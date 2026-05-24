@@ -1,0 +1,318 @@
+/* Win95 shared theme */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background-color: #008080;
+  font-family: 'Arial', sans-serif;
+  font-size: 12px;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Desktop */
+.desktop {
+  width: 100%;
+  height: calc(100vh - 40px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 16px;
+  position: relative;
+}
+
+/* Desktop Icons */
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 80px;
+  cursor: pointer;
+  text-decoration: none;
+  color: white;
+  padding: 4px;
+  border: 1px solid transparent;
+  text-align: center;
+  gap: 4px;
+}
+
+.icon:hover {
+  border: 1px dotted white;
+  background-color: rgba(255,255,255,0.1);
+}
+
+.icon:active .icon-img {
+  filter: brightness(0.7);
+}
+
+.icon-img {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+}
+
+.icon-label {
+  font-size: 11px;
+  color: white;
+  text-shadow: 1px 1px 1px black;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+/* Window */
+.window {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #c0c0c0;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-bottom: 2px solid #404040;
+  border-right: 2px solid #404040;
+  box-shadow: 1px 1px 0 #000000;
+  min-width: 280px;
+}
+
+.title-bar {
+  background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+  color: white;
+  padding: 3px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: bold;
+  font-size: 12px;
+  cursor: move;
+  user-select: none;
+}
+
+.title-bar.inactive {
+  background: linear-gradient(90deg, #808080 0%, #c0c0c0 100%);
+}
+
+.title-bar-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-bar-buttons {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.title-btn {
+  width: 16px;
+  height: 14px;
+  background-color: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #404040;
+  border-right: 1px solid #404040;
+  color: black;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.title-btn:active {
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+}
+
+/* Menu Bar */
+.menu-bar {
+  background-color: #c0c0c0;
+  padding: 2px 4px;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #808080;
+}
+
+.menu-item {
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background-color: #000080;
+  color: white;
+}
+
+.menu-item u { text-decoration: underline; }
+
+/* Standard raised button */
+.btn {
+  background-color: #c0c0c0;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-bottom: 2px solid #404040;
+  border-right: 2px solid #404040;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  min-width: 75px;
+}
+
+.btn:active,
+.btn.pressed {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-bottom: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+}
+
+/* Sunken inset (for fields, displays) */
+.sunken {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-bottom: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+  background-color: #ffffff;
+}
+
+/* Status Bar */
+.status-bar {
+  background-color: #c0c0c0;
+  padding: 2px 4px;
+  border-top: 1px solid #ffffff;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  gap: 2px;
+}
+
+.status-cell {
+  padding: 1px 6px;
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+  flex: 1;
+}
+
+/* Taskbar */
+.taskbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background-color: #c0c0c0;
+  border-top: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  gap: 4px;
+  z-index: 1000;
+}
+
+.start-btn {
+  height: 30px;
+  padding: 0 8px;
+  background-color: #c0c0c0;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-bottom: 2px solid #404040;
+  border-right: 2px solid #404040;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  text-decoration: none;
+  color: black;
+  font-size: 12px;
+  font-family: Arial, sans-serif;
+}
+
+.start-btn:active {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-bottom: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+}
+
+.taskbar-divider {
+  width: 2px;
+  height: 28px;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  flex-shrink: 0;
+}
+
+.taskbar-apps {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.taskbar-app {
+  height: 30px;
+  padding: 0 8px;
+  background-color: #c0c0c0;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-bottom: 2px solid #404040;
+  border-right: 2px solid #404040;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  max-width: 180px;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: Arial, sans-serif;
+}
+
+.taskbar-app.active {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-bottom: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+  background-image: linear-gradient(45deg,
+    #c0c0c0 25%, #b0b0b0 25%, #b0b0b0 50%,
+    #c0c0c0 50%, #c0c0c0 75%, #b0b0b0 75%);
+  background-size: 4px 4px;
+}
+
+.taskbar-app-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clock {
+  height: 30px;
+  padding: 0 8px;
+  background-color: #c0c0c0;
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-bottom: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  font-size: 12px;
+  flex-shrink: 0;
+}

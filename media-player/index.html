@@ -4,110 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Media Player - Monday Jeffrey</title>
+  <link rel="stylesheet" href="../assets/win95.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Media-player-specific styles */
+    .window { width: 420px; }
 
-    body {
-      background-color: #008080;
-      font-family: 'Arial', sans-serif;
-      font-size: 12px;
-      height: 100vh;
-      overflow: hidden;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding-bottom: 40px;
-    }
+    .content { padding: 8px; }
 
-    /* The Window */
-    .window {
-      width: 420px;
-      background-color: #c0c0c0;
-      border-top: 2px solid #ffffff;
-      border-left: 2px solid #ffffff;
-      border-bottom: 2px solid #404040;
-      border-right: 2px solid #404040;
-      box-shadow: 1px 1px 0 #000000;
-    }
-
-    /* Title bar */
-    .title-bar {
-      background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
-      color: white;
-      padding: 3px 4px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-weight: bold;
-      font-size: 12px;
-    }
-
-    .title-bar-text {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .title-bar-buttons {
-      display: flex;
-      gap: 2px;
-    }
-
-    .title-btn {
-      width: 16px;
-      height: 14px;
-      background-color: #c0c0c0;
-      border-top: 1px solid #ffffff;
-      border-left: 1px solid #ffffff;
-      border-bottom: 1px solid #404040;
-      border-right: 1px solid #404040;
-      color: black;
-      font-size: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-family: 'Marlett', sans-serif;
-      font-weight: bold;
-    }
-
-    .title-btn:active {
-      border-top: 1px solid #404040;
-      border-left: 1px solid #404040;
-      border-bottom: 1px solid #ffffff;
-      border-right: 1px solid #ffffff;
-    }
-
-    /* Menu bar */
-    .menu-bar {
-      background-color: #c0c0c0;
-      padding: 2px 4px;
-      display: flex;
-      gap: 8px;
-      border-bottom: 1px solid #808080;
-    }
-
-    .menu-item {
-      padding: 1px 6px;
-      cursor: pointer;
-    }
-
-    .menu-item:hover {
-      background-color: #000080;
-      color: white;
-    }
-
-    .menu-item u {
-      text-decoration: underline;
-    }
-
-    /* Main content */
-    .content {
-      padding: 8px;
-    }
-
-    /* Display screen */
     .display {
       background-color: #000000;
       color: #00ff00;
@@ -135,7 +38,6 @@
       margin-bottom: 4px;
     }
 
-    /* Progress bar */
     .progress-container {
       background-color: #000000;
       height: 12px;
@@ -145,7 +47,6 @@
       border-right: 2px solid #ffffff;
       margin-bottom: 8px;
       cursor: pointer;
-      position: relative;
     }
 
     .progress-bar {
@@ -155,7 +56,6 @@
       transition: width 0.1s linear;
     }
 
-    /* Controls */
     .controls {
       display: flex;
       gap: 4px;
@@ -179,15 +79,13 @@
       font-family: Arial, sans-serif;
     }
 
-    .control-btn:active,
-    .control-btn.active {
+    .control-btn:active {
       border-top: 2px solid #404040;
       border-left: 2px solid #404040;
       border-bottom: 2px solid #ffffff;
       border-right: 2px solid #ffffff;
     }
 
-    /* Playlist */
     .playlist-label {
       font-size: 11px;
       margin-bottom: 4px;
@@ -219,106 +117,20 @@
       background-color: #000080;
       color: white;
     }
-
-    .playlist-item .duration {
-      color: #606060;
-    }
-
-    .playlist-item.playing .duration {
-      color: #c0c0c0;
-    }
-
-    /* Status bar */
-    .status-bar {
-      background-color: #c0c0c0;
-      padding: 2px 4px;
-      border-top: 1px solid #ffffff;
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      margin-top: 8px;
-    }
-
-    .status-cell {
-      padding: 1px 6px;
-      border-top: 1px solid #404040;
-      border-left: 1px solid #404040;
-      border-bottom: 1px solid #ffffff;
-      border-right: 1px solid #ffffff;
-    }
-
-    /* Back link as taskbar icon */
-    #taskbar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 40px;
-      background-color: #c0c0c0;
-      border-top: 2px solid #ffffff;
-      display: flex;
-      align-items: center;
-      padding: 0 4px;
-      gap: 4px;
-    }
-
-    #start-btn {
-      height: 30px;
-      padding: 0 8px;
-      background-color: #c0c0c0;
-      border-top: 2px solid #ffffff;
-      border-left: 2px solid #ffffff;
-      border-bottom: 2px solid #404040;
-      border-right: 2px solid #404040;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-weight: bold;
-      cursor: pointer;
-      text-decoration: none;
-      color: black;
-    }
-
-    .taskbar-app {
-      height: 30px;
-      padding: 0 8px;
-      background-color: #c0c0c0;
-      border-top: 2px solid #404040;
-      border-left: 2px solid #404040;
-      border-bottom: 2px solid #ffffff;
-      border-right: 2px solid #ffffff;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-    }
-
-    #clock {
-      margin-left: auto;
-      height: 30px;
-      padding: 0 8px;
-      background-color: #c0c0c0;
-      border-top: 2px solid #404040;
-      border-left: 2px solid #404040;
-      border-bottom: 2px solid #ffffff;
-      border-right: 2px solid #ffffff;
-      display: flex;
-      align-items: center;
-    }
   </style>
 </head>
 <body>
 
-  <div class="window">
+  <div class="window" data-title="Media Player" data-icon="&#9835;" data-close-href="../index.html">
     <div class="title-bar">
       <div class="title-bar-text">
-        <span>♪</span>
+        <span>&#9835;</span>
         <span>Media Player</span>
       </div>
       <div class="title-bar-buttons">
-        <div class="title-btn">_</div>
-        <div class="title-btn">□</div>
-        <a href="../index.html" style="text-decoration:none;color:black;"><div class="title-btn">×</div></a>
+        <div class="title-btn minimize">_</div>
+        <div class="title-btn maximize">&#9633;</div>
+        <div class="title-btn close">&times;</div>
       </div>
     </div>
 
@@ -344,34 +156,34 @@
       </div>
 
       <div class="controls">
-        <button class="control-btn" id="prev-btn" title="Previous">|◄◄</button>
-        <button class="control-btn" id="play-btn" title="Play/Pause">►</button>
-        <button class="control-btn" id="stop-btn" title="Stop">■</button>
-        <button class="control-btn" id="next-btn" title="Next">►►|</button>
+        <button class="control-btn" id="prev-btn" title="Previous">|&#9664;&#9664;</button>
+        <button class="control-btn" id="play-btn" title="Play/Pause">&#9658;</button>
+        <button class="control-btn" id="stop-btn" title="Stop">&#9632;</button>
+        <button class="control-btn" id="next-btn" title="Next">&#9654;&#9654;|</button>
       </div>
 
       <div class="playlist-label">Playlist:</div>
       <div class="playlist" id="playlist"></div>
 
-      <div class="status-bar">
+      <div class="status-bar" style="margin-top: 8px;">
         <div class="status-cell" id="status-text">Ready</div>
-        <div class="status-cell" id="track-count">0 / 0</div>
+        <div class="status-cell" id="track-count" style="flex: 0 0 auto;">0 / 0</div>
       </div>
     </div>
   </div>
 
   <audio id="audio"></audio>
 
-  <div id="taskbar">
-    <a href="../index.html" id="start-btn">
-      <span>⊞</span> Start
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn">
+      <span>&#8862;</span> Start
     </a>
-    <div class="taskbar-app">
-      <span>♪</span> Media Player
-    </div>
-    <div id="clock"></div>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
   </div>
 
+  <script src="../assets/win95.js"></script>
   <script>
     const tracks = [
       { title: "LLM - Busters Song", file: "songs/LLM%20-%20Busters%20Song.mp3" },
@@ -408,7 +220,7 @@
       tracks.forEach((track, i) => {
         const item = document.createElement('div');
         item.className = 'playlist-item' + (i === currentTrack ? ' playing' : '');
-        item.innerHTML = '<span>' + (i + 1) + '. ' + track.title + '</span><span class="duration"></span>';
+        item.textContent = (i + 1) + '. ' + track.title;
         item.addEventListener('click', () => {
           currentTrack = i;
           loadTrack();
@@ -428,14 +240,14 @@
     function play() {
       audio.play();
       isPlaying = true;
-      playBtn.textContent = '❚❚';
+      playBtn.innerHTML = '&#10074;&#10074;';
       statusText.textContent = 'Playing';
     }
 
     function pause() {
       audio.pause();
       isPlaying = false;
-      playBtn.textContent = '►';
+      playBtn.innerHTML = '&#9658;';
       statusText.textContent = 'Paused';
     }
 
@@ -443,7 +255,7 @@
       audio.pause();
       audio.currentTime = 0;
       isPlaying = false;
-      playBtn.textContent = '►';
+      playBtn.innerHTML = '&#9658;';
       statusText.textContent = 'Stopped';
     }
 
@@ -487,15 +299,6 @@
       const pct = (e.clientX - rect.left) / rect.width;
       audio.currentTime = pct * audio.duration;
     });
-
-    function updateClock() {
-      const now = new Date();
-      const h = now.getHours().toString().padStart(2, '0');
-      const m = now.getMinutes().toString().padStart(2, '0');
-      document.getElementById('clock').textContent = h + ':' + m;
-    }
-    updateClock();
-    setInterval(updateClock, 10000);
 
     renderPlaylist();
     loadTrack();
