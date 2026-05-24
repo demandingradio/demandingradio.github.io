@@ -1,4 +1,30 @@
 (function () {
+  // Desktop icons - single source of truth. Add new apps here.
+  const DESKTOP_ICONS = [
+    { label: 'Game',         icon: '\u{1F3AE}', href: '#',              title: 'Coming soon' },
+    { label: 'Media Player', icon: '\u{1F3B5}', href: '/media-player/', title: 'Media Player' },
+    { label: 'Cricket Sim',  icon: '\u{1F3CF}', href: '#',              title: 'Coming soon' }
+  ];
+
+  function renderDesktop(container) {
+    if (container.children.length > 0) return;
+    DESKTOP_ICONS.forEach((icon) => {
+      const a = document.createElement('a');
+      a.className = 'icon';
+      a.href = icon.href;
+      a.title = icon.title;
+      const img = document.createElement('div');
+      img.className = 'icon-img';
+      img.textContent = icon.icon;
+      const label = document.createElement('div');
+      label.className = 'icon-label';
+      label.textContent = icon.label;
+      a.appendChild(img);
+      a.appendChild(label);
+      container.appendChild(a);
+    });
+  }
+
   class Win95Window {
     constructor(element) {
       this.el = element;
@@ -154,6 +180,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.desktop').forEach(renderDesktop);
     document.querySelectorAll('.window').forEach((el) => new Win95Window(el));
 
     const clock = document.querySelector('.clock');
