@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>War Game - Monday Jeffrey</title>
+  <link rel="stylesheet" href="../assets/win95.css">
+  <style>
+    .window { width: min(960px, 96vw); }
+
+    .game-area {
+      position: relative;
+      background: #0e1626;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      cursor: grab;
+      width: 100%;
+      height: 62vh;
+      min-height: 380px;
+      background: #0e1626;
+      touch-action: none;
+    }
+    canvas.dragging { cursor: grabbing; }
+
+    .hud {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(192, 192, 192, 0.94);
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      padding: 6px 8px;
+      font-family: 'MS Sans Serif', Arial, sans-serif;
+      font-size: 11px;
+      pointer-events: none;
+      min-width: 180px;
+    }
+    .hud .title { font-weight: bold; margin-bottom: 4px; }
+    .hud .row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+    .hud .swatch { width: 10px; height: 10px; border: 1px solid #000; flex-shrink: 0; }
+    .hud .name { flex: 1; }
+    .hud .stats { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .hud .dead { text-decoration: line-through; opacity: 0.45; }
+
+    .controls {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .controls .btn {
+      min-width: 110px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 4px 8px;
+    }
+
+    .toast {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.82);
+      color: #fff;
+      padding: 6px 14px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+
+    .game-over {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .game-over.show { display: flex; }
+    .game-over .modal {
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      padding: 16px 24px;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      min-width: 220px;
+    }
+    .game-over h2 { margin: 0 0 8px; font-size: 16px; }
+    .game-over button {
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="desktop"></div>
+
+  <div class="window" data-title="War Game" data-icon="⚔️" data-close-href="../index.html">
+    <div class="title-bar">
+      <div class="title-bar-text">
+        <span>⚔️</span><span>War Game</span>
+      </div>
+      <div class="title-bar-buttons">
+        <div class="title-btn minimize">_</div>
+        <div class="title-btn maximize">□</div>
+        <div class="title-btn close">×</div>
+      </div>
+    </div>
+    <div class="menu-bar">
+      <span style="padding: 1px 4px;">Drag to pan &middot; Click your hex then any hex to march &middot; B = build road &middot; Eliminate all factions</span>
+    </div>
+    <div class="game-area">
+      <canvas id="game"></canvas>
+      <div class="hud" id="hud"></div>
+      <div class="controls">
+        <button class="btn" id="center-btn">Center on Home</button>
+        <button class="btn" id="build-btn" title="Toggle road-building mode (B)">Build Road (5)</button>
+        <button class="btn" id="restart-btn">New Game</button>
+      </div>
+      <div class="toast" id="toast"></div>
+      <div class="game-over" id="game-over">
+        <div class="modal">
+          <h2 id="game-over-title">Victory!</h2>
+          <div id="game-over-text"></div>
+          <button class="btn" id="play-again">Play Again</button>
+        </div>
+      </div>
+    </div>
+    <div class="status-bar">
+      <span class="status-cell" id="status-text">Ready</span>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn"><span>⊞</span> Start</a>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
+  </div>
+
+  <script src="../assets/win95.js"></script>
+  <script>
+  (function () {
+    // ===== Constants =====
+    const HEX_SIZE = 30;
+    const SQRT3 = Math.sqrt(3);
+    const TROOP_TICK_MS = 1500;
+    const AI_TICK_MS = 2400;
+    const MAX_TROOPS = 99;
+
+    const STEP_MS = 2200;       // ms per hex on open ground
+    const ROAD_STEP_MS = 900;   // ms per hex when both ends have a road
+    const MAX_PATH_LEN = 25;    // max hex distance per march
+    const ROAD_BUILD_COST = 5;
+
+    const NEUTRAL = -1;
+    const FACTIONS = [
+      { id: 0, name: 'You',     color: '#4d8fd6', dark: '#2d5a8c' },
+      { id: 1, name: 'Crimson', color: '#d24a4a', dark: '#8c2d2d' },
+      { id: 2, name: 'Verdant', color: '#4ab85e', dark: '#2d6e3a' },
+      { id: 3, name: 'Violet',  color: '#a05cc8', dark: '#5e348c' }
+    ];
+    const NEUTRAL_FILL = '#6a6a78';
+    const NEUTRAL_EDGE = '#3a3a44';
+    const ROAD_COLOR = '#d6b985';
+    const ROAD_EDGE = '#5e4a2c';
+
+    // ===== Hex math (pointy-top, axial coords) =====
+    const NEIGHBORS = [
+      [+1, 0], [+1, -1], [0, -1], [-1, 0], [-1, +1], [0, +1]
+    ];
+
+    function hexToPixel(q, r) {
+      return {
+        x: HEX_SIZE * SQRT3 * (q + r / 2),
+        y: HEX_SIZE * 1.5 * r
+      };
+    }
+
+    function roundHex(qf, rf) {
+      const sf = -qf - rf;
+      let q = Math.round(qf);
+      let r = Math.round(rf);
+      let s = Math.round(sf);
+      const dq = Math.abs(q - qf);
+      const dr = Math.abs(r - rf);
+      const ds = Math.abs(s - sf);
+      if (dq > dr && dq > ds) q = -r - s;
+      else if (dr > ds) r = -q - s;
+      return { q, r };
+    }
+
+    function pixelToHex(x, y) {
+      const qf = (SQRT3 / 3 * x - y / 3) / HEX_SIZE;
+      const rf = (2 / 3 * y) / HEX_SIZE;
+      return roundHex(qf, rf);
+    }
+
+    function hexKey(q, r) { return q + ',' + r; }
+    function neighbors(q, r) { return NEIGHBORS.map(([dq, dr]) => ({ q: q + dq, r: r + dr })); }
+    function hexDist(q, r) { return (Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2; }
+    function hexDistBetween(a, b) { return hexDist(a.q - b.q, a.r - b.r); }
+
+    // ===== Seeded RNG =====
+    function hash2d(q, r, seed) {
+      let h = seed | 0;
+      h = Math.imul(h ^ (q | 0), 2654435761);
+      h = Math.imul(h ^ (r | 0), 1597334677);
+      h ^= h >>> 16;
+      h = Math.imul(h, 2246822519);
+      h ^= h >>> 13;
+      h = Math.imul(h, 3266489917);
+      h ^= h >>> 16;
+      return (h >>> 0) / 4294967295;
+    }
+
+    // ===== Game state =====
+    const territories = new Map();
+    const marches = [];
+    const roads = new Set();
+    let camera = { x: 0, y: 0 };
+    let canvas, ctx;
+    let selected = null;
+    let hover = null;
+    let mode = 'move'; // 'move' | 'build'
+    let worldSeed = (Math.random() * 1e9) | 0;
+    let gameOver = false;
+    let lastTroopTick = 0;
+    let lastAiTick = 0;
+    let toastTimer = null;
+    let statusText = 'Select one of your territories.';
+
+    function ensureTerritory(q, r) {
+      const k = hexKey(q, r);
+      let t = territories.get(k);
+      if (!t) {
+        const dist = hexDist(q, r);
+        const base = 2 + Math.floor(hash2d(q, r, worldSeed) * 4);
+        const garrison = Math.min(40, base + Math.floor(dist * dist / 24));
+        t = { q, r, owner: NEUTRAL, troops: garrison };
+        territories.set(k, t);
+      }
+      return t;
+    }
+
+    // ===== Pathfinding =====
+    function findPath(from, to) {
+      if (from.q === to.q && from.r === to.r) return [];
+      const maxRadius = MAX_PATH_LEN + 2;
+      const came = new Map();
+      came.set(hexKey(from.q, from.r), null);
+      const queue = [{ q: from.q, r: from.r }];
+      let head = 0;
+      while (head < queue.length) {
+        const cur = queue[head++];
+        if (cur.q === to.q && cur.r === to.r) {
+          const path = [];
+          let n = cur;
+          while (n && (n.q !== from.q || n.r !== from.r)) {
+            path.unshift({ q: n.q, r: n.r });
+            n = came.get(hexKey(n.q, n.r));
+          }
+          return path;
+        }
+        const nbs = neighbors(cur.q, cur.r);
+        for (const nb of nbs) {
+          const k = hexKey(nb.q, nb.r);
+          if (came.has(k)) continue;
+          if (hexDistBetween(nb, from) > maxRadius) continue;
+          came.set(k, cur);
+          queue.push(nb);
+        }
+      }
+      return null;
+    }
+
+    // ===== Marches =====
+    function stepDurationFor(prev, next) {
+      const fast = roads.has(hexKey(prev.q, prev.r)) && roads.has(hexKey(next.q, next.r));
+      return fast ? ROAD_STEP_MS : STEP_MS;
+    }
+
+    function makeMarch(owner, troops, from, path, now) {
+      if (!path || path.length === 0 || troops < 1) return;
+      marches.push({
+        owner,
+        troops,
+        from: { q: from.q, r: from.r },
+        path,
+        step: 0,
+        stepStartTime: now,
+        stepDuration: stepDurationFor(from, path[0])
+      });
+    }
+
+    function resolveCombat(attackerTroops, defenderTroops) {
+      const atk = attackerTroops * (0.75 + Math.random() * 0.5);
+      const def = defenderTroops * (0.95 + Math.random() * 0.5);
+      if (atk > def) {
+        return { winner: 'a', survivors: Math.max(1, Math.floor((atk - def) * 0.85)) };
+      }
+      return { winner: 'd', survivors: Math.max(1, Math.floor((def - atk) * 0.85)) };
+    }
+
+    function processMarches(now) {
+      for (let i = marches.length - 1; i >= 0; i--) {
+        const m = marches[i];
+        // Process as many completed steps as time allows
+        let removed = false;
+        while (!removed && now - m.stepStartTime >= m.stepDuration) {
+          const next = m.path[m.step];
+          const target = ensureTerritory(next.q, next.r);
+          const isFinal = m.step === m.path.length - 1;
+
+          if (target.owner === m.owner) {
+            if (isFinal) {
+              target.troops = Math.min(MAX_TROOPS, target.troops + m.troops);
+              marches.splice(i, 1);
+              removed = true;
+              break;
+            }
+            // pass through friendly hex
+          } else {
+            const r = resolveCombat(m.troops, target.troops);
+            if (r.winner === 'a') {
+              target.owner = m.owner;
+              if (isFinal) {
+                target.troops = Math.min(MAX_TROOPS, r.survivors);
+                marches.splice(i, 1);
+                removed = true;
+                break;
+              }
+              // Leave 1 troop garrison, continue with the rest
+              target.troops = 1;
+              m.troops = Math.max(0, r.survivors - 1);
+              if (m.troops <= 0) {
+                marches.splice(i, 1);
+                removed = true;
+                break;
+              }
+            } else {
+              target.troops = Math.min(MAX_TROOPS, r.survivors);
+              marches.splice(i, 1);
+              removed = true;
+              break;
+            }
+          }
+
+          // Advance to next step
+          m.step++;
+          if (m.step >= m.path.length) {
+            marches.splice(i, 1);
+            removed = true;
+            break;
+          }
+          const prev = next;
+          const upcoming = m.path[m.step];
+          m.stepStartTime = now;
+          m.stepDuration = stepDurationFor(prev, upcoming);
+        }
+      }
+    }
+
+    // ===== Init =====
+    function initGame() {
+      territories.clear();
+      marches.length = 0;
+      roads.clear();
+      worldSeed = (Math.random() * 1e9) | 0;
+      selected = null;
+      hover = null;
+      mode = 'move';
+      gameOver = false;
+      lastTroopTick = 0;
+      lastAiTick = 0;
+      statusText = 'Select one of your territories.';
+
+      const playerStart = [
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 0, r: 1 },
+        { q: -1, r: 1 }
+      ];
+      playerStart.forEach(({ q, r }) => {
+        const t = ensureTerritory(q, r);
+        t.owner = 0;
+        t.troops = 12;
+      });
+
+      const aiStarts = [
+        { q: 10, r: -5 },
+        { q: -10, r: 6 },
+        { q: 4, r: 10 }
+      ];
+      aiStarts.forEach((center, idx) => {
+        const fid = idx + 1;
+        const cells = [center].concat(neighbors(center.q, center.r).slice(0, 2));
+        cells.forEach(({ q, r }) => {
+          const t = ensureTerritory(q, r);
+          t.owner = fid;
+          t.troops = 12;
+        });
+      });
+
+      updateBuildButton();
+      centerOnHome();
+      hideGameOver();
+    }
+
+    function centerOnHome() {
+      const owned = [];
+      territories.forEach(t => { if (t.owner === 0) owned.push(t); });
+      if (owned.length === 0) return;
+      let sx = 0, sy = 0;
+      owned.forEach(t => {
+        const p = hexToPixel(t.q, t.r);
+        sx += p.x; sy += p.y;
+      });
+      camera.x = sx / owned.length;
+      camera.y = sy / owned.length;
+    }
+
+    // ===== Rendering =====
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function drawHex(cx, cy, fill, stroke, lineWidth) {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.PI / 180 * (60 * i - 30);
+        const px = cx + HEX_SIZE * Math.cos(angle);
+        const py = cy + HEX_SIZE * Math.sin(angle);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.lineWidth = lineWidth;
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+    }
+
+    function render(now) {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+
+      ctx.fillStyle = '#0e1626';
+      ctx.fillRect(0, 0, w, h);
+
+      const xUnit = HEX_SIZE * SQRT3;
+      const yUnit = HEX_SIZE * 1.5;
+      const left   = camera.x - w / 2 - HEX_SIZE * 2;
+      const right  = camera.x + w / 2 + HEX_SIZE * 2;
+      const top    = camera.y - h / 2 - HEX_SIZE * 2;
+      const bottom = camera.y + h / 2 + HEX_SIZE * 2;
+
+      const rMin = Math.floor(top / yUnit) - 1;
+      const rMax = Math.ceil(bottom / yUnit) + 1;
+
+      ctx.save();
+      ctx.translate(w / 2 - camera.x, h / 2 - camera.y);
+
+      // Hexes
+      for (let r = rMin; r <= rMax; r++) {
+        const qMin = Math.floor(left / xUnit - r / 2) - 1;
+        const qMax = Math.ceil(right / xUnit - r / 2) + 1;
+        for (let q = qMin; q <= qMax; q++) {
+          const t = ensureTerritory(q, r);
+          const { x, y } = hexToPixel(q, r);
+
+          let fill, stroke, lw = 1;
+          if (t.owner === NEUTRAL) {
+            fill = NEUTRAL_FILL;
+            stroke = NEUTRAL_EDGE;
+          } else {
+            const f = FACTIONS[t.owner];
+            fill = f.color;
+            stroke = f.dark;
+          }
+
+          const isSel = selected && selected.q === q && selected.r === r;
+          const isHover = hover && hover.q === q && hover.r === r;
+          const buildHover = isHover && mode === 'build' && t.owner === 0;
+
+          if (isSel) { stroke = '#ffffff'; lw = 3; }
+          else if (buildHover) { stroke = '#ffd83a'; lw = 2; }
+          else if (isHover && !gameOver) { stroke = '#ffffff'; lw = 2; }
+
+          drawHex(x, y, fill, stroke, lw);
+
+          ctx.font = 'bold 13px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillText(String(t.troops), x + 1, y + 1);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(String(t.troops), x, y);
+        }
+      }
+
+      // Roads — draw on top of hexes
+      ctx.lineCap = 'round';
+      roads.forEach(key => {
+        const [q, r] = key.split(',').map(Number);
+        const pos = hexToPixel(q, r);
+        let connected = false;
+        NEIGHBORS.forEach(([dq, dr]) => {
+          const nbKey = hexKey(q + dq, r + dr);
+          if (!roads.has(nbKey)) return;
+          connected = true;
+          if (key >= nbKey) return; // draw each edge once
+          const nbPos = hexToPixel(q + dq, r + dr);
+          ctx.strokeStyle = ROAD_EDGE;
+          ctx.lineWidth = 7;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y);
+          ctx.lineTo(nbPos.x, nbPos.y);
+          ctx.stroke();
+          ctx.strokeStyle = ROAD_COLOR;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y);
+          ctx.lineTo(nbPos.x, nbPos.y);
+          ctx.stroke();
+        });
+        if (!connected) {
+          ctx.fillStyle = ROAD_EDGE;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y - 9, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = ROAD_COLOR;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y - 9, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+      ctx.lineCap = 'butt';
+
+      // Marching armies
+      marches.forEach(m => {
+        const prev = m.step === 0 ? m.from : m.path[m.step - 1];
+        const next = m.path[m.step];
+        const prevPos = hexToPixel(prev.q, prev.r);
+        const nextPos = hexToPixel(next.q, next.r);
+        const t = Math.max(0, Math.min(1, (now - m.stepStartTime) / m.stepDuration));
+        const px = prevPos.x + (nextPos.x - prevPos.x) * t;
+        const py = prevPos.y + (nextPos.y - prevPos.y) * t;
+        const f = FACTIONS[m.owner];
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath();
+        ctx.arc(px + 1, py + 2, 12, 0, Math.PI * 2);
+        ctx.fill();
+        // Body
+        ctx.fillStyle = f.color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px, py, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Number
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(m.troops), px, py);
+      });
+
+      ctx.restore();
+    }
+
+    // ===== HUD =====
+    function updateHud() {
+      const counts = [0, 0, 0, 0];
+      const troops = [0, 0, 0, 0];
+      territories.forEach(t => {
+        if (t.owner !== NEUTRAL) {
+          counts[t.owner]++;
+          troops[t.owner] += t.troops;
+        }
+      });
+      marches.forEach(m => { troops[m.owner] += m.troops; });
+      const hud = document.getElementById('hud');
+      let html = '<div class="title">Factions</div>';
+      FACTIONS.forEach(f => {
+        const dead = counts[f.id] === 0;
+        html += '<div class="row' + (dead ? ' dead' : '') + '">' +
+          '<div class="swatch" style="background:' + f.color + '"></div>' +
+          '<span class="name">' + f.name + '</span>' +
+          '<span class="stats">' + counts[f.id] + ' &middot; ' + troops[f.id] + '</span>' +
+          '</div>';
+      });
+      hud.innerHTML = html;
+      document.getElementById('status-text').textContent = statusText;
+      return counts;
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 1500);
+    }
+
+    // ===== AI =====
+    function aiTick(now) {
+      for (let fid = 1; fid < FACTIONS.length; fid++) {
+        const owned = [];
+        territories.forEach(t => { if (t.owner === fid) owned.push(t); });
+        if (owned.length === 0) continue;
+
+        const moves = [];
+        owned.forEach(t => {
+          if (t.troops < 4) return;
+          neighbors(t.q, t.r).forEach(({ q, r }) => {
+            const target = ensureTerritory(q, r);
+            if (target.owner === fid) return;
+            const send = Math.floor(t.troops / 2);
+            let score = send - target.troops;
+            if (target.owner === NEUTRAL) score += 2.5;
+            if (target.owner === 0) score += 1.0;
+            score += (Math.random() - 0.5) * 0.5;
+            moves.push({ from: t, to: target, score });
+          });
+        });
+
+        if (moves.length === 0) continue;
+        moves.sort((a, b) => b.score - a.score);
+        for (const m of moves) {
+          if (m.score < 0.5) break;
+          if (m.from.troops < 4) continue;
+          const send = Math.floor(m.from.troops / 2);
+          m.from.troops -= send;
+          makeMarch(fid, send, m.from, [{ q: m.to.q, r: m.to.r }], now);
+          break;
+        }
+      }
+    }
+
+    // ===== Troop production =====
+    function troopTick() {
+      const ownedByFaction = [[], [], [], []];
+      territories.forEach(t => {
+        if (t.owner !== NEUTRAL && t.troops < MAX_TROOPS) {
+          t.troops = Math.min(MAX_TROOPS, t.troops + 1);
+        }
+        if (t.owner !== NEUTRAL) ownedByFaction[t.owner].push(t);
+      });
+      ownedByFaction.forEach((owned) => {
+        const bonus = Math.floor(owned.length / 4);
+        for (let i = 0; i < bonus; i++) {
+          const t = owned[(Math.random() * owned.length) | 0];
+          if (t) t.troops = Math.min(MAX_TROOPS, t.troops + 1);
+        }
+      });
+    }
+
+    // ===== Game over =====
+    function checkGameOver(counts) {
+      if (gameOver) return;
+      if (counts[0] === 0) showGameOver('Defeat', 'Your empire has fallen.');
+      else if (counts[1] === 0 && counts[2] === 0 && counts[3] === 0)
+        showGameOver('Victory!', 'All rival factions eliminated.');
+    }
+
+    function showGameOver(title, text) {
+      gameOver = true;
+      selected = null;
+      document.getElementById('game-over-title').textContent = title;
+      document.getElementById('game-over-text').textContent = text;
+      document.getElementById('game-over').classList.add('show');
+    }
+
+    function hideGameOver() {
+      document.getElementById('game-over').classList.remove('show');
+    }
+
+    // ===== Mode toggle =====
+    function setMode(m) {
+      mode = m;
+      selected = null;
+      statusText = (mode === 'build')
+        ? 'Build mode: click your hex to lay a road (costs ' + ROAD_BUILD_COST + ' troops).'
+        : 'Select one of your territories, then click anywhere to march.';
+      updateBuildButton();
+    }
+
+    function updateBuildButton() {
+      const btn = document.getElementById('build-btn');
+      if (!btn) return;
+      if (mode === 'build') btn.classList.add('pressed');
+      else btn.classList.remove('pressed');
+    }
+
+    // ===== Input =====
+    function screenToWorld(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left) - rect.width / 2 + camera.x,
+        y: (clientY - rect.top) - rect.height / 2 + camera.y,
+        inside: clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+      };
+    }
+
+    function setupInput() {
+      let dragging = false;
+      let dragStart = null;
+      let dragMoved = false;
+
+      const startDrag = (cx, cy) => {
+        dragging = true;
+        dragMoved = false;
+        dragStart = { x: cx, y: cy, camX: camera.x, camY: camera.y };
+        canvas.classList.add('dragging');
+      };
+      const moveDrag = (cx, cy) => {
+        if (!dragging) return;
+        const dx = cx - dragStart.x;
+        const dy = cy - dragStart.y;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+        camera.x = dragStart.camX - dx;
+        camera.y = dragStart.camY - dy;
+      };
+      const endDrag = (cx, cy) => {
+        if (!dragging) return;
+        canvas.classList.remove('dragging');
+        if (!dragMoved && !gameOver) handleClick(cx, cy);
+        dragging = false;
+      };
+
+      canvas.addEventListener('mousedown', (e) => { startDrag(e.clientX, e.clientY); e.preventDefault(); });
+      window.addEventListener('mousemove', (e) => {
+        moveDrag(e.clientX, e.clientY);
+        const w = screenToWorld(e.clientX, e.clientY);
+        hover = w.inside ? pixelToHex(w.x, w.y) : null;
+      });
+      window.addEventListener('mouseup', (e) => endDrag(e.clientX, e.clientY));
+
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0]; startDrag(t.clientX, t.clientY); e.preventDefault();
+      }, { passive: false });
+      canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0]; moveDrag(t.clientX, t.clientY); e.preventDefault();
+      }, { passive: false });
+      canvas.addEventListener('touchend', (e) => {
+        const t = e.changedTouches[0]; endDrag(t.clientX, t.clientY);
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+        if (e.key === 'b' || e.key === 'B') setMode(mode === 'build' ? 'move' : 'build');
+        else if (e.key === 'Escape') { selected = null; if (mode === 'build') setMode('move'); }
+      });
+    }
+
+    function handleClick(clientX, clientY) {
+      const w = screenToWorld(clientX, clientY);
+      if (!w.inside) return;
+      const { q, r } = pixelToHex(w.x, w.y);
+      const t = ensureTerritory(q, r);
+
+      // Build mode
+      if (mode === 'build') {
+        if (t.owner !== 0) { showToast('Can only build on your own hexes'); return; }
+        if (roads.has(hexKey(q, r))) { showToast('Already has a road'); return; }
+        if (t.troops <= ROAD_BUILD_COST) { showToast('Need more than ' + ROAD_BUILD_COST + ' troops here'); return; }
+        t.troops -= ROAD_BUILD_COST;
+        roads.add(hexKey(q, r));
+        return;
+      }
+
+      // Move mode
+      if (!selected) {
+        if (t.owner === 0) {
+          selected = { q, r };
+          statusText = 'Click any hex (up to ' + MAX_PATH_LEN + ' away) to march troops there.';
+        } else {
+          showToast("That's not yours");
+        }
+        return;
+      }
+
+      // Click the same selected hex to deselect
+      if (selected.q === q && selected.r === r) {
+        selected = null;
+        statusText = 'Select one of your territories.';
+        return;
+      }
+
+      const from = ensureTerritory(selected.q, selected.r);
+      if (from.owner !== 0) { selected = null; return; }
+
+      if (from.troops < 2) {
+        showToast('Need 2+ troops to march');
+        selected = null;
+        return;
+      }
+
+      const path = findPath(selected, { q, r });
+      if (!path) { showToast('No route'); return; }
+      if (path.length === 0) { selected = null; return; }
+      if (path.length > MAX_PATH_LEN) { showToast('Too far (max ' + MAX_PATH_LEN + ' hexes)'); return; }
+
+      const send = Math.max(1, Math.floor(from.troops / 2));
+      from.troops -= send;
+      makeMarch(0, send, from, path, performance.now());
+      selected = null;
+      statusText = 'Army marching. Select another hex.';
+    }
+
+    // ===== Main loop =====
+    function loop(timestamp) {
+      if (!lastTroopTick) lastTroopTick = timestamp;
+      if (!lastAiTick) lastAiTick = timestamp;
+
+      if (!gameOver) {
+        processMarches(timestamp);
+        if (timestamp - lastTroopTick >= TROOP_TICK_MS) {
+          troopTick();
+          lastTroopTick = timestamp;
+        }
+        if (timestamp - lastAiTick >= AI_TICK_MS) {
+          aiTick(timestamp);
+          lastAiTick = timestamp;
+        }
+      }
+
+      render(timestamp);
+      const counts = updateHud();
+      checkGameOver(counts);
+
+      requestAnimationFrame(loop);
+    }
+
+    // ===== Init =====
+    document.addEventListener('DOMContentLoaded', () => {
+      canvas = document.getElementById('game');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      document.getElementById('center-btn').addEventListener('click', centerOnHome);
+      document.getElementById('restart-btn').addEventListener('click', initGame);
+      document.getElementById('play-again').addEventListener('click', initGame);
+      const buildBtn = document.getElementById('build-btn');
+      if (buildBtn) buildBtn.addEventListener('click', () => setMode(mode === 'build' ? 'move' : 'build'));
+
+      setupInput();
+      initGame();
+      requestAnimationFrame(loop);
+    });
+  })();
+  </script>
+</body>
+</html>
