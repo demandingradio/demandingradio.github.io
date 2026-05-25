@@ -259,6 +259,7 @@
     const territories = new Map();
     const marches = [];
     const roads = new Set();
+    let factionAnchors = [{ q: 0, r: 0 }]; // start positions of all factions
     let camera = { x: 0, y: 0 };
     let zoom = 0.7;
     const ZOOM_MIN = 0.35;
@@ -286,6 +287,24 @@
       return T_OCEANS;
     }
 
+    // Hex distance to the nearest faction start (player or AI).
+    function distToNearestAnchor(q, r) {
+      let m = Infinity;
+      for (const a of factionAnchors) {
+        const d = hexDist(q - a.q, r - a.r);
+        if (d < m) m = d;
+      }
+      return m;
+    }
+
+    function neutralGarrisonAt(q, r, terrain) {
+      const minDist = distToNearestAnchor(q, r);
+      const base = 2 + Math.floor(hash2d(q, r, worldSeed) * 4);
+      let troops = base + Math.floor(minDist * 0.6); // gentle linear ramp from each anchor
+      if (terrain === T_MOUNTAINS) troops = Math.max(3, Math.floor(troops * 1.15));
+      return troops;
+    }
+
     function ensureTerritory(q, r) {
       const k = hexKey(q, r);
       let t = territories.get(k);
@@ -293,10 +312,7 @@
         const terrain = terrainAt(q, r);
         let troops = 0;
         if (isPassable(terrain)) {
-          const dist = hexDist(q, r);
-          const base = 2 + Math.floor(hash2d(q, r, worldSeed) * 4);
-          troops = base + Math.floor(dist * dist / 24);
-          if (terrain === T_MOUNTAINS) troops = Math.max(3, Math.floor(troops * 1.1));
+          troops = neutralGarrisonAt(q, r, terrain);
         }
         t = { q, r, owner: NEUTRAL, troops, terrain };
         territories.set(k, t);
@@ -440,15 +456,22 @@
           const t = ensureTerritory(q, r);
           if (!isPassable(t.terrain)) {
             t.terrain = T_PLAINS;
-            const dist = hexDist(q, r);
-            const base = 2 + Math.floor(hash2d(q, r, worldSeed) * 4);
-            t.troops = base + Math.floor(dist * dist / 24);
+            t.troops = neutralGarrisonAt(q, r, T_PLAINS);
           }
         }
       }
     }
 
     function initGame() {
+      const aiStarts = [
+        { q: 20, r: -40 },  // north
+        { q: 20, r:  20 },  // south-east
+        { q: -40, r: 20 }   // south-west
+      ];
+      // Set anchors BEFORE generating any terrain so garrisons scale by
+      // distance to the nearest faction, not just from origin.
+      factionAnchors = [{ q: 0, r: 0 }].concat(aiStarts);
+
       territories.clear();
       marches.length = 0;
       roads.clear();
@@ -479,11 +502,6 @@
         t.troops = 12;
       });
 
-      const aiStarts = [
-        { q: 20, r: -40 },  // north
-        { q: 20, r:  20 },  // south-east
-        { q: -40, r: 20 }   // south-west
-      ];
       aiStarts.forEach((center, idx) => {
         const fid = idx + 1;
         forceLandAround(center, 2);
@@ -492,7 +510,7 @@
           const t = ensureTerritory(q, r);
           t.terrain = T_PLAINS;
           t.owner = fid;
-          t.troops = 12;
+          t.troops = 14;
         });
       });
 
@@ -763,6 +781,11 @@
     }
 
     // ===== AI =====
+    function aiSendSize(troops) {
+      // Send most of the troops, but leave a small garrison behind.
+      return Math.max(1, troops - 2);
+    }
+
     function aiTick(now) {
       for (let fid = 1; fid < FACTIONS.length; fid++) {
         const owned = [];
@@ -776,26 +799,33 @@
             const target = ensureTerritory(q, r);
             if (target.owner === fid) return;
             if (!isPassable(target.terrain)) return;
-            const send = Math.floor(t.troops / 2);
+            const send = aiSendSize(t.troops);
             const defStrength = target.troops * (target.terrain === T_MOUNTAINS ? 1.35 : 1.0);
             let score = send - defStrength;
-            if (target.owner === NEUTRAL) score += 2.5;
-            if (target.owner === 0) score += 1.0;
-            if (target.terrain === T_MOUNTAINS) score -= 0.8; // mountains less attractive
-            score += (Math.random() - 0.5) * 0.5;
+            if (target.owner === NEUTRAL) score += 3.0; // strong expansion preference
+            if (target.owner === 0) score += 2.0;       // attack player when possible
+            if (target.terrain === T_MOUNTAINS) score -= 1.0;
+            score += (Math.random() - 0.5) * 0.6;
             moves.push({ from: t, to: target, score });
           });
         });
 
         if (moves.length === 0) continue;
         moves.sort((a, b) => b.score - a.score);
+        // Allow up to 2 attacks per tick (one per source hex)
+        const usedSources = new Set();
+        let executed = 0;
         for (const m of moves) {
-          if (m.score < 0.5) break;
+          if (executed >= 2) break;
+          if (m.score < 0) break;
           if (m.from.troops < 4) continue;
-          const send = Math.floor(m.from.troops / 2);
+          const srcKey = hexKey(m.from.q, m.from.r);
+          if (usedSources.has(srcKey)) continue;
+          const send = aiSendSize(m.from.troops);
           m.from.troops -= send;
           makeMarch(fid, send, m.from, [{ q: m.to.q, r: m.to.r }], now);
-          break;
+          usedSources.add(srcKey);
+          executed++;
         }
       }
     }
