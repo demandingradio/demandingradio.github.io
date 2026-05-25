@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake - Monday Jeffrey</title>
+  <link rel="stylesheet" href="../assets/win95.css">
+  <style>
+    .window { width: 400px; }
+
+    /* ---------- Nokia 3310 shell ---------- */
+    .nokia-outer {
+      background: linear-gradient(180deg, #6a6a78 0%, #585868 50%, #505060 100%);
+      border-radius: 30px 30px 80px 80px;
+      padding: 4px;
+      margin: 6px auto;
+      max-width: 290px;
+      box-shadow: 2px 5px 12px rgba(0,0,0,0.5);
+    }
+    .nokia {
+      background: linear-gradient(180deg, #282838 0%, #1e1e2e 30%, #1a1a28 60%, #222234 100%);
+      border-radius: 28px 28px 78px 78px;
+      padding: 14px 20px 34px;
+      position: relative;
+    }
+
+    /* Speaker grille */
+    .nokia-speaker {
+      display: flex;
+      justify-content: center;
+      gap: 3px;
+      margin-bottom: 6px;
+      padding-top: 2px;
+    }
+    .nokia-speaker span {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #0e0e18;
+      box-shadow: inset 0 0 1px rgba(255,255,255,0.08);
+    }
+    .nokia-brand {
+      text-align: center;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      font-weight: bold;
+      color: #909098;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+    }
+
+    /* LCD screen */
+    .lcd-frame {
+      background: linear-gradient(180deg, #8a8a92 0%, #a0a0a6 30%, #a0a0a6 70%, #8a8a92 100%);
+      border-radius: 8px;
+      padding: 10px 10px 14px;
+      margin: 0 auto 10px;
+      box-shadow:
+        inset 0 1px 0 #b0b0b8,
+        0 2px 4px rgba(0,0,0,0.4);
+    }
+    .lcd {
+      background: #8bac0f;
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
+      image-rendering: pixelated;
+      aspect-ratio: 5 / 4;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .lcd canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+
+    /* Nokia buttons */
+    .nokia-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .nokia-soft-keys {
+      display: flex;
+      justify-content: space-between;
+      width: 80%;
+      margin-bottom: 2px;
+    }
+    .soft-btn {
+      background: linear-gradient(180deg, #3a3a4a 0%, #2a2a38 100%);
+      color: #b0b0c0;
+      border: none;
+      border-radius: 12px;
+      padding: 5px 16px;
+      font-size: 10px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 2px 3px rgba(0,0,0,0.5);
+    }
+    .soft-btn:active {
+      box-shadow: inset 0 2px 3px rgba(0,0,0,0.5);
+      transform: translateY(1px);
+    }
+
+    /* D-pad — circular disc with directional buttons */
+    .dpad {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      margin: 4px 0;
+    }
+    .dpad-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #2e2e3e 0%, #1e1e2c 100%);
+      box-shadow:
+        inset 0 2px 4px rgba(255,255,255,0.08),
+        0 3px 6px rgba(0,0,0,0.5);
+    }
+    .dpad-center {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 30px; height: 30px;
+      background: radial-gradient(circle, #3a3a4a 0%, #2a2a38 100%);
+      border-radius: 50%;
+      box-shadow: inset 0 1px 2px rgba(255,255,255,0.1), 0 1px 2px rgba(0,0,0,0.4);
+      z-index: 2;
+    }
+    .dpad-btn {
+      position: absolute;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #606078;
+      font-weight: bold;
+      z-index: 3;
+    }
+    .dpad-btn:hover { color: #9090a0; }
+    .dpad-btn:active { color: #b0b0c0; }
+    .dpad-up {
+      top: 4px; left: 50%; transform: translateX(-50%);
+      width: 36px; height: 32px;
+    }
+    .dpad-down {
+      bottom: 4px; left: 50%; transform: translateX(-50%);
+      width: 36px; height: 32px;
+    }
+    .dpad-left {
+      left: 4px; top: 50%; transform: translateY(-50%);
+      width: 32px; height: 36px;
+    }
+    .dpad-right {
+      right: 4px; top: 50%; transform: translateY(-50%);
+      width: 32px; height: 36px;
+    }
+
+    /* Call / End buttons row */
+    .nokia-call-row {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin-top: 2px;
+    }
+    .call-btn {
+      width: 36px; height: 22px;
+      border: none;
+      border-radius: 10px;
+      cursor: default;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 2px 3px rgba(0,0,0,0.4);
+    }
+    .call-btn.green { background: linear-gradient(180deg, #2a6a2a, #1a4a1a); }
+    .call-btn.red   { background: linear-gradient(180deg, #7a2a2a, #4a1a1a); }
+
+    /* Number pad */
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px 10px;
+      width: 190px;
+      margin-top: 4px;
+    }
+    .num-btn {
+      background: linear-gradient(180deg, #32324a 0%, #262640 100%);
+      border: none;
+      border-radius: 14px;
+      padding: 7px 0;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      font-weight: bold;
+      color: #c0c0d0;
+      cursor: default;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.08),
+        0 2px 3px rgba(0,0,0,0.4);
+      line-height: 1.1;
+      text-align: center;
+    }
+    .num-btn .sub {
+      display: block;
+      font-size: 7px;
+      font-weight: normal;
+      color: #707088;
+      letter-spacing: 1px;
+      margin-top: 1px;
+    }
+
+    /* ---------- Game overlay text (on LCD) ---------- */
+    .lcd-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .lcd-overlay.interactive { pointer-events: auto; }
+    .lcd-text {
+      font-family: 'Courier New', monospace;
+      color: #306230;
+      text-align: center;
+      font-weight: bold;
+      image-rendering: auto;
+    }
+    .lcd-text.title { font-size: 18px; letter-spacing: 2px; }
+    .lcd-text.small { font-size: 11px; margin-top: 4px; }
+    .lcd-text.score { font-size: 14px; margin-top: 6px; }
+    .lcd-text.blink {
+      animation: lcdBlink 1s step-end infinite;
+    }
+    @keyframes lcdBlink { 50% { opacity: 0; } }
+
+    /* ---------- High score panel ---------- */
+    .score-panel {
+      background: #c0c0c0;
+      padding: 6px 10px;
+      font-size: 12px;
+      border-top: 1px solid #808080;
+    }
+    .score-panel-title {
+      font-weight: bold;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .score-list {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .score-row { display: flex; justify-content: space-between; }
+    .score-row .rank { width: 24px; }
+    .score-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .score-row .pts  { width: 50px; text-align: right; font-weight: bold; }
+    .score-empty { color: #808080; font-style: italic; font-family: Arial, sans-serif; }
+
+    /* ---------- Game over name entry ---------- */
+    .name-entry {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      background: #8bac0f;
+    }
+    .name-entry.show { display: flex; }
+    .name-entry input {
+      background: #306230;
+      border: 2px solid #306230;
+      color: #8bac0f;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      font-weight: bold;
+      text-align: center;
+      width: 120px;
+      padding: 4px;
+      outline: none;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .name-entry .lcd-text { pointer-events: none; }
+
+    /* ---------- Win95 dialog ---------- */
+    .dlg-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.2);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+    }
+    .dlg-overlay.show { display: flex; }
+    .dlg {
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      min-width: 300px;
+      max-width: 400px;
+      box-shadow: 2px 2px 0 #000;
+    }
+    .dlg-title {
+      background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+      color: white;
+      padding: 3px 4px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .dlg-body {
+      padding: 16px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .dlg-actions { padding: 6px 14px 14px; display: flex; justify-content: center; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="desktop"></div>
+
+  <div class="window" data-title="Snake" data-icon="🐍" data-close-href="../index.html">
+    <div class="title-bar">
+      <div class="title-bar-text">
+        <span>🐍</span><span>Snake</span>
+      </div>
+      <div class="title-bar-buttons">
+        <div class="title-btn minimize">_</div>
+        <div class="title-btn maximize">□</div>
+        <div class="title-btn close">×</div>
+      </div>
+    </div>
+
+    <div class="nokia-outer">
+    <div class="nokia">
+      <div class="nokia-speaker">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="nokia-brand">NOKIA</div>
+
+      <div class="lcd-frame">
+        <div class="lcd" id="lcd">
+          <canvas id="game-canvas"></canvas>
+
+          <!-- Title screen overlay -->
+          <div class="lcd-overlay interactive" id="title-screen">
+            <div class="lcd-text title">SNAKE</div>
+            <div class="lcd-text small" style="margin-top:12px;">High: <span id="title-high">0</span></div>
+            <div class="lcd-text small blink" style="margin-top:16px;">PRESS START</div>
+          </div>
+
+          <!-- Game over overlay -->
+          <div class="lcd-overlay" id="gameover-screen" style="display:none;">
+            <div class="lcd-text score">GAME OVER</div>
+            <div class="lcd-text score">Score: <span id="final-score">0</span></div>
+          </div>
+
+          <!-- Name entry -->
+          <div class="name-entry" id="name-entry">
+            <div class="lcd-text small">GAME OVER</div>
+            <div class="lcd-text score">Score: <span id="entry-score">0</span></div>
+            <div class="lcd-text small" style="margin-top:8px;">Enter name:</div>
+            <input type="text" id="name-input" maxlength="8" value="" autocomplete="off">
+            <div class="lcd-text small blink" style="margin-top:6px;">PRESS ENTER</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nokia-controls">
+        <div class="nokia-soft-keys">
+          <button class="soft-btn" id="btn-start">Start</button>
+          <button class="soft-btn" id="btn-pause">Pause</button>
+        </div>
+
+        <div class="dpad">
+          <div class="dpad-ring"></div>
+          <button class="dpad-btn dpad-up"    id="dpad-up">&#9650;</button>
+          <button class="dpad-btn dpad-down"  id="dpad-down">&#9660;</button>
+          <button class="dpad-btn dpad-left"  id="dpad-left">&#9664;</button>
+          <button class="dpad-btn dpad-right" id="dpad-right">&#9654;</button>
+          <div class="dpad-center"></div>
+        </div>
+
+        <div class="nokia-call-row">
+          <div class="call-btn green"></div>
+          <div class="call-btn red"></div>
+        </div>
+
+        <div class="numpad">
+          <div class="num-btn">1<span class="sub">&nbsp;</span></div>
+          <div class="num-btn">2<span class="sub">ABC</span></div>
+          <div class="num-btn">3<span class="sub">DEF</span></div>
+          <div class="num-btn">4<span class="sub">GHI</span></div>
+          <div class="num-btn">5<span class="sub">JKL</span></div>
+          <div class="num-btn">6<span class="sub">MNO</span></div>
+          <div class="num-btn">7<span class="sub">PQRS</span></div>
+          <div class="num-btn">8<span class="sub">TUV</span></div>
+          <div class="num-btn">9<span class="sub">WXYZ</span></div>
+          <div class="num-btn">*<span class="sub">&nbsp;</span></div>
+          <div class="num-btn">0<span class="sub">+</span></div>
+          <div class="num-btn">#<span class="sub">&nbsp;</span></div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- High scores below the phone -->
+    <div class="score-panel">
+      <div class="score-panel-title">🏆 High Scores</div>
+      <div class="score-list" id="score-list">
+        <div class="score-empty">No scores yet. Be the first!</div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-cell" id="status-score">Score: 0</div>
+      <div class="status-cell" id="status-length">Length: 3</div>
+      <div class="status-cell" id="status-speed">Speed: 1</div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn"><span>⊞</span> Start</a>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
+  </div>
+
+  <script src="../assets/win95.js"></script>
+  <script>
+  (function () {
+    // ---------- Config ----------
+    const COLS = 20;
+    const ROWS = 16;
+    const CELL = 8;
+    const BG     = '#9bbc0f';
+    const BG2    = '#8bac0f';
+    const SNAKE  = '#0f380f';
+    const FOOD   = '#306230';
+    const BORDER = '#306230';
+    const BASE_SPEED = 180;
+    const SPEED_STEP = 8;
+    const SCORES_KEY = 'snake_scores_v1';
+    const MAX_SCORES = 10;
+
+    // ---------- Canvas setup ----------
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width  = COLS * CELL;
+    canvas.height = ROWS * CELL;
+
+    const lcd = document.getElementById('lcd');
+
+    // ---------- Game state ----------
+    let snake, dir, nextDir, food, score, alive, paused, gameLoop, speed;
+
+    function initGame() {
+      const startX = Math.floor(COLS / 2);
+      const startY = Math.floor(ROWS / 2);
+      snake = [
+        { x: startX, y: startY },
+        { x: startX - 1, y: startY },
+        { x: startX - 2, y: startY }
+      ];
+      dir = { x: 1, y: 0 };
+      nextDir = { x: 1, y: 0 };
+      score = 0;
+      alive = true;
+      paused = false;
+      speed = 1;
+      placeFood();
+      updateStatus();
+    }
+
+    function placeFood() {
+      let attempts = 0;
+      while (attempts < 500) {
+        const x = Math.floor(Math.random() * COLS);
+        const y = Math.floor(Math.random() * ROWS);
+        if (!snake.some(s => s.x === x && s.y === y)) {
+          food = { x, y };
+          return;
+        }
+        attempts++;
+      }
+    }
+
+    // ---------- Rendering ----------
+    function draw() {
+      // checkerboard BG
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? BG : BG2;
+          ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+        }
+      }
+
+      // food
+      if (food) {
+        ctx.fillStyle = FOOD;
+        ctx.fillRect(food.x * CELL + 1, food.y * CELL + 1, CELL - 2, CELL - 2);
+      }
+
+      // snake
+      snake.forEach((seg, i) => {
+        ctx.fillStyle = SNAKE;
+        if (i === 0) {
+          // head: full cell
+          ctx.fillRect(seg.x * CELL, seg.y * CELL, CELL, CELL);
+        } else {
+          // body: slightly inset
+          ctx.fillRect(seg.x * CELL + 1, seg.y * CELL + 1, CELL - 2, CELL - 2);
+        }
+      });
+
+      // border
+      ctx.strokeStyle = BORDER;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+
+      // HUD on canvas: score top-left
+      ctx.fillStyle = SNAKE;
+      ctx.font = 'bold 8px Courier New';
+      ctx.textBaseline = 'top';
+      ctx.fillText('Score:' + score, 2, 2);
+
+      // pause indicator
+      if (paused && alive) {
+        ctx.fillStyle = SNAKE;
+        ctx.font = 'bold 10px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('PAUSED', canvas.width/2, canvas.height/2);
+        ctx.textAlign = 'start';
+      }
+    }
+
+    // ---------- Game logic ----------
+    function tick() {
+      if (!alive || paused) return;
+
+      dir = { ...nextDir };
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+      // wall collision
+      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+        die(); return;
+      }
+      // self collision
+      if (snake.some(s => s.x === head.x && s.y === head.y)) {
+        die(); return;
+      }
+
+      snake.unshift(head);
+
+      if (food && head.x === food.x && head.y === food.y) {
+        score += 10;
+        // speed up every 50 points
+        speed = 1 + Math.floor(score / 50);
+        placeFood();
+        sfx.eat();
+      } else {
+        snake.pop();
+      }
+
+      draw();
+      updateStatus();
+
+      clearTimeout(gameLoop);
+      gameLoop = setTimeout(tick, Math.max(60, BASE_SPEED - (speed - 1) * SPEED_STEP));
+    }
+
+    function die() {
+      alive = false;
+      sfx.die();
+      draw();
+      // flash the screen briefly
+      ctx.fillStyle = 'rgba(15,56,15,0.3)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      setTimeout(() => {
+        // check if high score worthy
+        const scores = getScores();
+        if (scores.length < MAX_SCORES || score > scores[scores.length - 1].score) {
+          showNameEntry();
+        } else {
+          showGameOver();
+        }
+      }, 600);
+    }
+
+    // ---------- Screens ----------
+    function showTitle() {
+      document.getElementById('title-screen').style.display = '';
+      document.getElementById('gameover-screen').style.display = 'none';
+      document.getElementById('name-entry').style.display = 'none';
+      const best = getScores()[0];
+      document.getElementById('title-high').textContent = best ? best.score : 0;
+      drawBlankLCD();
+    }
+
+    function showGameOver() {
+      document.getElementById('title-screen').style.display = 'none';
+      document.getElementById('gameover-screen').style.display = '';
+      document.getElementById('name-entry').style.display = 'none';
+      document.getElementById('final-score').textContent = score;
+      setTimeout(() => showTitle(), 2000);
+    }
+
+    function showNameEntry() {
+      document.getElementById('title-screen').style.display = 'none';
+      document.getElementById('gameover-screen').style.display = 'none';
+      const entry = document.getElementById('name-entry');
+      entry.style.display = 'flex';
+      document.getElementById('entry-score').textContent = score;
+      const input = document.getElementById('name-input');
+      input.value = '';
+      input.focus();
+    }
+
+    function submitName() {
+      const input = document.getElementById('name-input');
+      let name = input.value.trim().toUpperCase().slice(0, 8);
+      if (!name) name = 'ANON';
+      addScore(name, score);
+      document.getElementById('name-entry').style.display = 'none';
+      renderScores();
+      showTitle();
+    }
+
+    function startGame() {
+      document.getElementById('title-screen').style.display = 'none';
+      document.getElementById('gameover-screen').style.display = 'none';
+      document.getElementById('name-entry').style.display = 'none';
+      initGame();
+      draw();
+      gameLoop = setTimeout(tick, BASE_SPEED);
+      sfx.start();
+    }
+
+    function togglePause() {
+      if (!alive) return;
+      paused = !paused;
+      if (!paused) {
+        gameLoop = setTimeout(tick, BASE_SPEED - (speed - 1) * SPEED_STEP);
+      }
+      draw();
+    }
+
+    function drawBlankLCD() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? BG : BG2;
+          ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+        }
+      }
+      ctx.strokeStyle = BORDER;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+    }
+
+    function updateStatus() {
+      document.getElementById('status-score').textContent  = 'Score: ' + score;
+      document.getElementById('status-length').textContent = 'Length: ' + snake.length;
+      document.getElementById('status-speed').textContent  = 'Speed: ' + speed;
+    }
+
+    // ---------- Scores (localStorage, shared across all players on this browser) ----------
+    function getScores() {
+      try { return JSON.parse(localStorage.getItem(SCORES_KEY) || '[]'); }
+      catch (e) { return []; }
+    }
+    function addScore(name, pts) {
+      const scores = getScores();
+      scores.push({ name, score: pts, date: new Date().toLocaleDateString() });
+      scores.sort((a, b) => b.score - a.score);
+      if (scores.length > MAX_SCORES) scores.length = MAX_SCORES;
+      localStorage.setItem(SCORES_KEY, JSON.stringify(scores));
+    }
+    function renderScores() {
+      const scores = getScores();
+      const el = document.getElementById('score-list');
+      if (scores.length === 0) {
+        el.innerHTML = '<div class="score-empty">No scores yet. Be the first!</div>';
+        return;
+      }
+      el.innerHTML = scores.map((s, i) =>
+        '<div class="score-row">' +
+        '<span class="rank">' + (i + 1) + '.</span>' +
+        '<span class="name">' + escapeHTML(s.name) + '</span>' +
+        '<span class="pts">' + s.score + '</span>' +
+        '</div>'
+      ).join('');
+    }
+    function escapeHTML(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    // ---------- Input ----------
+    function setDir(dx, dy) {
+      // prevent reversing into yourself
+      if (dir.x === -dx && dir.y === -dy) return;
+      nextDir = { x: dx, y: dy };
+    }
+
+    document.addEventListener('keydown', (e) => {
+      // name entry takes priority
+      if (document.getElementById('name-entry').style.display === 'flex') {
+        if (e.key === 'Enter') { submitName(); e.preventDefault(); }
+        return;
+      }
+
+      // title screen — any key starts
+      if (document.getElementById('title-screen').style.display !== 'none') {
+        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter',' '].includes(e.key)) {
+          startGame();
+          e.preventDefault();
+          return;
+        }
+      }
+
+      switch (e.key) {
+        case 'ArrowUp':    case 'w': case 'W': setDir(0, -1); e.preventDefault(); break;
+        case 'ArrowDown':  case 's': case 'S': setDir(0,  1); e.preventDefault(); break;
+        case 'ArrowLeft':  case 'a': case 'A': setDir(-1, 0); e.preventDefault(); break;
+        case 'ArrowRight': case 'd': case 'D': setDir( 1, 0); e.preventDefault(); break;
+        case 'p': case 'P': case ' ': togglePause(); e.preventDefault(); break;
+      }
+    });
+
+    // D-pad buttons
+    document.getElementById('dpad-up').addEventListener('click',    () => handleDpad(0, -1));
+    document.getElementById('dpad-down').addEventListener('click',  () => handleDpad(0,  1));
+    document.getElementById('dpad-left').addEventListener('click',  () => handleDpad(-1, 0));
+    document.getElementById('dpad-right').addEventListener('click', () => handleDpad( 1, 0));
+
+    function handleDpad(dx, dy) {
+      if (document.getElementById('title-screen').style.display !== 'none') {
+        startGame(); return;
+      }
+      setDir(dx, dy);
+    }
+
+    // Soft keys
+    document.getElementById('btn-start').addEventListener('click', () => {
+      if (document.getElementById('title-screen').style.display !== 'none') {
+        startGame();
+      } else if (!alive) {
+        showTitle();
+      } else {
+        // restart
+        clearTimeout(gameLoop);
+        showTitle();
+      }
+    });
+    document.getElementById('btn-pause').addEventListener('click', togglePause);
+
+    // Name entry submit
+    document.getElementById('name-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { submitName(); e.preventDefault(); }
+    });
+
+    // ---------- Sound (Nokia-style bleeps) ----------
+    let audioCtx;
+    function bleep(freq, dur, gain) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'square';
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.stop(audioCtx.currentTime + dur + 0.01);
+      } catch (e) {}
+    }
+    const sfx = {
+      eat:   () => bleep(880, 0.06, 0.04),
+      die:   () => { bleep(220, 0.1, 0.05); setTimeout(()=>bleep(160,0.15,0.05), 100); setTimeout(()=>bleep(110,0.2,0.04), 220); },
+      start: () => { bleep(440, 0.06, 0.03); setTimeout(()=>bleep(660,0.06,0.03), 70); setTimeout(()=>bleep(880,0.08,0.03), 140); }
+    };
+
+    // ---------- Touch controls (prevent scroll) ----------
+    let touchStartX, touchStartY;
+    lcd.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      e.preventDefault();
+    }, { passive: false });
+    lcd.addEventListener('touchend', (e) => {
+      if (!touchStartX) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      if (Math.max(absDx, absDy) < 10) {
+        // tap — start game if on title screen
+        if (document.getElementById('title-screen').style.display !== 'none') startGame();
+        return;
+      }
+      if (absDx > absDy) setDir(dx > 0 ? 1 : -1, 0);
+      else setDir(0, dy > 0 ? 1 : -1);
+      touchStartX = null;
+      touchStartY = null;
+      e.preventDefault();
+    }, { passive: false });
+
+    // ---------- Init ----------
+    initGame();
+    renderScores();
+    showTitle();
+  })();
+  </script>
+</body>
+</html>

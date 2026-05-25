@@ -5,7 +5,8 @@
     { label: 'Media Player', icon: '\u{1F3B5}', href: '/media-player/', title: 'Media Player' },
     { label: 'Cricket Sim',  icon: '\u{1F3CF}', href: '/cricket-sim/',  title: 'Cricket Sim' },
     { label: 'To do',        icon: '\u{1F4DD}', href: '/to-do/',        title: 'To do' },
-    { label: 'Calculator',   icon: '\u{1F4DF}', href: '/calculator/',   title: 'Calculator' }
+    { label: 'Calculator',   icon: '\u{1F4DF}', href: '/calculator/',   title: 'Calculator' },
+    { label: 'Snake',        icon: '\u{1F40D}', href: '/snake/',        title: 'Snake' }
   ];
 
   function renderDesktop(container) {
