@@ -128,7 +128,7 @@
       </div>
     </div>
     <div class="menu-bar">
-      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; Click your hex then any hex to march &middot; B = build road &middot; Eliminate all factions</span>
+      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; Click your hex then any hex to march &middot; B = build road &middot; F = fog &middot; Eliminate all factions</span>
     </div>
     <div class="game-area">
       <canvas id="game"></canvas>
@@ -136,6 +136,7 @@
       <div class="controls">
         <button class="btn" id="center-btn">Center on Home</button>
         <button class="btn" id="build-btn" title="Toggle road-building mode (B)">Build Road (5)</button>
+        <button class="btn" id="fog-btn" title="Toggle fog of war (F)">Fog: Off</button>
         <button class="btn" id="restart-btn">New Game</button>
       </div>
       <div class="toast" id="toast"></div>
@@ -307,6 +308,11 @@
     let factionAnchors = [{ q: 0, r: 0 }]; // start positions of all factions
     let camera = { x: 0, y: 0 };
     let zoom = 0.7;
+
+    // Fog of war
+    let fogEnabled = false;
+    const seenHexes = new Set();    // hex keys the player has ever seen
+    let visibleHexes = new Set();   // hex keys currently in player vision
     const ZOOM_MIN = 0.35;
     const ZOOM_MAX = 1.8;
     let canvas, ctx;
@@ -365,11 +371,43 @@
       return t;
     }
 
+    // ===== Fog of war =====
+    function updateVisibility() {
+      // Recomputed on demand. Each player-owned hex provides 1-ring vision.
+      const next = new Set();
+      if (!fogEnabled) {
+        visibleHexes = next;
+        return;
+      }
+      territories.forEach(t => {
+        if (t.owner !== 0) return;
+        const k = hexKey(t.q, t.r);
+        next.add(k);
+        seenHexes.add(k);
+        for (const [dq, dr] of NEIGHBORS) {
+          const nk = hexKey(t.q + dq, t.r + dr);
+          next.add(nk);
+          seenHexes.add(nk);
+        }
+      });
+      visibleHexes = next;
+    }
+    function isHexVisible(q, r) {
+      if (!fogEnabled) return true;
+      return visibleHexes.has(hexKey(q, r));
+    }
+    function isHexSeen(q, r) {
+      if (!fogEnabled) return true;
+      const k = hexKey(q, r);
+      return visibleHexes.has(k) || seenHexes.has(k);
+    }
+
     // ===== Pathfinding =====
     function findPath(from, to) {
       if (from.q === to.q && from.r === to.r) return [];
       const destT = ensureTerritory(to.q, to.r);
       if (!isPassable(destT.terrain)) return null;
+      if (!isHexSeen(to.q, to.r)) return null;
       const maxRadius = MAX_PATH_LEN + 2;
       const came = new Map();
       came.set(hexKey(from.q, from.r), null);
@@ -393,6 +431,7 @@
           if (hexDistBetween(nb, from) > maxRadius) continue;
           const nbT = ensureTerritory(nb.q, nb.r);
           if (!isPassable(nbT.terrain)) continue;
+          if (!isHexSeen(nb.q, nb.r)) continue;
           came.set(k, cur);
           queue.push(nb);
         }
@@ -520,6 +559,8 @@
       territories.clear();
       marches.length = 0;
       roads.clear();
+      seenHexes.clear();
+      visibleHexes = new Set();
       worldSeed = (Math.random() * 1e9) | 0;
       tickCount = 0;
       selected = null;
@@ -634,12 +675,22 @@
         const qMin = Math.floor(left / xUnit - r / 2) - 1;
         const qMax = Math.ceil(right / xUnit - r / 2) + 1;
         for (let q = qMin; q <= qMax; q++) {
-          const t = ensureTerritory(q, r);
           const { x, y } = hexToPixel(q, r);
+          const visible = isHexVisible(q, r);
+          const seen = isHexSeen(q, r);
+
+          // Unseen — solid dark, skip everything else
+          if (fogEnabled && !seen) {
+            drawHex(x, y, '#0a1018', '#06080d', 1);
+            continue;
+          }
+
+          const t = ensureTerritory(q, r);
           const passable = isPassable(t.terrain);
 
           let fill, stroke, lw = 1;
-          if (t.owner === NEUTRAL) {
+          if (t.owner === NEUTRAL || (fogEnabled && !visible)) {
+            // In fog (explored only) we render terrain without faction color
             fill = TERRAIN_FILL[t.terrain];
             stroke = TERRAIN_EDGE[t.terrain];
           } else {
@@ -654,8 +705,10 @@
 
           if (isSel) { stroke = '#ffffff'; lw = 3; }
           else if (buildHover) { stroke = '#ffd83a'; lw = 2; }
-          else if (isHover && !gameOver && passable) { stroke = '#ffffff'; lw = 2; }
+          else if (isHover && !gameOver && passable && visible) { stroke = '#ffffff'; lw = 2; }
 
+          const dimmed = fogEnabled && !visible;
+          if (dimmed) ctx.globalAlpha = 0.45;
           drawHex(x, y, fill, stroke, lw);
 
           // Terrain overlay icons
@@ -685,8 +738,8 @@
             ctx.stroke();
           }
 
-          // Troop count — only for passable hexes
-          if (showText && passable && (t.owner !== NEUTRAL || t.troops > 0)) {
+          // Troop count — only for hexes currently visible to the player
+          if (showText && passable && !dimmed && (t.owner !== NEUTRAL || t.troops > 0)) {
             const txt = String(t.troops);
             const fs = txt.length >= 4 ? 11 : 13;
             ctx.font = 'bold ' + fs + 'px Arial, sans-serif';
@@ -698,6 +751,8 @@
             ctx.fillStyle = '#ffffff';
             ctx.fillText(txt, x, ty);
           }
+
+          if (dimmed) ctx.globalAlpha = 1.0;
         }
       }
 
@@ -743,6 +798,10 @@
       marches.forEach(m => {
         const prev = m.step === 0 ? m.from : m.path[m.step - 1];
         const next = m.path[m.step];
+        if (fogEnabled && m.owner !== 0) {
+          // Hide enemy marches that are passing through unseen hexes
+          if (!isHexVisible(prev.q, prev.r) && !isHexVisible(next.q, next.r)) return;
+        }
         const prevPos = hexToPixel(prev.q, prev.r);
         const nextPos = hexToPixel(next.q, next.r);
         const t = Math.max(0, Math.min(1, (now - m.stepStartTime) / m.stepDuration));
@@ -958,6 +1017,18 @@
       else btn.classList.remove('pressed');
     }
 
+    function setFog(enabled) {
+      fogEnabled = enabled;
+      const btn = document.getElementById('fog-btn');
+      if (btn) {
+        btn.textContent = 'Fog: ' + (enabled ? 'On' : 'Off');
+        btn.classList.toggle('pressed', enabled);
+      }
+      // Seed seen set with current player vision so the player isn't
+      // immediately blinded around their existing hexes.
+      updateVisibility();
+    }
+
     // ===== Input =====
     function screenToWorld(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
@@ -1061,6 +1132,7 @@
       document.addEventListener('keydown', (e) => {
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
         if (e.key === 'b' || e.key === 'B') setMode(mode === 'build' ? 'move' : 'build');
+        else if (e.key === 'f' || e.key === 'F') setFog(!fogEnabled);
         else if (e.key === 'Escape') { selected = null; if (mode === 'build') setMode('move'); }
         else if (e.key === '+' || e.key === '=') {
           const rect = canvas.getBoundingClientRect();
@@ -1077,6 +1149,12 @@
       if (!w.inside) return;
       const { q, r } = pixelToHex(w.x, w.y);
       const t = ensureTerritory(q, r);
+
+      // Fog blocks interaction with unseen hexes
+      if (fogEnabled && !isHexSeen(q, r)) {
+        showToast('Unexplored');
+        return;
+      }
 
       // Build mode
       if (mode === 'build') {
@@ -1153,6 +1231,7 @@
             lastFactionTick[fid] = timestamp;
           }
         }
+        if (fogEnabled) updateVisibility();
       }
 
       render(timestamp);
@@ -1174,6 +1253,8 @@
       document.getElementById('play-again').addEventListener('click', initGame);
       const buildBtn = document.getElementById('build-btn');
       if (buildBtn) buildBtn.addEventListener('click', () => setMode(mode === 'build' ? 'move' : 'build'));
+      const fogBtn = document.getElementById('fog-btn');
+      if (fogBtn) fogBtn.addEventListener('click', () => setFog(!fogEnabled));
 
       setupInput();
       initGame();
