@@ -3,7 +3,8 @@
   const DESKTOP_ICONS = [
     { label: 'Game',         icon: '\u{1F3AE}', href: '#',              title: 'Coming soon' },
     { label: 'Media Player', icon: '\u{1F3B5}', href: '/media-player/', title: 'Media Player' },
-    { label: 'Cricket Sim',  icon: '\u{1F3CF}', href: '#',              title: 'Coming soon' }
+    { label: 'Cricket Sim',  icon: '\u{1F3CF}', href: '/cricket-sim/',  title: 'Cricket Sim' },
+    { label: 'To do',        icon: '\u{1F4DD}', href: '/to-do/',        title: 'To do' }
   ];
 
   function renderDesktop(container) {

@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notepad - Monday Jeffrey</title>
+  <link rel="stylesheet" href="../assets/win95.css">
+  <style>
+    .window { width: 480px; }
+    .notepad-body { background: #c0c0c0; }
+
+    /* ---------- Login screen ---------- */
+    .login-box { padding: 16px 20px 20px; }
+    .login-blurb {
+      font-size: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .login-blurb .ic { font-size: 28px; flex-shrink: 0; }
+    .login-tabs { display: flex; }
+    .login-tab {
+      padding: 4px 14px;
+      background: #b8b8b8;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-right: 2px solid #404040;
+      border-bottom: none;
+      cursor: pointer;
+      font-size: 12px;
+      margin-right: -2px;
+    }
+    .login-tab.active {
+      background: #c0c0c0;
+      position: relative;
+      z-index: 2;
+      padding-top: 6px;
+      margin-top: -2px;
+    }
+    .login-panel {
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-right: 2px solid #404040;
+      border-bottom: 2px solid #404040;
+      padding: 14px 14px 12px;
+      background: #c0c0c0;
+      margin-top: -2px;
+      position: relative;
+      z-index: 1;
+    }
+    .form-row {
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .form-row label.lbl { width: 80px; font-size: 12px; }
+    .form-row input[type="text"],
+    .form-row input[type="password"] {
+      flex: 1;
+      padding: 2px 4px;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      background: #ffffff;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+    .form-row .inline {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .form-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .form-msg {
+      font-size: 11px;
+      color: #800000;
+      min-height: 14px;
+      margin-top: 4px;
+    }
+    .form-note {
+      font-size: 11px;
+      color: #404040;
+      margin: 4px 0 8px;
+      line-height: 1.4;
+    }
+
+    /* ---------- Notepad / tasks ---------- */
+    .menu-bar { user-select: none; }
+    .file-menu {
+      position: absolute;
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      box-shadow: 2px 2px 0 #000;
+      min-width: 160px;
+      z-index: 200;
+      display: none;
+    }
+    .file-menu.show { display: block; }
+    .file-menu-item {
+      padding: 4px 18px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .file-menu-item:hover { background: #000080; color: white; }
+    .file-menu-sep {
+      border-top: 1px solid #808080;
+      border-bottom: 1px solid #ffffff;
+      margin: 2px 0;
+    }
+
+    .notepad-shell { padding: 4px 6px 0; }
+    .notepad-content {
+      background: #ffffff;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      min-height: 240px;
+      max-height: 340px;
+      overflow-y: auto;
+      padding: 4px 2px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+    .empty-state {
+      text-align: center;
+      color: #808080;
+      padding: 40px 10px;
+      font-style: italic;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+    }
+    .task-row {
+      display: flex;
+      align-items: center;
+      padding: 3px 6px;
+      gap: 8px;
+      border-bottom: 1px dotted #d8d8d8;
+    }
+    .task-row:hover { background: #f4f4f4; }
+    .task-priority {
+      width: 14px; height: 14px;
+      flex-shrink: 0;
+      border-top: 1px solid #404040;
+      border-left: 1px solid #404040;
+      border-bottom: 1px solid #ffffff;
+      border-right: 1px solid #ffffff;
+      cursor: pointer;
+    }
+    .task-priority.high   { background: #c00000; }
+    .task-priority.normal { background: #f8d800; }
+    .task-priority.low    { background: #b0b0b0; }
+    .task-check { flex-shrink: 0; cursor: pointer; }
+    .task-text {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      outline: none;
+      padding: 1px 2px;
+      color: #000;
+    }
+    .task-text.done {
+      text-decoration: line-through;
+      color: #808080;
+    }
+    .task-del {
+      flex-shrink: 0;
+      cursor: pointer;
+      color: #707070;
+      font-weight: bold;
+      padding: 0 6px;
+      font-family: Arial, sans-serif;
+    }
+    .task-del:hover { color: #c00000; }
+
+    .add-row {
+      padding: 6px 2px 8px;
+      display: flex;
+      gap: 6px;
+    }
+    .add-row input {
+      flex: 1;
+      padding: 3px 5px;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      background: #ffffff;
+    }
+
+    /* ---------- Status bar ---------- */
+    .counter-cell { font-weight: bold; text-align: center; }
+    .counter-bump { animation: bump 0.6s ease-out; }
+    @keyframes bump {
+      0%   { background: #ffff80; transform: scale(1); }
+      40%  { background: #ffff80; transform: scale(1.18); }
+      100% { background: transparent; transform: scale(1); }
+    }
+
+    /* ---------- Win95 modal dialog ---------- */
+    .dlg-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.25);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+    }
+    .dlg-overlay.show { display: flex; }
+    .dlg {
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      min-width: 340px;
+      max-width: 420px;
+      box-shadow: 2px 2px 0 #000;
+    }
+    .dlg-title {
+      background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+      color: white;
+      padding: 3px 4px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .dlg-body {
+      padding: 18px 18px 8px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .dlg-icon { font-size: 36px; flex-shrink: 0; line-height: 1; }
+    .dlg-msg { font-size: 12px; line-height: 1.5; flex: 1; }
+    .dlg-password {
+      font-family: 'Courier New', monospace;
+      font-size: 18px;
+      font-weight: bold;
+      background: #ffffff;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      padding: 8px 12px;
+      margin: 10px 0 6px;
+      letter-spacing: 2px;
+      text-align: center;
+      color: #000080;
+    }
+    .dlg-actions {
+      padding: 6px 14px 14px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .hourglass-ic {
+      display: inline-block;
+      animation: spin 1.5s linear infinite;
+    }
+    @keyframes spin {
+      0%   { transform: rotate(0deg); }
+      50%  { transform: rotate(180deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="desktop"></div>
+
+  <div class="window" data-title="Notepad" data-icon="📝" data-close-href="../index.html">
+    <div class="title-bar">
+      <div class="title-bar-text">
+        <span>📝</span><span id="window-title-text">Notepad - Untitled.todo</span>
+      </div>
+      <div class="title-bar-buttons">
+        <div class="title-btn minimize">_</div>
+        <div class="title-btn maximize">□</div>
+        <div class="title-btn close">×</div>
+      </div>
+    </div>
+
+    <!-- ===== Login view ===== -->
+    <div id="login-view" class="notepad-body">
+      <div class="login-box">
+        <div class="login-blurb">
+          <div class="ic">📝</div>
+          <div>
+            <strong>Notepad cannot open Untitled.todo</strong><br>
+            Sign in to access your saved tasks, or create a new user.
+            <div style="margin-top:6px; font-size:11px; color:#404040;">
+              <em>Note: accounts are stored in this browser only.<br>
+              Passwords cannot be recovered.</em>
+            </div>
+          </div>
+        </div>
+
+        <div class="login-tabs">
+          <div class="login-tab active" data-tab="login">Log In</div>
+          <div class="login-tab" data-tab="create">New User</div>
+        </div>
+        <div class="login-panel">
+          <!-- Login form -->
+          <div id="login-form" class="auth-form">
+            <div class="form-row">
+              <label class="lbl">Username:</label>
+              <input type="text" id="login-username" maxlength="20" autocomplete="off">
+            </div>
+            <div class="form-row">
+              <label class="lbl">Password:</label>
+              <input type="password" id="login-password" maxlength="40" autocomplete="off">
+            </div>
+            <div class="form-row" style="padding-left: 88px;">
+              <label class="inline">
+                <input type="checkbox" id="login-remember"> Remember me on this computer
+              </label>
+            </div>
+            <div class="form-msg" id="login-msg"></div>
+            <div class="form-actions">
+              <button class="btn" id="login-btn">OK</button>
+            </div>
+          </div>
+
+          <!-- Create user form -->
+          <div id="create-form" class="auth-form" style="display:none;">
+            <div class="form-row">
+              <label class="lbl">Username:</label>
+              <input type="text" id="create-username" maxlength="20" autocomplete="off">
+            </div>
+            <div class="form-note">
+              3–20 characters: letters, numbers, underscore.<br>
+              A secure password will be <strong>generated for you</strong>.<br>
+              Write it down — it cannot be recovered.
+            </div>
+            <div class="form-msg" id="create-msg"></div>
+            <div class="form-actions">
+              <button class="btn" id="create-btn">Generate Account</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== App view ===== -->
+    <div id="app-view" class="notepad-body" style="display:none;">
+      <div class="menu-bar">
+        <div class="menu-item" id="file-menu-btn"><u>F</u>ile</div>
+        <div class="menu-item" id="help-menu-btn"><u>H</u>elp</div>
+      </div>
+
+      <div class="file-menu" id="file-menu">
+        <div class="file-menu-item" data-action="clear-done">Clear Completed</div>
+        <div class="file-menu-sep"></div>
+        <div class="file-menu-item" data-action="logout">Log Out</div>
+      </div>
+
+      <div class="notepad-shell">
+        <div class="notepad-content" id="task-list"></div>
+        <div class="add-row">
+          <input type="text" id="new-task-input" maxlength="100"
+                 placeholder="Type a new task and press Enter...">
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-cell" id="status-user">User: —</div>
+        <div class="status-cell counter-cell" id="status-counter">Completed: 0</div>
+        <div class="status-cell" id="status-clock" style="text-align:right;">--:--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Dialog modal ===== -->
+  <div class="dlg-overlay" id="dlg">
+    <div class="dlg">
+      <div class="dlg-title" id="dlg-title">Notepad</div>
+      <div class="dlg-body">
+        <div class="dlg-icon" id="dlg-icon">ℹ️</div>
+        <div class="dlg-msg" id="dlg-msg"></div>
+      </div>
+      <div class="dlg-actions" id="dlg-actions"></div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn"><span>⊞</span> Start</a>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
+  </div>
+
+  <script src="../assets/win95.js"></script>
+  <script>
+  (function () {
+    // ---------- Storage ----------
+    const USERS_KEY   = 'todo_users_v1';
+    const SESSION_KEY = 'todo_session_v1';
+
+    const Store = {
+      getUsers: () => JSON.parse(localStorage.getItem(USERS_KEY) || '{}'),
+      setUsers: (u) => localStorage.setItem(USERS_KEY, JSON.stringify(u)),
+      getData:  (user) => JSON.parse(
+        localStorage.getItem('todo_data_' + user) ||
+        '{"tasks":[],"completed":0}'
+      ),
+      setData:  (user, d) => localStorage.setItem('todo_data_' + user, JSON.stringify(d)),
+      getSession: () => {
+        const a = localStorage.getItem(SESSION_KEY);
+        if (a) return JSON.parse(a);
+        const b = sessionStorage.getItem(SESSION_KEY);
+        if (b) return JSON.parse(b);
+        return null;
+      },
+      setSession: (user, remember) => {
+        const data = JSON.stringify({ user });
+        if (remember) localStorage.setItem(SESSION_KEY, data);
+        else sessionStorage.setItem(SESSION_KEY, data);
+      },
+      clearSession: () => {
+        localStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(SESSION_KEY);
+      }
+    };
+
+    // ---------- Crypto ----------
+    async function sha256(text) {
+      const buf = new TextEncoder().encode(text);
+      const h = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(h))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    function randomSalt() {
+      const arr = new Uint8Array(16);
+      crypto.getRandomValues(arr);
+      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // ---------- Password generator ----------
+    const ADJ = ['BLUE','RED','FAST','SHARP','SILVER','GOLD','PIXEL','CYBER',
+                 'LUCKY','SOLID','CRISP','BOLD','QUIET','TURBO','MAGIC',
+                 'SILENT','BRAVE','MERRY','MIGHTY','SUPER','NEON','RETRO'];
+    const NOUN = ['DRAGON','FALCON','TIGER','MODEM','DISK','LASER','RACCOON',
+                  'PHOENIX','SHARK','EAGLE','COMET','PIXEL','CYBORG','NINJA',
+                  'WIZARD','GOBLIN','RANGER','ROBOT','KNIGHT','RIVER','GIZMO','BYTE'];
+    function generatePassword() {
+      const a = ADJ[Math.floor(Math.random() * ADJ.length)];
+      const n = NOUN[Math.floor(Math.random() * NOUN.length)];
+      const num = Math.floor(Math.random() * 90 + 10);
+      return a + '-' + n + '-' + num;
+    }
+
+    // ---------- Win95 sounds ----------
+    let audioCtx;
+    function tone(freqStart, freqEnd, dur, gain) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.value = freqStart;
+        g.gain.value = gain;
+        o.start();
+        o.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime + dur);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur + 0.02);
+        o.stop(audioCtx.currentTime + dur + 0.05);
+      } catch (e) {}
+    }
+    const sfx = {
+      ding:    () => tone(880, 660, 0.15, 0.05),
+      complete:() => { tone(700, 1000, 0.08, 0.04); setTimeout(()=>tone(1000,1400,0.1,0.04),80); },
+      error:   () => { tone(220, 180, 0.15, 0.05); setTimeout(()=>tone(180,160,0.15,0.05),140); },
+      logon:   () => { tone(523, 659, 0.12, 0.04); setTimeout(()=>tone(659,784,0.15,0.04),120); }
+    };
+
+    // ---------- Dialog ----------
+    function dialog({ title='Notepad', icon='ℹ️', msg='', buttons=[{label:'OK'}] }) {
+      const el = document.getElementById('dlg');
+      document.getElementById('dlg-title').textContent = title;
+      document.getElementById('dlg-icon').textContent  = icon;
+      document.getElementById('dlg-msg').innerHTML     = msg;
+      const actions = document.getElementById('dlg-actions');
+      actions.innerHTML = '';
+      return new Promise(resolve => {
+        if (buttons.length === 0) { el.classList.add('show'); return; }
+        buttons.forEach(b => {
+          const btn = document.createElement('button');
+          btn.className = 'btn';
+          btn.textContent = b.label;
+          btn.onclick = () => {
+            el.classList.remove('show');
+            resolve(b.value !== undefined ? b.value : b.label);
+          };
+          actions.appendChild(btn);
+        });
+        el.classList.add('show');
+      });
+    }
+    function hideDialog() { document.getElementById('dlg').classList.remove('show'); }
+
+    // ---------- Auth ----------
+    async function attemptLogin(username, password, remember) {
+      username = (username || '').trim();
+      if (!username || !password) return 'Enter username and password.';
+      const users = Store.getUsers();
+      const u = users[username];
+      if (!u) return 'No such user on this computer.';
+      const h = await sha256(u.salt + password);
+      if (h !== u.hash) return 'Incorrect password.';
+      Store.setSession(username, remember);
+      sfx.logon();
+      enterApp(username);
+      return null;
+    }
+
+    async function attemptCreate(username) {
+      username = (username || '').trim();
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+        return 'Username must be 3–20 chars: letters, numbers, underscore.';
+      }
+      const users = Store.getUsers();
+      if (users[username]) return 'Username already taken on this computer.';
+
+      // Fake "generating" hourglass dialog (non-blocking visual)
+      dialog({
+        title: 'Generating credentials...',
+        icon: '⏳',
+        msg: '<span class="hourglass-ic">⏳</span> &nbsp; Generating secure password...<br><br><em>Please wait.</em>',
+        buttons: []
+      });
+
+      // Generate password + hash with salt
+      const pwd  = generatePassword();
+      const salt = randomSalt();
+      const hash = await sha256(salt + pwd);
+
+      // Brief artificial delay for the "feel"
+      await new Promise(r => setTimeout(r, 1200));
+
+      users[username] = { salt, hash, created: Date.now() };
+      Store.setUsers(users);
+
+      sfx.ding();
+      hideDialog();
+
+      // Reveal password dialog
+      await dialog({
+        title: 'Your new password',
+        icon: '🔑',
+        msg:
+          '<strong>Welcome, ' + escapeHTML(username) + '.</strong><br>' +
+          'This is your password. <strong>Write it down now.</strong><br>' +
+          'It cannot be recovered.' +
+          '<div class="dlg-password">' + pwd + '</div>' +
+          '<div style="font-size:11px; color:#404040;">' +
+          'After clicking OK you\'ll be logged in.</div>',
+        buttons: [{ label: 'OK' }]
+      });
+
+      // Auto-login after account creation (not remembered by default)
+      Store.setSession(username, false);
+      sfx.logon();
+      enterApp(username);
+      return null;
+    }
+
+    function escapeHTML(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    // ---------- View switching ----------
+    function showLoginView() {
+      document.getElementById('login-view').style.display = '';
+      document.getElementById('app-view').style.display = 'none';
+      document.getElementById('window-title-text').textContent = 'Notepad - Untitled.todo';
+      document.getElementById('login-username').focus();
+    }
+
+    function enterApp(username) {
+      document.getElementById('login-view').style.display = 'none';
+      document.getElementById('app-view').style.display = '';
+      document.getElementById('window-title-text').textContent = 'Notepad - ' + username + '.todo';
+      document.getElementById('status-user').textContent = 'User: ' + username;
+      currentUser = username;
+      renderTasks();
+      document.getElementById('new-task-input').focus();
+    }
+
+    // ---------- Task list logic ----------
+    let currentUser = null;
+    const PRIORITIES = ['normal', 'high', 'low'];
+
+    function loadData() { return Store.getData(currentUser); }
+    function saveData(d) { Store.setData(currentUser, d); }
+
+    function renderTasks() {
+      const data = loadData();
+      const list = document.getElementById('task-list');
+      list.innerHTML = '';
+
+      if (data.tasks.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'No tasks yet. Add one below to get started.';
+        list.appendChild(empty);
+      } else {
+        data.tasks.forEach((t, idx) => {
+          const row = document.createElement('div');
+          row.className = 'task-row';
+
+          const pr = document.createElement('div');
+          pr.className = 'task-priority ' + (t.priority || 'normal');
+          pr.title = 'Priority: ' + (t.priority || 'normal') + ' (click to change)';
+          pr.onclick = () => cyclePriority(idx);
+
+          const chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.className = 'task-check';
+          chk.checked = !!t.done;
+          chk.onchange = () => toggleDone(idx, chk.checked);
+
+          const txt = document.createElement('input');
+          txt.type = 'text';
+          txt.className = 'task-text' + (t.done ? ' done' : '');
+          txt.value = t.text;
+          txt.maxLength = 100;
+          txt.onchange = () => updateText(idx, txt.value);
+
+          const del = document.createElement('div');
+          del.className = 'task-del';
+          del.textContent = '✕';
+          del.title = 'Delete task';
+          del.onclick = () => deleteTask(idx);
+
+          row.appendChild(pr);
+          row.appendChild(chk);
+          row.appendChild(txt);
+          row.appendChild(del);
+          list.appendChild(row);
+        });
+      }
+
+      document.getElementById('status-counter').textContent = 'Completed: ' + data.completed;
+    }
+
+    function addTask(text) {
+      text = (text || '').trim();
+      if (!text) return;
+      const data = loadData();
+      data.tasks.push({
+        text: text.slice(0, 100),
+        priority: 'normal',
+        done: false
+      });
+      saveData(data);
+      renderTasks();
+    }
+
+    function toggleDone(idx, done) {
+      const data = loadData();
+      if (!data.tasks[idx]) return;
+      const wasDone = data.tasks[idx].done;
+      data.tasks[idx].done = done;
+      if (done && !wasDone) {
+        data.completed = (data.completed || 0) + 1;
+        sfx.complete();
+        bumpCounter();
+        celebrate(data.completed);
+      }
+      saveData(data);
+      renderTasks();
+    }
+
+    function bumpCounter() {
+      const c = document.getElementById('status-counter');
+      c.classList.remove('counter-bump');
+      void c.offsetWidth;
+      c.classList.add('counter-bump');
+    }
+
+    function celebrate(count) {
+      const milestones = {
+        1:   { msg: 'First task completed!', icon: '🎉' },
+        10:  { msg: '10 tasks done. Nice streak.', icon: '⭐' },
+        25:  { msg: '25 tasks. You are getting things done.', icon: '🏆' },
+        50:  { msg: 'Half a hundred! 50 tasks completed.', icon: '🎖️' },
+        100: { msg: '100 tasks. Productivity legend.', icon: '👑' },
+        250: { msg: '250 tasks. Are you OK?', icon: '🤖' },
+        500: { msg: '500 tasks. Touch grass maybe?', icon: '🌱' }
+      };
+      const m = milestones[count];
+      if (!m) return;
+      setTimeout(() => {
+        dialog({
+          title: 'Achievement Unlocked',
+          icon: m.icon,
+          msg: '<strong>' + m.msg + '</strong>',
+          buttons: [{ label: 'Cool' }]
+        });
+      }, 200);
+    }
+
+    function cyclePriority(idx) {
+      const data = loadData();
+      if (!data.tasks[idx]) return;
+      const cur = data.tasks[idx].priority || 'normal';
+      const next = PRIORITIES[(PRIORITIES.indexOf(cur) + 1) % PRIORITIES.length];
+      data.tasks[idx].priority = next;
+      saveData(data);
+      renderTasks();
+    }
+
+    function updateText(idx, text) {
+      const data = loadData();
+      if (!data.tasks[idx]) return;
+      data.tasks[idx].text = (text || '').slice(0, 100);
+      saveData(data);
+    }
+
+    async function deleteTask(idx) {
+      const data = loadData();
+      const t = data.tasks[idx];
+      if (!t) return;
+      const ok = await dialog({
+        title: 'Delete task',
+        icon: '⚠️',
+        msg: 'Delete this task?<br><br><em>"' + escapeHTML(t.text) + '"</em>',
+        buttons: [{ label: 'Yes', value: true }, { label: 'No', value: false }]
+      });
+      if (!ok) return;
+      data.tasks.splice(idx, 1);
+      saveData(data);
+      renderTasks();
+    }
+
+    async function clearCompleted() {
+      const data = loadData();
+      const n = data.tasks.filter(t => t.done).length;
+      if (n === 0) {
+        dialog({ title: 'Nothing to clear', icon: 'ℹ️', msg: 'No completed tasks.', buttons: [{label:'OK'}] });
+        return;
+      }
+      const ok = await dialog({
+        title: 'Clear completed',
+        icon: '⚠️',
+        msg: 'Remove ' + n + ' completed task' + (n === 1 ? '' : 's') + ' from the list?<br><br>(Your <strong>Completed</strong> counter will not change.)',
+        buttons: [{ label: 'Yes', value: true }, { label: 'No', value: false }]
+      });
+      if (!ok) return;
+      data.tasks = data.tasks.filter(t => !t.done);
+      saveData(data);
+      renderTasks();
+    }
+
+    function logout() {
+      Store.clearSession();
+      currentUser = null;
+      document.getElementById('login-password').value = '';
+      document.getElementById('login-username').value = '';
+      document.getElementById('login-msg').textContent = '';
+      showLoginView();
+    }
+
+    // ---------- Wire up UI ----------
+    document.addEventListener('DOMContentLoaded', () => {
+
+      // Tab switching
+      document.querySelectorAll('.login-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          const which = tab.dataset.tab;
+          document.getElementById('login-form').style.display  = (which === 'login')  ? '' : 'none';
+          document.getElementById('create-form').style.display = (which === 'create') ? '' : 'none';
+          document.getElementById('login-msg').textContent = '';
+          document.getElementById('create-msg').textContent = '';
+          if (which === 'login')  document.getElementById('login-username').focus();
+          if (which === 'create') document.getElementById('create-username').focus();
+        });
+      });
+
+      // Login
+      const tryLogin = async () => {
+        const u = document.getElementById('login-username').value;
+        const p = document.getElementById('login-password').value;
+        const r = document.getElementById('login-remember').checked;
+        const err = await attemptLogin(u, p, r);
+        if (err) {
+          document.getElementById('login-msg').textContent = err;
+          sfx.error();
+        }
+      };
+      document.getElementById('login-btn').addEventListener('click', tryLogin);
+      ['login-username','login-password'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', e => {
+          if (e.key === 'Enter') tryLogin();
+        });
+      });
+
+      // Create
+      const tryCreate = async () => {
+        const u = document.getElementById('create-username').value;
+        const err = await attemptCreate(u);
+        if (err) {
+          document.getElementById('create-msg').textContent = err;
+          sfx.error();
+        }
+      };
+      document.getElementById('create-btn').addEventListener('click', tryCreate);
+      document.getElementById('create-username').addEventListener('keydown', e => {
+        if (e.key === 'Enter') tryCreate();
+      });
+
+      // Add task
+      const addInput = document.getElementById('new-task-input');
+      addInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          addTask(addInput.value);
+          addInput.value = '';
+        }
+      });
+
+      // File menu
+      const fileBtn  = document.getElementById('file-menu-btn');
+      const fileMenu = document.getElementById('file-menu');
+      fileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const rect = fileBtn.getBoundingClientRect();
+        const winRect = fileBtn.closest('.window').getBoundingClientRect();
+        fileMenu.style.left = (rect.left - winRect.left) + 'px';
+        fileMenu.style.top  = (rect.bottom - winRect.top) + 'px';
+        fileMenu.classList.toggle('show');
+      });
+      document.addEventListener('click', () => fileMenu.classList.remove('show'));
+      fileMenu.querySelectorAll('.file-menu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fileMenu.classList.remove('show');
+          const action = item.dataset.action;
+          if (action === 'logout')     logout();
+          if (action === 'clear-done') clearCompleted();
+        });
+      });
+
+      // Help menu
+      document.getElementById('help-menu-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        dialog({
+          title: 'About Notepad',
+          icon: '📝',
+          msg: '<strong>Notepad To-Do</strong><br>' +
+               'Monday Jeffrey edition<br><br>' +
+               'Tips:<br>' +
+               '• Click the colored square to cycle priority<br>' +
+               '&nbsp;&nbsp;<span style="color:#c00000;">■</span> high &nbsp; ' +
+               '<span style="color:#d8b800;">■</span> normal &nbsp; ' +
+               '<span style="color:#909090;">■</span> low<br>' +
+               '• Press <strong>Enter</strong> to add a task<br>' +
+               '• Click the title of any task to edit it<br>' +
+               '• Completed count never goes down — every win counts',
+          buttons: [{ label: 'OK' }]
+        });
+      });
+
+      // Auto-login if session exists
+      const sess = Store.getSession();
+      if (sess && sess.user && Store.getUsers()[sess.user]) {
+        enterApp(sess.user);
+      } else {
+        showLoginView();
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
