@@ -50,6 +50,7 @@
     .hud .swatch { display: inline-block; width: 10px; height: 10px; border: 1px solid #000; vertical-align: middle; margin-right: 4px; }
     .hud tr.dead { text-decoration: line-through; opacity: 0.45; }
     .hud tr.you td { color: #003a80; }
+    .hud .flavor { font-size: 9px; opacity: 0.65; font-style: italic; }
 
     .controls {
       position: absolute;
@@ -165,7 +166,51 @@
     const HEX_SIZE = 30;
     const SQRT3 = Math.sqrt(3);
     const TROOP_TICK_MS = 1500;
-    const AI_TICK_MS = 2400;
+
+    // Per-faction AI personalities. Each AI faction has its own cadence and
+    // scoring profile so they play visibly differently.
+    const AI_PERSONALITIES = {
+      // Crimson — relentless expansion, sprawls everywhere
+      1: {
+        tickMs: 1800,
+        maxMovesPerTick: 3,
+        sendStyle: 'most',       // send troops - 2
+        threshold: -1,            // will attack at slight expected loss
+        neutralBonus: 5.0,
+        playerBonus: 1.0,
+        terrainMountainsValue: -2,
+        terrainPlainsValue: 0.5,
+        valueWaterBorder: 0,
+        targetCap: Infinity
+      },
+      // Verdant — balanced but slow, steady worker
+      2: {
+        tickMs: 3500,
+        maxMovesPerTick: 1,
+        sendStyle: 'most',
+        threshold: 0,
+        neutralBonus: 3.0,
+        playerBonus: 1.5,
+        terrainMountainsValue: -1,
+        terrainPlainsValue: 0,
+        valueWaterBorder: 0.5,
+        targetCap: Infinity
+      },
+      // Violet — fast tempo, picks strategic ground, stops at a small but
+      // heavily-defended empire
+      3: {
+        tickMs: 1400,
+        maxMovesPerTick: 1,
+        sendStyle: 'most',
+        threshold: 5,             // only attacks with overwhelming force
+        neutralBonus: 1.0,
+        playerBonus: 2.5,
+        terrainMountainsValue: 3, // values chokepoints
+        terrainPlainsValue: 1.5,  // values production
+        valueWaterBorder: 1.5,    // values natural defensive borders
+        targetCap: 14             // stops expanding into neutrals after this
+      }
+    };
 
     const STEP_MS_BASE = 2200;  // ms per hex on plains
     const ROAD_SPEEDUP = 2.5;   // road divides terrain step time
@@ -198,10 +243,10 @@
 
     const NEUTRAL = -1;
     const FACTIONS = [
-      { id: 0, name: 'You',     color: '#4d8fd6', dark: '#2d5a8c' },
-      { id: 1, name: 'Crimson', color: '#d24a4a', dark: '#8c2d2d' },
-      { id: 2, name: 'Verdant', color: '#4ab85e', dark: '#2d6e3a' },
-      { id: 3, name: 'Violet',  color: '#a05cc8', dark: '#5e348c' }
+      { id: 0, name: 'You',     color: '#4d8fd6', dark: '#2d5a8c', flavor: '' },
+      { id: 1, name: 'Crimson', color: '#d24a4a', dark: '#8c2d2d', flavor: 'expansionist' },
+      { id: 2, name: 'Verdant', color: '#4ab85e', dark: '#2d6e3a', flavor: 'balanced' },
+      { id: 3, name: 'Violet',  color: '#a05cc8', dark: '#5e348c', flavor: 'strategist' }
     ];
     const ROAD_COLOR = '#d6b985';
     const ROAD_EDGE = '#5e4a2c';
@@ -271,7 +316,7 @@
     let worldSeed = (Math.random() * 1e9) | 0;
     let gameOver = false;
     let lastTroopTick = 0;
-    let lastAiTick = 0;
+    const lastFactionTick = [0, 0, 0, 0]; // index = faction id
     let toastTimer = null;
     let statusText = 'Select one of your territories.';
 
@@ -482,7 +527,7 @@
       mode = 'move';
       gameOver = false;
       lastTroopTick = 0;
-      lastAiTick = 0;
+      for (let i = 0; i < lastFactionTick.length; i++) lastFactionTick[i] = 0;
       zoom = 0.7;
       statusText = 'Select one of your territories. Scroll to zoom.';
 
@@ -758,9 +803,10 @@
         const perSec = perTick * tickPerSec;
         const rateStr = dead ? '–' : ('+' + (perSec >= 10 ? perSec.toFixed(0) : perSec.toFixed(1)));
         const cls = (dead ? 'dead' : '') + (f.id === 0 ? ' you' : '');
+        const flavor = f.flavor ? ' <span class="flavor">' + f.flavor + '</span>' : '';
         html +=
           '<tr class="' + cls.trim() + '">' +
-          '<td><span class="swatch" style="background:' + f.color + '"></span>' + f.name + '</td>' +
+          '<td><span class="swatch" style="background:' + f.color + '"></span>' + f.name + flavor + '</td>' +
           '<td class="right">' + counts[f.id] + '</td>' +
           '<td class="right army">' + troops[f.id] + '</td>' +
           '<td class="right">' + rateStr + '</td>' +
@@ -781,52 +827,71 @@
     }
 
     // ===== AI =====
-    function aiSendSize(troops) {
-      // Send most of the troops, but leave a small garrison behind.
+    function aiSendSize(p, troops) {
+      if (p.sendStyle === 'half') return Math.max(1, Math.floor(troops / 2));
+      // 'most' (default): send all but 2 garrison
       return Math.max(1, troops - 2);
     }
 
-    function aiTick(now) {
-      for (let fid = 1; fid < FACTIONS.length; fid++) {
-        const owned = [];
-        territories.forEach(t => { if (t.owner === fid) owned.push(t); });
-        if (owned.length === 0) continue;
+    function countAdjacentWater(q, r) {
+      let n = 0;
+      for (const [dq, dr] of NEIGHBORS) {
+        const t = ensureTerritory(q + dq, r + dr);
+        if (t.terrain === T_LAKES || t.terrain === T_OCEANS) n++;
+      }
+      return n;
+    }
 
-        const moves = [];
-        owned.forEach(t => {
-          if (t.troops < 4) return;
-          neighbors(t.q, t.r).forEach(({ q, r }) => {
-            const target = ensureTerritory(q, r);
-            if (target.owner === fid) return;
-            if (!isPassable(target.terrain)) return;
-            const send = aiSendSize(t.troops);
-            const defStrength = target.troops * (target.terrain === T_MOUNTAINS ? 1.35 : 1.0);
-            let score = send - defStrength;
-            if (target.owner === NEUTRAL) score += 3.0; // strong expansion preference
-            if (target.owner === 0) score += 2.0;       // attack player when possible
-            if (target.terrain === T_MOUNTAINS) score -= 1.0;
-            score += (Math.random() - 0.5) * 0.6;
-            moves.push({ from: t, to: target, score });
-          });
+    function aiTickFaction(now, fid) {
+      const p = AI_PERSONALITIES[fid];
+      if (!p) return;
+      const owned = [];
+      territories.forEach(t => { if (t.owner === fid) owned.push(t); });
+      if (owned.length === 0) return;
+
+      const atCap = owned.length >= p.targetCap;
+
+      const moves = [];
+      owned.forEach(t => {
+        if (t.troops < 4) return;
+        neighbors(t.q, t.r).forEach(({ q, r }) => {
+          const target = ensureTerritory(q, r);
+          if (target.owner === fid) return;
+          if (!isPassable(target.terrain)) return;
+          // If at territory cap, only attack the player (defensive war / domination)
+          if (atCap && target.owner !== 0) return;
+
+          const send = aiSendSize(p, t.troops);
+          const defStrength = target.troops * (target.terrain === T_MOUNTAINS ? 1.35 : 1.0);
+          let score = send - defStrength;
+          if (target.owner === NEUTRAL) score += p.neutralBonus;
+          if (target.owner === 0) score += p.playerBonus;
+          if (target.terrain === T_MOUNTAINS) score += p.terrainMountainsValue;
+          if (target.terrain === T_PLAINS) score += p.terrainPlainsValue;
+          if (p.valueWaterBorder) {
+            score += countAdjacentWater(target.q, target.r) * p.valueWaterBorder;
+          }
+          score += (Math.random() - 0.5) * 0.6;
+          moves.push({ from: t, to: target, score });
         });
+      });
 
-        if (moves.length === 0) continue;
-        moves.sort((a, b) => b.score - a.score);
-        // Allow up to 2 attacks per tick (one per source hex)
-        const usedSources = new Set();
-        let executed = 0;
-        for (const m of moves) {
-          if (executed >= 2) break;
-          if (m.score < 0) break;
-          if (m.from.troops < 4) continue;
-          const srcKey = hexKey(m.from.q, m.from.r);
-          if (usedSources.has(srcKey)) continue;
-          const send = aiSendSize(m.from.troops);
-          m.from.troops -= send;
-          makeMarch(fid, send, m.from, [{ q: m.to.q, r: m.to.r }], now);
-          usedSources.add(srcKey);
-          executed++;
-        }
+      if (moves.length === 0) return;
+      moves.sort((a, b) => b.score - a.score);
+
+      const usedSources = new Set();
+      let executed = 0;
+      for (const m of moves) {
+        if (executed >= p.maxMovesPerTick) break;
+        if (m.score < p.threshold) break;
+        if (m.from.troops < 4) continue;
+        const srcKey = hexKey(m.from.q, m.from.r);
+        if (usedSources.has(srcKey)) continue;
+        const send = aiSendSize(p, m.from.troops);
+        m.from.troops -= send;
+        makeMarch(fid, send, m.from, [{ q: m.to.q, r: m.to.r }], now);
+        usedSources.add(srcKey);
+        executed++;
       }
     }
 
@@ -1070,7 +1135,9 @@
     // ===== Main loop =====
     function loop(timestamp) {
       if (!lastTroopTick) lastTroopTick = timestamp;
-      if (!lastAiTick) lastAiTick = timestamp;
+      for (let fid = 1; fid < FACTIONS.length; fid++) {
+        if (!lastFactionTick[fid]) lastFactionTick[fid] = timestamp;
+      }
 
       if (!gameOver) {
         processMarches(timestamp);
@@ -1078,9 +1145,13 @@
           troopTick();
           lastTroopTick = timestamp;
         }
-        if (timestamp - lastAiTick >= AI_TICK_MS) {
-          aiTick(timestamp);
-          lastAiTick = timestamp;
+        for (let fid = 1; fid < FACTIONS.length; fid++) {
+          const p = AI_PERSONALITIES[fid];
+          if (!p) continue;
+          if (timestamp - lastFactionTick[fid] >= p.tickMs) {
+            aiTickFaction(timestamp, fid);
+            lastFactionTick[fid] = timestamp;
+          }
         }
       }
 
