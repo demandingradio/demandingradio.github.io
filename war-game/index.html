@@ -38,14 +38,18 @@
       font-family: 'MS Sans Serif', Arial, sans-serif;
       font-size: 11px;
       pointer-events: none;
-      min-width: 180px;
+      min-width: 250px;
     }
     .hud .title { font-weight: bold; margin-bottom: 4px; }
-    .hud .row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
-    .hud .swatch { width: 10px; height: 10px; border: 1px solid #000; flex-shrink: 0; }
-    .hud .name { flex: 1; }
-    .hud .stats { margin-left: auto; font-variant-numeric: tabular-nums; }
-    .hud .dead { text-decoration: line-through; opacity: 0.45; }
+    .hud table { border-collapse: collapse; width: 100%; }
+    .hud th { font-weight: normal; opacity: 0.75; text-align: right; padding: 0 4px 2px; }
+    .hud th.left { text-align: left; }
+    .hud td { padding: 1px 4px; font-variant-numeric: tabular-nums; }
+    .hud td.right { text-align: right; }
+    .hud td.army { font-weight: bold; }
+    .hud .swatch { display: inline-block; width: 10px; height: 10px; border: 1px solid #000; vertical-align: middle; margin-right: 4px; }
+    .hud tr.dead { text-decoration: line-through; opacity: 0.45; }
+    .hud tr.you td { color: #003a80; }
 
     .controls {
       position: absolute;
@@ -123,7 +127,7 @@
       </div>
     </div>
     <div class="menu-bar">
-      <span style="padding: 1px 4px;">Drag to pan &middot; Click your hex then any hex to march &middot; B = build road &middot; Mountains slow &amp; defend &middot; Water blocks &middot; Eliminate all factions</span>
+      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; Click your hex then any hex to march &middot; B = build road &middot; Eliminate all factions</span>
     </div>
     <div class="game-area">
       <canvas id="game"></canvas>
@@ -256,6 +260,9 @@
     const marches = [];
     const roads = new Set();
     let camera = { x: 0, y: 0 };
+    let zoom = 0.7;
+    const ZOOM_MIN = 0.35;
+    const ZOOM_MAX = 1.8;
     let canvas, ctx;
     let selected = null;
     let hover = null;
@@ -453,7 +460,8 @@
       gameOver = false;
       lastTroopTick = 0;
       lastAiTick = 0;
-      statusText = 'Select one of your territories.';
+      zoom = 0.7;
+      statusText = 'Select one of your territories. Scroll to zoom.';
 
       // Ensure starting regions have passable land + room to grow
       forceLandAround({ q: 0, r: 0 }, 2);
@@ -472,9 +480,9 @@
       });
 
       const aiStarts = [
-        { q: 10, r: -5 },
-        { q: -10, r: 6 },
-        { q: 4, r: 10 }
+        { q: 20, r: -40 },  // north
+        { q: 20, r:  20 },  // south-east
+        { q: -40, r: 20 }   // south-west
       ];
       aiStarts.forEach((center, idx) => {
         const fid = idx + 1;
@@ -539,18 +547,24 @@
       ctx.fillStyle = '#0e1626';
       ctx.fillRect(0, 0, w, h);
 
+      const halfW = w / (2 * zoom);
+      const halfH = h / (2 * zoom);
       const xUnit = HEX_SIZE * SQRT3;
       const yUnit = HEX_SIZE * 1.5;
-      const left   = camera.x - w / 2 - HEX_SIZE * 2;
-      const right  = camera.x + w / 2 + HEX_SIZE * 2;
-      const top    = camera.y - h / 2 - HEX_SIZE * 2;
-      const bottom = camera.y + h / 2 + HEX_SIZE * 2;
+      const left   = camera.x - halfW - HEX_SIZE * 2;
+      const right  = camera.x + halfW + HEX_SIZE * 2;
+      const top    = camera.y - halfH - HEX_SIZE * 2;
+      const bottom = camera.y + halfH + HEX_SIZE * 2;
 
       const rMin = Math.floor(top / yUnit) - 1;
       const rMax = Math.ceil(bottom / yUnit) + 1;
 
       ctx.save();
-      ctx.translate(w / 2 - camera.x, h / 2 - camera.y);
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-camera.x, -camera.y);
+
+      const showText = zoom >= 0.55;
 
       // Hexes
       for (let r = rMin; r <= rMax; r++) {
@@ -609,7 +623,7 @@
           }
 
           // Troop count — only for passable hexes
-          if (passable && (t.owner !== NEUTRAL || t.troops > 0)) {
+          if (showText && passable && (t.owner !== NEUTRAL || t.troops > 0)) {
             const txt = String(t.troops);
             const fs = txt.length >= 4 ? 11 : 13;
             ctx.font = 'bold ' + fs + 'px Arial, sans-serif';
@@ -700,23 +714,41 @@
     function updateHud() {
       const counts = [0, 0, 0, 0];
       const troops = [0, 0, 0, 0];
+      const plains = [0, 0, 0, 0];
+      const mtns = [0, 0, 0, 0];
       territories.forEach(t => {
-        if (t.owner !== NEUTRAL) {
-          counts[t.owner]++;
-          troops[t.owner] += t.troops;
-        }
+        if (t.owner === NEUTRAL) return;
+        counts[t.owner]++;
+        troops[t.owner] += t.troops;
+        if (t.terrain === T_PLAINS) plains[t.owner]++;
+        else if (t.terrain === T_MOUNTAINS) mtns[t.owner]++;
       });
       marches.forEach(m => { troops[m.owner] += m.troops; });
+      const tickPerSec = 1000 / TROOP_TICK_MS;
       const hud = document.getElementById('hud');
-      let html = '<div class="title">Factions</div>';
+      let html = '<div class="title">Factions</div>' +
+        '<table><thead><tr>' +
+        '<th class="left">&nbsp;</th>' +
+        '<th>Hexes</th>' +
+        '<th>Army</th>' +
+        '<th>+/s</th>' +
+        '</tr></thead><tbody>';
       FACTIONS.forEach(f => {
         const dead = counts[f.id] === 0;
-        html += '<div class="row' + (dead ? ' dead' : '') + '">' +
-          '<div class="swatch" style="background:' + f.color + '"></div>' +
-          '<span class="name">' + f.name + '</span>' +
-          '<span class="stats">' + counts[f.id] + ' &middot; ' + troops[f.id] + '</span>' +
-          '</div>';
+        // Per-tick: 1 per plain + 1/5 per mountain (avg) + floor(total/4) empire bonus
+        const perTick = plains[f.id] + mtns[f.id] / MOUNTAIN_PRODUCE_EVERY + Math.floor(counts[f.id] / 4);
+        const perSec = perTick * tickPerSec;
+        const rateStr = dead ? '–' : ('+' + (perSec >= 10 ? perSec.toFixed(0) : perSec.toFixed(1)));
+        const cls = (dead ? 'dead' : '') + (f.id === 0 ? ' you' : '');
+        html +=
+          '<tr class="' + cls.trim() + '">' +
+          '<td><span class="swatch" style="background:' + f.color + '"></span>' + f.name + '</td>' +
+          '<td class="right">' + counts[f.id] + '</td>' +
+          '<td class="right army">' + troops[f.id] + '</td>' +
+          '<td class="right">' + rateStr + '</td>' +
+          '</tr>';
       });
+      html += '</tbody></table>';
       hud.innerHTML = html;
       document.getElementById('status-text').textContent = statusText;
       return counts;
@@ -835,16 +867,31 @@
     function screenToWorld(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
       return {
-        x: (clientX - rect.left) - rect.width / 2 + camera.x,
-        y: (clientY - rect.top) - rect.height / 2 + camera.y,
+        x: ((clientX - rect.left) - rect.width / 2) / zoom + camera.x,
+        y: ((clientY - rect.top) - rect.height / 2) / zoom + camera.y,
         inside: clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
       };
+    }
+
+    function applyZoom(newZoom, anchorClientX, anchorClientY) {
+      newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+      if (Math.abs(newZoom - zoom) < 1e-4) return;
+      const rect = canvas.getBoundingClientRect();
+      const ax = (anchorClientX - rect.left) - rect.width / 2;
+      const ay = (anchorClientY - rect.top) - rect.height / 2;
+      // World point under the anchor before/after must match
+      const wx = ax / zoom + camera.x;
+      const wy = ay / zoom + camera.y;
+      zoom = newZoom;
+      camera.x = wx - ax / zoom;
+      camera.y = wy - ay / zoom;
     }
 
     function setupInput() {
       let dragging = false;
       let dragStart = null;
       let dragMoved = false;
+      let pinch = null; // { d0, z0, cx, cy }
 
       const startDrag = (cx, cy) => {
         dragging = true;
@@ -857,8 +904,8 @@
         const dx = cx - dragStart.x;
         const dy = cy - dragStart.y;
         if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
-        camera.x = dragStart.camX - dx;
-        camera.y = dragStart.camY - dy;
+        camera.x = dragStart.camX - dx / zoom;
+        camera.y = dragStart.camY - dy / zoom;
       };
       const endDrag = (cx, cy) => {
         if (!dragging) return;
@@ -875,22 +922,58 @@
       });
       window.addEventListener('mouseup', (e) => endDrag(e.clientX, e.clientY));
 
+      // Mouse wheel zoom
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const factor = Math.pow(1.0015, -e.deltaY);
+        applyZoom(zoom * factor, e.clientX, e.clientY);
+      }, { passive: false });
+
       canvas.addEventListener('touchstart', (e) => {
-        if (e.touches.length !== 1) return;
-        const t = e.touches[0]; startDrag(t.clientX, t.clientY); e.preventDefault();
+        if (e.touches.length === 1) {
+          const t = e.touches[0]; startDrag(t.clientX, t.clientY);
+        } else if (e.touches.length === 2) {
+          dragging = false;
+          const a = e.touches[0], b = e.touches[1];
+          const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+          pinch = { d0: d, z0: zoom, cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2 };
+        }
+        e.preventDefault();
       }, { passive: false });
       canvas.addEventListener('touchmove', (e) => {
-        if (e.touches.length !== 1) return;
-        const t = e.touches[0]; moveDrag(t.clientX, t.clientY); e.preventDefault();
+        if (e.touches.length === 1 && !pinch) {
+          const t = e.touches[0]; moveDrag(t.clientX, t.clientY);
+        } else if (e.touches.length === 2 && pinch) {
+          const a = e.touches[0], b = e.touches[1];
+          const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+          const cx = (a.clientX + b.clientX) / 2;
+          const cy = (a.clientY + b.clientY) / 2;
+          applyZoom(pinch.z0 * (d / pinch.d0), cx, cy);
+        }
+        e.preventDefault();
       }, { passive: false });
       canvas.addEventListener('touchend', (e) => {
-        const t = e.changedTouches[0]; endDrag(t.clientX, t.clientY);
+        if (e.touches.length === 0) {
+          pinch = null;
+          if (e.changedTouches.length > 0) {
+            const t = e.changedTouches[0]; endDrag(t.clientX, t.clientY);
+          }
+        } else if (e.touches.length === 1) {
+          pinch = null;
+        }
       });
 
       document.addEventListener('keydown', (e) => {
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
         if (e.key === 'b' || e.key === 'B') setMode(mode === 'build' ? 'move' : 'build');
         else if (e.key === 'Escape') { selected = null; if (mode === 'build') setMode('move'); }
+        else if (e.key === '+' || e.key === '=') {
+          const rect = canvas.getBoundingClientRect();
+          applyZoom(zoom * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+        } else if (e.key === '-' || e.key === '_') {
+          const rect = canvas.getBoundingClientRect();
+          applyZoom(zoom / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }
       });
     }
 
