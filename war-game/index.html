@@ -73,6 +73,42 @@
       color: #555;
     }
 
+    /* Custom tooltip — pops to the left of the button (since controls hug the right edge) */
+    .controls .btn[data-tip] { position: relative; }
+    .controls .btn[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      right: calc(100% + 8px);
+      top: 50%;
+      transform: translateY(-50%);
+      background: #ffffd0;
+      color: #000;
+      padding: 6px 9px;
+      font-family: 'MS Sans Serif', Arial, sans-serif;
+      font-size: 11px;
+      width: 230px;
+      border: 1px solid #404040;
+      box-shadow: 1px 1px 0 #000;
+      z-index: 100;
+      pointer-events: none;
+      text-align: left;
+      line-height: 1.4;
+      white-space: normal;
+      cursor: default;
+    }
+    /* Small triangle pointing at the button */
+    .controls .btn[data-tip]:hover::before {
+      content: '';
+      position: absolute;
+      right: calc(100% + 1px);
+      top: 50%;
+      transform: translateY(-50%);
+      border: 6px solid transparent;
+      border-left-color: #404040;
+      z-index: 101;
+      pointer-events: none;
+    }
+
     .toast {
       position: absolute;
       bottom: 12px;
@@ -139,14 +175,22 @@
       <canvas id="game"></canvas>
       <div class="hud" id="hud"></div>
       <div class="controls">
-        <button class="btn" id="center-btn">Center on Home</button>
-        <button class="btn" id="pause-btn" title="Pause for 30s (P), 5min cooldown">Pause (30s)</button>
-        <button class="btn" id="build-btn" title="Build road (B) — 5 troops">Road (5)</button>
-        <button class="btn" id="farm-btn" title="Build farm — 10 gold, +50% production">Farm (10g)</button>
-        <button class="btn" id="fort-btn" title="Build fortress — 15 gold, +50% defence">Fort (15g)</button>
-        <button class="btn" id="tower-btn" title="Build tower — 8 gold, +2 vision">Tower (8g)</button>
-        <button class="btn" id="fog-btn" title="Toggle fog of war (F)">Fog: Off</button>
-        <button class="btn" id="restart-btn">New Game</button>
+        <button class="btn" id="center-btn"
+          data-tip="Centre the camera on your capital. Doesn't change the zoom level.">Center on Home</button>
+        <button class="btn" id="pause-btn"
+          data-tip="Freeze the game for up to 30 seconds so you can plan. 5-minute cooldown between pauses. Shortcut: P or Space.">Pause (30s)</button>
+        <button class="btn" id="build-btn"
+          data-tip="Road mode — click your hex to lay a road (6 gold). Marches step ~2.5× faster between two connected road hexes. Shortcut: B.">Road (6g)</button>
+        <button class="btn" id="farm-btn"
+          data-tip="Farm mode — click your hex to build a farm (10 gold). Boosts that hex's troop production by 50%.">Farm (10g)</button>
+        <button class="btn" id="fort-btn"
+          data-tip="Fortress mode — click your hex to build a fortress (15 gold). Defenders here fight at +50% strength.">Fort (15g)</button>
+        <button class="btn" id="tower-btn"
+          data-tip="Tower mode — click your hex to build a watchtower (8 gold). Adds 2 hexes of vision range when fog of war is on.">Tower (8g)</button>
+        <button class="btn" id="fog-btn"
+          data-tip="Toggle fog of war. When on, hexes you've never been near render as solid black, and enemy moves in fog are hidden. Shortcut: F.">Fog: Off</button>
+        <button class="btn" id="restart-btn"
+          data-tip="Abandon the current game and generate a fresh world. Your seen-hexes memory and gold reset.">New Game</button>
       </div>
       <div class="toast" id="toast"></div>
       <div class="game-over" id="game-over">
@@ -257,7 +301,7 @@
     const STEP_MS_BASE = 2200;  // ms per hex on plains
     const ROAD_SPEEDUP = 2.5;   // road divides terrain step time
     const MAX_PATH_LEN = 30;    // max hex distance per march
-    const ROAD_BUILD_COST = 5;
+    const ROAD_BUILD_COST_GOLD = 6;
     const MOUNTAIN_PRODUCE_EVERY = 5;  // mountains produce 1 troop every N ticks
 
     // Terrain
@@ -1319,7 +1363,7 @@
     function setMode(m) {
       mode = m;
       selected = null;
-      if (mode === 'build') statusText = 'Road mode: click your hex (' + ROAD_BUILD_COST + ' troops).';
+      if (mode === 'build') statusText = 'Road mode: click your hex (' + ROAD_BUILD_COST_GOLD + ' gold).';
       else if (mode === 'farm') statusText = 'Farm mode: click your hex (' + IMPROVEMENTS.farm.cost + ' gold).';
       else if (mode === 'fortress') statusText = 'Fortress mode: click your hex (' + IMPROVEMENTS.fortress.cost + ' gold).';
       else if (mode === 'tower') statusText = 'Tower mode: click your hex (' + IMPROVEMENTS.tower.cost + ' gold).';
@@ -1546,8 +1590,8 @@
       if (mode === 'build') {
         if (t.owner !== 0) { showToast('Can only build on your own hexes'); return; }
         if (roads.has(hexKey(q, r))) { showToast('Already has a road'); return; }
-        if (t.troops <= ROAD_BUILD_COST) { showToast('Need more than ' + ROAD_BUILD_COST + ' troops here'); return; }
-        t.troops -= ROAD_BUILD_COST;
+        if (gold[0] < ROAD_BUILD_COST_GOLD) { showToast('Need ' + ROAD_BUILD_COST_GOLD + ' gold (have ' + Math.floor(gold[0]) + ')'); return; }
+        gold[0] -= ROAD_BUILD_COST_GOLD;
         roads.add(hexKey(q, r));
         return;
       }
