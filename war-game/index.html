@@ -67,6 +67,11 @@
       font-size: 11px;
       padding: 4px 8px;
     }
+    .controls .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      color: #555;
+    }
 
     .toast {
       position: absolute;
@@ -128,14 +133,18 @@
       </div>
     </div>
     <div class="menu-bar">
-      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; Click your hex then any hex to march &middot; B = build road &middot; F = fog &middot; Eliminate all factions</span>
+      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; March your hexes &middot; B = road, F = fog, P = pause &middot; Capture enemy capitals to win</span>
     </div>
     <div class="game-area">
       <canvas id="game"></canvas>
       <div class="hud" id="hud"></div>
       <div class="controls">
         <button class="btn" id="center-btn">Center on Home</button>
-        <button class="btn" id="build-btn" title="Toggle road-building mode (B)">Build Road (5)</button>
+        <button class="btn" id="pause-btn" title="Pause for 30s (P), 5min cooldown">Pause (30s)</button>
+        <button class="btn" id="build-btn" title="Build road (B) — 5 troops">Road (5)</button>
+        <button class="btn" id="farm-btn" title="Build farm — 10 gold, +50% production">Farm (10g)</button>
+        <button class="btn" id="fort-btn" title="Build fortress — 15 gold, +50% defence">Fort (15g)</button>
+        <button class="btn" id="tower-btn" title="Build tower — 8 gold, +2 vision">Tower (8g)</button>
         <button class="btn" id="fog-btn" title="Toggle fog of war (F)">Fog: Off</button>
         <button class="btn" id="restart-btn">New Game</button>
       </div>
@@ -167,6 +176,38 @@
     const HEX_SIZE = 30;
     const SQRT3 = Math.sqrt(3);
     const TROOP_TICK_MS = 1500;
+
+    // Development levels
+    const MAX_DEV_LEVEL = 10;
+    const TICKS_PER_LEVEL = 20; // 20 ticks × 1.5s = 30s per level
+    // Lvl 1-2 → 1, Lvl 3-4 → 2, Lvl 5-6 → 3, Lvl 7-8 → 4, Lvl 9-10 → 5 (plains base)
+    const DEV_PRODUCTION = [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5];
+
+    // Troop upkeep
+    const UPKEEP_PER_HEX_THRESHOLD = 25;
+    const UPKEEP_DRAIN_PER_10_EXCESS = 1; // 1 troop drained per 10 excess army per tick
+
+    // Resources
+    const GOLD_MINE_RATE = 1;      // gold per tick from a gold mine
+    const RESOURCE_DENSITY = 0.035; // ~1 in 28 passable hexes
+    const RESOURCE_MIN_DIST = 6;   // hexes from any faction anchor
+
+    // Improvements
+    const IMPROVEMENTS = {
+      farm:     { label: 'Farm',     short: 'F', cost: 10, prodMult: 1.5 },
+      fortress: { label: 'Fortress', short: '+', cost: 15, defMult:  1.5 },
+      tower:    { label: 'Tower',    short: 'T', cost: 8,  visionPlus: 2 }
+    };
+
+    // Capital
+    const CAPITAL_DEV_START = 5;       // capital center starts at Lvl 5
+    const CAPITAL_RING_DEV_START = 3;  // ring hexes at Lvl 3
+    const CAPITAL_DEFENDER_MULT = 1.5; // +50% defender bonus on capital hexes
+    const CAPITAL_PROD_BONUS = 1;      // +1 flat production per tick on capital hexes
+
+    // Pause
+    const PAUSE_DURATION_MS = 30000;
+    const PAUSE_COOLDOWN_MS = 300000; // 5 minutes
 
     // Per-faction AI personalities. Each AI faction has its own cadence and
     // scoring profile so they play visibly differently.
@@ -313,6 +354,22 @@
     let fogEnabled = false;
     const seenHexes = new Set();    // hex keys the player has ever seen
     let visibleHexes = new Set();   // hex keys currently in player vision
+
+    // Resources (gold per faction)
+    const gold = [0, 0, 0, 0];
+
+    // Game time vs real time (so pause halts game logic but not rendering)
+    let gameTime = 0;
+    let lastRealTime = 0;
+
+    // Pause state
+    let isPaused = false;
+    let pauseStartedAt = 0;     // realTime when current pause started
+    let lastPauseEnd = -Infinity; // realTime when last pause ended
+
+    // Build mode for new improvements
+    // mode: 'move' | 'build-road' | 'build-farm' | 'build-fortress' | 'build-tower'
+    // Previously 'build' meant road; now disambiguate.
     const ZOOM_MIN = 0.35;
     const ZOOM_MAX = 1.8;
     let canvas, ctx;
@@ -356,24 +413,56 @@
       return troops;
     }
 
+    function resourceAt(q, r) {
+      // Deterministic per-tile gold-mine placement, but not too close to any anchor
+      const h = hash2d(q, r, worldSeed ^ 0x6F1D31);
+      if (h >= RESOURCE_DENSITY) return null;
+      if (distToNearestAnchor(q, r) < RESOURCE_MIN_DIST) return null;
+      return 'gold';
+    }
+
     function ensureTerritory(q, r) {
       const k = hexKey(q, r);
       let t = territories.get(k);
       if (!t) {
         const terrain = terrainAt(q, r);
         let troops = 0;
+        let resource = null;
         if (isPassable(terrain)) {
           troops = neutralGarrisonAt(q, r, terrain);
+          resource = resourceAt(q, r);
         }
-        t = { q, r, owner: NEUTRAL, troops, terrain };
+        t = {
+          q, r,
+          owner: NEUTRAL,
+          troops,
+          terrain,
+          level: 1,
+          heldTicks: 0,
+          improvement: null,
+          resource,
+          isCapital: false,
+          capitalCenter: null
+        };
         territories.set(k, t);
       }
       return t;
     }
 
     // ===== Fog of war =====
+    function addVisionRing(centerQ, centerR, range, into) {
+      for (let dq = -range; dq <= range; dq++) {
+        for (let dr = -range; dr <= range; dr++) {
+          if (Math.abs(dq + dr) > range) continue;
+          const k = hexKey(centerQ + dq, centerR + dr);
+          into.add(k);
+          seenHexes.add(k);
+        }
+      }
+    }
     function updateVisibility() {
-      // Recomputed on demand. Each player-owned hex provides 1-ring vision.
+      // Recomputed on demand. Each player-owned hex provides 1-ring vision;
+      // towers extend it; capital provides 2-ring vision.
       const next = new Set();
       if (!fogEnabled) {
         visibleHexes = next;
@@ -381,14 +470,10 @@
       }
       territories.forEach(t => {
         if (t.owner !== 0) return;
-        const k = hexKey(t.q, t.r);
-        next.add(k);
-        seenHexes.add(k);
-        for (const [dq, dr] of NEIGHBORS) {
-          const nk = hexKey(t.q + dq, t.r + dr);
-          next.add(nk);
-          seenHexes.add(nk);
-        }
+        let range = 1;
+        if (t.improvement === 'tower') range += IMPROVEMENTS.tower.visionPlus;
+        if (t.isCapital) range = Math.max(range, 2);
+        addVisionRing(t.q, t.r, range, next);
       });
       visibleHexes = next;
     }
@@ -460,10 +545,47 @@
       });
     }
 
-    function resolveCombat(attackerTroops, defenderTroops, defenderTerrain) {
-      const defMult = (defenderTerrain === T_MOUNTAINS) ? 1.35 : 1.0;
+    function defenderMultiplier(target) {
+      let m = 1.0;
+      if (target.terrain === T_MOUNTAINS) m *= 1.35;
+      if (target.improvement === 'fortress') m *= IMPROVEMENTS.fortress.defMult;
+      if (target.isCapital) m *= CAPITAL_DEFENDER_MULT;
+      return m;
+    }
+
+    function onHexCaptured(target, newOwner) {
+      const fallenOwner = target.owner;
+      const isCenter = target.isCapital && target.capitalCenter &&
+                       target.capitalCenter.q === target.q && target.capitalCenter.r === target.r;
+      target.owner = newOwner;
+      target.level = 1;
+      target.heldTicks = 0;
+      target.improvement = null;
+      if (isCenter && fallenOwner !== NEUTRAL) {
+        // Capital fell — that faction collapses. All their hexes go neutral
+        // (anarchy), their marches dissolve.
+        territories.forEach(t => {
+          if (t.owner === fallenOwner) {
+            t.owner = NEUTRAL;
+            t.level = 1;
+            t.heldTicks = 0;
+            t.improvement = null;
+            t.isCapital = false;
+            t.capitalCenter = null;
+            // Leave a small holdout garrison so it's not a free grab
+            t.troops = Math.max(t.troops, 2);
+          }
+        });
+        for (let i = marches.length - 1; i >= 0; i--) {
+          if (marches[i].owner === fallenOwner) marches.splice(i, 1);
+        }
+      }
+    }
+
+    function resolveCombat(attackerTroops, target) {
+      const defMult = defenderMultiplier(target);
       const atk = attackerTroops * (0.75 + Math.random() * 0.5);
-      const def = defenderTroops * defMult * (0.95 + Math.random() * 0.5);
+      const def = target.troops * defMult * (0.95 + Math.random() * 0.5);
       if (atk > def) {
         return { winner: 'a', survivors: Math.max(1, Math.floor((atk - def) * 0.85)) };
       }
@@ -489,9 +611,9 @@
             }
             // pass through friendly hex
           } else {
-            const r = resolveCombat(m.troops, target.troops, target.terrain);
+            const r = resolveCombat(m.troops, target);
             if (r.winner === 'a') {
-              target.owner = m.owner;
+              onHexCaptured(target, m.owner);
               if (isFinal) {
                 target.troops = r.survivors;
                 marches.splice(i, 1);
@@ -546,6 +668,31 @@
       }
     }
 
+    // Each faction's capital center hex coordinates
+    let capitalCenters = [];
+
+    function setupCapital(center, fid) {
+      // Create a 7-hex capital cluster (center + 6 neighbors).
+      const centerT = ensureTerritory(center.q, center.r);
+      centerT.terrain = T_PLAINS;
+      centerT.owner = fid;
+      centerT.troops = 18;
+      centerT.level = CAPITAL_DEV_START;
+      centerT.heldTicks = 0;
+      centerT.isCapital = true;
+      centerT.capitalCenter = { q: center.q, r: center.r };
+      neighbors(center.q, center.r).forEach(({ q, r }) => {
+        const t = ensureTerritory(q, r);
+        t.terrain = T_PLAINS;
+        t.owner = fid;
+        t.troops = 14;
+        t.level = CAPITAL_RING_DEV_START;
+        t.heldTicks = 0;
+        t.isCapital = true;
+        t.capitalCenter = { q: center.q, r: center.r };
+      });
+    }
+
     function initGame() {
       const aiStarts = [
         { q: 20, r: -40 },  // north
@@ -555,12 +702,14 @@
       // Set anchors BEFORE generating any terrain so garrisons scale by
       // distance to the nearest faction, not just from origin.
       factionAnchors = [{ q: 0, r: 0 }].concat(aiStarts);
+      capitalCenters = factionAnchors.slice();
 
       territories.clear();
       marches.length = 0;
       roads.clear();
       seenHexes.clear();
       visibleHexes = new Set();
+      for (let i = 0; i < gold.length; i++) gold[i] = 0;
       worldSeed = (Math.random() * 1e9) | 0;
       tickCount = 0;
       selected = null;
@@ -569,38 +718,23 @@
       gameOver = false;
       lastTroopTick = 0;
       for (let i = 0; i < lastFactionTick.length; i++) lastFactionTick[i] = 0;
+      gameTime = 0;
+      lastRealTime = 0;
+      isPaused = false;
+      lastPauseEnd = -Infinity;
       zoom = 0.7;
       statusText = 'Select one of your territories. Scroll to zoom.';
 
-      // Ensure starting regions have passable land + room to grow
-      forceLandAround({ q: 0, r: 0 }, 2);
+      // Ensure all capital areas have passable land + breathing room
+      forceLandAround({ q: 0, r: 0 }, 3);
+      aiStarts.forEach(c => forceLandAround(c, 3));
 
-      const playerStart = [
-        { q: 0, r: 0 },
-        { q: 1, r: 0 },
-        { q: 0, r: 1 },
-        { q: -1, r: 1 }
-      ];
-      playerStart.forEach(({ q, r }) => {
-        const t = ensureTerritory(q, r);
-        t.terrain = T_PLAINS;
-        t.owner = 0;
-        t.troops = 12;
-      });
-
-      aiStarts.forEach((center, idx) => {
-        const fid = idx + 1;
-        forceLandAround(center, 2);
-        const cells = [center].concat(neighbors(center.q, center.r).slice(0, 2));
-        cells.forEach(({ q, r }) => {
-          const t = ensureTerritory(q, r);
-          t.terrain = T_PLAINS;
-          t.owner = fid;
-          t.troops = 14;
-        });
-      });
+      // Set up each faction's 7-hex capital cluster
+      setupCapital({ q: 0, r: 0 }, 0);
+      aiStarts.forEach((center, idx) => setupCapital(center, idx + 1));
 
       updateBuildButton();
+      updatePauseButton();
       centerOnHome();
       hideGameOver();
     }
@@ -643,6 +777,13 @@
       ctx.strokeStyle = stroke;
       ctx.stroke();
     }
+
+    function hexVertex(cx, cy, i) {
+      const ang = Math.PI / 180 * (60 * i - 30);
+      return { x: cx + HEX_SIZE * Math.cos(ang), y: cy + HEX_SIZE * Math.sin(ang) };
+    }
+    // Maps NEIGHBORS index → edge index (edge i connects vertex i to vertex i+1)
+    const NEIGHBOR_EDGE_IDX = [0, 5, 4, 3, 2, 1];
 
     function render(now) {
       const w = canvas.clientWidth;
@@ -701,10 +842,16 @@
 
           const isSel = selected && selected.q === q && selected.r === r;
           const isHover = hover && hover.q === q && hover.r === r;
-          const buildHover = isHover && mode === 'build' && t.owner === 0;
+          const inBuildMode = mode !== 'move';
+          const buildHover = isHover && inBuildMode && t.owner === 0;
 
           if (isSel) { stroke = '#ffffff'; lw = 3; }
           else if (buildHover) { stroke = '#ffd83a'; lw = 2; }
+          else if (t.isCapital && visible && t.owner !== NEUTRAL) {
+            const f = FACTIONS[t.owner];
+            stroke = '#ffeaa6';
+            lw = 1.5;
+          }
           else if (isHover && !gameOver && passable && visible) { stroke = '#ffffff'; lw = 2; }
 
           const dimmed = fogEnabled && !visible;
@@ -752,6 +899,55 @@
             ctx.fillText(txt, x, ty);
           }
 
+          // Level pip for owned hexes (upper-left)
+          if (showText && t.owner !== NEUTRAL && !dimmed) {
+            ctx.font = 'bold 9px Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillText('L' + t.level, x - HEX_SIZE * 0.65 + 1, y - HEX_SIZE * 0.55 + 1);
+            ctx.fillStyle = t.level >= 8 ? '#ffe9a4' : '#ffffff';
+            ctx.fillText('L' + t.level, x - HEX_SIZE * 0.65, y - HEX_SIZE * 0.55);
+          }
+
+          // Resource indicator (gold mine) — small yellow circle bottom-left
+          if (showText && t.resource === 'gold') {
+            const rx = x - HEX_SIZE * 0.45;
+            const ry = y + HEX_SIZE * 0.45;
+            ctx.fillStyle = '#3a2e10';
+            ctx.beginPath(); ctx.arc(rx + 1, ry + 1, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffd24a';
+            ctx.beginPath(); ctx.arc(rx, ry, 4.5, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#a07a14';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+
+          // Improvement icon (bottom-right)
+          if (showText && t.improvement && !dimmed) {
+            const ix = x + HEX_SIZE * 0.4;
+            const iy = y + HEX_SIZE * 0.45;
+            ctx.font = 'bold 11px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath(); ctx.arc(ix, iy, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(IMPROVEMENTS[t.improvement].short, ix, iy + 1);
+          }
+
+          // Crown on capital centre
+          if (showText && t.isCapital && t.capitalCenter &&
+              t.capitalCenter.q === q && t.capitalCenter.r === r && t.owner !== NEUTRAL && !dimmed) {
+            ctx.font = 'bold 14px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillText('♔', x + 1, y - HEX_SIZE * 0.35 + 1);
+            ctx.fillStyle = '#ffe9a4';
+            ctx.fillText('♔', x, y - HEX_SIZE * 0.35);
+          }
+
           if (dimmed) ctx.globalAlpha = 1.0;
         }
       }
@@ -794,6 +990,38 @@
       });
       ctx.lineCap = 'butt';
 
+      // Capital cluster outline — thick gold border on the cluster perimeter
+      territories.forEach(t => {
+        if (!t.isCapital || t.owner === NEUTRAL) return;
+        if (fogEnabled && !isHexVisible(t.q, t.r)) return;
+        const pos = hexToPixel(t.q, t.r);
+        for (let i = 0; i < 6; i++) {
+          const [dq, dr] = NEIGHBORS[i];
+          const nb = ensureTerritory(t.q + dq, t.r + dr);
+          const sameCapital = nb.isCapital && nb.capitalCenter && t.capitalCenter &&
+            nb.capitalCenter.q === t.capitalCenter.q && nb.capitalCenter.r === t.capitalCenter.r &&
+            nb.owner === t.owner;
+          if (sameCapital) continue;
+          const ei = NEIGHBOR_EDGE_IDX[i];
+          const v1 = hexVertex(pos.x, pos.y, ei);
+          const v2 = hexVertex(pos.x, pos.y, (ei + 1) % 6);
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = '#1a1208';
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.moveTo(v1.x, v1.y);
+          ctx.lineTo(v2.x, v2.y);
+          ctx.stroke();
+          ctx.strokeStyle = '#ffd66a';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(v1.x, v1.y);
+          ctx.lineTo(v2.x, v2.y);
+          ctx.stroke();
+          ctx.lineCap = 'butt';
+        }
+      });
+
       // Marching armies
       marches.forEach(m => {
         const prev = m.step === 0 ? m.from : m.path[m.step - 1];
@@ -833,22 +1061,50 @@
     }
 
     // ===== HUD =====
-    function updateHud() {
+    function updateHud(realTime) {
+      updatePauseButton();
       const counts = [0, 0, 0, 0];
       const troops = [0, 0, 0, 0];
-      const plains = [0, 0, 0, 0];
-      const mtns = [0, 0, 0, 0];
+      const prodPerTick = [0, 0, 0, 0];
+      const goldRate = [0, 0, 0, 0];
+      const ownedLists = [[], [], [], []];
+
       territories.forEach(t => {
         if (t.owner === NEUTRAL) return;
         counts[t.owner]++;
         troops[t.owner] += t.troops;
-        if (t.terrain === T_PLAINS) plains[t.owner]++;
-        else if (t.terrain === T_MOUNTAINS) mtns[t.owner]++;
+        ownedLists[t.owner].push(t);
+        // Use averaged production: plains contribute full hexProduction,
+        // mountains contribute proportional (1/N ticks)
+        if (t.terrain === T_PLAINS) {
+          prodPerTick[t.owner] += hexProduction(t);
+        } else if (t.terrain === T_MOUNTAINS) {
+          // Simulate average mountain output ignoring the modulo cadence
+          let mtnAvg = (DEV_PRODUCTION[t.level] || 1) / 2 / MOUNTAIN_PRODUCE_EVERY;
+          if (t.improvement === 'farm') mtnAvg *= IMPROVEMENTS.farm.prodMult;
+          if (t.isCapital) mtnAvg += CAPITAL_PROD_BONUS / MOUNTAIN_PRODUCE_EVERY;
+          prodPerTick[t.owner] += mtnAvg;
+        }
+        if (t.resource === 'gold') goldRate[t.owner] += GOLD_MINE_RATE;
       });
       marches.forEach(m => { troops[m.owner] += m.troops; });
+
+      // Empire bonus + upkeep estimate
+      FACTIONS.forEach(f => {
+        const fid = f.id;
+        prodPerTick[fid] += Math.floor(counts[fid] / 4);
+        const cap = counts[fid] * UPKEEP_PER_HEX_THRESHOLD;
+        const excess = Math.max(0, troops[fid] - cap);
+        const upkeep = Math.floor(excess / 10) * UPKEEP_DRAIN_PER_10_EXCESS;
+        prodPerTick[fid] -= upkeep;
+      });
+
       const tickPerSec = 1000 / TROOP_TICK_MS;
       const hud = document.getElementById('hud');
-      let html = '<div class="title">Factions</div>' +
+      const playerGoldRateStr = (goldRate[0] * tickPerSec).toFixed(1);
+      let html =
+        '<div class="title">You · Gold: ' + Math.floor(gold[0]) +
+        ' <span class="flavor">(+' + playerGoldRateStr + '/s)</span></div>' +
         '<table><thead><tr>' +
         '<th class="left">&nbsp;</th>' +
         '<th>Hexes</th>' +
@@ -857,10 +1113,11 @@
         '</tr></thead><tbody>';
       FACTIONS.forEach(f => {
         const dead = counts[f.id] === 0;
-        // Per-tick: 1 per plain + 1/5 per mountain (avg) + floor(total/4) empire bonus
-        const perTick = plains[f.id] + mtns[f.id] / MOUNTAIN_PRODUCE_EVERY + Math.floor(counts[f.id] / 4);
-        const perSec = perTick * tickPerSec;
-        const rateStr = dead ? '–' : ('+' + (perSec >= 10 ? perSec.toFixed(0) : perSec.toFixed(1)));
+        const perSec = prodPerTick[f.id] * tickPerSec;
+        let rateStr;
+        if (dead) rateStr = '–';
+        else if (perSec >= 10) rateStr = (perSec >= 0 ? '+' : '') + perSec.toFixed(0);
+        else rateStr = (perSec >= 0 ? '+' : '') + perSec.toFixed(1);
         const cls = (dead ? 'dead' : '') + (f.id === 0 ? ' you' : '');
         const flavor = f.flavor ? ' <span class="flavor">' + f.flavor + '</span>' : '';
         html +=
@@ -956,20 +1213,54 @@
 
     // ===== Troop production =====
     let tickCount = 0;
+
+    // Compute per-hex production for one tick (factoring in dev, improvements, capital)
+    function hexProduction(t) {
+      if (t.owner === NEUTRAL) return 0;
+      let prod = 0;
+      if (t.terrain === T_PLAINS) {
+        prod = DEV_PRODUCTION[t.level] || 1;
+      } else if (t.terrain === T_MOUNTAINS) {
+        // Mountains still produce on schedule, scaled by dev (rounded down for cadence)
+        if (tickCount % MOUNTAIN_PRODUCE_EVERY === 0) {
+          prod = Math.max(1, Math.floor((DEV_PRODUCTION[t.level] || 1) / 2));
+        }
+      }
+      if (t.improvement === 'farm' && prod > 0) {
+        prod = Math.ceil(prod * IMPROVEMENTS.farm.prodMult);
+      }
+      if (t.isCapital && prod > 0) prod += CAPITAL_PROD_BONUS;
+      return prod;
+    }
+
     function troopTick() {
       tickCount++;
       const ownedByFaction = [[], [], [], []];
+
+      // Promote levels and collect production
       territories.forEach(t => {
         if (t.owner === NEUTRAL) return;
-        if (t.terrain === T_PLAINS) {
-          t.troops += 1;
-        } else if (t.terrain === T_MOUNTAINS && tickCount % MOUNTAIN_PRODUCE_EVERY === 0) {
-          t.troops += 1;
+        // Held-time progression toward next level
+        if (t.level < MAX_DEV_LEVEL) {
+          t.heldTicks++;
+          if (t.heldTicks >= TICKS_PER_LEVEL) {
+            t.heldTicks = 0;
+            t.level++;
+          }
+        }
+        // Production
+        const prod = hexProduction(t);
+        if (prod > 0) t.troops += prod;
+        // Resource collection
+        if (t.resource === 'gold') {
+          gold[t.owner] += GOLD_MINE_RATE;
         }
         ownedByFaction[t.owner].push(t);
       });
-      // Empire bonus: extra recruits distributed to random owned plains hexes
-      ownedByFaction.forEach((owned) => {
+
+      // Empire bonus: +1 per 4 hexes (still favors larger empires, capped by upkeep)
+      ownedByFaction.forEach((owned, fid) => {
+        if (owned.length === 0) return;
         const plains = owned.filter(t => t.terrain === T_PLAINS);
         if (plains.length === 0) return;
         const bonus = Math.floor(owned.length / 4);
@@ -978,14 +1269,38 @@
           if (t) t.troops += 1;
         }
       });
+
+      // Troop upkeep — large standing armies cost troops drained each tick
+      ownedByFaction.forEach((owned, fid) => {
+        if (owned.length === 0) return;
+        let total = 0;
+        owned.forEach(t => { total += t.troops; });
+        marches.forEach(m => { if (m.owner === fid) total += m.troops; });
+        const cap = owned.length * UPKEEP_PER_HEX_THRESHOLD;
+        const excess = total - cap;
+        if (excess <= 0) return;
+        let drain = Math.floor(excess / 10) * UPKEEP_DRAIN_PER_10_EXCESS;
+        if (drain <= 0) return;
+        // Remove troops one at a time from richest hexes
+        const sorted = owned.slice().sort((a, b) => b.troops - a.troops);
+        let idx = 0;
+        while (drain > 0 && idx < sorted.length * 4) {
+          const t = sorted[idx % sorted.length];
+          if (t.troops > 1) {
+            t.troops--;
+            drain--;
+          }
+          idx++;
+        }
+      });
     }
 
     // ===== Game over =====
     function checkGameOver(counts) {
       if (gameOver) return;
-      if (counts[0] === 0) showGameOver('Defeat', 'Your empire has fallen.');
+      if (counts[0] === 0) showGameOver('Defeat', 'Your capital has fallen.');
       else if (counts[1] === 0 && counts[2] === 0 && counts[3] === 0)
-        showGameOver('Victory!', 'All rival factions eliminated.');
+        showGameOver('Victory!', 'All rival capitals captured.');
     }
 
     function showGameOver(title, text) {
@@ -1004,17 +1319,87 @@
     function setMode(m) {
       mode = m;
       selected = null;
-      statusText = (mode === 'build')
-        ? 'Build mode: click your hex to lay a road (costs ' + ROAD_BUILD_COST + ' troops).'
-        : 'Select one of your territories, then click anywhere to march.';
+      if (mode === 'build') statusText = 'Road mode: click your hex (' + ROAD_BUILD_COST + ' troops).';
+      else if (mode === 'farm') statusText = 'Farm mode: click your hex (' + IMPROVEMENTS.farm.cost + ' gold).';
+      else if (mode === 'fortress') statusText = 'Fortress mode: click your hex (' + IMPROVEMENTS.fortress.cost + ' gold).';
+      else if (mode === 'tower') statusText = 'Tower mode: click your hex (' + IMPROVEMENTS.tower.cost + ' gold).';
+      else statusText = 'Select one of your territories, then click anywhere to march.';
       updateBuildButton();
     }
 
     function updateBuildButton() {
-      const btn = document.getElementById('build-btn');
+      const map = { 'build': 'build-btn', 'farm': 'farm-btn', 'fortress': 'fort-btn', 'tower': 'tower-btn' };
+      Object.values(map).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('pressed');
+      });
+      if (map[mode]) {
+        const el = document.getElementById(map[mode]);
+        if (el) el.classList.add('pressed');
+      }
+    }
+
+    // ===== Pause =====
+    function canPause(realTime) {
+      if (isPaused) return false;
+      if (lastPauseEnd === -Infinity) return true;
+      return (realTime - lastPauseEnd) >= PAUSE_COOLDOWN_MS;
+    }
+    function startPause(realTime) {
+      if (!canPause(realTime)) return false;
+      isPaused = true;
+      pauseStartedAt = realTime;
+      statusText = 'Game paused. Plan your move.';
+      updatePauseButton();
+      return true;
+    }
+    function endPause(realTime) {
+      if (!isPaused) return;
+      isPaused = false;
+      lastPauseEnd = realTime;
+      statusText = 'Resumed.';
+      updatePauseButton();
+    }
+    function togglePause(realTime) {
+      if (isPaused) endPause(realTime);
+      else startPause(realTime);
+    }
+    function updatePauseButton() {
+      const btn = document.getElementById('pause-btn');
       if (!btn) return;
-      if (mode === 'build') btn.classList.add('pressed');
-      else btn.classList.remove('pressed');
+      const realTime = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+      if (isPaused) {
+        const remaining = Math.max(0, Math.ceil((PAUSE_DURATION_MS - (realTime - pauseStartedAt)) / 1000));
+        btn.textContent = 'Resume (' + remaining + 's left)';
+        btn.classList.add('pressed');
+        btn.disabled = false;
+      } else if (!canPause(realTime)) {
+        const wait = Math.max(0, Math.ceil((PAUSE_COOLDOWN_MS - (realTime - lastPauseEnd)) / 1000));
+        const m = Math.floor(wait / 60);
+        const s = (wait % 60).toString().padStart(2, '0');
+        btn.textContent = 'Pause (' + m + ':' + s + ')';
+        btn.classList.remove('pressed');
+        btn.disabled = true;
+      } else {
+        btn.textContent = 'Pause (30s)';
+        btn.classList.remove('pressed');
+        btn.disabled = false;
+      }
+    }
+    function drawPauseOverlay(realTime) {
+      if (!isPaused) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, 0, w, h);
+      const remaining = Math.max(0, Math.ceil((PAUSE_DURATION_MS - (realTime - pauseStartedAt)) / 1000));
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 36px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('PAUSED', w / 2, h / 2 - 12);
+      ctx.font = '18px Arial, sans-serif';
+      ctx.fillText(remaining + 's remaining', w / 2, h / 2 + 22);
     }
 
     function setFog(enabled) {
@@ -1133,7 +1518,8 @@
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
         if (e.key === 'b' || e.key === 'B') setMode(mode === 'build' ? 'move' : 'build');
         else if (e.key === 'f' || e.key === 'F') setFog(!fogEnabled);
-        else if (e.key === 'Escape') { selected = null; if (mode === 'build') setMode('move'); }
+        else if (e.key === 'p' || e.key === 'P' || e.code === 'Space') { togglePause(performance.now()); e.preventDefault(); }
+        else if (e.key === 'Escape') { selected = null; if (mode !== 'move') setMode('move'); }
         else if (e.key === '+' || e.key === '=') {
           const rect = canvas.getBoundingClientRect();
           applyZoom(zoom * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -1156,13 +1542,25 @@
         return;
       }
 
-      // Build mode
+      // Build mode (road)
       if (mode === 'build') {
         if (t.owner !== 0) { showToast('Can only build on your own hexes'); return; }
         if (roads.has(hexKey(q, r))) { showToast('Already has a road'); return; }
         if (t.troops <= ROAD_BUILD_COST) { showToast('Need more than ' + ROAD_BUILD_COST + ' troops here'); return; }
         t.troops -= ROAD_BUILD_COST;
         roads.add(hexKey(q, r));
+        return;
+      }
+      // Build improvement modes
+      const improvementKey = (mode === 'farm' || mode === 'fortress' || mode === 'tower') ? mode : null;
+      if (improvementKey) {
+        const imp = IMPROVEMENTS[improvementKey];
+        if (t.owner !== 0) { showToast('Can only build on your own hexes'); return; }
+        if (t.improvement) { showToast('Already has ' + IMPROVEMENTS[t.improvement].label); return; }
+        if (gold[0] < imp.cost) { showToast('Need ' + imp.cost + ' gold (have ' + gold[0] + ')'); return; }
+        gold[0] -= imp.cost;
+        t.improvement = improvementKey;
+        showToast(imp.label + ' built');
         return;
       }
 
@@ -1205,37 +1603,48 @@
 
       const send = Math.max(1, Math.floor(from.troops / 2));
       from.troops -= send;
-      makeMarch(0, send, from, path, performance.now());
+      makeMarch(0, send, from, path, gameTime);
       selected = null;
       statusText = 'Army marching. Select another hex.';
     }
 
     // ===== Main loop =====
-    function loop(timestamp) {
-      if (!lastTroopTick) lastTroopTick = timestamp;
+    function loop(realTime) {
+      if (!lastRealTime) lastRealTime = realTime;
+      const delta = realTime - lastRealTime;
+      lastRealTime = realTime;
+
+      // Auto-end pause after PAUSE_DURATION_MS
+      if (isPaused && realTime - pauseStartedAt >= PAUSE_DURATION_MS) {
+        endPause(realTime);
+      }
+      if (!isPaused) gameTime += delta;
+
+      if (!lastTroopTick) lastTroopTick = gameTime;
       for (let fid = 1; fid < FACTIONS.length; fid++) {
-        if (!lastFactionTick[fid]) lastFactionTick[fid] = timestamp;
+        if (!lastFactionTick[fid]) lastFactionTick[fid] = gameTime;
       }
 
-      if (!gameOver) {
-        processMarches(timestamp);
-        if (timestamp - lastTroopTick >= TROOP_TICK_MS) {
+      if (!gameOver && !isPaused) {
+        processMarches(gameTime);
+        if (gameTime - lastTroopTick >= TROOP_TICK_MS) {
           troopTick();
-          lastTroopTick = timestamp;
+          lastTroopTick = gameTime;
         }
         for (let fid = 1; fid < FACTIONS.length; fid++) {
           const p = AI_PERSONALITIES[fid];
           if (!p) continue;
-          if (timestamp - lastFactionTick[fid] >= p.tickMs) {
-            aiTickFaction(timestamp, fid);
-            lastFactionTick[fid] = timestamp;
+          if (gameTime - lastFactionTick[fid] >= p.tickMs) {
+            aiTickFaction(gameTime, fid);
+            lastFactionTick[fid] = gameTime;
           }
         }
         if (fogEnabled) updateVisibility();
       }
 
-      render(timestamp);
-      const counts = updateHud();
+      render(gameTime);
+      drawPauseOverlay(realTime);
+      const counts = updateHud(realTime);
       checkGameOver(counts);
 
       requestAnimationFrame(loop);
@@ -1253,8 +1662,16 @@
       document.getElementById('play-again').addEventListener('click', initGame);
       const buildBtn = document.getElementById('build-btn');
       if (buildBtn) buildBtn.addEventListener('click', () => setMode(mode === 'build' ? 'move' : 'build'));
+      const farmBtn = document.getElementById('farm-btn');
+      if (farmBtn) farmBtn.addEventListener('click', () => setMode(mode === 'farm' ? 'move' : 'farm'));
+      const fortBtn = document.getElementById('fort-btn');
+      if (fortBtn) fortBtn.addEventListener('click', () => setMode(mode === 'fortress' ? 'move' : 'fortress'));
+      const towerBtn = document.getElementById('tower-btn');
+      if (towerBtn) towerBtn.addEventListener('click', () => setMode(mode === 'tower' ? 'move' : 'tower'));
       const fogBtn = document.getElementById('fog-btn');
       if (fogBtn) fogBtn.addEventListener('click', () => setFog(!fogEnabled));
+      const pauseBtn = document.getElementById('pause-btn');
+      if (pauseBtn) pauseBtn.addEventListener('click', () => togglePause(performance.now()));
 
       setupInput();
       initGame();
