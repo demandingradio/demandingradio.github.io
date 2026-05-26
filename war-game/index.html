@@ -25,6 +25,46 @@
     }
     canvas.dragging { cursor: grabbing; }
 
+    /* When the user maximises the window (or we auto-maximise on mobile),
+       lay out the chrome with flexbox so the canvas fills all leftover space
+       instead of stretching past its container. */
+    .window.maximized {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      max-width: 100vw;
+    }
+    .window.maximized .game-area {
+      flex: 1 1 0;
+      min-height: 0;
+    }
+    .window.maximized canvas {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+
+    /* Mobile: aim for a comfortable landscape layout, but stay usable in
+       portrait. The window is auto-maximised by win95.js. */
+    @media (max-width: 768px) {
+      .controls .btn { min-width: 0; font-size: 10px; padding: 3px 6px; }
+      .controls { gap: 3px; }
+      .hud { font-size: 10px; min-width: 0; padding: 4px 6px; }
+      .hud .flavor { display: none; }
+      .menu-bar { font-size: 10px; white-space: nowrap; overflow-x: auto; }
+    }
+    /* In portrait orientation specifically, stack HUD/controls so the
+       playfield isn't cramped. */
+    @media (max-width: 768px) and (orientation: portrait) {
+      .controls { top: auto; bottom: 8px; right: 8px; flex-direction: row; flex-wrap: wrap; max-width: calc(100vw - 16px); }
+    }
+    /* Start screen — shrink the title on phones so it never overflows. */
+    @media (max-width: 480px) {
+      .start-title { font-size: 52px; }
+      .start-subtitle { font-size: 13px; }
+      .manual-body { padding: 18px 5%; }
+    }
+
     .hud {
       position: absolute;
       top: 8px;
@@ -152,6 +192,244 @@
     .game-over button {
       margin-top: 12px;
     }
+
+    /* ===== Start screen ===== */
+    .start-screen {
+      position: absolute;
+      inset: 0;
+      background: #0e1626;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      padding: 24px;
+      overflow: auto;
+    }
+    .start-screen.show { display: flex; }
+    .start-title {
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      letter-spacing: 0.08em;
+      font-size: 72px;
+      color: #f3e9c8;
+      text-shadow: 3px 3px 0 #8d2424, 6px 6px 0 #000;
+      margin: 0;
+      line-height: 1;
+    }
+    .start-subtitle {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      color: #f3e9c8;
+      opacity: 0.85;
+      font-size: 16px;
+      margin-top: 6px;
+      margin-bottom: 24px;
+    }
+    .start-rule {
+      width: 60%;
+      max-width: 360px;
+      height: 0;
+      border-top: 1px solid #f3e9c8;
+      opacity: 0.5;
+      margin: 12px 0 18px;
+    }
+    .start-modes {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .start-btn-mode {
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      text-align: left;
+      color: #000;
+    }
+    .start-btn-mode:active {
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+    }
+    .start-btn-mode .mode-name {
+      font-weight: bold;
+      font-size: 16px;
+      letter-spacing: 0.05em;
+    }
+    .start-btn-mode .mode-desc {
+      font-size: 11px;
+      opacity: 0.75;
+      margin-top: 2px;
+    }
+    .start-extras {
+      margin-top: 22px;
+      display: flex;
+      gap: 8px;
+    }
+    .start-footer {
+      color: #f3e9c8;
+      opacity: 0.5;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      margin-top: 20px;
+      letter-spacing: 0.1em;
+    }
+
+    /* ===== Inline manual overlay ===== */
+    .manual-overlay {
+      position: absolute;
+      inset: 0;
+      background: #f3e9c8;
+      color: #1f1808;
+      display: none;
+      flex-direction: column;
+      z-index: 30;
+    }
+    .manual-overlay.show { display: flex; }
+    .manual-toolbar {
+      flex-shrink: 0;
+      background: #1f1808;
+      color: #f3e9c8;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'Helvetica', Arial, sans-serif;
+      letter-spacing: 0.06em;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .manual-toolbar button {
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      padding: 3px 12px;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      color: #000;
+      font-weight: normal;
+      letter-spacing: 0;
+    }
+    .manual-toolbar button:active {
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+    }
+    .manual-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 24px 6%;
+      font-family: 'Times New Roman', Georgia, serif;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .manual-body h1 {
+      font-family: Impact, 'Arial Black', sans-serif;
+      letter-spacing: 0.06em;
+      font-size: 38px;
+      text-align: center;
+      margin: 0;
+      line-height: 1;
+    }
+    .manual-body .manual-subtitle {
+      font-style: italic;
+      text-align: center;
+      margin: 6px 0 4px;
+      font-size: 14px;
+    }
+    .manual-body .manual-tag {
+      background: #8d2424;
+      color: #f3e9c8;
+      text-align: center;
+      padding: 5px 0;
+      letter-spacing: 0.18em;
+      font-family: Helvetica, Arial, sans-serif;
+      font-weight: bold;
+      font-size: 12px;
+      margin: 14px auto;
+      max-width: 360px;
+    }
+    .manual-body h2 {
+      background: #1f1808;
+      color: #f3e9c8;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      padding: 6px 10px;
+      margin: 26px 0 12px;
+    }
+    .manual-body h3 {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      margin: 18px 0 6px;
+      border-bottom: 1px solid #1f1808;
+      padding-bottom: 3px;
+    }
+    .manual-body p { margin: 6px 0 10px; }
+    .manual-body .faction {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 10px 0;
+    }
+    .manual-body .faction .swatch {
+      flex-shrink: 0;
+      width: 22px; height: 16px;
+      border: 1px solid #1f1808;
+      margin-top: 3px;
+    }
+    .manual-body table.controls-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+    .manual-body table.controls-table td {
+      padding: 3px 8px;
+      vertical-align: top;
+    }
+    .manual-body table.controls-table td:first-child {
+      white-space: nowrap;
+      font-weight: bold;
+      width: 36%;
+    }
+    .manual-body .builds {
+      display: grid;
+      grid-template-columns: auto auto 1fr;
+      gap: 4px 14px;
+      font-size: 12px;
+    }
+    .manual-body .builds .label { font-weight: bold; }
+    .manual-body .builds .cost { font-family: 'Courier New', monospace; }
+    .manual-body .tips {
+      background: #1f1808;
+      color: #f3e9c8;
+      padding: 14px 18px;
+      margin-top: 22px;
+      font-style: italic;
+      font-family: 'Times New Roman', Georgia, serif;
+    }
+    .manual-body .tips .tips-title {
+      font-style: normal;
+      font-family: Helvetica, Arial, sans-serif;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .manual-body .tips p { margin: 4px 0; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -169,7 +447,7 @@
       </div>
     </div>
     <div class="menu-bar">
-      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; March your hexes &middot; B = road, F = fog, P = pause &middot; Capture enemy capitals to win &middot; <a href="war-game-manual.pdf" target="_blank" style="color:#000080;">📘 Manual (PDF)</a></span>
+      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; March your hexes &middot; B = road, F = fog, P = pause &middot; Capture enemy capitals to win &middot; <a href="#" id="open-manual-menu" style="color:#000080;">📘 Game Guide</a></span>
     </div>
     <div class="game-area">
       <canvas id="game"></canvas>
@@ -198,6 +476,103 @@
           <h2 id="game-over-title">Victory!</h2>
           <div id="game-over-text"></div>
           <button class="btn" id="play-again">Play Again</button>
+        </div>
+      </div>
+
+      <div class="start-screen" id="start-screen">
+        <div class="start-title">WAR GAME</div>
+        <div class="start-subtitle">An Infinite Hex Conflict</div>
+        <div class="start-rule"></div>
+        <div class="start-modes">
+          <button class="start-btn-mode" data-mode="long">
+            <div class="mode-name">LONG</div>
+            <div class="mode-desc">Distant starts. A slow campaign across the realm.</div>
+          </button>
+          <button class="start-btn-mode" data-mode="standard">
+            <div class="mode-name">STANDARD</div>
+            <div class="mode-desc">Half the distance. Borders meet sooner.</div>
+          </button>
+          <button class="start-btn-mode" data-mode="quick">
+            <div class="mode-name">QUICK</div>
+            <div class="mode-desc">Very close starts. Total war from the first march.</div>
+          </button>
+        </div>
+        <div class="start-extras">
+          <button class="btn" id="open-guide">📘 Game Guide</button>
+        </div>
+        <div class="start-footer">MJV-0001 &middot; SELECT A MODE TO BEGIN</div>
+      </div>
+
+      <div class="manual-overlay" id="manual-overlay">
+        <div class="manual-toolbar">
+          <span>WAR GAME &middot; INSTRUCTION MANUAL</span>
+          <button id="close-manual">Back</button>
+        </div>
+        <div class="manual-body">
+          <h1>WAR GAME</h1>
+          <div class="manual-subtitle">An Infinite Hex Conflict</div>
+          <div class="manual-tag">★ INSTRUCTION MANUAL ★</div>
+
+          <h2>THE WORLD &amp; THE FACTIONS</h2>
+          <p>The world is infinite. Drag the map in any direction and new lands unfold — rolling plains, jagged mountains, still lakes, and the deep blue boundary of the open sea. Three rival warlords share this realm with you, each carving an empire out of unclaimed neutral ground. Only one of you will rule what remains.</p>
+
+          <h3>THE FOUR WARLORDS</h3>
+          <div class="faction"><div class="swatch" style="background:#4d8fd6;"></div><div><b>YOU &middot; The Player.</b> Strategy is yours. You begin with a seven-hex capital and a small standing army. From this small kingdom you must do what your enemies cannot — choose.</div></div>
+          <div class="faction"><div class="swatch" style="background:#d24a4a;"></div><div><b>CRIMSON &middot; The Expansionist.</b> Sprawls in every direction. Acts every 1.8 seconds, up to three moves at once, and will throw a stack at any target it can plausibly win. Crimson is everywhere — and thinnest where you need to look.</div></div>
+          <div class="faction"><div class="swatch" style="background:#4ab85e;"></div><div><b>VERDANT &middot; The Balanced.</b> Methodical and patient. Acts once every 3.5 seconds. Prefers stable borders and quietly accumulates strength. Outpaces nothing but outlasts almost everything.</div></div>
+          <div class="faction"><div class="swatch" style="background:#a05cc8;"></div><div><b>VIOLET &middot; The Strategist.</b> Tactical, fast, and frightening. Acts every 1.4 seconds — but only attacks when victory is certain. Stops at fourteen hexes and turtles behind mountains and shorelines. Do not let her finish her wall.</div></div>
+
+          <h3>VICTORY &amp; DEFEAT</h3>
+          <p>Capture the crowned hex at the centre of an enemy capital to eliminate that faction. Lose yours, and you fall.</p>
+
+          <h2>HOW TO PLAY</h2>
+          <h3>CONTROLS</h3>
+          <table class="controls-table">
+            <tr><td>Click your hex</td><td>Select a source</td></tr>
+            <tr><td>Click any other hex</td><td>Dispatch a march (up to 30 hexes away)</td></tr>
+            <tr><td>Drag the map</td><td>Pan the view</td></tr>
+            <tr><td>Mouse wheel / pinch</td><td>Zoom in and out</td></tr>
+            <tr><td>+ &nbsp; / &nbsp; −</td><td>Zoom by keystroke</td></tr>
+            <tr><td>B</td><td>Toggle road build mode</td></tr>
+            <tr><td>F</td><td>Toggle fog of war</td></tr>
+            <tr><td>P &nbsp; / &nbsp; Space</td><td>Pause (30 s, 5 min cooldown)</td></tr>
+            <tr><td>Esc</td><td>Clear selection or exit build mode</td></tr>
+          </table>
+
+          <h3>MARCHES</h3>
+          <p>Selecting your hex and then clicking a destination dispatches half your troops along the shortest path through known passable land. When the column enters an enemy or neutral hex it gives battle. If it prevails it leaves a single garrison troop and presses on with the survivors. If it falls, the defenders gain that ground.</p>
+          <p>Movement is timed. A march steps once every 2.2 seconds across plains and once every 5.7 seconds through mountain country. Where you have built roads on both ends of a step the time drops to around 0.9 seconds. Water always blocks.</p>
+
+          <h3>BUILDING</h3>
+          <div class="builds">
+            <div class="label">Road</div><div class="cost">6 gold</div><div>Cuts march time across your network.</div>
+            <div class="label">Farm</div><div class="cost">10 gold</div><div>+50% troop production on this hex.</div>
+            <div class="label">Fortress</div><div class="cost">15 gold</div><div>+50% defender strength on this hex.</div>
+            <div class="label">Tower</div><div class="cost">8 gold</div><div>+2 hex vision range when fog is enabled.</div>
+          </div>
+
+          <h2>STRATEGY &amp; FEATURES</h2>
+          <h3>TERRAIN</h3>
+          <p>Plains &middot; +1 troop per tick, normal march speed.<br>
+             Mountains &middot; +1 troop every 5 ticks, 2.6× slower, +35% defender.<br>
+             Lakes &amp; Oceans &middot; impassable. Use them as natural walls.</p>
+
+          <h3>DEVELOPMENT (LEVELS 1 – 10)</h3>
+          <p>A held hex levels up roughly every 30 seconds. Level 10 produces five times what a Level 1 hex does. Captured hexes reset to Level 1 and lose any improvement.</p>
+
+          <h3>CAPITALS &amp; GOLD</h3>
+          <p>A capital is a seven-hex cluster with a crowned centre. Capital hexes earn +1 production and defend at +50%. Roughly one in twenty-eight passable hexes is a gold mine — owning one earns gold per tick that can be spent on improvements.</p>
+
+          <h3>UPKEEP &amp; FOG</h3>
+          <p>Armies above an average of 25 troops per hex begin to drain. Each 10 troops of excess costs 1 troop per tick. With Fog of War on, only your vision is yours to plan in — towers extend sight, and capitals see two hexes in every direction.</p>
+
+          <div class="tips">
+            <div class="tips-title">★ TIPS FROM AN OLD GENERAL</div>
+            <p>“Crimson will overextend — pick his frontier hexes off one by one. He won't notice the holes until it's too late.”</p>
+            <p>“Violet is dangerous only if you let her settle. Strike before she finishes her fortress.”</p>
+            <p>“One Level 10 hex out-produces a sprawl of Level 1 land.”</p>
+            <p>“When in doubt, build a road.”</p>
+          </div>
         </div>
       </div>
     </div>
@@ -422,6 +797,7 @@
     let mode = 'move'; // 'move' | 'build'
     let worldSeed = (Math.random() * 1e9) | 0;
     let gameOver = false;
+    let gameStarted = false; // false until the player picks a mode from the start screen
     let lastTroopTick = 0;
     const lastFactionTick = [0, 0, 0, 0]; // index = faction id
     let toastTimer = null;
@@ -737,11 +1113,21 @@
       });
     }
 
-    function initGame() {
+    // Game-version → distance multiplier applied to the AI start coordinates.
+    // Long = current (distant) world, Standard = half, Quick = quarter.
+    const GAME_MODE_DISTANCE = { long: 1, standard: 0.5, quick: 0.25 };
+    let currentGameMode = 'long';
+
+    function initGame(mode) {
+      if (typeof mode === 'string' && GAME_MODE_DISTANCE[mode]) {
+        currentGameMode = mode;
+      }
+      const factor = GAME_MODE_DISTANCE[currentGameMode];
+      const scale = (n) => Math.round(n * factor);
       const aiStarts = [
-        { q: 20, r: -40 },  // north
-        { q: 20, r:  20 },  // south-east
-        { q: -40, r: 20 }   // south-west
+        { q: scale(20),  r: scale(-40) },  // north
+        { q: scale(20),  r: scale( 20) },  // south-east
+        { q: scale(-40), r: scale( 20) }   // south-west
       ];
       // Set anchors BEFORE generating any terrain so garrisons scale by
       // distance to the nearest faction, not just from origin.
@@ -781,6 +1167,7 @@
       updatePauseButton();
       centerOnHome();
       hideGameOver();
+      gameStarted = true;
     }
 
     function centerOnHome() {
@@ -1342,6 +1729,9 @@
     // ===== Game over =====
     function checkGameOver(counts) {
       if (gameOver) return;
+      // Don't evaluate win/loss before a game has actually been initialised
+      // (the start-screen state has zero territories for everyone).
+      if (!gameStarted) return;
       if (counts[0] === 0) showGameOver('Defeat', 'Your capital has fallen.');
       else if (counts[1] === 0 && counts[2] === 0 && counts[3] === 0)
         showGameOver('Victory!', 'All rival capitals captured.');
@@ -1700,10 +2090,42 @@
       ctx = canvas.getContext('2d');
       resizeCanvas();
       window.addEventListener('resize', resizeCanvas);
+      // Maximize/restore changes the canvas's CSS size without firing a
+      // window resize. ResizeObserver catches every layout change.
+      if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(resizeCanvas).observe(canvas);
+      }
+
+      // ===== Start screen + inline manual =====
+      const startScreen   = document.getElementById('start-screen');
+      const manualOverlay = document.getElementById('manual-overlay');
+      function showStartScreen() {
+        hideGameOver();
+        manualOverlay.classList.remove('show');
+        startScreen.classList.add('show');
+        gameStarted = false;
+      }
+      function hideStartScreen() { startScreen.classList.remove('show'); }
+      function showManual()      { manualOverlay.classList.add('show'); }
+      function hideManual()      { manualOverlay.classList.remove('show'); }
+
+      startScreen.querySelectorAll('.start-btn-mode').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const mode = btn.dataset.mode;
+          hideStartScreen();
+          initGame(mode);
+        });
+      });
+      document.getElementById('open-guide').addEventListener('click', showManual);
+      document.getElementById('close-manual').addEventListener('click', hideManual);
+      const openManualMenu = document.getElementById('open-manual-menu');
+      if (openManualMenu) {
+        openManualMenu.addEventListener('click', (e) => { e.preventDefault(); showManual(); });
+      }
 
       document.getElementById('center-btn').addEventListener('click', centerOnHome);
-      document.getElementById('restart-btn').addEventListener('click', initGame);
-      document.getElementById('play-again').addEventListener('click', initGame);
+      document.getElementById('restart-btn').addEventListener('click', showStartScreen);
+      document.getElementById('play-again').addEventListener('click', showStartScreen);
       const buildBtn = document.getElementById('build-btn');
       if (buildBtn) buildBtn.addEventListener('click', () => setMode(mode === 'build' ? 'move' : 'build'));
       const farmBtn = document.getElementById('farm-btn');
@@ -1718,7 +2140,7 @@
       if (pauseBtn) pauseBtn.addEventListener('click', () => togglePause(performance.now()));
 
       setupInput();
-      initGame();
+      showStartScreen();
       requestAnimationFrame(loop);
     });
   })();

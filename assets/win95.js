@@ -42,6 +42,12 @@
       this.initDrag();
       this.initButtons();
       this.addToTaskbar();
+
+      // On phone-sized screens, open apps full-screen by default so the
+      // content has room to breathe.
+      if (window.matchMedia('(max-width: 768px)').matches) {
+        this.toggleMaximize();
+      }
     }
 
     getPoint(e) {
@@ -139,6 +145,7 @@
           this.el.style.height = this.savedStyle.height;
           this.el.style.transform = this.savedStyle.transform;
         }
+        this.el.classList.remove('maximized');
         this.isMaximized = false;
       } else {
         this.savedStyle = {
@@ -153,6 +160,7 @@
         this.el.style.width = '100vw';
         this.el.style.height = 'calc(100vh - 40px)';
         this.el.style.transform = 'none';
+        this.el.classList.add('maximized');
         this.isMaximized = true;
       }
     }
