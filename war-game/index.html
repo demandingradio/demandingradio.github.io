@@ -908,37 +908,64 @@
     }
 
     // ===== Pathfinding =====
+    // Dijkstra by march TIME, not hop count. Edge cost is the same
+    // stepDurationFor() that the runtime uses for actual march steps, so the
+    // planner and the simulation agree on what's fast. This makes marches
+    // prefer roads (cheap edges) and detour around mountains (expensive
+    // edges) when it genuinely saves real seconds.
+    //
+    // The open set is a Map keyed by hex; extract-min is a linear scan.
+    // With the 30-hex search cap the open set tops out at a few hundred
+    // entries, so the O(N²) scan is well under a millisecond — and pathing
+    // only runs once per dispatched march, never per frame.
     function findPath(from, to) {
       if (from.q === to.q && from.r === to.r) return [];
       const destT = ensureTerritory(to.q, to.r);
       if (!isPassable(destT.terrain)) return null;
       if (!isHexSeen(to.q, to.r)) return null;
       const maxRadius = MAX_PATH_LEN + 2;
-      const came = new Map();
-      came.set(hexKey(from.q, from.r), null);
-      const queue = [{ q: from.q, r: from.r }];
-      let head = 0;
-      while (head < queue.length) {
-        const cur = queue[head++];
+
+      const fromKey = hexKey(from.q, from.r);
+      const dist = new Map(); // hexKey → best cost (ms) to reach this hex
+      const came = new Map(); // hexKey → previous {q, r}
+      const open = new Map(); // hexKey → { q, r, cost }
+      dist.set(fromKey, 0);
+      came.set(fromKey, null);
+      open.set(fromKey, { q: from.q, r: from.r, cost: 0 });
+
+      while (open.size > 0) {
+        // Extract the cheapest open node.
+        let curK = null, curEntry = null;
+        open.forEach((e, k) => {
+          if (curEntry === null || e.cost < curEntry.cost) { curEntry = e; curK = k; }
+        });
+        open.delete(curK);
+        const cur = curEntry;
+
         if (cur.q === to.q && cur.r === to.r) {
           const path = [];
-          let n = cur;
+          let n = { q: cur.q, r: cur.r };
           while (n && (n.q !== from.q || n.r !== from.r)) {
             path.unshift({ q: n.q, r: n.r });
             n = came.get(hexKey(n.q, n.r));
           }
           return path;
         }
+
         const nbs = neighbors(cur.q, cur.r);
         for (const nb of nbs) {
-          const k = hexKey(nb.q, nb.r);
-          if (came.has(k)) continue;
+          const nbK = hexKey(nb.q, nb.r);
           if (hexDistBetween(nb, from) > maxRadius) continue;
           const nbT = ensureTerritory(nb.q, nb.r);
           if (!isPassable(nbT.terrain)) continue;
           if (!isHexSeen(nb.q, nb.r)) continue;
-          came.set(k, cur);
-          queue.push(nb);
+          const tentative = cur.cost + stepDurationFor(cur, nb);
+          const existing = dist.get(nbK);
+          if (existing === undefined || tentative < existing) {
+            dist.set(nbK, tentative);
+            came.set(nbK, { q: cur.q, r: cur.r });
+            open.set(nbK, { q: nb.q, r: nb.r, cost: tentative });
+          }
         }
       }
       return null;
@@ -2030,10 +2057,17 @@
         return;
       }
 
+      // Gate by direct hex distance (what the player sees on screen), not
+      // by path hop count. With time-weighted pathing a road route can have
+      // more hops than a straight one — we don't want to reject a hex the
+      // player can clearly reach just because the chosen path winds.
+      if (hexDistBetween(selected, { q, r }) > MAX_PATH_LEN) {
+        showToast('Too far (max ' + MAX_PATH_LEN + ' hexes)');
+        return;
+      }
       const path = findPath(selected, { q, r });
       if (!path) { showToast('No route'); return; }
       if (path.length === 0) { selected = null; return; }
-      if (path.length > MAX_PATH_LEN) { showToast('Too far (max ' + MAX_PATH_LEN + ' hexes)'); return; }
 
       const send = Math.max(1, Math.floor(from.troops / 2));
       from.troops -= send;
