@@ -11,6 +11,8 @@ The game is **fully playable and live** at `mondayjeffrey.com/war-game/`. Everyt
 - Infinite procedural hex world (plains / mountains / lakes / oceans)
 - You vs 3 AI factions (Crimson, Verdant, Violet) with distinct personalities
 - Marches — click your hex, click destination, half your troops march
+- **Shift-drag to multi-select** multiple source hexes, then click target to dispatch them all
+- **Rally points** (R) — 12g one-time setup, max 5, hex auto-marches half its troops to a saved target every time it hits 10
 - Roads, Farms, Fortresses, Towers (cost gold to build)
 - Hex development levels 1–10 (~30s per level, 5× production at max)
 - Troop upkeep (armies above 25 troops/hex average start bleeding)
@@ -19,8 +21,10 @@ The game is **fully playable and live** at `mondayjeffrey.com/war-game/`. Everyt
 - Fog of war — press F to toggle
 - Pause — press P or Space (30s pause, 5-min cooldown)
 - Zoom (scroll wheel / pinch / +–), pan (drag)
-- A 4-page retro PDF instruction manual (`war-game-manual.pdf`)
-- Git tag `war-game-v1.0` marks the state before all the above was added (safe rollback point)
+- Time-weighted (Dijkstra) march pathing — marches prefer roads and detour around mountains when it saves time
+- Start menu with 3 game lengths (Long / Standard / Quick) — distance between factions scales 1× / 0.5× / 0.25×
+- In-window Game Guide (replaces the old PDF popup; PDF file still in repo but unused)
+- Git tags: `war-game-v1.0` (pre-capitals/resources), `war-game-v2.0` (pre-rally/multi-select). Safe rollback points.
 
 ---
 

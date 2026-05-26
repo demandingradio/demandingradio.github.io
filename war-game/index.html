@@ -447,7 +447,7 @@
       </div>
     </div>
     <div class="menu-bar">
-      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; March your hexes &middot; B = road, F = fog, P = pause &middot; Capture enemy capitals to win &middot; <a href="#" id="open-manual-menu" style="color:#000080;">📘 Game Guide</a></span>
+      <span style="padding: 1px 4px;">Drag to pan &middot; Scroll/pinch to zoom &middot; Shift-drag to multi-select &middot; B = road, R = rally, F = fog, P = pause &middot; <a href="#" id="open-manual-menu" style="color:#000080;">📘 Game Guide</a></span>
     </div>
     <div class="game-area">
       <canvas id="game"></canvas>
@@ -465,6 +465,8 @@
           data-tip="Fortress mode — click your hex to build a fortress (15 gold). Defenders here fight at +50% strength.">Fort (15g)</button>
         <button class="btn" id="tower-btn"
           data-tip="Tower mode — click your hex to build a watchtower (8 gold). Adds 2 hexes of vision range when fog of war is on.">Tower (8g)</button>
+        <button class="btn" id="rally-btn"
+          data-tip="Rally mode — click your hex then a target to make it auto-march half its troops there whenever it hits 10+. Costs 12 gold each, max 5 rallies. Shortcut: R.">Rally (12g)</button>
         <button class="btn" id="fog-btn"
           data-tip="Toggle fog of war. When on, hexes you've never been near render as solid black, and enemy moves in fog are hidden. Shortcut: F.">Fog: Off</button>
         <button class="btn" id="restart-btn"
@@ -530,13 +532,15 @@
           <table class="controls-table">
             <tr><td>Click your hex</td><td>Select a source</td></tr>
             <tr><td>Click any other hex</td><td>Dispatch a march (up to 30 hexes away)</td></tr>
+            <tr><td>Shift + drag</td><td>Paint a multi-select; click a target to send them all</td></tr>
             <tr><td>Drag the map</td><td>Pan the view</td></tr>
             <tr><td>Mouse wheel / pinch</td><td>Zoom in and out</td></tr>
             <tr><td>+ &nbsp; / &nbsp; −</td><td>Zoom by keystroke</td></tr>
             <tr><td>B</td><td>Toggle road build mode</td></tr>
+            <tr><td>R</td><td>Toggle rally point mode</td></tr>
             <tr><td>F</td><td>Toggle fog of war</td></tr>
             <tr><td>P &nbsp; / &nbsp; Space</td><td>Pause (30 s, 5 min cooldown)</td></tr>
-            <tr><td>Esc</td><td>Clear selection or exit build mode</td></tr>
+            <tr><td>Esc</td><td>Clear selection or exit a mode</td></tr>
           </table>
 
           <h3>MARCHES</h3>
@@ -549,7 +553,12 @@
             <div class="label">Farm</div><div class="cost">10 gold</div><div>+50% troop production on this hex.</div>
             <div class="label">Fortress</div><div class="cost">15 gold</div><div>+50% defender strength on this hex.</div>
             <div class="label">Tower</div><div class="cost">8 gold</div><div>+2 hex vision range when fog is enabled.</div>
+            <div class="label">Rally</div><div class="cost">12 gold</div><div>One-time setup. Auto-marches half the garrison toward a saved target whenever the hex reaches 10 troops. Up to 5 rallies at once.</div>
           </div>
+
+          <h3>RALLY POINTS &amp; MULTI-SELECT</h3>
+          <p><b>Rallies</b> turn a hex into a self-managing supply line. Press <b>R</b>, click a source, click a destination — every time that hex hits 10 troops it sends half toward the target. A dashed gold line shows the route. Clear a rally by clicking its source again in rally mode (no refund).</p>
+          <p><b>Multi-select</b> handles the bulk-movement case. Hold <b>Shift</b> and drag across your hexes to paint a selection — every hex you touch joins. Then click any target and they all march at once. Press <b>Esc</b> to drop the selection.</p>
 
           <h2>STRATEGY &amp; FEATURES</h2>
           <h3>TERRAIN</h3>
@@ -679,6 +688,13 @@
     const ROAD_BUILD_COST_GOLD = 6;
     const MOUNTAIN_PRODUCE_EVERY = 5;  // mountains produce 1 troop every N ticks
 
+    // Rally points — one-time gold cost to set up, hard cap on how many you
+    // can hold at once. Whenever a rally-equipped hex hits the troop
+    // threshold it auto-dispatches half its army toward the saved target.
+    const RALLY_BUILD_COST_GOLD = 12;
+    const MAX_RALLY_POINTS = 5;
+    const RALLY_TROOP_THRESHOLD = 10;
+
     // Terrain
     const T_PLAINS = 'plains';
     const T_MOUNTAINS = 'mountains';
@@ -793,8 +809,11 @@
     const ZOOM_MAX = 1.8;
     let canvas, ctx;
     let selected = null;
+    const selectedSet = new Set(); // multi-select source hexes (hexKey strings)
+    let painting = false;          // true while shift-drag is painting selections
+    let rallySource = null;        // first click in rally mode, waiting on a target
     let hover = null;
-    let mode = 'move'; // 'move' | 'build'
+    let mode = 'move'; // 'move' | 'build' | 'farm' | 'fortress' | 'tower' | 'rally'
     let worldSeed = (Math.random() * 1e9) | 0;
     let gameOver = false;
     let gameStarted = false; // false until the player picks a mode from the start screen
@@ -862,7 +881,8 @@
           improvement: null,
           resource,
           isCapital: false,
-          capitalCenter: null
+          capitalCenter: null,
+          rallyTarget: null
         };
         territories.set(k, t);
       }
@@ -1008,6 +1028,7 @@
       target.level = 1;
       target.heldTicks = 0;
       target.improvement = null;
+      target.rallyTarget = null;
       if (isCenter && fallenOwner !== NEUTRAL) {
         // Capital fell — that faction collapses. All their hexes go neutral
         // (anarchy), their marches dissolve.
@@ -1017,6 +1038,7 @@
             t.level = 1;
             t.heldTicks = 0;
             t.improvement = null;
+            t.rallyTarget = null;
             t.isCapital = false;
             t.capitalCenter = null;
             // Leave a small holdout garrison so it's not a free grab
@@ -1170,6 +1192,9 @@
       worldSeed = (Math.random() * 1e9) | 0;
       tickCount = 0;
       selected = null;
+      selectedSet.clear();
+      painting = false;
+      rallySource = null;
       hover = null;
       mode = 'move';
       gameOver = false;
@@ -1298,7 +1323,9 @@
             stroke = f.dark;
           }
 
-          const isSel = selected && selected.q === q && selected.r === r;
+          const isSel = (selected && selected.q === q && selected.r === r) ||
+                        selectedSet.has(hexKey(q, r)) ||
+                        (rallySource && rallySource.q === q && rallySource.r === r);
           const isHover = hover && hover.q === q && hover.r === r;
           const inBuildMode = mode !== 'move';
           const buildHover = isHover && inBuildMode && t.owner === 0;
@@ -1479,6 +1506,34 @@
           ctx.lineCap = 'butt';
         }
       });
+
+      // Rally lines (dashed) — drawn before marches so the dots sit on top
+      ctx.save();
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 1.5;
+      territories.forEach(src => {
+        if (src.owner !== 0 || !src.rallyTarget) return;
+        if (fogEnabled && !isHexSeen(src.rallyTarget.q, src.rallyTarget.r)) return;
+        const a = hexToPixel(src.q, src.r);
+        const b = hexToPixel(src.rallyTarget.q, src.rallyTarget.r);
+        ctx.strokeStyle = 'rgba(255, 235, 120, 0.75)';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        // Small arrow head at target
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        const head = 10;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x - head * Math.cos(ang - 0.35), b.y - head * Math.sin(ang - 0.35));
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x - head * Math.cos(ang + 0.35), b.y - head * Math.sin(ang + 0.35));
+        ctx.stroke();
+        ctx.setLineDash([6, 5]);
+      });
+      ctx.restore();
 
       // Marching armies
       marches.forEach(m => {
@@ -1753,6 +1808,36 @@
       });
     }
 
+    // ===== Rally points =====
+    function countRallies(owner) {
+      let n = 0;
+      territories.forEach(t => {
+        if (t.owner === owner && t.rallyTarget) n++;
+      });
+      return n;
+    }
+
+    // Fires each troop tick: every rally-equipped hex with enough troops
+    // auto-dispatches half its army toward its saved target. Uses the
+    // same Dijkstra pathing the player gets, so road networks help here too.
+    function processRallies(now) {
+      territories.forEach(src => {
+        if (src.owner !== 0) return;
+        if (!src.rallyTarget) return;
+        if (src.troops < RALLY_TROOP_THRESHOLD) return;
+        if (src.rallyTarget.q === src.q && src.rallyTarget.r === src.r) return;
+        // Don't auto-march into fog you can't see — same fairness rule
+        // as the manual click path.
+        if (fogEnabled && !isHexSeen(src.rallyTarget.q, src.rallyTarget.r)) return;
+        if (hexDistBetween(src, src.rallyTarget) > MAX_PATH_LEN) return;
+        const path = findPath(src, src.rallyTarget);
+        if (!path || path.length === 0) return;
+        const send = Math.max(1, Math.floor(src.troops / 2));
+        src.troops -= send;
+        makeMarch(0, send, src, path, now);
+      });
+    }
+
     // ===== Game over =====
     function checkGameOver(counts) {
       if (gameOver) return;
@@ -1780,16 +1865,22 @@
     function setMode(m) {
       mode = m;
       selected = null;
+      selectedSet.clear();
+      rallySource = null;
       if (mode === 'build') statusText = 'Road mode: click your hex (' + ROAD_BUILD_COST_GOLD + ' gold).';
       else if (mode === 'farm') statusText = 'Farm mode: click your hex (' + IMPROVEMENTS.farm.cost + ' gold).';
       else if (mode === 'fortress') statusText = 'Fortress mode: click your hex (' + IMPROVEMENTS.fortress.cost + ' gold).';
       else if (mode === 'tower') statusText = 'Tower mode: click your hex (' + IMPROVEMENTS.tower.cost + ' gold).';
-      else statusText = 'Select one of your territories, then click anywhere to march.';
+      else if (mode === 'rally') {
+        const used = countRallies(0);
+        statusText = 'Rally mode: pick a source hex (' + RALLY_BUILD_COST_GOLD + ' gold each, ' + used + '/' + MAX_RALLY_POINTS + ' used).';
+      }
+      else statusText = 'Select one of your territories, then click anywhere to march. Shift-drag to select many at once.';
       updateBuildButton();
     }
 
     function updateBuildButton() {
-      const map = { 'build': 'build-btn', 'farm': 'farm-btn', 'fortress': 'fort-btn', 'tower': 'tower-btn' };
+      const map = { 'build': 'build-btn', 'farm': 'farm-btn', 'fortress': 'fort-btn', 'tower': 'tower-btn', 'rally': 'rally-btn' };
       Object.values(map).forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('pressed');
@@ -1926,13 +2017,48 @@
         dragging = false;
       };
 
-      canvas.addEventListener('mousedown', (e) => { startDrag(e.clientX, e.clientY); e.preventDefault(); });
+      // Add the hex under (cx, cy) to selectedSet if it belongs to the
+      // player and isn't water. No-op otherwise. Used during shift-paint.
+      const paintHexAt = (cx, cy) => {
+        const w = screenToWorld(cx, cy);
+        if (!w.inside) return;
+        const { q, r } = pixelToHex(w.x, w.y);
+        if (fogEnabled && !isHexSeen(q, r)) return;
+        const t = ensureTerritory(q, r);
+        if (t.owner !== 0) return;
+        if (!isPassable(t.terrain)) return;
+        selectedSet.add(hexKey(q, r));
+        statusText = selectedSet.size + ' selected. Click any hex to dispatch them all.';
+      };
+
+      canvas.addEventListener('mousedown', (e) => {
+        if (e.shiftKey && mode === 'move') {
+          // Shift-drag paints a multi-select instead of panning the camera.
+          painting = true;
+          selected = null;
+          paintHexAt(e.clientX, e.clientY);
+          e.preventDefault();
+          return;
+        }
+        startDrag(e.clientX, e.clientY);
+        e.preventDefault();
+      });
       window.addEventListener('mousemove', (e) => {
-        moveDrag(e.clientX, e.clientY);
+        if (painting) {
+          paintHexAt(e.clientX, e.clientY);
+        } else {
+          moveDrag(e.clientX, e.clientY);
+        }
         const w = screenToWorld(e.clientX, e.clientY);
         hover = w.inside ? pixelToHex(w.x, w.y) : null;
       });
-      window.addEventListener('mouseup', (e) => endDrag(e.clientX, e.clientY));
+      window.addEventListener('mouseup', (e) => {
+        if (painting) {
+          painting = false;
+          return; // don't fall through to a click on mouseup
+        }
+        endDrag(e.clientX, e.clientY);
+      });
 
       // Mouse wheel zoom
       canvas.addEventListener('wheel', (e) => {
@@ -1978,9 +2104,15 @@
       document.addEventListener('keydown', (e) => {
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
         if (e.key === 'b' || e.key === 'B') setMode(mode === 'build' ? 'move' : 'build');
+        else if (e.key === 'r' || e.key === 'R') setMode(mode === 'rally' ? 'move' : 'rally');
         else if (e.key === 'f' || e.key === 'F') setFog(!fogEnabled);
         else if (e.key === 'p' || e.key === 'P' || e.code === 'Space') { togglePause(performance.now()); e.preventDefault(); }
-        else if (e.key === 'Escape') { selected = null; if (mode !== 'move') setMode('move'); }
+        else if (e.key === 'Escape') {
+          selected = null;
+          selectedSet.clear();
+          rallySource = null;
+          if (mode !== 'move') setMode('move');
+        }
         else if (e.key === '+' || e.key === '=') {
           const rect = canvas.getBoundingClientRect();
           applyZoom(zoom * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -2000,6 +2132,52 @@
       // Fog blocks interaction with unseen hexes
       if (fogEnabled && !isHexSeen(q, r)) {
         showToast('Unexplored');
+        return;
+      }
+
+      // Rally mode — two-click flow: pick source, then target.
+      if (mode === 'rally') {
+        if (!rallySource) {
+          if (t.owner !== 0) { showToast('Pick one of your hexes'); return; }
+          // Already has a rally → clear it for free
+          if (t.rallyTarget) {
+            t.rallyTarget = null;
+            showToast('Rally cleared');
+            statusText = 'Rally cleared. Pick another source or press Esc.';
+            return;
+          }
+          if (countRallies(0) >= MAX_RALLY_POINTS) {
+            showToast('Rally limit reached (' + MAX_RALLY_POINTS + ')');
+            return;
+          }
+          if (gold[0] < RALLY_BUILD_COST_GOLD) {
+            showToast('Need ' + RALLY_BUILD_COST_GOLD + ' gold (have ' + Math.floor(gold[0]) + ')');
+            return;
+          }
+          rallySource = { q, r };
+          statusText = 'Now click the target hex (or click the source again to cancel).';
+          return;
+        }
+        // Second click — pick destination
+        if (rallySource.q === q && rallySource.r === r) {
+          rallySource = null;
+          statusText = 'Rally cancelled.';
+          return;
+        }
+        if (!isPassable(t.terrain)) { showToast('Target must be passable'); return; }
+        if (hexDistBetween(rallySource, { q, r }) > MAX_PATH_LEN) {
+          showToast('Target too far (max ' + MAX_PATH_LEN + ' hexes)');
+          return;
+        }
+        const src = ensureTerritory(rallySource.q, rallySource.r);
+        if (src.owner !== 0) { rallySource = null; showToast('Source no longer yours'); return; }
+        if (gold[0] < RALLY_BUILD_COST_GOLD) { rallySource = null; showToast('Not enough gold'); return; }
+        gold[0] -= RALLY_BUILD_COST_GOLD;
+        src.rallyTarget = { q, r };
+        rallySource = null;
+        const used = countRallies(0);
+        showToast('Rally set (' + used + '/' + MAX_RALLY_POINTS + ')');
+        statusText = 'Rally set. Pick another source or press R to leave rally mode.';
         return;
       }
 
@@ -2028,6 +2206,35 @@
       // Move mode
       if (!isPassable(t.terrain)) {
         showToast(t.terrain === T_OCEANS ? 'Ocean — impassable' : 'Lake — impassable');
+        return;
+      }
+
+      // Multi-select dispatch: if the player has painted a selection, this
+      // click is the target. Send half-troops from every selected hex.
+      if (selectedSet.size > 0) {
+        let dispatched = 0;
+        let skipped = 0;
+        selectedSet.forEach((k) => {
+          const [sq, sr] = k.split(',').map(Number);
+          if (sq === q && sr === r) return; // skip the target itself
+          const src = ensureTerritory(sq, sr);
+          if (src.owner !== 0) { skipped++; return; }
+          if (src.troops < 2) { skipped++; return; }
+          if (hexDistBetween({ q: sq, r: sr }, { q, r }) > MAX_PATH_LEN) { skipped++; return; }
+          const path = findPath({ q: sq, r: sr }, { q, r });
+          if (!path || path.length === 0) { skipped++; return; }
+          const send = Math.max(1, Math.floor(src.troops / 2));
+          src.troops -= send;
+          makeMarch(0, send, src, path, gameTime);
+          dispatched++;
+        });
+        selectedSet.clear();
+        if (dispatched > 0) {
+          showToast(dispatched + ' armies marching' + (skipped > 0 ? ' (' + skipped + ' skipped)' : ''));
+          statusText = dispatched + ' armies dispatched.';
+        } else {
+          showToast('No eligible armies');
+        }
         return;
       }
 
@@ -2097,6 +2304,7 @@
         processMarches(gameTime);
         if (gameTime - lastTroopTick >= TROOP_TICK_MS) {
           troopTick();
+          processRallies(gameTime);
           lastTroopTick = gameTime;
         }
         for (let fid = 1; fid < FACTIONS.length; fid++) {
@@ -2168,6 +2376,8 @@
       if (fortBtn) fortBtn.addEventListener('click', () => setMode(mode === 'fortress' ? 'move' : 'fortress'));
       const towerBtn = document.getElementById('tower-btn');
       if (towerBtn) towerBtn.addEventListener('click', () => setMode(mode === 'tower' ? 'move' : 'tower'));
+      const rallyBtn = document.getElementById('rally-btn');
+      if (rallyBtn) rallyBtn.addEventListener('click', () => setMode(mode === 'rally' ? 'move' : 'rally'));
       const fogBtn = document.getElementById('fog-btn');
       if (fogBtn) fogBtn.addEventListener('click', () => setFog(!fogEnabled));
       const pauseBtn = document.getElementById('pause-btn');
