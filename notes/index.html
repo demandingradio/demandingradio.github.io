@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notes - Monday Jeffrey</title>
+  <link rel="stylesheet" href="../assets/win95.css">
+  <style>
+    .window { width: 540px; }
+
+    /* Highlight toolbar */
+    .hl-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 6px;
+      background: #c0c0c0;
+      border-bottom: 1px solid #808080;
+    }
+    .hl-label {
+      font-size: 11px;
+      color: #404040;
+      margin-right: 2px;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .hl-btn {
+      padding: 2px 10px;
+      font-size: 12px;
+      font-family: Arial, sans-serif;
+      cursor: pointer;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      user-select: none;
+      line-height: 1.5;
+      flex-shrink: 0;
+    }
+    .hl-btn:active {
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+    }
+    .hl-yellow { background: #ffff00; }
+    .hl-green  { background: #90ee90; }
+    .hl-clear  { background: #c0c0c0; }
+    .hl-sep {
+      width: 2px;
+      height: 18px;
+      border-left: 1px solid #808080;
+      border-right: 1px solid #ffffff;
+      margin: 0 2px;
+      flex-shrink: 0;
+    }
+    .hl-hint {
+      font-size: 11px;
+      color: #808080;
+      font-style: italic;
+    }
+
+    /* Editor area */
+    .notes-shell { padding: 4px 6px 0; }
+    .notes-editor {
+      background: #ffffff;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      min-height: 300px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding: 6px 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      outline: none;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    /* Dropdown menus */
+    .dd-menu {
+      position: absolute;
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      box-shadow: 2px 2px 0 #000;
+      min-width: 200px;
+      z-index: 200;
+      display: none;
+    }
+    .dd-menu.show { display: block; }
+    .dd-item {
+      padding: 4px 18px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .dd-item:hover { background: #000080; color: white; }
+    .dd-shortcut { color: #606060; }
+    .dd-item:hover .dd-shortcut { color: #c0c0ff; }
+    .dd-sep {
+      border-top: 1px solid #808080;
+      border-bottom: 1px solid #ffffff;
+      margin: 2px 0;
+    }
+
+    /* Status */
+    .status-saved   { color: #006400; font-style: italic; }
+    .status-unsaved { color: #800000; font-style: italic; }
+
+    /* Dialog */
+    .dlg-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.25);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+    }
+    .dlg-overlay.show { display: flex; }
+    .dlg {
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      min-width: 300px;
+      max-width: 400px;
+      box-shadow: 2px 2px 0 #000;
+    }
+    .dlg-title {
+      background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+      color: white;
+      padding: 3px 4px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .dlg-body {
+      padding: 18px 18px 8px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .dlg-icon { font-size: 36px; flex-shrink: 0; line-height: 1; }
+    .dlg-msg { font-size: 12px; line-height: 1.5; flex: 1; }
+    .dlg-actions {
+      padding: 6px 14px 14px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="desktop"></div>
+
+  <div class="window" data-title="Notes" data-icon="🗒️" data-close-href="../index.html">
+    <div class="title-bar">
+      <div class="title-bar-text">
+        <span>🗒️</span><span>Notes - Untitled.txt</span>
+      </div>
+      <div class="title-bar-buttons">
+        <div class="title-btn minimize">_</div>
+        <div class="title-btn maximize">□</div>
+        <div class="title-btn close">×</div>
+      </div>
+    </div>
+
+    <div class="menu-bar">
+      <div class="menu-item" id="file-btn"><u>F</u>ile</div>
+      <div class="menu-item" id="help-btn"><u>H</u>elp</div>
+    </div>
+
+    <div class="dd-menu" id="file-menu">
+      <div class="dd-item" data-action="new">New<span class="dd-shortcut">Ctrl+N</span></div>
+      <div class="dd-sep"></div>
+      <div class="dd-item" data-action="clear-all-hl">Clear All Highlights</div>
+    </div>
+
+    <div class="hl-toolbar">
+      <span class="hl-label">Highlight:</span>
+      <div class="hl-btn hl-yellow" id="btn-yellow" title="Highlight selected text yellow">Yellow</div>
+      <div class="hl-btn hl-green"  id="btn-green"  title="Highlight selected text green">Green</div>
+      <div class="hl-sep"></div>
+      <div class="hl-btn hl-clear"  id="btn-clear"  title="Remove highlight from selected text">✕ Clear</div>
+      <span class="hl-hint" id="hl-hint"></span>
+    </div>
+
+    <div class="notes-shell">
+      <div id="editor" class="notes-editor" contenteditable="true" spellcheck="true"></div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-cell" id="status-save">Auto-saved</div>
+      <div class="status-cell" id="status-words" style="text-align:center;">Words: 0</div>
+      <div class="status-cell" id="status-clock" style="text-align:right;">--:--</div>
+    </div>
+  </div>
+
+  <div class="dlg-overlay" id="dlg">
+    <div class="dlg">
+      <div class="dlg-title" id="dlg-title">Notes</div>
+      <div class="dlg-body">
+        <div class="dlg-icon" id="dlg-icon">ℹ️</div>
+        <div class="dlg-msg" id="dlg-msg"></div>
+      </div>
+      <div class="dlg-actions" id="dlg-actions"></div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn"><span>⊞</span> Start</a>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
+  </div>
+
+  <script src="../assets/win95.js"></script>
+  <script>
+  (function () {
+    const STORAGE_KEY = 'notes_content_v1';
+    const editor = document.getElementById('editor');
+    let saveTimer = null;
+    let hintTimer = null;
+    let openMenu  = null;
+
+    // ---------- Storage ----------
+    function saveContent() {
+      localStorage.setItem(STORAGE_KEY, editor.innerHTML);
+      setStatusSave('Auto-saved', false);
+    }
+    function scheduleSave() {
+      setStatusSave('Unsaved...', true);
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveContent, 600);
+    }
+
+    // ---------- Status ----------
+    function setStatusSave(text, unsaved) {
+      const el = document.getElementById('status-save');
+      el.textContent = text;
+      el.className = 'status-cell ' + (unsaved ? 'status-unsaved' : 'status-saved');
+    }
+    function updateWordCount() {
+      const text = editor.innerText || '';
+      const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+      document.getElementById('status-words').textContent = 'Words: ' + words;
+    }
+
+    // ---------- Highlight ----------
+    function applyHighlight(color) {
+      editor.focus();
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) { showHint('Select text first'); return; }
+      if (!editor.contains(sel.anchorNode) && !editor.contains(sel.focusNode)) return;
+      document.execCommand('hiliteColor', false, color);
+      scheduleSave();
+    }
+
+    function clearHighlight() {
+      editor.focus();
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) { showHint('Select text first'); return; }
+      if (!editor.contains(sel.anchorNode) && !editor.contains(sel.focusNode)) return;
+      document.execCommand('hiliteColor', false, 'transparent');
+      scheduleSave();
+    }
+
+    function clearAllHighlights() {
+      editor.querySelectorAll('[style*="background-color"]').forEach(span => {
+        span.style.backgroundColor = '';
+        if (!span.getAttribute('style') || span.getAttribute('style').trim() === '') {
+          const p = span.parentNode;
+          while (span.firstChild) p.insertBefore(span.firstChild, span);
+          p.removeChild(span);
+        }
+      });
+      scheduleSave();
+    }
+
+    // ---------- Hint ----------
+    function showHint(msg) {
+      const el = document.getElementById('hl-hint');
+      el.textContent = msg;
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => { el.textContent = ''; }, 2000);
+    }
+
+    // ---------- New document ----------
+    async function newDoc() {
+      if (editor.innerHTML.trim()) {
+        const ok = await dialog({
+          icon: '⚠️',
+          msg: 'Clear everything and start a new note?<br><br><em>This cannot be undone.</em>',
+          buttons: [{ label: 'Yes', value: true }, { label: 'No', value: false }]
+        });
+        if (!ok) return;
+      }
+      editor.innerHTML = '';
+      saveContent();
+      updateWordCount();
+      editor.focus();
+    }
+
+    // ---------- Dialog ----------
+    function dialog({ title = 'Notes', icon = 'ℹ️', msg = '', buttons = [{ label: 'OK' }] }) {
+      document.getElementById('dlg-title').textContent = title;
+      document.getElementById('dlg-icon').textContent  = icon;
+      document.getElementById('dlg-msg').innerHTML     = msg;
+      const actions = document.getElementById('dlg-actions');
+      actions.innerHTML = '';
+      return new Promise(resolve => {
+        buttons.forEach(b => {
+          const btn = document.createElement('button');
+          btn.className = 'btn';
+          btn.textContent = b.label;
+          btn.onclick = () => {
+            document.getElementById('dlg').classList.remove('show');
+            resolve(b.value !== undefined ? b.value : b.label);
+          };
+          actions.appendChild(btn);
+        });
+        document.getElementById('dlg').classList.add('show');
+      });
+    }
+
+    // ---------- Menu ----------
+    function openDropdown(menuEl, triggerEl) {
+      if (openMenu && openMenu !== menuEl) openMenu.classList.remove('show');
+      if (menuEl.classList.contains('show')) {
+        menuEl.classList.remove('show');
+        openMenu = null;
+      } else {
+        const rect    = triggerEl.getBoundingClientRect();
+        const winRect = triggerEl.closest('.window').getBoundingClientRect();
+        menuEl.style.left = (rect.left - winRect.left) + 'px';
+        menuEl.style.top  = (rect.bottom - winRect.top) + 'px';
+        menuEl.classList.add('show');
+        openMenu = menuEl;
+      }
+    }
+    document.addEventListener('click', (e) => {
+      if (openMenu && !openMenu.contains(e.target)) {
+        openMenu.classList.remove('show');
+        openMenu = null;
+      }
+    });
+
+    // ---------- Boot ----------
+    document.addEventListener('DOMContentLoaded', () => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) editor.innerHTML = saved;
+      updateWordCount();
+
+      editor.addEventListener('input', () => {
+        scheduleSave();
+        updateWordCount();
+      });
+
+      // Strip formatting on paste — keep plain text + preserve existing highlights
+      editor.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        document.execCommand('insertText', false, text);
+      });
+
+      // Highlight buttons: preventDefault on mousedown keeps selection alive in editor
+      ['btn-yellow', 'btn-green', 'btn-clear'].forEach(id => {
+        document.getElementById(id).addEventListener('mousedown', (e) => e.preventDefault());
+      });
+      document.getElementById('btn-yellow').addEventListener('click', () => applyHighlight('#ffff00'));
+      document.getElementById('btn-green').addEventListener('click',  () => applyHighlight('#90ee90'));
+      document.getElementById('btn-clear').addEventListener('click',  clearHighlight);
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') { e.preventDefault(); newDoc(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveContent(); }
+      });
+
+      // File menu
+      const fileBtn  = document.getElementById('file-btn');
+      const fileMenu = document.getElementById('file-menu');
+      fileBtn.addEventListener('click', (e) => { e.stopPropagation(); openDropdown(fileMenu, fileBtn); });
+      fileMenu.querySelectorAll('.dd-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fileMenu.classList.remove('show');
+          openMenu = null;
+          if (item.dataset.action === 'new')          newDoc();
+          if (item.dataset.action === 'clear-all-hl') clearAllHighlights();
+        });
+      });
+
+      // Help menu
+      document.getElementById('help-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (openMenu) { openMenu.classList.remove('show'); openMenu = null; }
+        dialog({
+          icon: '🗒️',
+          msg:
+            '<strong>Notes</strong> — Monday Jeffrey edition<br><br>' +
+            '<u>Highlighting:</u><br>' +
+            '1. Select some text<br>' +
+            '2. Click <strong>Yellow</strong> or <strong>Green</strong><br>' +
+            '3. Select highlighted text + click <strong>✕ Clear</strong> to remove<br>' +
+            '4. <em>File → Clear All Highlights</em> removes all at once<br><br>' +
+            '<u>Shortcuts:</u><br>' +
+            '&nbsp; Ctrl+N — new note &nbsp;&nbsp; Ctrl+S — save now<br><br>' +
+            'Notes are saved automatically in this browser.',
+          buttons: [{ label: 'OK' }]
+        });
+      });
+
+      editor.focus();
+    });
+  })();
+  </script>
+</body>
+</html>
