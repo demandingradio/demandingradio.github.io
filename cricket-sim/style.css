@@ -1,0 +1,800 @@
+/* Cricket Sim — Win95 Excel workbook theme */
+
+/* The window is a workbook — bigger than the average app */
+.xl-window {
+  width: 900px;
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.xl-window.maximized {
+  width: 100vw !important;
+  height: calc(100vh - 40px) !important;
+}
+
+/* ===== TOOLBAR ===== */
+
+.xl-toolbar {
+  background-color: #c0c0c0;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  border-bottom: 1px solid #808080;
+  flex-shrink: 0;
+}
+
+.xl-toolbtn {
+  background-color: #c0c0c0;
+  border: 1px solid transparent;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  cursor: default;
+  padding: 0;
+}
+
+.xl-toolbtn:hover {
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #404040;
+  border-right: 1px solid #404040;
+}
+
+.xl-toolbtn:active {
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+}
+
+.xl-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  margin: 0 2px;
+}
+
+.xl-font-select, .xl-size-select {
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+  background-color: white;
+  height: 20px;
+}
+
+.xl-font-select { width: 90px; }
+.xl-size-select { width: 38px; }
+
+/* ===== FORMULA BAR ===== */
+
+.xl-formula-bar {
+  background-color: #c0c0c0;
+  display: flex;
+  align-items: stretch;
+  padding: 2px;
+  gap: 2px;
+  border-bottom: 1px solid #808080;
+  flex-shrink: 0;
+  height: 22px;
+}
+
+.xl-name-box {
+  width: 80px;
+  background-color: white;
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+  font-size: 11px;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  font-family: Arial, sans-serif;
+}
+
+.xl-formula-buttons {
+  display: flex;
+  gap: 0;
+}
+
+.xl-formula-btn {
+  width: 18px;
+  background-color: #c0c0c0;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+  cursor: default;
+  padding: 0;
+  color: #404040;
+}
+
+.xl-formula-btn:hover {
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #404040;
+  border-right: 1px solid #404040;
+}
+
+.xl-formula-btn.xl-fx {
+  color: #000080;
+  font-style: italic;
+  font-weight: bold;
+}
+
+.xl-formula-input {
+  flex: 1;
+  background-color: white;
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+  font-size: 11px;
+  padding: 2px 4px;
+  font-family: Arial, sans-serif;
+  display: flex;
+  align-items: center;
+  color: #404040;
+}
+
+/* ===== SHEET AREA ===== */
+
+.xl-sheet-area {
+  flex: 1;
+  overflow: auto;
+  background-color: #c0c0c0;
+  position: relative;
+  border-top: 1px solid #808080;
+}
+
+.xl-sheet {
+  display: none;
+  min-height: 100%;
+  background-color: #ffffff;
+}
+
+.xl-sheet.active {
+  display: block;
+}
+
+.xl-empty {
+  padding: 60px 30px;
+  text-align: center;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: #808080;
+}
+
+/* ===== EXCEL CELL GRID ===== */
+
+.xl-grid {
+  display: grid;
+  background-color: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  width: 100%;
+}
+
+/* Default grid for general sheets: row-header col + 8 data cols */
+.xl-grid {
+  grid-template-columns: 28px repeat(8, 1fr);
+}
+
+/* Setup sheet has its own widths */
+.setup-grid {
+  grid-template-columns: 28px 160px 220px 80px 80px 80px 80px 80px;
+}
+
+.xl-corner {
+  background-color: #c0c0c0;
+  border-bottom: 1px solid #808080;
+  border-right: 1px solid #808080;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  height: 18px;
+}
+
+.xl-col-header {
+  background-color: #c0c0c0;
+  border-bottom: 1px solid #808080;
+  border-right: 1px solid #808080;
+  border-top: 1px solid #ffffff;
+  text-align: center;
+  font-size: 11px;
+  font-family: Arial, sans-serif;
+  padding: 1px 0;
+  height: 18px;
+  line-height: 16px;
+}
+
+.xl-row-header {
+  background-color: #c0c0c0;
+  border-bottom: 1px solid #808080;
+  border-right: 1px solid #808080;
+  border-left: 1px solid #ffffff;
+  text-align: center;
+  font-size: 11px;
+  font-family: Arial, sans-serif;
+  line-height: 22px;
+  height: 22px;
+}
+
+.xl-cell {
+  border-right: 1px solid #d4d0c8;
+  border-bottom: 1px solid #d4d0c8;
+  padding: 2px 4px;
+  background-color: #ffffff;
+  font-size: 11px;
+  font-family: Arial, sans-serif;
+  line-height: 16px;
+  height: 22px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Setup-specific cell variants */
+
+.xl-cell-title {
+  font-weight: bold;
+  background-color: #ffffcc;
+  font-size: 12px;
+  color: #000080;
+  height: 24px;
+  line-height: 20px;
+}
+
+.xl-cell-label {
+  font-weight: bold;
+  text-align: right;
+  padding-right: 8px;
+}
+
+.xl-cell-section {
+  background-color: #e0e0e0;
+  font-weight: bold;
+  color: #000080;
+  height: 20px;
+}
+
+.xl-cell-input {
+  padding: 1px 2px;
+}
+
+.xl-cell-input input,
+.xl-cell-input select {
+  width: 100%;
+  height: 18px;
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+  font-size: 11px;
+  font-family: Arial, sans-serif;
+  padding: 1px 2px;
+  background-color: #ffffff;
+}
+
+.xl-cell-roll {
+  padding: 1px 2px;
+}
+
+.xl-roll-btn {
+  width: 100%;
+  font-size: 11px;
+  padding: 1px 4px;
+  height: 20px;
+  min-width: 0;
+}
+
+.xl-cell-result {
+  text-align: center;
+  font-weight: bold;
+  font-size: 16px;
+  color: #800000;
+  font-family: 'Times New Roman', serif;
+  background-color: #ffffe0;
+  line-height: 22px;
+}
+
+.xl-cell-tier {
+  font-style: italic;
+  color: #006000;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.xl-cell-generate {
+  padding: 2px;
+  background-color: #ffffcc;
+}
+
+.xl-generate-btn {
+  width: 100%;
+  height: 24px;
+  font-weight: bold;
+  font-size: 12px;
+  background-color: #c0c0c0;
+  color: #008000;
+}
+
+.xl-generate-btn:disabled {
+  color: #808080;
+  cursor: not-allowed;
+}
+
+.xl-cell-help {
+  background-color: #ffffe0;
+  font-style: italic;
+  color: #404040;
+  font-size: 11px;
+  white-space: normal;
+  height: auto;
+  min-height: 22px;
+  line-height: 1.3;
+  padding: 4px 6px;
+}
+
+/* Generic data grid (used by Summary/Batting/Bowling/Matches/Careers) */
+
+.xl-data-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  background-color: #ffffff;
+}
+
+.xl-data-grid thead th {
+  background-color: #c0c0c0;
+  border-bottom: 1px solid #808080;
+  border-right: 1px solid #808080;
+  border-top: 1px solid #ffffff;
+  padding: 2px 6px;
+  font-weight: normal;
+  font-size: 11px;
+  text-align: center;
+  height: 18px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.xl-data-grid thead th.xl-row-num-h {
+  width: 28px;
+}
+
+.xl-data-grid tbody td {
+  border-right: 1px solid #d4d0c8;
+  border-bottom: 1px solid #d4d0c8;
+  padding: 2px 6px;
+  font-size: 11px;
+  height: 20px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.xl-data-grid tbody td.xl-row-num {
+  background-color: #c0c0c0;
+  border-right: 1px solid #808080;
+  text-align: center;
+  font-size: 11px;
+  width: 28px;
+}
+
+.xl-data-grid tbody tr:hover td {
+  background-color: #f0f4ff;
+}
+
+.xl-data-grid tbody tr.clickable { cursor: pointer; }
+.xl-data-grid tbody tr.clickable:hover td { background-color: #d8e4ff; }
+
+.xl-num   { text-align: right; font-family: 'Consolas', 'Courier New', monospace; }
+.xl-center{ text-align: center; }
+.xl-bold  { font-weight: bold; }
+.xl-good  { color: #006000; font-weight: bold; }
+.xl-bad   { color: #800000; }
+.xl-milestone { background-color: #fffacc !important; }
+
+/* Section headers within data sheets */
+.xl-section-header {
+  background-color: #000080;
+  color: white;
+  padding: 4px 8px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.xl-summary-block {
+  padding: 12px;
+  font-family: Arial, sans-serif;
+  background-color: #ffffff;
+}
+
+.xl-summary-block h2 {
+  font-size: 14px;
+  color: #000080;
+  margin-bottom: 6px;
+}
+
+.xl-summary-block .xl-meta {
+  font-size: 11px;
+  color: #404040;
+  margin-bottom: 12px;
+}
+
+/* ===== TAB STRIP ===== */
+
+.xl-tab-strip {
+  background-color: #c0c0c0;
+  border-top: 1px solid #808080;
+  display: flex;
+  align-items: stretch;
+  height: 22px;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+.xl-tab-scrollers {
+  display: flex;
+  align-items: stretch;
+  padding-right: 4px;
+}
+
+.xl-tab-scroll {
+  background-color: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #404040;
+  border-right: 1px solid #404040;
+  width: 18px;
+  font-size: 10px;
+  cursor: default;
+  padding: 0;
+  margin-right: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.xl-tab-scroll:active {
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+}
+
+.xl-tabs {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.xl-tab {
+  background-color: #c0c0c0;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #808080;
+  border-bottom: none;
+  padding: 3px 12px 1px;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+  margin-right: 2px;
+  margin-top: 2px;
+  position: relative;
+  user-select: none;
+}
+
+.xl-tab.active {
+  background-color: #ffffff;
+  margin-top: 0;
+  padding-top: 5px;
+  font-weight: bold;
+  z-index: 2;
+}
+
+.xl-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background-color: #ffffff;
+}
+
+.xl-tab.disabled {
+  color: #808080;
+  cursor: not-allowed;
+}
+
+.xl-tab-hsplit {
+  width: 4px;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  margin: 0 4px;
+}
+
+.xl-hscroll {
+  flex: 1;
+  background-color: #ffffff;
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+  position: relative;
+  align-self: center;
+  height: 16px;
+  margin: 2px 0;
+}
+
+.xl-hscroll-thumb {
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  bottom: 1px;
+  width: 80px;
+  background-color: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #404040;
+  border-right: 1px solid #404040;
+}
+
+/* ===== SCORECARD MODAL ===== */
+
+.xl-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+}
+
+.xl-modal-backdrop[hidden] { display: none; }
+
+.xl-scorecard-window {
+  position: relative;
+  transform: none;
+  left: auto;
+  top: auto;
+  width: 760px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.xl-scorecard-body {
+  background-color: #ffffff;
+  padding: 0;
+  overflow: auto;
+  flex: 1;
+}
+
+.xl-sc-header {
+  padding: 8px 12px;
+  background-color: #000080;
+  color: white;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.xl-sc-header h2 {
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.xl-sc-result {
+  padding: 6px 12px;
+  background-color: #ffffcc;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  border-bottom: 1px solid #808080;
+}
+
+.xl-sc-innings {
+  padding: 8px 0;
+}
+
+.xl-sc-innings-title {
+  padding: 4px 12px;
+  background-color: #c0c0c0;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  border-top: 1px solid #ffffff;
+  border-bottom: 1px solid #808080;
+  display: flex;
+  justify-content: space-between;
+}
+
+.xl-sc-innings table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+}
+
+.xl-sc-innings table th {
+  background-color: #e0e0e0;
+  text-align: left;
+  padding: 2px 6px;
+  border-bottom: 1px solid #808080;
+  font-weight: normal;
+  font-size: 10px;
+  color: #404040;
+}
+
+.xl-sc-innings table th.xl-num,
+.xl-sc-innings table td.xl-num { text-align: right; }
+
+.xl-sc-innings table td {
+  padding: 2px 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.xl-sc-innings table tr.xl-player-row td {
+  background-color: #ffffcc;
+  font-weight: bold;
+}
+
+.xl-sc-extras, .xl-sc-total, .xl-sc-fow {
+  padding: 4px 12px;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  border-top: 1px solid #d4d0c8;
+}
+
+.xl-sc-total {
+  font-weight: bold;
+  background-color: #f0f0f0;
+}
+
+/* ===== GRAPHS ===== */
+
+.xl-graphs-wrap {
+  padding: 12px;
+  background-color: #ffffff;
+}
+
+.xl-graph-block {
+  margin-bottom: 16px;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #808080;
+  border-right: 1px solid #808080;
+  background-color: #ffffff;
+  padding: 8px;
+}
+
+.xl-graph-block h3 {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  color: #000080;
+  margin-bottom: 6px;
+}
+
+.xl-graph-block canvas {
+  display: block;
+  background-color: #ffffff;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+}
+
+/* ===== STATS CARDS (Summary tab) ===== */
+
+.xl-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin-bottom: 12px;
+}
+
+.xl-stat {
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #808080;
+  border-right: 1px solid #808080;
+  background-color: #f8f8f8;
+  padding: 8px 10px;
+}
+
+.xl-stat-label {
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  color: #606060;
+  text-transform: uppercase;
+}
+
+.xl-stat-value {
+  font-family: 'Times New Roman', serif;
+  font-size: 22px;
+  font-weight: bold;
+  color: #000080;
+  margin-top: 2px;
+}
+
+.xl-stat-sub {
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  color: #404040;
+  margin-top: 2px;
+}
+
+/* Careers tab list */
+
+.xl-career-row {
+  cursor: pointer;
+}
+
+.xl-career-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.xl-mini-btn {
+  background-color: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #404040;
+  border-right: 1px solid #404040;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.xl-mini-btn:active {
+  border-top: 1px solid #404040;
+  border-left: 1px solid #404040;
+  border-bottom: 1px solid #ffffff;
+  border-right: 1px solid #ffffff;
+}
+
+/* Toast for status updates */
+.xl-toast {
+  position: fixed;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #ffffcc;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #404040;
+  border-right: 1px solid #404040;
+  padding: 6px 14px;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  z-index: 5001;
+}
+
+/* Tier classes for the dice result tier text */
+.xl-tier-elite { color: #800080; font-weight: bold; }
+.xl-tier-great { color: #006000; font-weight: bold; }
+.xl-tier-good  { color: #006000; }
+.xl-tier-ok    { color: #806000; }
+.xl-tier-poor  { color: #800000; }
+.xl-tier-woeful{ color: #800000; font-style: italic; }
+
+@media (max-width: 920px) {
+  .xl-window { width: 100vw !important; height: calc(100vh - 40px) !important; }
+}

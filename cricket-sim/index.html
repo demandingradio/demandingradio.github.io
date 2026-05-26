@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cricket Sim - Monday Jeffrey</title>
+  <link rel="stylesheet" href="../assets/win95.css">
+  <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+
+  <div class="desktop"></div>
+
+  <div class="window xl-window" data-title="Cricket Sim - Career.xls" data-icon="&#127951;" data-close-href="../index.html">
+    <div class="title-bar">
+      <div class="title-bar-text">
+        <span>&#127951;</span>
+        <span id="xl-title-text">Microsoft Excel - Career.xls</span>
+      </div>
+      <div class="title-bar-buttons">
+        <div class="title-btn minimize">_</div>
+        <div class="title-btn maximize">&#9633;</div>
+        <div class="title-btn close">&times;</div>
+      </div>
+    </div>
+
+    <div class="menu-bar">
+      <div class="menu-item"><u>F</u>ile</div>
+      <div class="menu-item"><u>E</u>dit</div>
+      <div class="menu-item"><u>V</u>iew</div>
+      <div class="menu-item"><u>I</u>nsert</div>
+      <div class="menu-item"><u>F</u>ormat</div>
+      <div class="menu-item"><u>T</u>ools</div>
+      <div class="menu-item"><u>D</u>ata</div>
+      <div class="menu-item"><u>W</u>indow</div>
+      <div class="menu-item"><u>H</u>elp</div>
+    </div>
+
+    <!-- Excel-style toolbar -->
+    <div class="xl-toolbar">
+      <button class="xl-toolbtn" title="New">&#128196;</button>
+      <button class="xl-toolbtn" title="Open">&#128193;</button>
+      <button class="xl-toolbtn" title="Save">&#128190;</button>
+      <div class="xl-toolbar-sep"></div>
+      <button class="xl-toolbtn" title="Cut">&#9986;</button>
+      <button class="xl-toolbtn" title="Copy">&#128203;</button>
+      <button class="xl-toolbtn" title="Paste">&#128203;</button>
+      <div class="xl-toolbar-sep"></div>
+      <button class="xl-toolbtn" title="Undo">&#8630;</button>
+      <button class="xl-toolbtn" title="Redo">&#8631;</button>
+      <div class="xl-toolbar-sep"></div>
+      <button class="xl-toolbtn" title="AutoSum">&#931;</button>
+      <button class="xl-toolbtn" title="Sort A-Z">A&#8595;</button>
+      <button class="xl-toolbtn" title="Sort Z-A">Z&#8595;</button>
+      <button class="xl-toolbtn" title="Chart Wizard">&#128202;</button>
+      <div class="xl-toolbar-sep"></div>
+      <select class="xl-font-select" disabled>
+        <option>Arial</option>
+      </select>
+      <select class="xl-size-select" disabled>
+        <option>10</option>
+      </select>
+      <button class="xl-toolbtn" title="Bold"><b>B</b></button>
+      <button class="xl-toolbtn" title="Italic"><i>I</i></button>
+      <button class="xl-toolbtn" title="Underline"><u>U</u></button>
+    </div>
+
+    <!-- Formula bar -->
+    <div class="xl-formula-bar">
+      <div class="xl-name-box" id="xl-name-box">A1</div>
+      <div class="xl-formula-buttons">
+        <button class="xl-formula-btn" title="Cancel">&#10006;</button>
+        <button class="xl-formula-btn" title="Enter">&#10004;</button>
+        <button class="xl-formula-btn xl-fx" title="Function Wizard"><i>f<sub>x</sub></i></button>
+      </div>
+      <div class="xl-formula-input" id="xl-formula-input">Cricket Career Generator</div>
+    </div>
+
+    <!-- Sheet area -->
+    <div class="xl-sheet-area" id="xl-sheet-area">
+
+      <!-- SETUP SHEET -->
+      <section class="xl-sheet active" id="sheet-setup">
+        <div class="xl-grid setup-grid">
+          <div class="xl-corner">&nbsp;</div>
+          <div class="xl-col-header">A</div>
+          <div class="xl-col-header">B</div>
+          <div class="xl-col-header">C</div>
+          <div class="xl-col-header">D</div>
+          <div class="xl-col-header">E</div>
+          <div class="xl-col-header">F</div>
+          <div class="xl-col-header">G</div>
+
+          <div class="xl-row-header">1</div>
+          <div class="xl-cell xl-cell-title" data-col="A" data-row="1">CAREER GENERATOR</div>
+          <div class="xl-cell" data-col="B" data-row="1"></div>
+          <div class="xl-cell" data-col="C" data-row="1"></div>
+          <div class="xl-cell" data-col="D" data-row="1"></div>
+          <div class="xl-cell" data-col="E" data-row="1"></div>
+          <div class="xl-cell" data-col="F" data-row="1"></div>
+          <div class="xl-cell" data-col="G" data-row="1"></div>
+
+          <div class="xl-row-header">2</div>
+          <div class="xl-cell xl-cell-label">Player Name:</div>
+          <div class="xl-cell xl-cell-input"><input type="text" id="su-name" maxlength="32" placeholder="(leave blank to randomise)"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">3</div>
+          <div class="xl-cell xl-cell-label">Nationality:</div>
+          <div class="xl-cell xl-cell-input"><select id="su-nation"></select></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">4</div>
+          <div class="xl-cell xl-cell-label">Primary Role:</div>
+          <div class="xl-cell xl-cell-input">
+            <select id="su-role">
+              <option value="batter">Batter</option>
+              <option value="bowler">Bowler</option>
+            </select>
+          </div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">5</div>
+          <div class="xl-cell xl-cell-label" id="su-style-label">Batting Position:</div>
+          <div class="xl-cell xl-cell-input"><select id="su-style"></select></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">6</div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">7</div>
+          <div class="xl-cell xl-cell-section">DICE ROLL</div>
+          <div class="xl-cell xl-cell-section"></div>
+          <div class="xl-cell xl-cell-section"></div>
+          <div class="xl-cell xl-cell-section"></div>
+          <div class="xl-cell xl-cell-section"></div>
+          <div class="xl-cell xl-cell-section"></div>
+          <div class="xl-cell xl-cell-section"></div>
+
+          <div class="xl-row-header">8</div>
+          <div class="xl-cell xl-cell-label" id="su-primary-label">Primary skill (d20):</div>
+          <div class="xl-cell xl-cell-roll">
+            <button class="btn xl-roll-btn" id="su-roll-primary">&#127922; Roll d20</button>
+          </div>
+          <div class="xl-cell xl-cell-result" id="su-primary-result">&mdash;</div>
+          <div class="xl-cell xl-cell-tier" id="su-primary-tier"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">9</div>
+          <div class="xl-cell xl-cell-label" id="su-secondary-label">Secondary skill (d10):</div>
+          <div class="xl-cell xl-cell-roll">
+            <button class="btn xl-roll-btn" id="su-roll-secondary">&#127922; Roll d10</button>
+          </div>
+          <div class="xl-cell xl-cell-result" id="su-secondary-result">&mdash;</div>
+          <div class="xl-cell xl-cell-tier" id="su-secondary-tier"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">10</div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">11</div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell xl-cell-generate" id="su-generate-cell">
+            <button class="btn xl-generate-btn" id="su-generate" disabled>GENERATE CAREER &#9658;</button>
+          </div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+          <div class="xl-cell"></div>
+
+          <div class="xl-row-header">12</div>
+          <div class="xl-cell xl-cell-help" id="su-help">Set your nation, role and position. Roll the dice to lock in your skill, then click Generate.</div>
+          <div class="xl-cell xl-cell-help"></div>
+          <div class="xl-cell xl-cell-help"></div>
+          <div class="xl-cell xl-cell-help"></div>
+          <div class="xl-cell xl-cell-help"></div>
+          <div class="xl-cell xl-cell-help"></div>
+          <div class="xl-cell xl-cell-help"></div>
+        </div>
+      </section>
+
+      <!-- Other sheets — rendered by JS into these placeholders -->
+      <section class="xl-sheet" id="sheet-summary"><div class="xl-empty">No career generated yet. Go to the <b>Setup</b> tab.</div></section>
+      <section class="xl-sheet" id="sheet-batting"><div class="xl-empty">No career generated yet. Go to the <b>Setup</b> tab.</div></section>
+      <section class="xl-sheet" id="sheet-bowling"><div class="xl-empty">No career generated yet. Go to the <b>Setup</b> tab.</div></section>
+      <section class="xl-sheet" id="sheet-matches"><div class="xl-empty">No career generated yet. Go to the <b>Setup</b> tab.</div></section>
+      <section class="xl-sheet" id="sheet-graphs"><div class="xl-empty">No career generated yet. Go to the <b>Setup</b> tab.</div></section>
+      <section class="xl-sheet" id="sheet-careers"><div class="xl-empty">No saved careers yet.</div></section>
+
+    </div>
+
+    <!-- Sheet tabs at bottom -->
+    <div class="xl-tab-strip">
+      <div class="xl-tab-scrollers">
+        <button class="xl-tab-scroll" title="First">&#9664;|</button>
+        <button class="xl-tab-scroll" title="Previous">&#9664;</button>
+        <button class="xl-tab-scroll" title="Next">&#9654;</button>
+        <button class="xl-tab-scroll" title="Last">|&#9654;</button>
+      </div>
+      <div class="xl-tabs" id="xl-tabs">
+        <div class="xl-tab active" data-sheet="setup">Setup</div>
+        <div class="xl-tab" data-sheet="summary">Summary</div>
+        <div class="xl-tab" data-sheet="batting">Batting</div>
+        <div class="xl-tab" data-sheet="bowling">Bowling</div>
+        <div class="xl-tab" data-sheet="matches">Matches</div>
+        <div class="xl-tab" data-sheet="graphs">Graphs</div>
+        <div class="xl-tab" data-sheet="careers">Careers</div>
+      </div>
+      <div class="xl-tab-hsplit"></div>
+      <div class="xl-hscroll">
+        <div class="xl-hscroll-thumb"></div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-cell" id="xl-status">Ready</div>
+      <div class="status-cell" id="xl-status-record" style="flex: 0 0 110px;">No career loaded</div>
+      <div class="status-cell" style="flex: 0 0 40px;">NUM</div>
+      <div class="status-cell" style="flex: 0 0 40px;">CAPS</div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn">
+      <span>&#8862;</span> Start
+    </a>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
+  </div>
+
+  <!-- Scorecard modal (for clicking a match in Matches tab) -->
+  <div class="xl-modal-backdrop" id="scorecard-modal" hidden>
+    <div class="window xl-scorecard-window">
+      <div class="title-bar">
+        <div class="title-bar-text">
+          <span>&#128196;</span>
+          <span id="scorecard-title">Match Scorecard</span>
+        </div>
+        <div class="title-bar-buttons">
+          <div class="title-btn close" id="scorecard-close">&times;</div>
+        </div>
+      </div>
+      <div class="xl-scorecard-body" id="scorecard-body"></div>
+    </div>
+  </div>
+
+  <script src="../assets/win95.js"></script>
+  <script src="data.js?v=2"></script>
+  <script src="engine.js?v=2"></script>
+  <script src="career.js?v=2"></script>
+  <script src="ui.js?v=2"></script>
+
+</body>
+</html>
