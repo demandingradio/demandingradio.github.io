@@ -38,6 +38,34 @@ window.CricketEngine = (function () {
     return parts[parts.length - 1];
   }
 
+  // ===== Streak system =====
+  // Per-career state machine: hero passes through 'normal' / 'hot' / 'cold' phases.
+  // Each streak lasts 5-20 matches with a triangular ramp peaking in the middle.
+
+  const STREAK_PEAKS = {
+    hot:  { mild: 1.18, strong: 1.32, scorching: 1.50 },
+    cold: { mild: 0.84, strong: 0.70, scorching: 0.55 }
+  };
+
+  function rollStreakDuration() { return 5 + Math.floor(Math.random() * 16); }
+  function rollStreakIntensity() {
+    const r = Math.random();
+    if (r < 0.10) return 'scorching';
+    if (r < 0.35) return 'strong';
+    return 'mild';
+  }
+  function rampFactor(pos, duration) {
+    if (duration <= 1) return 1;
+    const p = pos / (duration - 1);
+    return 1 - 2 * Math.abs(p - 0.5);
+  }
+  function computeFormMod(state, pos, duration, intensity) {
+    if (state === 'normal') return 1.0;
+    const peak = STREAK_PEAKS[state][intensity];
+    const ramp = rampFactor(pos, duration);
+    return 1.0 + ramp * (peak - 1.0);
+  }
+
   // ===== Single innings outcomes =====
 
   // Sample a batting score for a player given their batting skill (1-20 d20-equivalent).
@@ -264,7 +292,8 @@ window.CricketEngine = (function () {
   }
 
   // Distribute bowling load and runs across opposition bowlers for one innings.
-  function distributeBowling(bowlingTeam, innings) {
+  function distributeBowling(bowlingTeam, innings, heroBowlMod) {
+    heroBowlMod = heroBowlMod || 1.0;
     // Threshold at >=6 — below that bowlers are very rarely thrown the ball.
     let bowlers = bowlingTeam.players.filter(p => p.bowlingSkill >= 6 && p.bowlingType);
     // Always need at least 4-5 bowlers to bowl the innings out
@@ -307,8 +336,9 @@ window.CricketEngine = (function () {
       const balls = overShares[i] * 6;
       const sr = D.BOWL_TARGET_SR[Math.max(1, Math.min(20, b.bowlingSkill))] || 100;
       const expectedWkts = balls / sr;
-      const form = 0.45 + Math.random() * 1.25;  // 0.45-1.70
-      return expectedWkts * form * (b.bowlingType ? b.bowlingType.wicketMod : 1);
+      const form = 0.45 + Math.random() * 1.25;  // per-innings variance
+      const streakMod = b.isHero ? heroBowlMod : 1.0;
+      return expectedWkts * form * (b.bowlingType ? b.bowlingType.wicketMod : 1) * streakMod;
     });
     const bowlerWickets = bowlers.map(() => 0);
     for (let i = 0; i < dismissalsToAssign; i++) {
@@ -412,6 +442,8 @@ window.CricketEngine = (function () {
     const conditionsMod = options.conditionsMod || 1.0;
     // Innings position mod (4th innings is harder)
     const inningsPosMod = options.inningsPosMod || 1.0;
+    // Hero form (streak multipliers for the career player only)
+    const heroBatMod = (options.heroForm && options.heroForm.bat) || 1.0;
 
     for (let pi = 0; pi < sortedBatters.length; pi++) {
       if (wickets >= 10) break;
@@ -420,7 +452,8 @@ window.CricketEngine = (function () {
       // If chasing & target reached, stop
       if (options.target && runningTotal > options.target) break;
 
-      const outcome = batterInningsScore(batter.battingSkill, conditionsMod * inningsPosMod);
+      const formMult = batter.isHero ? heroBatMod : 1.0;
+      const outcome = batterInningsScore(batter.battingSkill, conditionsMod * inningsPosMod * formMult);
 
       // Decide if out
       let isOut;
@@ -510,7 +543,8 @@ window.CricketEngine = (function () {
     }
 
     // Distribute bowling
-    const bowlingStats = distributeBowling(bowlingTeam, innings);
+    const heroBowlMod = (options.heroForm && options.heroForm.bowl) || 1.0;
+    const bowlingStats = distributeBowling(bowlingTeam, innings, heroBowlMod);
     innings.bowling = bowlingStats.map(s => ({
       name: s.player.shortName,
       fullName: s.player.name,
@@ -552,11 +586,12 @@ window.CricketEngine = (function () {
     const secondBat = firstBat === heroTeam ? oppTeam : heroTeam;
 
     const conditionsMod = ctx.conditionsMod || (0.92 + Math.random() * 0.16);
+    const heroForm = ctx.heroForm || { bat: 1.0, bowl: 1.0 };
 
     // Innings 1
-    const inn1 = simulateInnings(firstBat, secondBat, { conditionsMod, inningsPosMod: 1.0 });
+    const inn1 = simulateInnings(firstBat, secondBat, { conditionsMod, inningsPosMod: 1.0, heroForm });
     // Innings 2
-    const inn2 = simulateInnings(secondBat, firstBat, { conditionsMod, inningsPosMod: 0.98 });
+    const inn2 = simulateInnings(secondBat, firstBat, { conditionsMod, inningsPosMod: 0.98, heroForm });
 
     const innings = [inn1, inn2];
 
@@ -566,26 +601,20 @@ window.CricketEngine = (function () {
 
     let inn3, inn4;
     if (followOn) {
-      // Team B bats again
-      inn3 = simulateInnings(secondBat, firstBat, { conditionsMod, inningsPosMod: 0.90, followedOn: true });
+      inn3 = simulateInnings(secondBat, firstBat, { conditionsMod, inningsPosMod: 0.90, followedOn: true, heroForm });
       innings.push(inn3);
-      // If still trailing & all out, A wins by innings
       if (inn3.total < lead) {
-        // Match ends
+        // Innings win
       } else {
-        // A bats again
-        const target = inn3.total - lead;  // not really used, A just bats to chase
-        inn4 = simulateInnings(firstBat, secondBat, { conditionsMod, inningsPosMod: 0.85, target: Math.max(40, target + 30) });
+        const target = inn3.total - lead;
+        inn4 = simulateInnings(firstBat, secondBat, { conditionsMod, inningsPosMod: 0.85, target: Math.max(40, target + 30), heroForm });
         innings.push(inn4);
       }
     } else {
-      // Normal flow: A bats again
-      inn3 = simulateInnings(firstBat, secondBat, { conditionsMod, inningsPosMod: 0.94, declarationLikely: lead > 0 });
+      inn3 = simulateInnings(firstBat, secondBat, { conditionsMod, inningsPosMod: 0.94, declarationLikely: lead > 0, heroForm });
       innings.push(inn3);
-      // Target for B
       const target = inn1.total + inn3.total - inn2.total + 1;
-      // B chases
-      inn4 = simulateInnings(secondBat, firstBat, { conditionsMod, inningsPosMod: 0.86, target: target });
+      inn4 = simulateInnings(secondBat, firstBat, { conditionsMod, inningsPosMod: 0.86, target: target, heroForm });
       innings.push(inn4);
     }
 
@@ -616,11 +645,12 @@ window.CricketEngine = (function () {
       tossDecision: decisionBat ? 'bat' : 'bowl',
       followOn,
       result: result.text,
-      resultCode: result.code,           // 'win' | 'loss' | 'draw' | 'tie' from hero perspective
+      resultCode: result.code,
       margin: result.margin,
       innings,
       heroBatting,
-      heroBowling
+      heroBowling,
+      streak: ctx.streak || null
     };
   }
 
@@ -744,6 +774,18 @@ window.CricketEngine = (function () {
     let seriesIdx = 0;
     let recentOpps = [];
 
+    // Streak state machine — hero alternates between 'normal' / 'hot' / 'cold'.
+    // Streak durations 5-20 matches with 3-5 match cooldowns.
+    let streakState = 'normal';
+    let streakIntensity = null;
+    let streakDuration = 0;
+    let streakProgress = 0;
+    let streakCooldown = 0;
+    // Skill bias: elite players hot more often, weak players cold more often.
+    const skillBias = (setup.primaryRoll - 10) * 0.04; // -0.36 to +0.40
+    // Streak entry probability per match while in 'normal' state.
+    const streakEntryChance = 0.06;
+
     const oppCycle = [];  // pool of upcoming opponents
 
     while (matchNum < targetMatches) {
@@ -774,16 +816,55 @@ window.CricketEngine = (function () {
       const venue = decideVenue(setup.nation, oppCode, isHome);
       const year = startYear + yearOffset;
 
+      // === Streak state update (before this match) ===
+      if (streakState === 'normal') {
+        if (streakCooldown > 0) {
+          streakCooldown--;
+        } else if (Math.random() < streakEntryChance) {
+          const hotChance = Math.max(0.15, Math.min(0.85, 0.5 + skillBias));
+          streakState = Math.random() < hotChance ? 'hot' : 'cold';
+          streakIntensity = rollStreakIntensity();
+          streakDuration = rollStreakDuration();
+          streakProgress = 0;
+        }
+      }
+      const formMod = computeFormMod(streakState, streakProgress, streakDuration, streakIntensity);
+      // Apply form: primary discipline gets full, secondary gets half-strength.
+      const heroForm = setup.role === 'batter'
+        ? { bat: formMod, bowl: 1 + (formMod - 1) * 0.5 }
+        : { bat: 1 + (formMod - 1) * 0.5, bowl: formMod };
+
+      const streakMeta = streakState === 'normal' ? null : {
+        type: streakState,
+        intensity: streakIntensity,
+        progress: streakProgress + 1,
+        duration: streakDuration,
+        formMod: +formMod.toFixed(3)
+      };
+
       const match = simulateMatch(heroTeam, oppTeam, {
         matchNum: matchNum + 1,
         year,
         seriesIdx,
         venue,
         isHome,
-        oppCode
+        oppCode,
+        heroForm,
+        streak: streakMeta
       });
       career.matches.push(match);
       matchNum++;
+
+      // Advance streak progress, reset when done
+      if (streakState !== 'normal') {
+        streakProgress++;
+        if (streakProgress >= streakDuration) {
+          streakState = 'normal';
+          streakIntensity = null;
+          streakProgress = 0;
+          streakCooldown = 3 + Math.floor(Math.random() * 3);
+        }
+      }
 
       // Update form — role-appropriate metric
       const heroRuns = match.heroBatting.reduce((s, b) => s + b.runs, 0);

@@ -531,12 +531,12 @@
     root.innerHTML = '';
 
     const matches = career.matches.slice().reverse();
-    const cols = ['#','Yr','Vs','Venue','Toss','Result','Bat','Bowl'];
+    const cols = ['#','Yr','Vs','Venue','Toss','Result','Form','Bat','Bowl'];
 
     const table = el('table', { class: 'xl-data-grid' });
     const thead = el('thead');
     const trh = el('tr');
-    cols.forEach((c, i) => trh.appendChild(el('th', { class: (i === 0 ? 'xl-row-num-h' : (i === 1 ? 'xl-num' : (i === 2 ? 'xl-center' : ''))) }, c)));
+    cols.forEach((c, i) => trh.appendChild(el('th', { class: (i === 0 ? 'xl-row-num-h' : (i === 1 ? 'xl-num' : (i === 2 ? 'xl-center' : (i === 6 ? 'xl-center' : '')))) }, c)));
     thead.appendChild(trh);
     table.appendChild(thead);
 
@@ -545,7 +545,8 @@
       const heroBatStr = m.heroBatting.map(b => b.runs + (b.out ? '' : '*')).join(' & ') || '-';
       const heroBowlStr = m.heroBowling.map(b => b.wickets + '/' + b.runs).join(' & ') || '-';
       const resCls = m.resultCode === 'win' ? 'xl-good' : m.resultCode === 'loss' ? 'xl-bad' : '';
-      const tr = el('tr', { class: 'clickable' });
+      const streakCls = m.streak ? ' xl-streak-' + m.streak.type : '';
+      const tr = el('tr', { class: 'clickable' + streakCls });
       tr.addEventListener('click', () => openScorecard(m));
       tr.appendChild(el('td', { class: 'xl-row-num' }, String(m.matchNum)));
       tr.appendChild(el('td', { class: 'xl-num' }, String(m.year)));
@@ -553,6 +554,7 @@
       tr.appendChild(el('td', null, m.venue));
       tr.appendChild(el('td', null, D.getNation(m.tossWinner).short + ' (' + m.tossDecision + ')'));
       tr.appendChild(el('td', { class: resCls }, m.result));
+      tr.appendChild(el('td', { class: 'xl-center xl-form-cell' }, formCellText(m.streak)));
       tr.appendChild(el('td', { class: 'xl-num' }, heroBatStr));
       tr.appendChild(el('td', { class: 'xl-num' }, heroBowlStr));
       tbody.appendChild(tr);
@@ -561,6 +563,14 @@
     root.appendChild(el('div', { class: 'xl-section-header' },
       'MATCH LOG — ' + matches.length + ' Tests (click for full scorecard)'));
     root.appendChild(table);
+  }
+
+  function formCellText(streak) {
+    if (!streak) return '';
+    const dot = streak.intensity === 'scorching' ? '●●●'
+              : streak.intensity === 'strong'    ? '●●'
+              : '●';
+    return (streak.type === 'hot' ? 'HOT ' : 'COLD ') + dot;
   }
 
   // ===== Scorecard modal =====

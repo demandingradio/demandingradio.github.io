@@ -407,6 +407,15 @@
 .xl-bad   { color: #800000; }
 .xl-milestone { background-color: #fffacc !important; }
 
+/* Streak row tints — visible on the Matches sheet */
+.xl-streak-hot  td { background-color: #e0ffe0; }
+.xl-streak-cold td { background-color: #ffe0e8; }
+.xl-streak-hot.clickable:hover  td { background-color: #c4f5c4; }
+.xl-streak-cold.clickable:hover td { background-color: #ffc8d4; }
+.xl-form-cell { font-family: 'Consolas','Courier New',monospace; font-size: 10px; letter-spacing: 0.5px; }
+.xl-streak-hot  .xl-form-cell { color: #006000; font-weight: bold; }
+.xl-streak-cold .xl-form-cell { color: #800000; font-weight: bold; }
+
 /* Section headers within data sheets */
 .xl-section-header {
   background-color: #000080;
