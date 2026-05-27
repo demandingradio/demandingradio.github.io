@@ -7,7 +7,8 @@
     { label: 'To do',        icon: '\u{1F4DD}', href: '/to-do/',        title: 'To do' },
     { label: 'Calculator',   icon: '\u{1F4DF}', href: '/calculator/',   title: 'Calculator' },
     { label: 'Snake',        icon: '\u{1F40D}', href: '/snake/',        title: 'Snake' },
-    { label: 'Notes',        icon: '\u{1F5D2}', href: '/notes/',        title: 'Notes' }
+    { label: 'Notes',        icon: '\u{1F5D2}', href: '/notes/',        title: 'Notes' },
+    { label: 'Footy',        icon: '\u{1F3C9}', href: '/footy/',        title: 'Footy' }
   ];
 
   function renderDesktop(container) {

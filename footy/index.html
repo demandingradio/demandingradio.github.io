@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Footy - Monday Jeffrey</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- The game canvas fills the viewport. -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD shown during play (score + timer). Hidden via display:none until game starts. -->
+  <div id="hud" class="hud hidden">
+    <div class="score">
+      <span class="team-a">US <span id="score-a">0</span></span>
+      <span class="sep">vs</span>
+      <span class="team-b"><span id="score-b">0</span> CPU</span>
+    </div>
+    <div class="clock" id="clock">4:00</div>
+    <div class="hint">
+      P1 (red): WASD move, F kick, G handball &nbsp;&middot;&nbsp;
+      P2 (blue): Arrows move, / kick, . handball &nbsp;&middot;&nbsp;
+      Esc pause
+    </div>
+  </div>
+
+  <!-- Centered banner used for "GOAL!", "BEHIND", "QUARTER TIME" etc. -->
+  <div id="banner" class="banner hidden"></div>
+
+  <!-- Main menu shown on load. -->
+  <div id="menu" class="overlay">
+    <div class="menu-box">
+      <h1>FOOTY</h1>
+      <p class="tagline">2 vs 1 &mdash; Aussie Rules</p>
+      <button class="big-btn" id="btn-play">PLAY</button>
+      <button class="big-btn" id="btn-quit">QUIT</button>
+      <p class="footer">A Monday Jeffrey production</p>
+    </div>
+  </div>
+
+  <!-- Pause menu (hidden until Esc is pressed in-game). -->
+  <div id="pause" class="overlay hidden">
+    <div class="menu-box">
+      <h1>PAUSED</h1>
+      <button class="big-btn" id="btn-resume">RESUME</button>
+      <button class="big-btn" id="btn-to-menu">QUIT TO MENU</button>
+    </div>
+  </div>
+
+  <!-- Scripts load in dependency order. Each attaches to window.FOOTY. -->
+  <script src="js/config.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/field.js"></script>
+  <script src="js/ball.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
