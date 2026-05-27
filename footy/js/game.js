@@ -87,10 +87,25 @@ FOOTY.Game = class {
   }
 
   // ---- Public state transitions ----
-  startMatch() {
+  // opts.mode: 'normal' (default) or 'freeplay'.
+  // In freeplay the AI is excluded from the active players, the clock doesn't
+  // tick, and both goals score for team A so you can shoot at either end.
+  startMatch(opts) {
+    const mode = (opts && opts.mode) || 'normal';
+    this.mode = mode;
     this.score.A = 0;
     this.score.B = 0;
     this.timeLeft = this.cfg.MATCH.DURATION;
+
+    if (mode === 'freeplay') {
+      this.players = [this.p1, this.p2];
+    } else {
+      this.players = [this.p1, this.p2, this.aiP];
+    }
+
+    // Tell the HUD which mode we're in (drives the "FREE PLAY" label + hides CPU score).
+    this.hud.classList.toggle('freeplay', mode === 'freeplay');
+
     this._resetForCenterBounce();
     this.state = 'playing';
     this._lastT = performance.now();
@@ -106,14 +121,19 @@ FOOTY.Game = class {
     this.ball.reset();
     this.p1.x = this.field.cx - 100; this.p1.y = this.field.cy - 60;
     this.p2.x = this.field.cx - 100; this.p2.y = this.field.cy + 60;
-    this.aiP.x = this.field.cx + 120; this.aiP.y = this.field.cy;
     this.p1.vx = this.p1.vy = 0;
     this.p2.vx = this.p2.vy = 0;
-    this.aiP.vx = this.aiP.vy = 0;
-    this.p1.lastKickRequest = this.p2.lastKickRequest = this.aiP.lastKickRequest = null;
-    this.p1.handballRequest = this.p2.handballRequest = this.aiP.handballRequest = false;
+    this.p1.lastKickRequest = this.p2.lastKickRequest = null;
+    this.p1.handballRequest = this.p2.handballRequest = false;
     this.p1.kickCharge = this.p2.kickCharge = 0;
     this.p1.kickHeld = this.p2.kickHeld = false;
+    // Only reset the AI if it's actually part of the match.
+    if (this.mode !== 'freeplay') {
+      this.aiP.x = this.field.cx + 120; this.aiP.y = this.field.cy;
+      this.aiP.vx = this.aiP.vy = 0;
+      this.aiP.lastKickRequest = null;
+      this.aiP.handballRequest = false;
+    }
     this.kickoffTimer = this.cfg.MATCH.KICKOFF_DELAY;
   }
 
@@ -126,10 +146,14 @@ FOOTY.Game = class {
   _updateHUD() {
     this.scoreA.textContent = this.score.A;
     this.scoreB.textContent = this.score.B;
-    const t = Math.max(0, Math.ceil(this.timeLeft));
-    const m = Math.floor(t / 60);
-    const s = t % 60;
-    this.clockEl.textContent = m + ':' + (s < 10 ? '0' + s : s);
+    if (this.mode === 'freeplay') {
+      this.clockEl.textContent = 'FREE PLAY';
+    } else {
+      const t = Math.max(0, Math.ceil(this.timeLeft));
+      const m = Math.floor(t / 60);
+      const s = t % 60;
+      this.clockEl.textContent = m + ':' + (s < 10 ? '0' + s : s);
+    }
   }
 
   _fitCanvas() {
@@ -174,6 +198,8 @@ FOOTY.Game = class {
       return;
     }
 
+    const isFreeplay = this.mode === 'freeplay';
+
     // Kick-off freeze: no ball motion or possession changes.
     if (this.kickoffTimer > 0) {
       this.kickoffTimer -= dt;
@@ -182,36 +208,38 @@ FOOTY.Game = class {
       this.p2.applyInput(FOOTY.Input, dt);
       this.p1.update(dt, this.ball, this.field);
       this.p2.update(dt, this.ball, this.field);
-      this.aiP.update(dt, this.ball, this.field);
+      if (!isFreeplay) this.aiP.update(dt, this.ball, this.field);
       this.ball.followHolder();
       return;
     }
 
-    // Match clock.
-    this.timeLeft -= dt;
-    if (this.timeLeft <= 0) {
-      this.timeLeft = 0;
-      this._endMatch();
-      return;
+    // Match clock — freeplay never expires.
+    if (!isFreeplay) {
+      this.timeLeft -= dt;
+      if (this.timeLeft <= 0) {
+        this.timeLeft = 0;
+        this._endMatch();
+        return;
+      }
     }
 
     // 1) Apply human inputs.
     this.p1.applyInput(FOOTY.Input, dt);
     this.p2.applyInput(FOOTY.Input, dt);
 
-    // 2) Drive the AI.
-    this.ai.update(dt, this.ball, [this.p1, this.p2]);
+    // 2) Drive the AI (skipped in freeplay).
+    if (!isFreeplay) this.ai.update(dt, this.ball, [this.p1, this.p2]);
 
     // 3) Resolve any pending kicks/handballs *before* moving — so ball
     //    launches from the player's current frame position.
     this.p1.executeActions(this.ball);
     this.p2.executeActions(this.ball);
-    this.aiP.executeActions(this.ball);
+    if (!isFreeplay) this.aiP.executeActions(this.ball);
 
     // 4) Integrate motion.
     this.p1.update(dt, this.ball, this.field);
     this.p2.update(dt, this.ball, this.field);
-    this.aiP.update(dt, this.ball, this.field);
+    if (!isFreeplay) this.aiP.update(dt, this.ball, this.field);
 
     // 5) Soft player-vs-player separation.
     this._separatePlayers();
@@ -324,9 +352,16 @@ FOOTY.Game = class {
     // Which team SCORES depends on which goal was crossed:
     // - crossing the goal Team A attacks (A_ATTACKS) → A scores
     // - crossing the goal Team B attacks (B_ATTACKS) → B scores
+    // In freeplay there's no opponent — every goal credits team A so the
+    // player can shoot at either end.
     let scoringTeam = null;
-    if (end === this.cfg.TEAMS.A_ATTACKS) scoringTeam = 'A';
-    else if (end === this.cfg.TEAMS.B_ATTACKS) scoringTeam = 'B';
+    if (this.mode === 'freeplay') {
+      scoringTeam = 'A';
+    } else if (end === this.cfg.TEAMS.A_ATTACKS) {
+      scoringTeam = 'A';
+    } else if (end === this.cfg.TEAMS.B_ATTACKS) {
+      scoringTeam = 'B';
+    }
 
     if (!scoringTeam) return;
 

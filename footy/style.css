@@ -62,6 +62,13 @@ html, body {
   opacity: 0.85;
 }
 
+/* Free-play mode: hide the "vs CPU" half — only one team on the field. */
+.hud.freeplay .team-b,
+.hud.freeplay .sep {
+  display: none;
+}
+.hud.freeplay .clock { color: #aaffaa; }
+
 /* ---------- Big center banner (GOAL!, etc.) ---------- */
 .banner {
   position: fixed;

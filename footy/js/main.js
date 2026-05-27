@@ -34,13 +34,16 @@
   };
 
   // ---- Main menu ----
-  document.getElementById('btn-play').addEventListener('click', () => {
+  function startGame(mode) {
     menu.classList.add('hidden');
     hud.classList.remove('hidden');
     FOOTY.Input.clear();
     FOOTY.Input.setEnabled(true);
-    game.startMatch();
-  });
+    game.startMatch({ mode });
+  }
+
+  document.getElementById('btn-play').addEventListener('click', () => startGame('normal'));
+  document.getElementById('btn-freeplay').addEventListener('click', () => startGame('freeplay'));
 
   document.getElementById('btn-quit').addEventListener('click', () => {
     // Quit returns to the Monday Jeffrey desktop.
