@@ -483,9 +483,6 @@ FOOTY.Game = class {
       p.draw(ctx, false, this.ball.holder === p);
     }
 
-    // Aim line — drawn for P1 only, always visible while playing.
-    this._drawAimLine(ctx);
-
     this.ball.draw(ctx);
 
     // Accuracy bar overlay (if a human carrier is in range of their goal).
@@ -493,69 +490,6 @@ FOOTY.Game = class {
 
     // Debug: collision radii etc.
     if (this.cfg.DEBUG) this._drawDebug(ctx);
-  }
-
-  // Draws an aim line from P1 toward the cursor. Length reflects the
-  // projected kick distance for the *current* charge level (so a tiny tap
-  // gives a short line, a fully-charged hold reaches MAX_KICK_DISTANCE).
-  // Colour signals validity / penalty zone: green = forward, yellow =
-  // sideways (distance penalty), red = behind (kick rejected) OR overcharged.
-  _drawAimLine(ctx) {
-    if (this.state !== 'playing') return;
-    // Only show the aim line when the human is actually holding the ball.
-    if (this.ball.holder !== this.p1) return;
-    const p1 = this.p1;
-    const M = FOOTY.Mouse;
-    const dx = M.worldX - p1.x;
-    const dy = M.worldY - p1.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 8) return;
-
-    const aim = Math.atan2(dy, dx);
-    let delta = aim - p1.facing;
-    while (delta >  Math.PI) delta -= 2 * Math.PI;
-    while (delta < -Math.PI) delta += 2 * Math.PI;
-    const absDelta = Math.abs(delta);
-
-    const K = this.cfg.KICK;
-    const distanceMult = K.ANGLE_PENALTY_MIN
-      + (1 - K.ANGLE_PENALTY_MIN) * Math.cos(Math.min(absDelta, Math.PI / 2));
-
-    // Reachable distance at current charge level (so the line stretches as
-    // the player holds the button). If not charging, show full range.
-    const charge = p1.kickChargeTime;
-    const power01 = p1.kickHeld
-      ? Math.min(1, charge / K.CHARGE_TIME)
-      : 1;
-    const overcharged = p1.kickHeld && charge > K.CHARGE_TIME;
-    const reach = K.MAX_KICK_DISTANCE * power01 * distanceMult;
-
-    let color;
-    if (absDelta > K.MAX_FORWARD_ANGLE) {
-      color = 'rgba(255, 70, 70, 0.55)';      // rejected
-    } else if (overcharged) {
-      color = 'rgba(255, 90, 90, 0.75)';      // overcharged — accuracy hit
-    } else if (absDelta > Math.PI / 4) {
-      color = 'rgba(255, 210, 74, 0.7)';      // sideways — penalty zone
-    } else {
-      color = 'rgba(120, 255, 120, 0.75)';    // forward — clean
-    }
-
-    const drawLen = Math.max(20, reach);
-    const ux = dx / len, uy = dy / len;
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 8]);
-    ctx.beginPath();
-    ctx.moveTo(p1.x + ux * (this.cfg.PLAYER.RADIUS + 4), p1.y + uy * (this.cfg.PLAYER.RADIUS + 4));
-    ctx.lineTo(p1.x + ux * drawLen, p1.y + uy * drawLen);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.arc(p1.x + ux * drawLen, p1.y + uy * drawLen, 5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
   }
 
   _drawAccuracyBar(ctx) {
