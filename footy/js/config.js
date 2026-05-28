@@ -49,17 +49,22 @@ FOOTY.CONFIG = {
     MIN_POWER: 280,          // initial horizontal speed at zero charge
     MAX_POWER: 730,          // initial horizontal speed at full charge
                              // (tuned so a flat max kick travels ~55m = 550 units)
-    CHARGE_TIME: 0.9,        // seconds to fully charge (unused with mouse aim, kept for AI)
+    CHARGE_TIME: 0.9,        // sec to reach full power by holding left-click
     LIFT_RATIO: 0.65,        // initial vz = horizontal_speed * this
     INACCURACY_BASE: 0.08,   // baseline angle wobble (radians)
 
-    // Mouse-aim distance + angle penalty model:
-    //   power01 = clamp(distance_to_cursor / MAX_KICK_DISTANCE, 0, 1)
-    //   angleDelta = |kickDir - facing| (in radians)
+    // Overcharge: holding past CHARGE_TIME keeps power at max but adds wobble.
+    // Wobble grows linearly from 0 (at exactly CHARGE_TIME) up to
+    // MAX_OVERCHARGE_WOBBLE radians (at CHARGE_TIME + OVERCHARGE_TIME and beyond).
+    OVERCHARGE_TIME: 0.6,
+    MAX_OVERCHARGE_WOBBLE: 0.45,
+
+    // Angle penalty model (direction is set by cursor position):
+    //   angleDelta = |kickDir - facing|
     //   if angleDelta > MAX_FORWARD_ANGLE → kick rejected (can't kick behind)
     //   else distanceMult = ANGLE_PENALTY_MIN + (1 - ANGLE_PENALTY_MIN) * cos(angleDelta)
-    //   launchSpeed = MIN_POWER + (MAX_POWER - MIN_POWER) * power01 * distanceMult
-    MAX_KICK_DISTANCE: 550,        // 55m at our 10u-per-metre scale
+    //   launchSpeed = (MIN_POWER + (MAX_POWER - MIN_POWER) * power01) * distanceMult
+    MAX_KICK_DISTANCE: 550,        // 55m at our 10u-per-metre scale (used for aim-line)
     MAX_FORWARD_ANGLE: Math.PI/2,  // > this from facing → reject
     ANGLE_PENALTY_MIN: 0.4,        // sideways kicks at 90° travel this fraction of full
   },

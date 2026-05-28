@@ -236,24 +236,44 @@ FOOTY.Game = class {
     // 1) Human input — movement + sprint + tackle button.
     this.p1.applyInput(FOOTY.Input, dt);
 
-    // 1b) Mouse aim + kick/handball for P1. Aim updates every frame so the
-    //     aim line tracks the cursor even when P1 doesn't have the ball.
+    // 1b) Mouse aim + charge-to-kick for P1. Direction comes from cursor,
+    //     power from how long left-click was held; release fires the kick.
+    //     Past CHARGE_TIME the kick stays at max power but adds wobble
+    //     (overcharge), shown in red on the power bar.
     const M = FOOTY.Mouse;
     this.p1.aimX = M.worldX;
     this.p1.aimY = M.worldY;
-    if (this.ball.holder === this.p1) {
-      if (M.leftPressed) {
-        // Kick: direction = player→cursor, power = clamped(distance / MAX_KICK_DISTANCE).
+    const carrying = this.ball.holder === this.p1;
+    if (carrying) {
+      // Start a fresh charge on press.
+      if (M.leftPressed && !this.p1.kickHeld) {
+        this.p1.kickHeld = true;
+        this.p1.kickChargeTime = 0;
+      }
+      // Accumulate while held.
+      if (this.p1.kickHeld && M.leftDown) {
+        this.p1.kickChargeTime += dt;
+      }
+      // Release: produce the kick request.
+      if (this.p1.kickHeld && !M.leftDown) {
         const K = this.cfg.KICK;
-        const dx = M.worldX - this.p1.x;
-        const dy = M.worldY - this.p1.y;
-        const dist = Math.hypot(dx, dy);
-        const power = Math.max(0, Math.min(1, dist / K.MAX_KICK_DISTANCE));
-        const angle = Math.atan2(dy, dx);
-        this.p1.lastKickRequest = { power01: power, angle };
-      } else if (M.rightPressed) {
+        const charge = this.p1.kickChargeTime;
+        const power01 = Math.min(1, charge / K.CHARGE_TIME);
+        const overSec = Math.max(0, charge - K.CHARGE_TIME);
+        const overcharge = Math.min(1, overSec / K.OVERCHARGE_TIME);
+        const extraWobble = overcharge * K.MAX_OVERCHARGE_WOBBLE;
+        const angle = Math.atan2(M.worldY - this.p1.y, M.worldX - this.p1.x);
+        this.p1.lastKickRequest = { power01, angle, extraWobble };
+        this.p1.kickHeld = false;
+        this.p1.kickChargeTime = 0;
+      }
+      if (M.rightPressed) {
         this.p1.requestHandballAimed(M.worldX, M.worldY);
       }
+    } else if (this.p1.kickHeld) {
+      // Lost the ball mid-charge — abort the charge, no kick.
+      this.p1.kickHeld = false;
+      this.p1.kickChargeTime = 0;
     }
 
     // 2) Drive both AIs (skipped in freeplay).
@@ -474,9 +494,11 @@ FOOTY.Game = class {
     if (this.cfg.DEBUG) this._drawDebug(ctx);
   }
 
-  // Draws a line from P1 to the cursor showing where a kick would go.
-  // Colour-coded: green = forward (valid), red = behind (rejected),
-  // yellow band in the middle = angle-penalty (reduced distance).
+  // Draws an aim line from P1 toward the cursor. Length reflects the
+  // projected kick distance for the *current* charge level (so a tiny tap
+  // gives a short line, a fully-charged hold reaches MAX_KICK_DISTANCE).
+  // Colour signals validity / penalty zone: green = forward, yellow =
+  // sideways (distance penalty), red = behind (kick rejected) OR overcharged.
   _drawAimLine(ctx) {
     if (this.state !== 'playing') return;
     const p1 = this.p1;
@@ -484,9 +506,8 @@ FOOTY.Game = class {
     const dx = M.worldX - p1.x;
     const dy = M.worldY - p1.y;
     const len = Math.hypot(dx, dy);
-    if (len < 8) return;  // cursor sitting on top of player — no line
+    if (len < 8) return;
 
-    // Angle delta in [-π, π].
     const aim = Math.atan2(dy, dx);
     let delta = aim - p1.facing;
     while (delta >  Math.PI) delta -= 2 * Math.PI;
@@ -494,17 +515,30 @@ FOOTY.Game = class {
     const absDelta = Math.abs(delta);
 
     const K = this.cfg.KICK;
+    const distanceMult = K.ANGLE_PENALTY_MIN
+      + (1 - K.ANGLE_PENALTY_MIN) * Math.cos(Math.min(absDelta, Math.PI / 2));
+
+    // Reachable distance at current charge level (so the line stretches as
+    // the player holds the button). If not charging, show full range.
+    const charge = p1.kickChargeTime;
+    const power01 = p1.kickHeld
+      ? Math.min(1, charge / K.CHARGE_TIME)
+      : 1;
+    const overcharged = p1.kickHeld && charge > K.CHARGE_TIME;
+    const reach = K.MAX_KICK_DISTANCE * power01 * distanceMult;
+
     let color;
     if (absDelta > K.MAX_FORWARD_ANGLE) {
       color = 'rgba(255, 70, 70, 0.55)';      // rejected
+    } else if (overcharged) {
+      color = 'rgba(255, 90, 90, 0.75)';      // overcharged — accuracy hit
     } else if (absDelta > Math.PI / 4) {
-      color = 'rgba(255, 210, 74, 0.65)';     // sideways — penalty zone
+      color = 'rgba(255, 210, 74, 0.7)';      // sideways — penalty zone
     } else {
-      color = 'rgba(120, 255, 120, 0.7)';     // forward — full power
+      color = 'rgba(120, 255, 120, 0.75)';    // forward — clean
     }
 
-    // Cap the visual length to MAX_KICK_DISTANCE so the line shows reach.
-    const drawLen = Math.min(len, K.MAX_KICK_DISTANCE);
+    const drawLen = Math.max(20, reach);
     const ux = dx / len, uy = dy / len;
     ctx.save();
     ctx.strokeStyle = color;
@@ -514,7 +548,6 @@ FOOTY.Game = class {
     ctx.moveTo(p1.x + ux * (this.cfg.PLAYER.RADIUS + 4), p1.y + uy * (this.cfg.PLAYER.RADIUS + 4));
     ctx.lineTo(p1.x + ux * drawLen, p1.y + uy * drawLen);
     ctx.stroke();
-    // Small target marker at the cursor end.
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.arc(p1.x + ux * drawLen, p1.y + uy * drawLen, 5, 0, Math.PI * 2);

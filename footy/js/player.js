@@ -232,8 +232,10 @@ FOOTY.Player = class {
       const distanceMult = K.ANGLE_PENALTY_MIN
         + (1 - K.ANGLE_PENALTY_MIN) * Math.cos(absDelta);
       const speed = (K.MIN_POWER + (K.MAX_POWER - K.MIN_POWER) * power01) * distanceMult;
-      // Tiny baseline inaccuracy so kicks aren't laser-perfect.
-      const wobble = (Math.random() - 0.5) * 2 * K.INACCURACY_BASE * (1 - power01 * 0.5);
+      // Baseline wobble + any overcharge wobble passed in from a held kick.
+      const extra = req.extraWobble || 0;
+      const baseWobble = K.INACCURACY_BASE * (1 - power01 * 0.5);
+      const wobble = (Math.random() - 0.5) * 2 * (baseWobble + extra);
       ball.launch(speed, aimAngle + wobble, K.LIFT_RATIO, this, 'kick');
       this.pickupCooldown = this.cfg.PLAYER.PICKUP_COOLDOWN;
       this.lastKickRequest = null;
@@ -326,12 +328,49 @@ FOOTY.Player = class {
       const y = this.y - P.RADIUS - 12;
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-      // Colour: green when plenty, orange below half, red below quarter.
       let fill = '#5ae15a';
       if (this.stamina < 0.25)     fill = '#ff5050';
       else if (this.stamina < 0.5) fill = '#ffaa30';
       ctx.fillStyle = fill;
       ctx.fillRect(x, y, w * this.stamina, h);
+    }
+
+    // Kick power bar — shown only while actively charging a kick. Two-zone
+    // layout: a green "safe" section filling up to full power, then a red
+    // "overcharge" section where holding longer hurts accuracy.
+    if (this.kickHeld) {
+      const K = this.cfg.KICK;
+      const totalSec = K.CHARGE_TIME + K.OVERCHARGE_TIME;
+      const greenW   = 50 * (K.CHARGE_TIME / totalSec);
+      const redW     = 50 - greenW;
+      const x = this.x - 25;
+      const y = this.y - P.RADIUS - 22;
+      // Frame.
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(x - 2, y - 2, 54, 9);
+      // Empty track (two zones, dim).
+      ctx.fillStyle = 'rgba(120, 220, 120, 0.25)';
+      ctx.fillRect(x, y, greenW, 5);
+      ctx.fillStyle = 'rgba(220, 90, 90, 0.25)';
+      ctx.fillRect(x + greenW, y, redW, 5);
+      // Fill: how much of the total has elapsed (clamped).
+      const fillSec = Math.min(this.kickChargeTime, totalSec);
+      const fillFrac = fillSec / totalSec;
+      // Draw green fill first.
+      const fillSecGreen = Math.min(fillSec, K.CHARGE_TIME);
+      ctx.fillStyle = '#5ae15a';
+      ctx.fillRect(x, y, 50 * (fillSecGreen / totalSec), 5);
+      // Then any red portion.
+      if (fillSec > K.CHARGE_TIME) {
+        const fillSecRed = fillSec - K.CHARGE_TIME;
+        ctx.fillStyle = '#ff5050';
+        ctx.fillRect(x + greenW, y, 50 * (fillSecRed / totalSec), 5);
+      }
+      // Divider tick at the boundary.
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillRect(x + greenW - 1, y - 1, 1, 7);
+      // Suppress unused-var lint
+      void fillFrac;
     }
   }
 };
