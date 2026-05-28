@@ -20,8 +20,12 @@
     </div>
     <div class="clock" id="clock">4:00</div>
     <div class="hint">
-      P1 (red): WASD move, F kick, G handball &nbsp;&middot;&nbsp;
-      P2 (blue): Arrows move, / kick, . handball &nbsp;&middot;&nbsp;
+      WASD move &nbsp;&middot;&nbsp;
+      Mouse aim &nbsp;&middot;&nbsp;
+      Left-click kick &nbsp;&middot;&nbsp;
+      Right-click handball &nbsp;&middot;&nbsp;
+      Shift sprint &nbsp;&middot;&nbsp;
+      Space tackle &nbsp;&middot;&nbsp;
       Esc pause
     </div>
   </div>
@@ -33,7 +37,7 @@
   <div id="menu" class="overlay">
     <div class="menu-box">
       <h1>FOOTY</h1>
-      <p class="tagline">2 vs 1 &mdash; Aussie Rules</p>
+      <p class="tagline">You + AI ally &mdash; vs CPU</p>
       <button class="big-btn" id="btn-play">PLAY</button>
       <button class="big-btn" id="btn-freeplay">FREE PLAY</button>
       <button class="big-btn" id="btn-quit">QUIT</button>
@@ -50,14 +54,17 @@
     </div>
   </div>
 
-  <!-- Scripts load in dependency order. Each attaches to window.FOOTY. -->
-  <script src="js/config.js"></script>
-  <script src="js/input.js"></script>
-  <script src="js/field.js"></script>
-  <script src="js/ball.js"></script>
-  <script src="js/player.js"></script>
-  <script src="js/ai.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/main.js"></script>
+  <!-- Scripts load in dependency order. Each attaches to window.FOOTY.
+       The ?v= query string is bumped when iterating so browsers don't cache
+       stale JS. -->
+  <script src="js/config.js?v=2"></script>
+  <script src="js/input.js?v=2"></script>
+  <script src="js/mouse.js?v=2"></script>
+  <script src="js/field.js?v=2"></script>
+  <script src="js/ball.js?v=2"></script>
+  <script src="js/player.js?v=2"></script>
+  <script src="js/ai.js?v=2"></script>
+  <script src="js/game.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
 </body>
 </html>

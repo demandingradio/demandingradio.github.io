@@ -46,7 +46,7 @@ FOOTY.Game = class {
     const A = this.cfg.TEAMS.A_ATTACKS;
     const B = this.cfg.TEAMS.B_ATTACKS;
 
-    // Human player 1 — red — starts on the left half.
+    // Human — red — mouse + keyboard.
     this.p1 = new FOOTY.Player(this.cfg, {
       id: 'P1',
       team: 'A',
@@ -58,19 +58,19 @@ FOOTY.Game = class {
       tackleStrength: 0.55,
     });
 
-    // Human player 2 — blue — starts on the left half too (same side).
+    // AI teammate — blue — same team as P1, attacks the same goal.
     this.p2 = new FOOTY.Player(this.cfg, {
       id: 'P2',
       team: 'A',
       attacks: A,
-      bindings: this.cfg.KEYS.P2,
+      bindings: null,
       colors: { BODY: C.P2_BODY, HEAD: C.P2_HEAD },
       x: this.field.cx - 120,
       y: this.field.cy + 60,
       tackleStrength: 0.55,
     });
 
-    // AI opponent — yellow — starts on the right half.
+    // AI opponent — yellow.
     this.aiP = new FOOTY.Player(this.cfg, {
       id: 'AI',
       team: 'B',
@@ -79,10 +79,11 @@ FOOTY.Game = class {
       colors: { BODY: C.AI_BODY, HEAD: C.AI_HEAD },
       x: this.field.cx + 140,
       y: this.field.cy,
-      tackleStrength: 0.70,   // AI is a slightly stronger tackler — difficulty knob
+      tackleStrength: 0.70,   // slightly stronger — difficulty knob
     });
 
-    this.ai = new FOOTY.AI(this.cfg, this.aiP, this.field);
+    this.aiAlly = new FOOTY.AI(this.cfg, this.p2,  this.field);
+    this.aiOpp  = new FOOTY.AI(this.cfg, this.aiP, this.field);
     this.players = [this.p1, this.p2, this.aiP];
   }
 
@@ -98,7 +99,8 @@ FOOTY.Game = class {
     this.timeLeft = this.cfg.MATCH.DURATION;
 
     if (mode === 'freeplay') {
-      this.players = [this.p1, this.p2];
+      // Solo — just the human on the field; no teammate, no opponent.
+      this.players = [this.p1];
     } else {
       this.players = [this.p1, this.p2, this.aiP];
     }
@@ -119,21 +121,28 @@ FOOTY.Game = class {
   // ---- Internal ----
   _resetForCenterBounce() {
     this.ball.reset();
+    const isFreeplay = this.mode === 'freeplay';
+
     this.p1.x = this.field.cx - 100; this.p1.y = this.field.cy - 60;
-    this.p2.x = this.field.cx - 100; this.p2.y = this.field.cy + 60;
     this.p1.vx = this.p1.vy = 0;
-    this.p2.vx = this.p2.vy = 0;
-    this.p1.lastKickRequest = this.p2.lastKickRequest = null;
-    this.p1.handballRequest = this.p2.handballRequest = false;
-    this.p1.kickCharge = this.p2.kickCharge = 0;
-    this.p1.kickHeld = this.p2.kickHeld = false;
-    // Only reset the AI if it's actually part of the match.
-    if (this.mode !== 'freeplay') {
+    this.p1.lastKickRequest = null;
+    this.p1.handballRequest = false;
+    this.p1.tackleRequest = false;
+
+    if (!isFreeplay) {
+      this.p2.x = this.field.cx - 100; this.p2.y = this.field.cy + 60;
+      this.p2.vx = this.p2.vy = 0;
+      this.p2.lastKickRequest = null;
+      this.p2.handballRequest = false;
+      this.p2.tackleRequest = false;
+
       this.aiP.x = this.field.cx + 120; this.aiP.y = this.field.cy;
       this.aiP.vx = this.aiP.vy = 0;
       this.aiP.lastKickRequest = null;
       this.aiP.handballRequest = false;
+      this.aiP.tackleRequest = false;
     }
+
     this.kickoffTimer = this.cfg.MATCH.KICKOFF_DELAY;
   }
 
@@ -187,6 +196,7 @@ FOOTY.Game = class {
     }
 
     FOOTY.Input.endFrame();
+    FOOTY.Mouse.endFrame();
   }
 
   _update(dt) {
@@ -203,12 +213,12 @@ FOOTY.Game = class {
     // Kick-off freeze: no ball motion or possession changes.
     if (this.kickoffTimer > 0) {
       this.kickoffTimer -= dt;
-      // Players can still drift a bit by inputs (feels alive).
       this.p1.applyInput(FOOTY.Input, dt);
-      this.p2.applyInput(FOOTY.Input, dt);
       this.p1.update(dt, this.ball, this.field);
-      this.p2.update(dt, this.ball, this.field);
-      if (!isFreeplay) this.aiP.update(dt, this.ball, this.field);
+      if (!isFreeplay) {
+        this.p2.update(dt, this.ball, this.field);
+        this.aiP.update(dt, this.ball, this.field);
+      }
       this.ball.followHolder();
       return;
     }
@@ -223,23 +233,50 @@ FOOTY.Game = class {
       }
     }
 
-    // 1) Apply human inputs.
+    // 1) Human input — movement + sprint + tackle button.
     this.p1.applyInput(FOOTY.Input, dt);
-    this.p2.applyInput(FOOTY.Input, dt);
 
-    // 2) Drive the AI (skipped in freeplay).
-    if (!isFreeplay) this.ai.update(dt, this.ball, [this.p1, this.p2]);
+    // 1b) Mouse aim + kick/handball for P1. Aim updates every frame so the
+    //     aim line tracks the cursor even when P1 doesn't have the ball.
+    const M = FOOTY.Mouse;
+    this.p1.aimX = M.worldX;
+    this.p1.aimY = M.worldY;
+    if (this.ball.holder === this.p1) {
+      if (M.leftPressed) {
+        // Kick: direction = player→cursor, power = clamped(distance / MAX_KICK_DISTANCE).
+        const K = this.cfg.KICK;
+        const dx = M.worldX - this.p1.x;
+        const dy = M.worldY - this.p1.y;
+        const dist = Math.hypot(dx, dy);
+        const power = Math.max(0, Math.min(1, dist / K.MAX_KICK_DISTANCE));
+        const angle = Math.atan2(dy, dx);
+        this.p1.lastKickRequest = { power01: power, angle };
+      } else if (M.rightPressed) {
+        this.p1.requestHandballAimed(M.worldX, M.worldY);
+      }
+    }
+
+    // 2) Drive both AIs (skipped in freeplay).
+    if (!isFreeplay) {
+      this.aiAlly.update(dt, this.ball, [this.p1, this.aiP]);
+      this.aiOpp.update(dt, this.ball, [this.p1, this.p2]);
+    }
 
     // 3) Resolve any pending kicks/handballs *before* moving — so ball
     //    launches from the player's current frame position.
-    this.p1.executeActions(this.ball);
-    this.p2.executeActions(this.ball);
-    if (!isFreeplay) this.aiP.executeActions(this.ball);
+    const p1Action = this.p1.executeActions(this.ball);
+    if (p1Action === 'rejected') this._maybeBanner("CAN'T KICK BACKWARDS", 700);
+    if (!isFreeplay) {
+      this.p2.executeActions(this.ball);
+      this.aiP.executeActions(this.ball);
+    }
 
     // 4) Integrate motion.
     this.p1.update(dt, this.ball, this.field);
-    this.p2.update(dt, this.ball, this.field);
-    if (!isFreeplay) this.aiP.update(dt, this.ball, this.field);
+    if (!isFreeplay) {
+      this.p2.update(dt, this.ball, this.field);
+      this.aiP.update(dt, this.ball, this.field);
+    }
 
     // 5) Soft player-vs-player separation.
     this._separatePlayers();
@@ -263,21 +300,25 @@ FOOTY.Game = class {
         if (p.tryPickup(this.ball)) break;
       }
     } else {
-      // Tackle: any non-holder opposing player within tackle radius triggers
-      // a contest. Outcome depends on carrier.possessionTime + tackler strength
-      // (see HOLDING_BALL config and tackle model docs there).
+      // Tackle: only fires when a player explicitly requested it this frame
+      // (space-bar for the human, AI sets it when adjacent to an opposing
+      // carrier). Outcome depends on carrier.possessionTime + tacker strength.
       const carrier = this.ball.holder;
-      for (const other of this.players) {
-        if (other === carrier) continue;
-        if (other.team === carrier.team) continue;
-        if (other.tackleCooldown > 0) continue;       // just got tackled themselves — no counter-tackle
-        const d = Math.hypot(other.x - carrier.x, other.y - carrier.y);
+      for (const p of this.players) {
+        if (!p.tackleRequest) continue;
+        p.tackleRequest = false;
+        if (p === carrier) continue;
+        if (p.team === carrier.team) continue;
+        if (p.tackleCooldown > 0) continue;
+        const d = Math.hypot(p.x - carrier.x, p.y - carrier.y);
         if (d < this.cfg.PLAYER.TACKLE_RADIUS) {
-          this._resolveTackle(carrier, other);
+          this._resolveTackle(carrier, p);
           break;
         }
       }
     }
+    // Clear any leftover tackleRequest flags (e.g. pressed when no holder).
+    for (const p of this.players) p.tackleRequest = false;
 
     // 8) Goal-line crossing check — only if ball is currently free.
     if (!this.ball.holder) {
@@ -409,6 +450,10 @@ FOOTY.Game = class {
     const offY = (ch - this.field.h * scale) / 2;
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
 
+    // Feed the mouse module our current transform so its worldX/worldY map
+    // pointer position back to field-units.
+    FOOTY.Mouse.setTransform(scale, offX, offY, this._dpr);
+
     // Draw field, ball, players.
     this.field.draw(ctx);
 
@@ -416,6 +461,10 @@ FOOTY.Game = class {
     for (const p of this.players) {
       p.draw(ctx, false, this.ball.holder === p);
     }
+
+    // Aim line — drawn for P1 only, always visible while playing.
+    this._drawAimLine(ctx);
+
     this.ball.draw(ctx);
 
     // Accuracy bar overlay (if a human carrier is in range of their goal).
@@ -423,6 +472,54 @@ FOOTY.Game = class {
 
     // Debug: collision radii etc.
     if (this.cfg.DEBUG) this._drawDebug(ctx);
+  }
+
+  // Draws a line from P1 to the cursor showing where a kick would go.
+  // Colour-coded: green = forward (valid), red = behind (rejected),
+  // yellow band in the middle = angle-penalty (reduced distance).
+  _drawAimLine(ctx) {
+    if (this.state !== 'playing') return;
+    const p1 = this.p1;
+    const M = FOOTY.Mouse;
+    const dx = M.worldX - p1.x;
+    const dy = M.worldY - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 8) return;  // cursor sitting on top of player — no line
+
+    // Angle delta in [-π, π].
+    const aim = Math.atan2(dy, dx);
+    let delta = aim - p1.facing;
+    while (delta >  Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    const absDelta = Math.abs(delta);
+
+    const K = this.cfg.KICK;
+    let color;
+    if (absDelta > K.MAX_FORWARD_ANGLE) {
+      color = 'rgba(255, 70, 70, 0.55)';      // rejected
+    } else if (absDelta > Math.PI / 4) {
+      color = 'rgba(255, 210, 74, 0.65)';     // sideways — penalty zone
+    } else {
+      color = 'rgba(120, 255, 120, 0.7)';     // forward — full power
+    }
+
+    // Cap the visual length to MAX_KICK_DISTANCE so the line shows reach.
+    const drawLen = Math.min(len, K.MAX_KICK_DISTANCE);
+    const ux = dx / len, uy = dy / len;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x + ux * (this.cfg.PLAYER.RADIUS + 4), p1.y + uy * (this.cfg.PLAYER.RADIUS + 4));
+    ctx.lineTo(p1.x + ux * drawLen, p1.y + uy * drawLen);
+    ctx.stroke();
+    // Small target marker at the cursor end.
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(p1.x + ux * drawLen, p1.y + uy * drawLen, 5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   _drawAccuracyBar(ctx) {

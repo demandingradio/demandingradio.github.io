@@ -17,6 +17,10 @@
     canvas, hud, banner, scoreA, scoreB, clockEl,
   });
 
+  // Mouse drives kick/handball/aim — attach once to the canvas.
+  FOOTY.Mouse.attach(canvas);
+  FOOTY.Mouse.setEnabled(false);   // off until a match starts
+
   // Expose for debugging in the console.
   window.__footy = game;
 
@@ -24,6 +28,7 @@
   game.onPause = () => {
     pause.classList.remove('hidden');
     FOOTY.Input.setEnabled(false);
+    FOOTY.Mouse.setEnabled(false);
   };
   game.onMatchEnd = () => {
     // Show main menu again after the end banner clears.
@@ -39,6 +44,7 @@
     hud.classList.remove('hidden');
     FOOTY.Input.clear();
     FOOTY.Input.setEnabled(true);
+    FOOTY.Mouse.setEnabled(true);
     game.startMatch({ mode });
   }
 
@@ -55,6 +61,7 @@
     pause.classList.add('hidden');
     FOOTY.Input.clear();
     FOOTY.Input.setEnabled(true);
+    FOOTY.Mouse.setEnabled(true);
     game.resume();
   });
 
@@ -64,6 +71,7 @@
     menu.classList.remove('hidden');
     game.state = 'idle';
     FOOTY.Input.setEnabled(false);
+    FOOTY.Mouse.setEnabled(false);
   });
 
   // Esc on the pause overlay also resumes.

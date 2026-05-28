@@ -46,16 +46,35 @@ FOOTY.CONFIG = {
   },
 
   KICK: {
-    MIN_POWER: 320,          // initial horizontal speed at zero charge
-    MAX_POWER: 1000,         // initial horizontal speed at full charge
-    CHARGE_TIME: 0.9,        // seconds to fully charge
+    MIN_POWER: 280,          // initial horizontal speed at zero charge
+    MAX_POWER: 730,          // initial horizontal speed at full charge
+                             // (tuned so a flat max kick travels ~55m = 550 units)
+    CHARGE_TIME: 0.9,        // seconds to fully charge (unused with mouse aim, kept for AI)
     LIFT_RATIO: 0.65,        // initial vz = horizontal_speed * this
     INACCURACY_BASE: 0.08,   // baseline angle wobble (radians)
+
+    // Mouse-aim distance + angle penalty model:
+    //   power01 = clamp(distance_to_cursor / MAX_KICK_DISTANCE, 0, 1)
+    //   angleDelta = |kickDir - facing| (in radians)
+    //   if angleDelta > MAX_FORWARD_ANGLE → kick rejected (can't kick behind)
+    //   else distanceMult = ANGLE_PENALTY_MIN + (1 - ANGLE_PENALTY_MIN) * cos(angleDelta)
+    //   launchSpeed = MIN_POWER + (MAX_POWER - MIN_POWER) * power01 * distanceMult
+    MAX_KICK_DISTANCE: 550,        // 55m at our 10u-per-metre scale
+    MAX_FORWARD_ANGLE: Math.PI/2,  // > this from facing → reject
+    ANGLE_PENALTY_MIN: 0.4,        // sideways kicks at 90° travel this fraction of full
   },
 
   HANDBALL: {
     SPEED: 480,              // horizontal speed
     LIFT_RATIO: 0.18,        // flatter than a kick
+  },
+
+  // Sprint mechanic. Hold SPRINT key while moving → +SPEED_MULT × base speed
+  // until stamina runs out. Recharges when not sprinting.
+  SPRINT: {
+    SPEED_MULT: 1.6,
+    STAMINA_DRAIN_RATE: 0.4,  // /sec — full stamina lasts 2.5s
+    STAMINA_REGEN_RATE: 0.2,  // /sec — full recharge takes 5s
   },
 
   ACCURACY: {
@@ -119,11 +138,9 @@ FOOTY.CONFIG = {
   KEYS: {
     P1: {
       UP: 'KeyW', DOWN: 'KeyS', LEFT: 'KeyA', RIGHT: 'KeyD',
-      KICK: 'KeyF', HANDBALL: 'KeyG',
-    },
-    P2: {
-      UP: 'ArrowUp', DOWN: 'ArrowDown', LEFT: 'ArrowLeft', RIGHT: 'ArrowRight',
-      KICK: 'Slash', HANDBALL: 'Period',
+      SPRINT: 'ShiftLeft',
+      TACKLE: 'Space',
+      // Kick/handball are now mouse-driven (see FOOTY.Mouse).
     },
     PAUSE: 'Escape',
   },

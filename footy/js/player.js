@@ -33,10 +33,11 @@ FOOTY.Player = class {
     this.wishDx = 0;
     this.wishDy = 0;
 
-    this.kickCharge = 0;       // 0..1 charge amount (kick held)
+    this.kickCharge = 0;       // 0..1 charge amount (legacy; unused with mouse aim)
     this.kickHeld = false;
-    this.lastKickRequest = null; // {power01, angle} populated on release
+    this.lastKickRequest = null; // {power01, angle} — angle absent ⇒ use facing
     this.handballRequest = false;
+    this.tackleRequest = false;  // set by mouse player (space) or AI; consumed by Game
     this.pickupCooldown = 0;
     this.tackleCooldown = 0;
 
@@ -48,9 +49,19 @@ FOOTY.Player = class {
     // Per-player tackle strength, 0..1. Higher = more likely to win a
     // holding-the-ball call. Set by Game when constructing players.
     this.tackleStrength = (opts.tackleStrength != null) ? opts.tackleStrength : 0.5;
+
+    // Sprint stamina, 0..1. Drains while sprinting, regens otherwise.
+    this.stamina = 1;
+    this.sprintHeld = false;
+
+    // Aim target in field units — only meaningful for the mouse-controlled
+    // player. Game writes the cursor position here every frame.
+    this.aimX = this.x;
+    this.aimY = this.y;
   }
 
-  // Read keys for a human player. Sets wishDx/wishDy and charge state.
+  // Read movement keys for the mouse-controlled human. Kick/handball/tackle
+  // are mouse-driven and set by Game directly via the *Request fields.
   applyInput(input, dt) {
     if (!this.bindings) return;
     const B = this.bindings;
@@ -66,20 +77,11 @@ FOOTY.Player = class {
     this.wishDx = dx;
     this.wishDy = dy;
 
-    const kickDown = input.isDown(B.KICK);
-    if (kickDown) {
-      this.kickHeld = true;
-      this.kickCharge = Math.min(1, this.kickCharge + dt / this.cfg.KICK.CHARGE_TIME);
-    } else if (this.kickHeld) {
-      // Just released — emit a kick request.
-      this.lastKickRequest = { power01: this.kickCharge, angle: this.facing };
-      this.kickHeld = false;
-      this.kickCharge = 0;
-    }
+    // Sprint: held only matters if we have any stamina left.
+    this.sprintHeld = input.isDown(B.SPRINT);
 
-    if (input.wasPressed(B.HANDBALL)) {
-      this.handballRequest = true;
-    }
+    // Tackle button — set the request; Game decides if there's anyone to tackle.
+    if (input.wasPressed(B.TACKLE)) this.tackleRequest = true;
   }
 
   // AI sets motion directly (already normalized).
@@ -104,7 +106,18 @@ FOOTY.Player = class {
     if (carrying) this.possessionTime += dt;
     else          this.possessionTime = 0;
 
-    const maxSpeed = carrying ? P.CARRY_SPEED : P.MAX_SPEED;
+    // Sprint stamina: drain while actively sprinting AND moving; regen otherwise.
+    const S = this.cfg.SPRINT;
+    const moving = (this.wishDx !== 0 || this.wishDy !== 0);
+    const sprinting = this.sprintHeld && this.stamina > 0 && moving;
+    if (sprinting) {
+      this.stamina = Math.max(0, this.stamina - S.STAMINA_DRAIN_RATE * dt);
+    } else {
+      this.stamina = Math.min(1, this.stamina + S.STAMINA_REGEN_RATE * dt);
+    }
+
+    let maxSpeed = carrying ? P.CARRY_SPEED : P.MAX_SPEED;
+    if (sprinting) maxSpeed *= S.SPEED_MULT;
 
     // Accelerate toward wish direction, decay otherwise.
     if (this.wishDx !== 0 || this.wishDy !== 0) {
@@ -178,11 +191,19 @@ FOOTY.Player = class {
     return false;
   }
 
-  // Execute any pending kick/handball this frame against a Ball. Returns true
-  // if the ball was launched.
+  // Execute any pending kick/handball this frame against a Ball. Returns one
+  // of: 'kick', 'handball', 'rejected', or false.
+  //
+  // Kick direction model (mouse-aim):
+  //   req.angle           — caller-supplied launch direction (radians)
+  //   req.power01         — caller-supplied power 0..1 (already distance-based)
+  //   If the angle between facing and req.angle exceeds MAX_FORWARD_ANGLE,
+  //   the kick is rejected (you can't kick behind yourself). Otherwise the
+  //   travel scales by ANGLE_PENALTY_MIN..1 based on cos(angleDelta).
+  //
+  // AI/legacy callers can omit angle to default to facing (no penalty).
   executeActions(ball) {
     if (ball.holder !== this) {
-      // No ball — clear pending actions so they don't fire next time we grab it.
       this.lastKickRequest = null;
       this.handballRequest = false;
       return false;
@@ -190,24 +211,54 @@ FOOTY.Player = class {
 
     if (this.lastKickRequest) {
       const K = this.cfg.KICK;
-      const { power01, angle } = this.lastKickRequest;
-      const speed = K.MIN_POWER + (K.MAX_POWER - K.MIN_POWER) * power01;
+      const req = this.lastKickRequest;
+      const aimAngle = (req.angle != null) ? req.angle : this.facing;
+      const power01 = Math.max(0, Math.min(1, req.power01));
+
+      // Angle delta in [-π, π] then absolute.
+      let delta = aimAngle - this.facing;
+      while (delta >  Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      const absDelta = Math.abs(delta);
+
+      if (absDelta > K.MAX_FORWARD_ANGLE) {
+        // Can't kick behind yourself — reject and surface a "rejected" result
+        // so Game can flash a hint. Ball stays in possession.
+        this.lastKickRequest = null;
+        this.handballRequest = false;
+        return 'rejected';
+      }
+
+      const distanceMult = K.ANGLE_PENALTY_MIN
+        + (1 - K.ANGLE_PENALTY_MIN) * Math.cos(absDelta);
+      const speed = (K.MIN_POWER + (K.MAX_POWER - K.MIN_POWER) * power01) * distanceMult;
       // Tiny baseline inaccuracy so kicks aren't laser-perfect.
       const wobble = (Math.random() - 0.5) * 2 * K.INACCURACY_BASE * (1 - power01 * 0.5);
-      ball.launch(speed, angle + wobble, K.LIFT_RATIO, this, 'kick');
+      ball.launch(speed, aimAngle + wobble, K.LIFT_RATIO, this, 'kick');
       this.pickupCooldown = this.cfg.PLAYER.PICKUP_COOLDOWN;
       this.lastKickRequest = null;
       this.handballRequest = false;
-      return true;
+      return 'kick';
     }
+
     if (this.handballRequest) {
       const H = this.cfg.HANDBALL;
-      ball.launch(H.SPEED, this.facing, H.LIFT_RATIO, this, 'handball');
+      // Handball uses the same aim if it was set explicitly via request angle;
+      // otherwise it goes in facing direction (legacy / AI behaviour).
+      const req = this.handballRequest === true ? null : this.handballRequest;
+      const aimAngle = (req && req.angle != null) ? req.angle : this.facing;
+      ball.launch(H.SPEED, aimAngle, H.LIFT_RATIO, this, 'handball');
       this.pickupCooldown = this.cfg.PLAYER.PICKUP_COOLDOWN;
       this.handballRequest = false;
-      return true;
+      return 'handball';
     }
     return false;
+  }
+
+  // Aim-aware handball request (used by mouse). Direction toward (aimX, aimY).
+  requestHandballAimed(targetX, targetY) {
+    const angle = Math.atan2(targetY - this.y, targetX - this.x);
+    this.handballRequest = { angle };
   }
 
   // ---- Drawing ----
@@ -267,15 +318,20 @@ FOOTY.Player = class {
       ctx.stroke();
     }
 
-    // Kick charge bar (above the player) for human only.
-    if (this.kickHeld && this.kickCharge > 0.02) {
-      const w = 36, h = 5;
+    // Stamina bar above the human player. Only draw when meaningful (not full,
+    // OR currently sprinting) so it doesn't clutter the field.
+    if (this.bindings && (this.stamina < 0.999 || this.sprintHeld)) {
+      const w = 36, h = 4;
       const x = this.x - w / 2;
-      const y = this.y - P.RADIUS - 14;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const y = this.y - P.RADIUS - 12;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-      ctx.fillStyle = '#ffd24a';
-      ctx.fillRect(x, y, w * this.kickCharge, h);
+      // Colour: green when plenty, orange below half, red below quarter.
+      let fill = '#5ae15a';
+      if (this.stamina < 0.25)     fill = '#ff5050';
+      else if (this.stamina < 0.5) fill = '#ffaa30';
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y, w * this.stamina, h);
     }
   }
 };

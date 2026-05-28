@@ -32,35 +32,45 @@ FOOTY.AI = class {
     return { dx: dx / len, dy: dy / len };
   }
 
-  update(dt, ball, humans) {
+  update(dt, ball, others) {
     this.timer -= dt;
     if (this.timer <= 0) {
       this.timer = this.cfg.AI.REACTION;
-      this._decide(ball, humans);
+      this._decide(ball, others);
     }
     // Steer toward current target each frame.
     const d = this._dirTo(this.targetX, this.targetY);
     this.player.setAIMove(d.dx, d.dy);
 
-    // If carrying ball and inside kick range of goal, request a kick.
+    // Carrying ball and inside kick range of goal → request a kick.
     if (ball.holder === this.player) {
       const goalEnd = this.player.attacks;
       const goalX = this.field.goalLineX[goalEnd];
       const goalY = this.field.goalCenterY();
       const dist = Math.hypot(goalX - this.player.x, goalY - this.player.y);
       if (dist < this.cfg.AI.KICK_RANGE) {
-        // Aim slightly toward goal, with random noise.
         const aim = Math.atan2(goalY - this.player.y, goalX - this.player.x);
         const power = Math.min(1, dist / this.cfg.AI.KICK_RANGE);
+        // Point body at goal so executeActions doesn't apply an angle penalty.
+        this.player.facing = aim;
         this.player.requestKick(power, aim + (Math.random() - 0.5) * 0.18);
+      }
+    }
+
+    // Not carrying — if an opponent carrier is in tackle range, request a tackle.
+    if (ball.holder && ball.holder !== this.player && ball.holder.team !== this.player.team) {
+      const c = ball.holder;
+      const d = Math.hypot(c.x - this.player.x, c.y - this.player.y);
+      if (d < this.cfg.PLAYER.TACKLE_RADIUS) {
+        this.player.tackleRequest = true;
       }
     }
   }
 
-  _decide(ball, humans) {
+  _decide(ball, others) {
     const me = this.player;
 
-    // Case 1: AI has the ball — head toward its goal.
+    // Case 1: I have the ball — head toward my attacking goal.
     if (ball.holder === me) {
       const goalEnd = me.attacks;
       this.targetX = this.field.goalLineX[goalEnd];
@@ -68,15 +78,27 @@ FOOTY.AI = class {
       return;
     }
 
-    // Case 2: A human has the ball — chase the carrier to pressure.
-    if (ball.holder && ball.holder !== me) {
+    // Case 2: A teammate has the ball — run forward to offer a passing option.
+    if (ball.holder && ball.holder.team === me.team && ball.holder !== me) {
+      const carrier = ball.holder;
+      const goalX = this.field.goalLineX[me.attacks];
+      // Position somewhere between carrier and goal, offset laterally.
+      const lead = 0.5;  // 50% of the way between them
+      this.targetX = carrier.x + (goalX - carrier.x) * lead;
+      // Offset to one side of carrier so we're not stacked.
+      const sideSign = (me.y >= carrier.y) ? 1 : -1;
+      this.targetY = carrier.y + sideSign * 140;
+      return;
+    }
+
+    // Case 3: An opponent has the ball — chase the carrier to pressure.
+    if (ball.holder && ball.holder.team !== me.team) {
       this.targetX = ball.holder.x;
       this.targetY = ball.holder.y;
       return;
     }
 
-    // Case 3: Ball is loose. Predict where it will land/roll to and head there.
-    // Cheap prediction: just chase current ball position.
+    // Case 4: Ball is loose — chase it.
     this.targetX = ball.x;
     this.targetY = ball.y;
   }
