@@ -284,8 +284,9 @@ FOOTY.Game = class {
 
     // 3) Resolve any pending kicks/handballs *before* moving — so ball
     //    launches from the player's current frame position.
-    const p1Action = this.p1.executeActions(this.ball);
-    if (p1Action === 'rejected') this._maybeBanner("CAN'T KICK BACKWARDS", 700);
+    // Note: rejected kicks (mouse aimed > 90° behind facing) are silently
+    // dropped. The aim line going red is the visual cue.
+    this.p1.executeActions(this.ball);
     if (!isFreeplay) {
       this.p2.executeActions(this.ball);
       this.aiP.executeActions(this.ball);
@@ -501,6 +502,8 @@ FOOTY.Game = class {
   // sideways (distance penalty), red = behind (kick rejected) OR overcharged.
   _drawAimLine(ctx) {
     if (this.state !== 'playing') return;
+    // Only show the aim line when the human is actually holding the ball.
+    if (this.ball.holder !== this.p1) return;
     const p1 = this.p1;
     const M = FOOTY.Mouse;
     const dx = M.worldX - p1.x;

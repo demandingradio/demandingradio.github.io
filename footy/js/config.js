@@ -10,10 +10,10 @@ window.FOOTY = window.FOOTY || {};
 FOOTY.CONFIG = {
 
   FIELD: {
-    WIDTH:  1600,            // long axis (left-right, goal-to-goal)
-    HEIGHT: 1000,            // short axis (top-bottom)
+    WIDTH:  2000,            // long axis (left-right, goal-to-goal) — 1.25× original
+    HEIGHT: 1250,            // short axis (top-bottom)             — 1.25× original
     PADDING: 50,             // visual border between canvas edge and oval
-    GOAL_WIDTH: 140,         // gap between the 2 inner goal posts
+    GOAL_WIDTH: 140,         // gap between the 2 inner goal posts (unchanged)
     BEHIND_WIDTH: 280,       // gap between the 2 outer behind posts
     POST_DEPTH: 70,          // how far the post strokes extend "outward" (visual)
     FIFTY_ARC_RADIUS: 360,   // 50m arc radius from goal-center
