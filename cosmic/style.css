@@ -1,0 +1,18 @@
+/* Cosmic Ascent — fullscreen canvas, no chrome. A full-page experience like
+   Footy (deliberately NOT a Win95 window). */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0d0d14;   /* matches the game's deep-space clear colour */
+}
+
+#game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: crosshair;     /* you aim the grapple with the mouse */
+  touch-action: none;
+}

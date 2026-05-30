@@ -9,6 +9,7 @@
     { label: 'Snake',        icon: '\u{1F40D}', href: '/snake/',        title: 'Snake' },
     { label: 'Notes',        icon: '\u{1F5D2}', href: '/notes/',        title: 'Notes' },
     { label: 'Footy',        icon: '\u{1F3C9}', href: '/footy/',        title: 'Footy' },
+    { label: 'Cosmic Ascent',icon: '\u{1F680}', href: '/cosmic/',       title: 'Cosmic Ascent' },
     { label: 'WFM Tycoon',   icon: '\u{1F4DE}', href: '/wfm/',          title: 'WFM Tycoon' },
     { label: 'WFM Tycoon Y', icon: '\u{1F4F2}', href: '/wfm-y/',        title: 'WFM Tycoon Y' }
   ];

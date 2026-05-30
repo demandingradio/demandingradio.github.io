@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmic Ascent - Monday Jeffrey</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- The whole game renders to this one canvas (menus, gameplay, everything),
+       mirroring the original LÖVE2D architecture: a state machine that draws
+       each screen itself. -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Looping background music. Swapped in for LÖVE's streamed music.mp3. -->
+  <audio id="bg-music" src="music.mp3" loop preload="auto"></audio>
+
+  <!-- Scripts load in dependency order, each attaching to window.ASCENT.
+       Bump ?v= when iterating so browsers don't serve stale JS. -->
+  <script src="js/config.js?v=1"></script>
+  <script src="js/draw.js?v=1"></script>
+  <script src="js/input.js?v=1"></script>
+  <script src="js/audio.js?v=1"></script>
+  <script src="js/save.js?v=1"></script>
+  <script src="js/level.js?v=1"></script>
+  <script src="js/rope.js?v=1"></script>
+  <script src="js/player.js?v=1"></script>
+  <script src="js/render.js?v=1"></script>
+  <script src="js/game.js?v=1"></script>
+  <script src="js/main.js?v=1"></script>
+</body>
+</html>
