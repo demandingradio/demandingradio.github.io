@@ -8,7 +8,8 @@
     { label: 'Calculator',   icon: '\u{1F4DF}', href: '/calculator/',   title: 'Calculator' },
     { label: 'Snake',        icon: '\u{1F40D}', href: '/snake/',        title: 'Snake' },
     { label: 'Notes',        icon: '\u{1F5D2}', href: '/notes/',        title: 'Notes' },
-    { label: 'Footy',        icon: '\u{1F3C9}', href: '/footy/',        title: 'Footy' }
+    { label: 'Footy',        icon: '\u{1F3C9}', href: '/footy/',        title: 'Footy' },
+    { label: 'WFM Tycoon',   icon: '\u{1F4DE}', href: '/wfm/',          title: 'WFM Tycoon' }
   ];
 
   function renderDesktop(container) {
