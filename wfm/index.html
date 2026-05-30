@@ -6,24 +6,12 @@
   <title>WFM Tycoon - Monday Jeffrey</title>
   <link rel="stylesheet" href="../assets/win95.css">
   <style>
-    .window { width: 820px; max-width: 96vw; }
+    .window { width: 860px; max-width: 96vw; }
     .wfm-body { padding: 8px; background: #c0c0c0; }
 
     /* ---------- HUD ---------- */
-    .hud {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr 1fr 1fr 1.6fr;
-      gap: 4px;
-      margin-bottom: 8px;
-    }
-    .hud-cell {
-      background: #c0c0c0;
-      border-top: 2px solid #404040;
-      border-left: 2px solid #404040;
-      border-bottom: 2px solid #ffffff;
-      border-right: 2px solid #ffffff;
-      padding: 4px 6px;
-    }
+    .hud { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1.6fr; gap: 4px; margin-bottom: 8px; }
+    .hud-cell { background: #c0c0c0; border-top: 2px solid #404040; border-left: 2px solid #404040; border-bottom: 2px solid #ffffff; border-right: 2px solid #ffffff; padding: 4px 6px; }
     .hud-cell .k { font-size: 10px; color: #000080; text-transform: uppercase; letter-spacing: .5px; }
     .hud-cell .v { font-size: 16px; font-weight: bold; }
     .hud-cell .v.sla { font-size: 22px; }
@@ -39,12 +27,7 @@
 
     /* ---------- generic screen ---------- */
     .screen { background: #c0c0c0; }
-    .panel {
-      background: #c0c0c0;
-      border-top: 2px solid #ffffff; border-left: 2px solid #ffffff;
-      border-bottom: 2px solid #404040; border-right: 2px solid #404040;
-      padding: 10px; margin-bottom: 8px;
-    }
+    .panel { background: #c0c0c0; border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; border-bottom: 2px solid #404040; border-right: 2px solid #404040; padding: 10px; margin-bottom: 8px; }
     .panel h3 { font-size: 13px; margin-bottom: 6px; border-bottom: 1px solid #808080; padding-bottom: 3px; }
     .panel h4 { font-size: 12px; margin: 8px 0 4px; }
     .muted { color: #404040; }
@@ -58,16 +41,11 @@
     .warn { color: #8a6d00; font-weight: bold; }
 
     /* advisor / clippy */
-    .advisor {
-      display: flex; gap: 8px; align-items: flex-start;
-      background: #ffffe1; border: 1px solid #000; padding: 8px; margin-bottom: 8px; font-size: 11px;
-    }
+    .advisor { display: flex; gap: 8px; align-items: flex-start; background: #ffffe1; border: 1px solid #000; padding: 8px; margin-bottom: 8px; font-size: 11px; }
     .advisor .face { font-size: 22px; line-height: 1; }
 
-    /* options (meeting) */
-    .opt { display: block; padding: 5px 8px; margin: 3px 0; background:#fff;
-      border-top: 1px solid #404040; border-left: 1px solid #404040; border-bottom: 1px solid #fff; border-right: 1px solid #fff;
-      cursor: pointer; font-size: 11px; }
+    /* options */
+    .opt { display: block; padding: 5px 8px; margin: 3px 0; background:#fff; border-top: 1px solid #404040; border-left: 1px solid #404040; border-bottom: 1px solid #fff; border-right: 1px solid #fff; cursor: pointer; font-size: 11px; }
     .opt input { margin-right: 6px; }
     .opt.disabled { color:#808080; cursor: not-allowed; background:#d8d8d8; }
     .cost { font-size:10px; color:#404040; }
@@ -79,19 +57,34 @@
     table.grid th { background: #000080; color:#fff; font-weight: bold; }
     table.grid td.day { text-align: left; white-space: nowrap; }
     table.grid tr.hol td { background: #fff3d6; }
-    table.grid tr.avg td { background: #e0e0e0; font-style: italic; }
-    table.grid tr.cul td { background: #ffd6d6; }
-    .num-in { width: 46px; font-size: 12px; text-align: center; font-family: Arial; }
-    .fc-in { width: 90px; font-size: 15px; text-align: center; font-family: Arial; font-weight: bold; }
-    .cov { height: 12px; background:#fff; border:1px solid #808080; position: relative; min-width: 70px; }
+    table.grid tr.avg td { background: #e0e0e0; font-style: italic; font-weight: bold; }
+    table.grid tr.cul td { background: #ffe0e0; }
+    table.grid tr.team-sep td { background: #d0d0e8; text-align: left; font-weight: bold; color:#000080; }
+    table.audit td, table.audit th { padding: 2px 4px; }
+    table.audit th.sortable { cursor: pointer; }
+    table.audit th.sortable:hover { background: #1834a0; }
+    .scroll-x { overflow-x: auto; }
+    .num-in { width: 44px; font-size: 12px; text-align: center; font-family: Arial; }
+    .fc-in { width: 72px; font-size: 13px; text-align: center; font-family: Arial; font-weight: bold; }
+    .fc-tot { width: 92px; font-size: 15px; text-align: center; font-family: Arial; font-weight: bold; }
+    .cov { height: 12px; background:#fff; border:1px solid #808080; position: relative; min-width: 60px; }
     .cov > i { position:absolute; left:0; top:0; bottom:0; background:#008000; }
     .cov.under > i { background:#a80000; }
     .cov .lab { position: relative; z-index: 2; font-size: 9px; line-height: 12px; }
 
+    /* intraday bars */
+    .bar { height: 11px; background:#dfe7ff; border:1px solid #808080; position:relative; min-width:60px; }
+    .bar > i { position:absolute; left:0; top:0; bottom:0; background:#3050c0; }
+
     .kpi-strip { display:flex; gap:6px; flex-wrap: wrap; }
-    .kpi { flex:1; min-width: 96px; background:#fff; border-top:2px solid #404040;border-left:2px solid #404040;border-bottom:2px solid #fff;border-right:2px solid #fff; padding:6px; text-align:center; }
+    .kpi { flex:1; min-width: 92px; background:#fff; border-top:2px solid #404040;border-left:2px solid #404040;border-bottom:2px solid #fff;border-right:2px solid #fff; padding:6px; text-align:center; }
     .kpi .k { font-size:10px; color:#000080; text-transform:uppercase; }
     .kpi .v { font-size:18px; font-weight:bold; }
+
+    /* tabs */
+    .tabs { display:flex; gap:2px; margin-bottom: -1px; }
+    .tab { padding: 5px 12px; background:#b8b8b8; border-top:2px solid #fff; border-left:2px solid #fff; border-right:2px solid #404040; cursor:pointer; font-size:12px; font-weight:bold; }
+    .tab.active { background:#c0c0c0; border-bottom:2px solid #c0c0c0; position:relative; z-index:2; }
 
     .log { font-size:11px; line-height:1.55; }
     .log .li { padding:2px 0; border-bottom:1px dotted #aaa; }
@@ -99,10 +92,7 @@
 
     .big-btn { min-width: 200px; padding: 8px 16px; font-weight: bold; }
 
-    @media (max-width: 760px){
-      .hud { grid-template-columns: 1fr 1fr; }
-      .hud-cell.trust { grid-column: span 2; }
-    }
+    @media (max-width: 760px){ .hud { grid-template-columns: 1fr 1fr; } .hud-cell.trust { grid-column: span 2; } }
   </style>
 </head>
 <body>
@@ -110,9 +100,7 @@
 
   <div class="window" data-title="WFM Tycoon" data-icon="📞" data-close-href="../index.html">
     <div class="title-bar">
-      <div class="title-bar-text">
-        <span>📞</span><span>WFM Tycoon — Service Level 80</span>
-      </div>
+      <div class="title-bar-text"><span>📞</span><span>WFM Tycoon — Service Level 80</span></div>
       <div class="title-bar-buttons">
         <div class="title-btn minimize">_</div>
         <div class="title-btn maximize">□</div>
@@ -137,7 +125,6 @@
     </div>
   </div>
 
-  <!-- Win95 dialog -->
   <div id="dlg" style="position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;z-index:3000;">
     <div style="background:#c0c0c0;border-top:2px solid #fff;border-left:2px solid #fff;border-bottom:2px solid #404040;border-right:2px solid #404040;min-width:320px;max-width:460px;box-shadow:2px 2px 0 #000;">
       <div id="dlg-title" style="background:linear-gradient(90deg,#000080,#1084d0);color:#fff;padding:3px 6px;font-weight:bold;">Message</div>
@@ -159,14 +146,14 @@
     'use strict';
 
     /* =======================================================================
-       CONFIG — the iteration knobs. Tweak these to rebalance the game.
+       CONFIG — the iteration knobs.
        ======================================================================= */
     var CFG = {
       WEEKS: 52,
       SLA_TARGET: 0.80,
       SLA_T: 20,
       OPEN_SECONDS: 10 * 3600,
-      BASE_CALLS: 3000,          // baseline Wed weekday daily calls
+      BASE_CALLS: 3000,
       AHT: 300,
 
       START_HC: 44,
@@ -203,12 +190,14 @@
       CLIENT_FLOOR: 8,
       MIN_HC: 22,
 
-      // Mon–Fri only (business closed weekends). Volume multiplier per weekday.
-      DOW: [1.15, 1.05, 1.00, 0.95, 0.90],
+      DOW: [1.15, 1.05, 1.00, 0.95, 0.90], // Mon–Fri volume multipliers
       HOLIDAY_VOL: 0.40,
       HOLIDAY_PAY: 2.0,
 
-      // 52 weekly seasonal volume multipliers (Week 1 = early Jul). AU-shaped.
+      // intraday arrival shape (per operating hour, 08:00–18:00). Bimodal, mild.
+      OPEN_HOURS: ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'],
+      INTRADAY: [0.07,0.10,0.12,0.115,0.09,0.085,0.10,0.11,0.105,0.105],
+
       SEASON: [
         1.00,1.00,1.01,1.02, 1.02,1.03,1.03,1.04,1.05,
         1.06,1.07,1.08,1.08,
@@ -225,33 +214,27 @@
       ]
     };
 
-    // AU public holidays across FY 2026/27 (national + widely-observed weekday dates).
     var HOLIDAYS = {
-      '2026-10-05': 'Labour Day',
-      '2026-11-03': 'Melbourne Cup',
-      '2026-12-25': 'Christmas Day',
-      '2026-12-28': 'Boxing Day (obs.)',
-      '2027-01-01': "New Year's Day",
-      '2027-01-26': 'Australia Day',
-      '2027-03-26': 'Good Friday',
-      '2027-03-29': 'Easter Monday',
-      '2027-04-26': 'Anzac Day (obs.)',
-      '2027-06-14': "King's Birthday"
+      '2026-10-05': 'Labour Day', '2026-11-03': 'Melbourne Cup',
+      '2026-12-25': 'Christmas Day', '2026-12-28': 'Boxing Day (obs.)',
+      '2027-01-01': "New Year's Day", '2027-01-26': 'Australia Day',
+      '2027-03-26': 'Good Friday', '2027-03-29': 'Easter Monday',
+      '2027-04-26': 'Anzac Day (obs.)', '2027-06-14': "King's Birthday"
     };
 
-    var START = new Date(2026, 6, 6); // Mon 6 Jul 2026 (FY 2026/27)
-    var DOW = ['Mon','Tue','Wed','Thu','Fri']; // operating days
+    var START = new Date(2026, 6, 6);
+    var DOW = ['Mon','Tue','Wed','Thu','Fri'];
     var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var AGENT_NAMES = ['Jess R.','Tom H.','Aisha K.','Dylan P.','Mia L.','Sam O.','Priya N.','Jake W.','Chloe T.','Ben F.','Zara M.','Lucas D.','Noah B.','Ava S.','Ethan C.','Ruby G.'];
-    var SAVE_KEY = 'wfm_tycoon_save_v2';
+    var TEAMS = ['Alpha', 'Bravo', 'Charlie'];
+    var AGENT_NAMES = ['Jess R.','Tom H.','Aisha K.','Dylan P.','Mia L.','Sam O.','Priya N.','Jake W.','Chloe T.','Ben F.','Zara M.','Lucas D.','Noah B.','Ava S.','Ethan C.','Ruby G.','Liam K.','Sophie M.','Mason J.','Ivy R.','Oscar P.','Grace L.','Leo T.','Hana W.'];
+    var SAVE_KEY = 'wfm_tycoon_save_v3';
 
     /* =======================================================================
-       SMALL HELPERS
+       HELPERS
        ======================================================================= */
     function $(id) { return document.getElementById(id); }
     function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
     function pad(n) { return String(n).padStart(2, '0'); }
-    function r1(x) { return Math.round(x * 10) / 10; }
     function pct(x) { return Math.round(x * 100) + '%'; }
     function pct1(x) { return (x * 100).toFixed(1) + '%'; }
     function money(x) { return (x < 0 ? '-$' : '$') + Math.abs(Math.round(x)).toLocaleString(); }
@@ -270,102 +253,90 @@
     function monthOfWeek(week) { return dateFor(week, 2).getMonth(); }
     function weekHasHoliday(week) { for (var i = 0; i < NDAYS(); i++) if (holidayOn(dateFor(week, i))) return true; return false; }
     function shortWeek(week) { return fmtDate(dateFor(week, 0)); }
-    function weekLabel(week) {
-      var a = dateFor(week, 0), b = dateFor(week, NDAYS() - 1);
-      return fmtDate(a) + ' – ' + fmtDate(b) + ' ' + b.getFullYear();
-    }
+    function weekLabel(week) { var a = dateFor(week, 0), b = dateFor(week, NDAYS() - 1); return fmtDate(a) + ' – ' + fmtDate(b) + ' ' + b.getFullYear(); }
 
     /* =======================================================================
-       ERLANG C ENGINE
+       ERLANG + INTRADAY
        ======================================================================= */
     function erlangB(N, A) { var B = 1; for (var k = 1; k <= N; k++) B = (A * B) / (k + A * B); return B; }
-    function erlangC(N, A) {
-      if (N <= 0) return 1; if (A <= 0) return 0;
-      var rho = A / N; if (rho >= 1) return 1;
-      var B = erlangB(N, A);
-      return clamp(B / (1 - rho * (1 - B)), 0, 1);
-    }
-    function serviceLevel(N, A, aht, T) {
-      if (A <= 0) return 1; if (N <= 0) return 0;
-      if (A / N >= 1) return 0;
-      var C = erlangC(N, A);
-      return clamp(1 - C * Math.exp(-(N - A) * T / aht), 0, 1);
-    }
+    function erlangC(N, A) { if (N <= 0) return 1; if (A <= 0) return 0; var rho = A / N; if (rho >= 1) return 1; var B = erlangB(N, A); return clamp(B / (1 - rho * (1 - B)), 0, 1); }
+    function serviceLevel(N, A, aht, T) { if (A <= 0) return 1; if (N <= 0) return 0; if (A / N >= 1) return 0; var C = erlangC(N, A); return clamp(1 - C * Math.exp(-(N - A) * T / aht), 0, 1); }
     function occupancy(N, A) { return N <= 0 ? 1 : clamp(A / N, 0, 1); }
-    function requiredOnPhones(A, aht, T, target) {
-      var N = Math.max(1, Math.floor(A) + 1);
-      while (serviceLevel(N, A, aht, T) < target) { N++; if (N > 3000) break; }
-      return N;
+    function requiredOnPhones(A, aht, T, target) { var N = Math.max(1, Math.floor(A) + 1); while (serviceLevel(N, A, aht, T) < target) { N++; if (N > 3000) break; } return N; }
+
+    // intraday breakdown for a day: distributes calls across hours; staffing flat.
+    function intervalsFor(dayCalls, phones, aht) {
+      var n = CFG.INTRADAY.length, iSec = CFG.OPEN_SECONDS / n, arr = [], wsum = sum(CFG.INTRADAY);
+      for (var h = 0; h < n; h++) {
+        var iCalls = dayCalls * (CFG.INTRADAY[h] / wsum);
+        var iA = iCalls * aht / iSec;
+        var sl = serviceLevel(phones, iA, aht, CFG.SLA_T);
+        var aband = iA >= phones ? iCalls * clamp((iA - phones) / Math.max(iA, 1), 0, 0.6) : iCalls * (1 - sl) * 0.06;
+        arr.push({ h: h, calls: iCalls, A: iA, phones: phones, sl: sl, aband: aband });
+      }
+      return arr;
+    }
+    // day SL = call-weighted average of interval SLs (so call-flow view agrees with headline)
+    function dayServiceLevel(dayCalls, phones, aht) {
+      if (dayCalls <= 0) return 1;
+      var iv = intervalsFor(dayCalls, phones, aht), ans = 0;
+      for (var k = 0; k < iv.length; k++) ans += iv[k].sl * iv[k].calls;
+      return ans / dayCalls;
+    }
+    function dayAbandoned(dayCalls, phones, aht) {
+      var iv = intervalsFor(dayCalls, phones, aht), ab = 0;
+      for (var k = 0; k < iv.length; k++) ab += iv[k].aband;
+      return ab;
     }
 
     /* =======================================================================
        GAME STATE
        ======================================================================= */
-    var S = null;     // saved game state
-    var plan = null;  // transient planning state (rebuilt on resume)
+    var S = null, plan = null;
 
     function newGame() {
       S = {
-        week: 0,
-        budget: CFG.START_BUDGET,
-        hc: CFG.START_HC,
-        pipeline: [],
-        engagement: CFG.ENG_START,
-        dodgy: CFG.DODGY_START,
-        ahtSkill: 1.0,
+        week: 0, budget: CFG.START_BUDGET, hc: CFG.START_HC, pipeline: [],
+        engagement: CFG.ENG_START, dodgy: CFG.DODGY_START, ahtSkill: 1.0,
         trust: { ops: 60, fin: 56, client: 62, team: 58 },
-        ytdCalls: 0, ytdAnswered: 0,
-        committed: CFG.SLA_TARGET, ambition: 'realistic',
-        lastWeek: null,
-        campaign: null,
-        forecastWeekly: null,
-        callHistory: [],
+        ytdCalls: 0, ytdAnswered: 0, committed: CFG.SLA_TARGET, ambition: 'realistic',
+        lastWeek: null, campaign: null, forecastDays: null, callHistory: [],
         weekInits: { engagement: false, coaching: false, training: false },
-        mods: null,
-        reviewData: null,
-        history: [],
-        phase: 'meeting'
+        mods: null, reviewData: null, reviewTab: 'audit', reviewDay: 0,
+        lastResult: null, history: [], phase: 'meeting'
       };
-      // seed 4 weeks of pre-FY actuals so the player has data to forecast from
-      var wkSum = weekdaySum();
       for (var i = 4; i >= 1; i--) {
-        S.callHistory.push({ label: 'Pre-FY −' + i, total: Math.round(CFG.BASE_CALLS * wkSum * rand(0.97, 1.03)), forecast: null });
+        var tot = Math.round(CFG.BASE_CALLS * weekdaySum() * rand(0.97, 1.03));
+        S.callHistory.push({ label: 'Pre-FY −' + i, total: tot, forecast: null, days: dowSplit(tot, false) });
       }
-      plan = null;
-      save();
-      enterMeeting();
+      plan = null; save(); enterMeeting();
     }
-
+    function dowSplit(total, withHoliday) {
+      var w = [], days = [];
+      for (var d = 0; d < NDAYS(); d++) w.push(CFG.DOW[d]);
+      var ws = sum(w);
+      for (var d2 = 0; d2 < NDAYS(); d2++) days.push(Math.round(total * w[d2] / ws));
+      return days;
+    }
     function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
     function load() { try { var raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
     function ytdSLA() { return S.ytdCalls > 0 ? S.ytdAnswered / S.ytdCalls : CFG.SLA_TARGET; }
     function trainees() { return S.pipeline.reduce(function (a, c) { return a + c.size; }, 0); }
     function recentAvg(n) { var h = S.callHistory.slice(-n); if (!h.length) return CFG.BASE_CALLS * weekdaySum(); return sum(h.map(function (c) { return c.total; })) / h.length; }
+    function histWithDays() { return S.callHistory.filter(function (c) { return c.days; }); }
+    function dowAvg(d) { var h = histWithDays().slice(-4); if (!h.length) return Math.round(CFG.BASE_CALLS * CFG.DOW[d]); return Math.round(sum(h.map(function (c) { return c.days[d]; })) / h.length); }
 
     /* =======================================================================
        HUD
        ======================================================================= */
-    function meterBar(val, cls) {
-      var c = cls || (val < 35 ? 'bad' : val < 55 ? 'warn' : '');
-      return '<span class="meter ' + c + '"><i style="width:' + clamp(val, 0, 100) + '%"></i></span>';
-    }
+    function meterBar(val, cls) { var c = cls || (val < 35 ? 'bad' : val < 55 ? 'warn' : ''); return '<span class="meter ' + c + '"><i style="width:' + clamp(val, 0, 100) + '%"></i></span>'; }
     function renderHUD() {
-      var y = ytdSLA();
-      var yCls = y >= CFG.SLA_TARGET ? 'good' : (y >= CFG.SLA_TARGET - 0.05 ? 'warn' : 'bad');
-      var t = S.trust;
+      var y = ytdSLA(), yCls = y >= CFG.SLA_TARGET ? 'good' : (y >= CFG.SLA_TARGET - 0.05 ? 'warn' : 'bad'), t = S.trust;
       $('hud').innerHTML =
-        '<div class="hud-cell"><div class="k">Financial Year</div>' +
-          '<div class="v">Week ' + (S.week + 1) + '/' + CFG.WEEKS + '</div>' +
-          '<div class="hud-sub">' + weekLabel(S.week) + '</div></div>' +
-        '<div class="hud-cell"><div class="k">YTD Service Level</div>' +
-          '<div class="v sla ' + yCls + '">' + pct1(y) + '</div>' +
-          '<div class="hud-sub">target ' + pct(CFG.SLA_TARGET) + '</div></div>' +
-        '<div class="hud-cell"><div class="k">Budget</div>' +
-          '<div class="v ' + (S.budget < 0 ? 'bad' : '') + '">' + money(S.budget) + '</div>' +
-          '<div class="hud-sub">contract P&amp;L</div></div>' +
-        '<div class="hud-cell"><div class="k">Headcount</div>' +
-          '<div class="v">' + S.hc + '</div>' +
-          '<div class="hud-sub">+' + trainees() + ' in training</div></div>' +
+        '<div class="hud-cell"><div class="k">Financial Year</div><div class="v">Week ' + (S.week + 1) + '/' + CFG.WEEKS + '</div><div class="hud-sub">' + weekLabel(S.week) + '</div></div>' +
+        '<div class="hud-cell"><div class="k">YTD Service Level</div><div class="v sla ' + yCls + '">' + pct1(y) + '</div><div class="hud-sub">target ' + pct(CFG.SLA_TARGET) + '</div></div>' +
+        '<div class="hud-cell"><div class="k">Budget</div><div class="v ' + (S.budget < 0 ? 'bad' : '') + '">' + money(S.budget) + '</div><div class="hud-sub">contract P&amp;L</div></div>' +
+        '<div class="hud-cell"><div class="k">Headcount</div><div class="v">' + S.hc + '</div><div class="hud-sub">+' + trainees() + ' in training</div></div>' +
         '<div class="hud-cell trust"><div class="k">Engagement &amp; Stakeholder Trust</div>' +
           '<div class="trust-row"><span class="tl">Team</span>' + meterBar(S.engagement, 'eng') + '<b>' + Math.round(S.engagement) + '</b></div>' +
           '<div class="trust-grid" style="margin-top:2px">' +
@@ -380,20 +351,14 @@
        EVENTS
        ======================================================================= */
     function freshMods() { return { volMult: 1, ahtMult: 1, absenceAdd: 0, notes: [] }; }
-
     function rollEvents() {
-      S.mods = freshMods();
-      S.campaign = null;
+      S.mods = freshMods(); S.campaign = null;
       if (weekHasHoliday(S.week)) { S.mods.absenceAdd += CFG.HOLIDAY_ABSENCE; S.mods.notes.push('🗓️ Public holiday this week — expect higher leave and penalty-rate days.'); }
-
-      if (Math.random() > 0.58) return; // ~42% of weeks get a wildcard event
-
+      if (Math.random() > 0.58) return;
       var winter = [5, 6, 7].indexOf(monthOfWeek(S.week)) >= 0;
-      var bag = [];
-      bag.push('flu'); if (winter) { bag.push('flu', 'flu'); }
+      var bag = []; bag.push('flu'); if (winter) { bag.push('flu', 'flu'); }
       bag.push('outage', 'star', 'viral', 'campaign', 'kudos', 'recruit', 'payroll');
       var ev = pick(bag);
-
       if (ev === 'flu') { S.mods.absenceAdd += rand(0.05, 0.09); S.mods.notes.push('🤒 Flu going around — sick leave is up sharply this week.'); }
       else if (ev === 'outage') { S.mods.ahtMult *= rand(1.10, 1.20); S.mods.notes.push('💥 Phone system glitches — handle times are running long this week.'); }
       else if (ev === 'star') { S.hc = Math.max(0, S.hc - 1); S.engagement = clamp(S.engagement - 4, 0, 100); S.mods.notes.push('🏃 A senior agent resigned unexpectedly. Headcount −1, the team is rattled.'); }
@@ -405,54 +370,41 @@
     }
 
     /* =======================================================================
-       MEETING — grilling effects are hidden until an option is selected.
-       Each grilling question has 4 options; one is clearly the wrong call.
+       MEETING (hidden grilling effects; 4 options, one a trap)
        ======================================================================= */
     var GRILL_GENERAL = [
-      { q: 'Finance wants the year-to-date cost story. How do you frame it?',
-        opts: [
-          { t: 'Show cost-per-contact trending down as volume grows.', d: { fin: 4, ops: 1 } },
-          { t: 'Promise blanket cost cuts next quarter.', d: { fin: 2, team: -3 } },
-          { t: 'Say service costs money — that\'s just the deal.', d: { fin: -3, client: 2 } },
-          { t: 'Tell Finance to stop micromanaging your budget.', d: { fin: -8, ops: -3 } }
-        ] },
-      { q: 'The client asks why occupancy looks so high on the dashboards.',
-        opts: [
-          { t: 'Explain the occupancy vs service-level trade-off with data.', d: { client: 3, ops: 2 } },
-          { t: 'Downplay it — the agents are coping fine.', d: { client: 1, team: -3 } },
-          { t: 'Blame the rostering tool.', d: { client: -2, team: -1 } },
-          { t: 'Tell the client to stop reading the dashboards.', d: { client: -9 } }
-        ] },
-      { q: 'Team Leaders say your schedules are hard to staff. Your response?',
-        opts: [
-          { t: 'Co-design the shift patterns with the TLs.', d: { team: 5, ops: 1 } },
-          { t: 'Offer more overtime to smooth it over.', d: { team: 1, fin: -2 } },
-          { t: 'Tell them to just follow the plan.', d: { team: -4, ops: 1 } },
-          { t: 'Suggest the TLs are simply bad at their jobs.', d: { team: -9, ops: -2 } }
-        ] },
-      { q: 'Ops wants a bolder service-level commitment to impress the board.',
-        opts: [
-          { t: 'Commit only to what the numbers support.', d: { ops: -1, client: 3, fin: 2 } },
-          { t: 'Stretch a little to keep Ops happy.', d: { ops: 3, client: -2 } },
-          { t: 'Deflect — say it depends on hiring approvals.', d: { ops: 0, fin: 1 } },
-          { t: 'Guarantee 95% on the spot to look good.', d: { ops: 2, client: -8, fin: -3 } }
-        ] }
+      { q: 'Finance wants the year-to-date cost story. How do you frame it?', opts: [
+        { t: 'Show cost-per-contact trending down as volume grows.', d: { fin: 4, ops: 1 } },
+        { t: 'Promise blanket cost cuts next quarter.', d: { fin: 2, team: -3 } },
+        { t: 'Say service costs money — that\'s just the deal.', d: { fin: -3, client: 2 } },
+        { t: 'Tell Finance to stop micromanaging your budget.', d: { fin: -8, ops: -3 } } ] },
+      { q: 'The client asks why occupancy looks so high on the dashboards.', opts: [
+        { t: 'Explain the occupancy vs service-level trade-off with data.', d: { client: 3, ops: 2 } },
+        { t: 'Downplay it — the agents are coping fine.', d: { client: 1, team: -3 } },
+        { t: 'Blame the rostering tool.', d: { client: -2, team: -1 } },
+        { t: 'Tell the client to stop reading the dashboards.', d: { client: -9 } } ] },
+      { q: 'Team Leaders say your schedules are hard to staff. Your response?', opts: [
+        { t: 'Co-design the shift patterns with the TLs.', d: { team: 5, ops: 1 } },
+        { t: 'Offer more overtime to smooth it over.', d: { team: 1, fin: -2 } },
+        { t: 'Tell them to just follow the plan.', d: { team: -4, ops: 1 } },
+        { t: 'Suggest the TLs are simply bad at their jobs.', d: { team: -9, ops: -2 } } ] },
+      { q: 'Ops wants a bolder service-level commitment to impress the board.', opts: [
+        { t: 'Commit only to what the numbers support.', d: { ops: -1, client: 3, fin: 2 } },
+        { t: 'Stretch a little to keep Ops happy.', d: { ops: 3, client: -2 } },
+        { t: 'Deflect — say it depends on hiring approvals.', d: { ops: 0, fin: 1 } },
+        { t: 'Guarantee 95% on the spot to look good.', d: { ops: 2, client: -8, fin: -3 } } ] }
     ];
     var GRILL_MISS = [
-      { q: 'Service level missed last week. Ops wants to know why.',
-        opts: [
-          { t: 'Walk them through the variance: volume, shrinkage, AHT.', d: { ops: 4, client: 2, fin: 1 } },
-          { t: 'Point the finger at agents gaming their AUX time.', d: { ops: 1, team: -4 } },
-          { t: 'Say it was a one-off and move on.', d: { ops: -3, client: -2 } },
-          { t: 'Insist the reporting numbers must be wrong.', d: { ops: -8, fin: -3 } }
-        ] },
-      { q: 'The client is unhappy about the miss. How do you handle it?',
-        opts: [
-          { t: 'Own it and show them the recovery plan.', d: { client: 4, ops: 2 } },
-          { t: 'Explain the unexpected volume spike, with data.', d: { client: 1, ops: 1 } },
-          { t: 'Minimise it — you were barely under.', d: { client: -3 } },
-          { t: 'Tell the client misses happen; deal with it.', d: { client: -10 } }
-        ] }
+      { q: 'Service level missed last week. Ops wants to know why.', opts: [
+        { t: 'Walk them through the variance: volume, shrinkage, AHT.', d: { ops: 4, client: 2, fin: 1 } },
+        { t: 'Point the finger at agents gaming their AUX time.', d: { ops: 1, team: -4 } },
+        { t: 'Say it was a one-off and move on.', d: { ops: -3, client: -2 } },
+        { t: 'Insist the reporting numbers must be wrong.', d: { ops: -8, fin: -3 } } ] },
+      { q: 'The client is unhappy about the miss. How do you handle it?', opts: [
+        { t: 'Own it and show them the recovery plan.', d: { client: 4, ops: 2 } },
+        { t: 'Explain the unexpected volume spike, with data.', d: { client: 1, ops: 1 } },
+        { t: 'Minimise it — you were barely under.', d: { client: -3 } },
+        { t: 'Tell the client misses happen; deal with it.', d: { client: -10 } } ] }
     ];
     var NARR = [
       { t: 'Own the miss and present the fix.', d: { client: 3, ops: 2, team: 1 } },
@@ -461,13 +413,8 @@
     ];
 
     function enterMeeting() {
-      S.phase = 'meeting'; save();
-      rollEvents();
-      renderHUD();
-      var first = (S.week === 0);
-      var prev = S.lastWeek;
-      var c = [];
-
+      S.phase = 'meeting'; save(); rollEvents(); renderHUD();
+      var first = (S.week === 0), prev = S.lastWeek, c = [];
       c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo, your WFM advisor:</b> ' + advisorMeetingTip(first, prev) + '</div></div>');
 
       c.push('<div class="panel"><h3>🗓️ Monday Meeting — ' + weekLabel(S.week) + '</h3>');
@@ -477,12 +424,11 @@
           'Your job all year: keep the <b>service level around ' + pct(CFG.SLA_TARGET) + '</b> without blowing the budget, burning out the team, or losing the client.</p>');
       } else {
         var hit = prev.sla >= prev.committed;
-        c.push('<p class="small">Last week you committed to <b>' + pct(prev.committed) + '</b> and delivered <b class="' + (hit ? 'good' : 'bad') + '">' + pct1(prev.sla) + '</b>' +
-          ' (' + (hit ? 'commitment met ✔' : 'commitment missed ✗') + '). YTD is <b>' + pct1(ytdSLA()) + '</b>.</p>');
+        c.push('<p class="small">Last week you committed to <b>' + pct(prev.committed) + '</b> and delivered <b class="' + (hit ? 'good' : 'bad') + '">' + pct1(prev.sla) + '</b> (' + (hit ? 'met ✔' : 'missed ✗') + '). YTD is <b>' + pct1(ytdSLA()) + '</b>.</p>');
         if (!hit) {
           c.push('<h4>The room wants an explanation. What\'s your line?</h4>');
           S._narrOrder = shuffle(NARR.map(function (_, i) { return i; }));
-          for (var no = 0; no < S._narrOrder.length; no++) { var nidx = S._narrOrder[no]; c.push(optRow('narr', nidx, NARR[nidx].t)); }
+          for (var no = 0; no < S._narrOrder.length; no++) c.push(optRow('narr', S._narrOrder[no], NARR[S._narrOrder[no]].t));
           c.push('<div class="fx-reveal" id="narr-fx">Pick a response to reveal how the room reacts.</div>');
         }
       }
@@ -495,16 +441,12 @@
       }
 
       var pool = (!first && prev && prev.sla < prev.committed) ? GRILL_MISS : GRILL_GENERAL;
-      var g = pick(pool);
-      S._grill = g;
-      S._grillOrder = shuffle(g.opts.map(function (_, i) { return i; }));
+      var g = pick(pool); S._grill = g; S._grillOrder = shuffle(g.opts.map(function (_, i) { return i; }));
       c.push('<div class="panel"><h3>🎤 The grilling</h3><p class="small">' + g.q + '</p>');
-      for (var go = 0; go < S._grillOrder.length; go++) { var gidx = S._grillOrder[go]; c.push(optRow('grill', gidx, g.opts[gidx].t)); }
-      c.push('<div class="fx-reveal" id="grill-fx">Choose your answer — the room\'s reaction shows once you commit to a line.</div>');
-      c.push('</div>');
+      for (var go = 0; go < S._grillOrder.length; go++) c.push(optRow('grill', S._grillOrder[go], g.opts[S._grillOrder[go]].t));
+      c.push('<div class="fx-reveal" id="grill-fx">Choose your answer — the room\'s reaction shows once you commit to a line.</div></div>');
 
-      c.push('<div class="panel"><h3>🤝 Your asks <span class="small muted">(political capital: ' + CFG.CAPITAL + ' — spend wisely)</span></h3>');
-      c.push('<p class="small muted">Each costs capital; money asks also need Finance on side.</p>');
+      c.push('<div class="panel"><h3>🤝 Your asks <span class="small muted">(political capital: ' + CFG.CAPITAL + ')</span></h3><p class="small muted">Each costs capital; money asks also need Finance on side.</p>');
       var finOK = S.trust.fin >= 45;
       c.push(askRow('hire', 2, '📋 Approve a hire (+' + CFG.HIRE_COHORT + ' recruits → ' + CFG.TRAIN_WEEKS + 'wk training)', money(CFG.HIRE_COST_EACH * CFG.HIRE_COHORT) + ' recruitment', !finOK, finOK ? '' : 'Finance won\'t sign off (needs trust ≥ 45)'));
       c.push(askRow('engage', 1, '🎉 Engagement initiative (recognition / incentives)', money(8000) + ' · lifts team, cuts sick &amp; churn', false, ''));
@@ -512,32 +454,18 @@
       c.push(askRow('train', 1, '🎓 Skills training block', money(4000) + ' · lowers AHT &amp; churn, +shrinkage this wk', false, ''));
       c.push('<div id="cap-note" class="small" style="margin-top:4px"></div></div>');
 
-      c.push('<div class="panel"><h3>✍️ Commit to a service level for the week</h3>' +
-        '<p class="small muted">Over-promise and a miss hurts more; under-promise and they lose confidence.</p>');
-      var commits = [
-        { id: 'cautious', t: 'Cautious — ' + pct(CFG.SLA_TARGET - 0.05), v: CFG.SLA_TARGET - 0.05 },
-        { id: 'realistic', t: 'Realistic — ' + pct(CFG.SLA_TARGET), v: CFG.SLA_TARGET },
-        { id: 'ambitious', t: 'Ambitious — ' + pct(CFG.SLA_TARGET + 0.05), v: CFG.SLA_TARGET + 0.05 }
-      ];
-      for (var ci = 0; ci < commits.length; ci++) {
-        c.push('<label class="opt"><input type="radio" name="commit" value="' + commits[ci].id + '" data-v="' + commits[ci].v + '"' + (commits[ci].id === 'realistic' ? ' checked' : '') + '>' + commits[ci].t + '</label>');
-      }
+      c.push('<div class="panel"><h3>✍️ Commit to a service level for the week</h3><p class="small muted">Over-promise and a miss hurts more; under-promise and they lose confidence.</p>');
+      var commits = [{ id: 'cautious', t: 'Cautious — ' + pct(CFG.SLA_TARGET - 0.05), v: CFG.SLA_TARGET - 0.05 }, { id: 'realistic', t: 'Realistic — ' + pct(CFG.SLA_TARGET), v: CFG.SLA_TARGET }, { id: 'ambitious', t: 'Ambitious — ' + pct(CFG.SLA_TARGET + 0.05), v: CFG.SLA_TARGET + 0.05 }];
+      for (var ci = 0; ci < commits.length; ci++) c.push('<label class="opt"><input type="radio" name="commit" value="' + commits[ci].id + '" data-v="' + commits[ci].v + '"' + (commits[ci].id === 'realistic' ? ' checked' : '') + '>' + commits[ci].t + '</label>');
       c.push('</div>');
 
       c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="lock">Lock it in &amp; forecast ▶</button></div>');
-
       $('screen').innerHTML = c.join('');
 
-      // reveal-on-select listeners (effects hidden until chosen)
       var gradios = $('screen').querySelectorAll('input[name="grill"]');
-      for (var gi = 0; gi < gradios.length; gi++) gradios[gi].addEventListener('change', function (e) {
-        $('grill-fx').innerHTML = 'The room reacts — <b>' + fxText(S._grill.opts[parseInt(e.target.value, 10)].d) + '</b>';
-      });
+      for (var gi = 0; gi < gradios.length; gi++) gradios[gi].addEventListener('change', function (e) { $('grill-fx').innerHTML = 'The room reacts — <b>' + fxText(S._grill.opts[parseInt(e.target.value, 10)].d) + '</b>'; });
       var nradios = $('screen').querySelectorAll('input[name="narr"]');
-      for (var nj = 0; nj < nradios.length; nj++) nradios[nj].addEventListener('change', function (e) {
-        $('narr-fx').innerHTML = 'The room reacts — <b>' + fxText(NARR[parseInt(e.target.value, 10)].d) + '</b>';
-      });
-
+      for (var nj = 0; nj < nradios.length; nj++) nradios[nj].addEventListener('change', function (e) { $('narr-fx').innerHTML = 'The room reacts — <b>' + fxText(NARR[parseInt(e.target.value, 10)].d) + '</b>'; });
       var cbs = $('screen').querySelectorAll('input[type="checkbox"][data-cost]');
       for (var k = 0; k < cbs.length; k++) cbs[k].addEventListener('change', updateCapNote);
       updateCapNote();
@@ -545,34 +473,19 @@
       setStatus('Monday meeting — answer the room, make your asks, commit a number.');
     }
 
-    function optRow(name, i, text) {
-      return '<label class="opt"><input type="radio" name="' + name + '" value="' + i + '">' + text + '</label>';
-    }
+    function optRow(name, i, text) { return '<label class="opt"><input type="radio" name="' + name + '" value="' + i + '">' + text + '</label>'; }
     function askRow(id, cost, text, costNote, disabled, why) {
-      return '<label class="opt ' + (disabled ? 'disabled' : '') + '">' +
-        '<input type="checkbox" name="ask" value="' + id + '" data-cost="' + cost + '"' + (disabled ? ' disabled' : '') + '>' +
-        text + ' <span class="cost">[' + cost + ' cap · ' + costNote + ']</span>' +
-        (why ? '<br><span class="cost bad">' + why + '</span>' : '') + '</label>';
+      return '<label class="opt ' + (disabled ? 'disabled' : '') + '"><input type="checkbox" name="ask" value="' + id + '" data-cost="' + cost + '"' + (disabled ? ' disabled' : '') + '>' + text + ' <span class="cost">[' + cost + ' cap · ' + costNote + ']</span>' + (why ? '<br><span class="cost bad">' + why + '</span>' : '') + '</label>';
     }
-    function fxText(d) {
-      var map = { ops: 'Ops', fin: 'Finance', client: 'Client', team: 'TLs' };
-      return Object.keys(d).map(function (k) { return map[k] + ' ' + (d[k] >= 0 ? '+' : '') + d[k]; }).join(', ');
-    }
-    function updateCapNote() {
-      var used = 0, sel = $('screen').querySelectorAll('input[name="ask"]:checked');
-      for (var i = 0; i < sel.length; i++) used += parseInt(sel[i].dataset.cost, 10);
-      var note = $('cap-note');
-      if (note) note.innerHTML = 'Capital used: <b class="' + (used > CFG.CAPITAL ? 'bad' : 'good') + '">' + used + '</b> / ' + CFG.CAPITAL;
-    }
+    function fxText(d) { var map = { ops: 'Ops', fin: 'Finance', client: 'Client', team: 'TLs' }; return Object.keys(d).map(function (k) { return map[k] + ' ' + (d[k] >= 0 ? '+' : '') + d[k]; }).join(', '); }
+    function updateCapNote() { var used = 0, sel = $('screen').querySelectorAll('input[name="ask"]:checked'); for (var i = 0; i < sel.length; i++) used += parseInt(sel[i].dataset.cost, 10); var note = $('cap-note'); if (note) note.innerHTML = 'Capital used: <b class="' + (used > CFG.CAPITAL ? 'bad' : 'good') + '">' + used + '</b> / ' + CFG.CAPITAL; }
     function applyTrust(d) { if (!d) return; for (var k in d) if (S.trust[k] != null) S.trust[k] = clamp(S.trust[k] + d[k], 0, 100); }
 
     function lockMeeting() {
       var grillEl = document.querySelector('input[name="grill"]:checked');
       if (!grillEl) { dialog('Answer the room', 'Pick a response to the grilling question before you wrap the meeting.'); return; }
-      var narrShown = !!document.querySelector('input[name="narr"]');
-      var narrEl = document.querySelector('input[name="narr"]:checked');
+      var narrShown = !!document.querySelector('input[name="narr"]'), narrEl = document.querySelector('input[name="narr"]:checked');
       if (narrShown && !narrEl) { dialog('Answer the room', 'Choose how you explain last week\'s miss first.'); return; }
-
       var used = 0, asks = [], sel = $('screen').querySelectorAll('input[name="ask"]:checked');
       for (var i = 0; i < sel.length; i++) { used += parseInt(sel[i].dataset.cost, 10); asks.push(sel[i].value); }
       if (used > CFG.CAPITAL) { dialog('Not enough capital', 'You picked ' + used + ' capital of asks but only have ' + CFG.CAPITAL + '. Drop one.'); return; }
@@ -588,100 +501,104 @@
         else if (k === 'coach') { S.weekInits.coaching = true; S.budget -= 5000; S.dodgy = clamp(S.dodgy - 0.06, 0, 1); }
         else if (k === 'train') { S.weekInits.training = true; S.budget -= 4000; S.ahtSkill = clamp(S.ahtSkill - 0.02, 0.85, 1); }
       }
-
       var cEl = document.querySelector('input[name="commit"]:checked');
-      S.committed = parseFloat(cEl.dataset.v);
-      S.ambition = cEl.value;
-      save();
-      enterForecast();
+      S.committed = parseFloat(cEl.dataset.v); S.ambition = cEl.value;
+      save(); enterForecast();
     }
 
     /* =======================================================================
-       FORECAST — the player reads historical data and sets the week's volume.
+       FORECAST — daily-level, player-entered.
        ======================================================================= */
-    function enterForecast() {
-      S.phase = 'forecast'; save();
-      renderHUD();
-      var def = Math.round(recentAvg(3) / 50) * 50;
-      if (S.forecastWeekly == null) S.forecastWeekly = def;
+    function initForecastDays() {
+      var arr = [];
+      for (var d = 0; d < NDAYS(); d++) {
+        var hol = holidayOn(dateFor(S.week, d));
+        var base = dowAvg(d) * (hol ? CFG.HOLIDAY_VOL : 1);
+        arr.push(Math.round(base / 10) * 10);
+      }
+      return arr;
+    }
+    function redistributeTotal(total) {
+      var w = [];
+      for (var d = 0; d < NDAYS(); d++) { var hol = holidayOn(dateFor(S.week, d)); w.push(CFG.DOW[d] * (hol ? CFG.HOLIDAY_VOL : 1)); }
+      var ws = sum(w), out = [];
+      for (var d2 = 0; d2 < NDAYS(); d2++) out.push(Math.round(total * w[d2] / ws));
+      return out;
+    }
 
+    function enterForecast() {
+      S.phase = 'forecast'; save(); renderHUD();
+      if (!S.forecastDays) S.forecastDays = initForecastDays();
       var c = [];
       c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' + advisorForecastTip() + '</div></div>');
 
-      // historical dataset
-      c.push('<div class="panel"><h3>📚 Historical data — weekly call volume</h3>');
-      c.push('<table class="grid"><thead><tr><th>Week</th><th>Forecast</th><th>Actual</th><th>Error</th></tr></thead><tbody>');
+      // weekly history
+      c.push('<div class="panel"><h3>📚 Historical data</h3>');
+      c.push('<h4>Weekly totals</h4><table class="grid"><thead><tr><th>Week</th><th>Forecast</th><th>Actual</th><th>Error</th></tr></thead><tbody>');
       var hist = S.callHistory.slice(-6);
       for (var i = 0; i < hist.length; i++) {
-        var h = hist[i];
-        var err = (h.forecast != null && h.total > 0) ? Math.abs(h.forecast - h.total) / h.total : null;
-        c.push('<tr><td class="day">' + h.label + '</td>' +
-          '<td>' + (h.forecast != null ? h.forecast.toLocaleString() : '—') + '</td>' +
-          '<td>' + h.total.toLocaleString() + '</td>' +
-          '<td class="' + (err == null ? '' : err <= 0.05 ? 'good' : err >= 0.12 ? 'bad' : 'warn') + '">' + (err == null ? '—' : pct(err)) + '</td></tr>');
+        var h = hist[i], err = (h.forecast != null && h.total > 0) ? Math.abs(h.forecast - h.total) / h.total : null;
+        c.push('<tr><td class="day">' + h.label + '</td><td>' + (h.forecast != null ? h.forecast.toLocaleString() : '—') + '</td><td>' + h.total.toLocaleString() + '</td><td class="' + (err == null ? '' : err <= 0.05 ? 'good' : err >= 0.12 ? 'bad' : 'warn') + '">' + (err == null ? '—' : pct(err)) + '</td></tr>');
       }
       c.push('</tbody></table>');
-      c.push('<p class="small" style="margin-top:6px">Recent 3-week average: <span class="pill">' + Math.round(recentAvg(3)).toLocaleString() + '</span> · ' + trendNote() + '</p>');
-      c.push('</div>');
-
-      // intel
-      var intel = forecastIntel();
-      if (intel.length) {
-        c.push('<div class="panel"><h4>🔎 Signals to weigh in</h4><ul class="small" style="margin-left:16px">');
-        for (var s = 0; s < intel.length; s++) c.push('<li>' + intel[s] + '</li>');
-        c.push('</ul></div>');
+      // daily history (last 3 weeks by weekday)
+      var hd = histWithDays().slice(-3);
+      c.push('<h4 style="margin-top:8px">By day of week</h4><table class="grid"><thead><tr><th>Day</th>');
+      for (var w = 0; w < hd.length; w++) c.push('<th>' + hd[w].label + '</th>');
+      c.push('<th>Avg</th></tr></thead><tbody>');
+      for (var d = 0; d < NDAYS(); d++) {
+        c.push('<tr><td class="day">' + DOW[d] + '</td>');
+        for (var w2 = 0; w2 < hd.length; w2++) c.push('<td>' + (hd[w2].days ? hd[w2].days[d].toLocaleString() : '—') + '</td>');
+        c.push('<td><b>' + dowAvg(d).toLocaleString() + '</b></td></tr>');
       }
+      c.push('</tbody></table></div>');
 
-      // input + live breakdown
+      var intel = forecastIntel();
+      if (intel.length) { c.push('<div class="panel"><h4>🔎 Signals to weigh in</h4><ul class="small" style="margin-left:16px">'); for (var s = 0; s < intel.length; s++) c.push('<li>' + intel[s] + '</li>'); c.push('</ul></div>'); }
+
+      // editable daily forecast
       c.push('<div class="panel"><h3>✍️ Your forecast for ' + weekLabel(S.week) + '</h3>');
-      c.push('<div class="row"><span class="small">Expected total calls this week:</span> ' +
-        '<input class="fc-in sunken" type="number" id="fc-input" min="0" step="50" value="' + S.forecastWeekly + '">' +
-        '<button class="btn" id="fc-use">Use recent avg</button></div>');
-      c.push('<div id="fc-breakdown" style="margin-top:8px"></div>');
-      c.push('<p class="small muted" style="margin-top:6px">This number drives your staffing. Forecast low and you\'ll under-staff; forecast high and you\'ll overspend. The actual demand won\'t be revealed until the week runs.</p>');
+      c.push('<p class="small">Set each day, or type a weekly total to auto-split. <b>Your numbers drive staffing</b> — the actual demand stays hidden until the week runs.</p>');
+      c.push('<table class="grid"><thead><tr><th>Day</th><th>Weekday avg</th><th>Your forecast</th></tr></thead><tbody>');
+      for (var dd = 0; dd < NDAYS(); dd++) {
+        var hol2 = holidayOn(dateFor(S.week, dd));
+        c.push('<tr class="' + (hol2 ? 'hol' : '') + '"><td class="day"><b>' + DOW[dd] + '</b> ' + fmtDate(dateFor(S.week, dd)) + (hol2 ? ' 🗓️' : '') + '</td>' +
+          '<td>' + dowAvg(dd).toLocaleString() + '</td>' +
+          '<td><input class="fc-in sunken" type="number" min="0" step="10" value="' + S.forecastDays[dd] + '" data-fd="' + dd + '"></td></tr>');
+      }
+      c.push('<tr class="avg"><td class="day">Weekly total</td><td>—</td><td><input class="fc-tot sunken" type="number" min="0" step="50" id="fc-total" value="' + sum(S.forecastDays) + '"></td></tr>');
+      c.push('</tbody></table>');
+      c.push('<div class="row" style="margin-top:6px"><button class="btn" id="fc-avg">Fill from weekday averages</button></div>');
       c.push('</div>');
 
       c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="fc-lock">Lock forecast &amp; build the roster ▶</button></div>');
-
       $('screen').innerHTML = c.join('');
-      $('fc-input').addEventListener('input', function () { S.forecastWeekly = Math.max(0, parseInt(this.value, 10) || 0); drawBreakdown(); });
-      $('fc-use').addEventListener('click', function () { S.forecastWeekly = Math.round(recentAvg(3) / 50) * 50; $('fc-input').value = S.forecastWeekly; drawBreakdown(); });
+
+      var dayInputs = $('screen').querySelectorAll('input[data-fd]');
+      for (var di = 0; di < dayInputs.length; di++) dayInputs[di].addEventListener('input', function (e) {
+        var idx = parseInt(e.target.dataset.fd, 10); S.forecastDays[idx] = Math.max(0, parseInt(e.target.value, 10) || 0);
+        $('fc-total').value = sum(S.forecastDays);
+      });
+      $('fc-total').addEventListener('input', function (e) {
+        var t = Math.max(0, parseInt(e.target.value, 10) || 0); S.forecastDays = redistributeTotal(t);
+        var ins = $('screen').querySelectorAll('input[data-fd]'); for (var z = 0; z < ins.length; z++) ins[z].value = S.forecastDays[z];
+      });
+      $('fc-avg').addEventListener('click', function () {
+        S.forecastDays = initForecastDays();
+        var ins = $('screen').querySelectorAll('input[data-fd]'); for (var z = 0; z < ins.length; z++) ins[z].value = S.forecastDays[z];
+        $('fc-total').value = sum(S.forecastDays);
+      });
       $('fc-lock').addEventListener('click', function () {
-        if (!S.forecastWeekly || S.forecastWeekly < 100) { dialog('Forecast too low', 'Enter a realistic weekly call forecast before building the roster.'); return; }
+        if (sum(S.forecastDays) < 100) { dialog('Forecast too low', 'Enter a realistic forecast before building the roster.'); return; }
         save(); enterPlanning();
       });
-      drawBreakdown();
-      setStatus('Forecast the week — read the data, weigh the signals, set your number.');
+      setStatus('Forecast each day from the data, then build the roster.');
     }
 
-    function drawBreakdown() {
-      var rows = [], tot = 0;
-      for (var d = 0; d < NDAYS(); d++) {
-        var hol = holidayOn(dateFor(S.week, d));
-        var v = Math.round(S.forecastWeekly * dowShare(d) * (hol ? CFG.HOLIDAY_VOL : 1));
-        tot += v;
-        rows.push('<td>' + DOW[d] + (hol ? ' 🗓️' : '') + '<br><b>' + v.toLocaleString() + '</b></td>');
-      }
-      $('fc-breakdown').innerHTML = '<table class="grid"><thead><tr><th colspan="' + NDAYS() + '">Forecast split across the week (≈ ' + tot.toLocaleString() + ' calls)</th></tr></thead>' +
-        '<tbody><tr>' + rows.join('') + '</tr></tbody></table>';
-    }
-
-    function trendNote() {
-      var h = S.callHistory;
-      if (h.length < 2) return 'not enough history for a trend yet.';
-      var a = h[h.length - 1].total, b = h[h.length - 2].total;
-      if (a > b * 1.03) return 'volumes are <span class="warn">trending up</span>.';
-      if (a < b * 0.97) return 'volumes are <span class="warn">trending down</span>.';
-      return 'volumes are roughly flat week-to-week.';
-    }
     function forecastIntel() {
       var out = [];
       if (S.campaign) out.push('📈 A marketing campaign is live. The business <i>claims</i> it adds ~' + pct(S.campaign.claim - 1) + ', but campaigns on this account have historically run hotter.');
-      if (weekHasHoliday(S.week)) {
-        var names = [];
-        for (var d = 0; d < NDAYS(); d++) { var hn = holidayOn(dateFor(S.week, d)); if (hn) names.push(DOW[d] + ' (' + hn + ')'); }
-        out.push('🗓️ Public holiday this week — ' + names.join(', ') + ' runs at ~' + pct(CFG.HOLIDAY_VOL) + ' of a normal day. Forecast lower.');
-      }
+      if (weekHasHoliday(S.week)) { var names = []; for (var d = 0; d < NDAYS(); d++) { var hn = holidayOn(dateFor(S.week, d)); if (hn) names.push(DOW[d] + ' (' + hn + ')'); } out.push('🗓️ Public holiday this week — ' + names.join(', ') + ' runs at ~' + pct(CFG.HOLIDAY_VOL) + ' of a normal day.'); }
       if (CFG.SEASON[S.week] >= 1.2) out.push('🎄 Peak trading period — seasonal demand is well above the yearly baseline right now.');
       else if (S.week > 0 && CFG.SEASON[S.week] < CFG.SEASON[S.week - 1] - 0.05) out.push('📉 Seasonal demand is easing off from recent weeks.');
       return out;
@@ -691,22 +608,10 @@
        PLANNING
        ======================================================================= */
     function weekShrink() { return CFG.BASE_SHRINK + (S.weekInits.coaching ? CFG.COACH_SHRINK : 0) + (S.weekInits.training ? CFG.TRAIN_SHRINK : 0); }
-    function expectedAbsence() {
-      var a = CFG.BASE_ABSENCE;
-      if ([5, 6, 7].indexOf(monthOfWeek(S.week)) >= 0) a += CFG.WINTER_ABSENCE;
-      if (S.engagement < 60) a += (60 - S.engagement) / 100 * 0.08;
-      return a;
-    }
-    // forecast calls per day = player's weekly number, split by day-of-week shape
-    function forecastCalls(day) {
-      var hol = holidayOn(dateFor(S.week, day));
-      var base = (S.forecastWeekly || 0) * dowShare(day);
-      if (hol) base *= CFG.HOLIDAY_VOL;
-      return Math.round(base);
-    }
+    function expectedAbsence() { var a = CFG.BASE_ABSENCE; if ([5, 6, 7].indexOf(monthOfWeek(S.week)) >= 0) a += CFG.WINTER_ABSENCE; if (S.engagement < 60) a += (60 - S.engagement) / 100 * 0.08; return a; }
+    function forecastCalls(day) { return (S.forecastDays && S.forecastDays[day]) || 0; }
     function dayNeeds(day) {
-      var calls = forecastCalls(day);
-      var aht = CFG.AHT * S.ahtSkill;
+      var calls = forecastCalls(day), aht = CFG.AHT * S.ahtSkill;
       var A = calls * aht / CFG.OPEN_SECONDS;
       var onPhones = requiredOnPhones(A, aht, CFG.SLA_T, CFG.SLA_TARGET);
       var grossFactor = (1 - expectedAbsence()) * (1 - weekShrink());
@@ -714,137 +619,71 @@
       return { calls: calls, A: A, onPhones: onPhones, roster: roster };
     }
     function defaultRoster(needs) {
-      var rost = needs.map(function (n) { return Math.min(n.roster, S.hc); });
-      var cap = S.hc * NDAYS();
-      var s = sum(rost);
-      var guard = 0;
-      while (s > cap && guard++ < 5000) {
-        var idx = -1, lo = Infinity;
-        for (var d = 0; d < NDAYS(); d++) { if (rost[d] > 0 && needs[d].calls < lo) { lo = needs[d].calls; idx = d; } }
-        if (idx < 0) break;
-        rost[idx] -= 1; s -= 1;
-      }
+      var rost = needs.map(function (n) { return Math.min(n.roster, S.hc); }), cap = S.hc * NDAYS(), s = sum(rost), guard = 0;
+      while (s > cap && guard++ < 5000) { var idx = -1, lo = Infinity; for (var d = 0; d < NDAYS(); d++) { if (rost[d] > 0 && needs[d].calls < lo) { lo = needs[d].calls; idx = d; } } if (idx < 0) break; rost[idx] -= 1; s -= 1; }
       return rost;
     }
-
     function enterPlanning() {
-      S.phase = 'planning'; save();
-      renderHUD();
-      var needs = [];
-      for (var d = 0; d < NDAYS(); d++) needs.push(dayNeeds(d));
+      S.phase = 'planning'; save(); renderHUD();
+      var needs = []; for (var d = 0; d < NDAYS(); d++) needs.push(dayNeeds(d));
       plan = { needs: needs, rost: defaultRoster(needs), ot: 0, shrink: weekShrink(), expAbs: expectedAbsence() };
       drawPlanning();
     }
-
     function drawPlanning() {
-      var c = [];
-      var hol = [];
+      var c = [], hol = [];
       for (var d = 0; d < NDAYS(); d++) { var h = holidayOn(dateFor(S.week, d)); if (h) hol.push(DOW[d] + ' ' + h); }
       c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' + advisorPlanTip() + '</div></div>');
-
       c.push('<div class="panel"><h3>📅 Plan the week — ' + weekLabel(S.week) + '</h3>');
-      c.push('<p class="small">Your forecast <span class="pill">' + (S.forecastWeekly || 0).toLocaleString() + ' calls</span> · ' +
-        'Planned shrinkage <span class="pill">' + pct(plan.shrink) + '</span> · ' +
-        'Expected absence <span class="pill">' + pct(plan.expAbs) + '</span>' +
-        (hol.length ? ' · <span class="warn">Holiday: ' + hol.join(', ') + '</span>' : '') + '</p>');
-
+      c.push('<p class="small">Your forecast <span class="pill">' + sum(S.forecastDays).toLocaleString() + ' calls</span> · Planned shrinkage <span class="pill">' + pct(plan.shrink) + '</span> · Expected absence <span class="pill">' + pct(plan.expAbs) + '</span>' + (hol.length ? ' · <span class="warn">Holiday: ' + hol.join(', ') + '</span>' : '') + '</p>');
       c.push('<table class="grid"><thead><tr><th>Day</th><th>Forecast calls</th><th>On&nbsp;phones<br>needed</th><th>Roster needed<br>(incl. shrink)</th><th>Your roster</th><th>Coverage</th></tr></thead><tbody>');
       for (var d2 = 0; d2 < NDAYS(); d2++) {
-        var n = plan.needs[d2], hday = holidayOn(dateFor(S.week, d2));
-        var covRaw = n.roster > 0 ? plan.rost[d2] / n.roster : 1;
-        var cov = clamp(covRaw, 0, 1.3);
-        c.push('<tr class="' + (hday ? 'hol' : '') + '">' +
-          '<td class="day"><b>' + DOW[d2] + '</b> ' + fmtDate(dateFor(S.week, d2)) + (hday ? ' 🗓️' : '') + '</td>' +
-          '<td>' + n.calls.toLocaleString() + '</td>' +
-          '<td>' + n.onPhones + '</td>' +
-          '<td>' + n.roster + '</td>' +
-          '<td><input class="num-in" type="number" min="0" max="' + S.hc + '" value="' + plan.rost[d2] + '" data-day="' + d2 + '"></td>' +
-          '<td><div class="cov ' + (covRaw < 0.999 ? 'under' : '') + '"><i style="width:' + Math.min(100, cov * 100) + '%"></i><span class="lab">&nbsp;' + Math.round(covRaw * 100) + '%</span></div></td>' +
-          '</tr>');
+        var n = plan.needs[d2], hday = holidayOn(dateFor(S.week, d2)), covRaw = n.roster > 0 ? plan.rost[d2] / n.roster : 1, cov = clamp(covRaw, 0, 1.3);
+        c.push('<tr class="' + (hday ? 'hol' : '') + '"><td class="day"><b>' + DOW[d2] + '</b> ' + fmtDate(dateFor(S.week, d2)) + (hday ? ' 🗓️' : '') + '</td><td>' + n.calls.toLocaleString() + '</td><td>' + n.onPhones + '</td><td>' + n.roster + '</td><td><input class="num-in" type="number" min="0" max="' + S.hc + '" value="' + plan.rost[d2] + '" data-day="' + d2 + '"></td><td><div class="cov ' + (covRaw < 0.999 ? 'under' : '') + '"><i style="width:' + Math.min(100, cov * 100) + '%"></i><span class="lab">&nbsp;' + Math.round(covRaw * 100) + '%</span></div></td></tr>');
       }
       c.push('</tbody></table>');
-
-      var used = sum(plan.rost);
-      var capW = S.hc * NDAYS();
-      var overDay = plan.rost.some(function (x) { return x > S.hc; });
-      c.push('<div class="row" style="margin-top:6px">' +
-        '<button class="btn" id="auto">Auto-roster</button>' +
-        '<span class="small">Capacity used: <b class="' + (used > capW ? 'bad' : '') + '">' + used + '</b> / ' + capW + ' agent-days (HC ' + S.hc + ' × ' + NDAYS() + ')</span></div>');
+      var used = sum(plan.rost), capW = S.hc * NDAYS(), overDay = plan.rost.some(function (x) { return x > S.hc; });
+      c.push('<div class="row" style="margin-top:6px"><button class="btn" id="auto">Auto-roster</button><span class="small">Capacity used: <b class="' + (used > capW ? 'bad' : '') + '">' + used + '</b> / ' + capW + ' agent-days (HC ' + S.hc + ' × ' + NDAYS() + ')</span></div>');
       var otCap = Math.round(capW * CFG.OT_CAP_FRAC);
-      c.push('<div class="row" style="margin-top:6px"><span class="small">Overtime: </span>' +
-        '<input type="range" id="ot" min="0" max="' + otCap + '" value="' + plan.ot + '" style="flex:1">' +
-        '<span class="small" id="ot-lab"></span></div></div>');
-
+      c.push('<div class="row" style="margin-top:6px"><span class="small">Overtime: </span><input type="range" id="ot" min="0" max="' + otCap + '" value="' + plan.ot + '" style="flex:1"><span class="small" id="ot-lab"></span></div></div>');
       c.push('<div class="panel" id="proj"></div>');
-
-      var warn = (used > capW) ? 'You\'re over weekly capacity — hire, use OT, or cut a day.' : overDay ? 'A day exceeds your headcount — can\'t roster more agents than you have.' : '';
-      c.push('<div class="row"><span class="bad small" id="run-warn">' + warn + '</span><span class="spacer"></span>' +
-        '<button class="btn big-btn" id="run"' + (used > capW || overDay ? ' disabled' : '') + '>Run the week ▶</button></div>');
-
+      var warn = (used > capW) ? 'You\'re over weekly capacity — hire, use OT, or cut a day.' : overDay ? 'A day exceeds your headcount.' : '';
+      c.push('<div class="row"><span class="bad small" id="run-warn">' + warn + '</span><span class="spacer"></span><button class="btn big-btn" id="run"' + (used > capW || overDay ? ' disabled' : '') + '>Run the week ▶</button></div>');
       $('screen').innerHTML = c.join('');
-      var inputs = $('screen').querySelectorAll('.num-in');
-      for (var ii = 0; ii < inputs.length; ii++) inputs[ii].addEventListener('input', onRosterInput);
+      var inputs = $('screen').querySelectorAll('.num-in'); for (var ii = 0; ii < inputs.length; ii++) inputs[ii].addEventListener('input', onRosterInput);
       $('auto').addEventListener('click', function () { plan.rost = defaultRoster(plan.needs); plan.ot = 0; drawPlanning(); });
       $('ot').addEventListener('input', function (e) { plan.ot = parseInt(e.target.value, 10) || 0; refreshProjection(); });
       $('run').addEventListener('click', runWeek);
       refreshProjection();
-      setStatus('Distribute your workforce across Mon–Fri, then run it. Actuals will vary from forecast.');
+      setStatus('Distribute your workforce across Mon–Fri, then run it.');
     }
-
     function onRosterInput(e) {
-      var d = parseInt(e.target.dataset.day, 10);
-      var v = parseInt(e.target.value, 10); if (isNaN(v) || v < 0) v = 0;
+      var d = parseInt(e.target.dataset.day, 10), v = parseInt(e.target.value, 10); if (isNaN(v) || v < 0) v = 0;
       plan.rost[d] = v;
-      var n = plan.needs[d];
-      var covRaw = n.roster > 0 ? v / n.roster : 1;
-      var cell = e.target.closest('tr').querySelector('.cov');
-      cell.classList.toggle('under', covRaw < 0.999);
-      cell.querySelector('i').style.width = Math.min(100, clamp(covRaw, 0, 1.3) * 100) + '%';
-      cell.querySelector('.lab').innerHTML = '&nbsp;' + Math.round(covRaw * 100) + '%';
+      var n = plan.needs[d], covRaw = n.roster > 0 ? v / n.roster : 1, cell = e.target.closest('tr').querySelector('.cov');
+      cell.classList.toggle('under', covRaw < 0.999); cell.querySelector('i').style.width = Math.min(100, clamp(covRaw, 0, 1.3) * 100) + '%'; cell.querySelector('.lab').innerHTML = '&nbsp;' + Math.round(covRaw * 100) + '%';
       refreshProjection();
     }
-
     function allocateOT(rost, needs, otTotal) {
       var ot = []; for (var z = 0; z < NDAYS(); z++) ot.push(0);
       var left = otTotal;
-      while (left > 0) {
-        var idx = -1, worst = -1;
-        for (var d = 0; d < NDAYS(); d++) { var gap = needs[d].roster - (rost[d] + ot[d]); if (gap > worst) { worst = gap; idx = d; } }
-        if (idx < 0 || worst <= 0) break;
-        ot[idx] += 1; left -= 1;
-      }
+      while (left > 0) { var idx = -1, worst = -1; for (var d = 0; d < NDAYS(); d++) { var gap = needs[d].roster - (rost[d] + ot[d]); if (gap > worst) { worst = gap; idx = d; } } if (idx < 0 || worst <= 0) break; ot[idx] += 1; left -= 1; }
       return ot;
     }
-    function laborCost(baseDays, otDays) {
-      var holSurcharge = 0;
-      for (var d = 0; d < NDAYS(); d++) if (holidayOn(dateFor(S.week, d))) holSurcharge += plan.rost[d] * CFG.DAY_COST * (CFG.HOLIDAY_PAY - 1);
-      return baseDays * CFG.DAY_COST + otDays * CFG.DAY_COST * CFG.OT_MULT + holSurcharge;
-    }
-
+    function laborCost(baseDays, otDays) { var holSurcharge = 0; for (var d = 0; d < NDAYS(); d++) if (holidayOn(dateFor(S.week, d))) holSurcharge += plan.rost[d] * CFG.DAY_COST * (CFG.HOLIDAY_PAY - 1); return baseDays * CFG.DAY_COST + otDays * CFG.DAY_COST * CFG.OT_MULT + holSurcharge; }
     function projectWeek() {
-      var otDays = allocateOT(plan.rost, plan.needs, plan.ot);
-      var calls = 0, answered = 0, occSum = 0, occN = 0;
+      var otDays = allocateOT(plan.rost, plan.needs, plan.ot), calls = 0, answered = 0, occSum = 0, occN = 0;
       for (var d = 0; d < NDAYS(); d++) {
-        var n = plan.needs[d];
-        var phones = (plan.rost[d] + otDays[d]) * (1 - plan.expAbs) * (1 - plan.shrink) * (1 - S.dodgy * CFG.DODGY_AVAIL_MAX);
-        var aht = CFG.AHT * S.ahtSkill * (1 + S.dodgy * CFG.DODGY_AHT_MAX);
-        var A = n.calls * aht / CFG.OPEN_SECONDS;
-        var sl = serviceLevel(phones, A, aht, CFG.SLA_T);
-        calls += n.calls; answered += sl * n.calls;
-        if (n.calls > 50) { occSum += occupancy(phones, A); occN++; }
+        var n = plan.needs[d], phones = (plan.rost[d] + otDays[d]) * (1 - plan.expAbs) * (1 - plan.shrink) * (1 - S.dodgy * CFG.DODGY_AVAIL_MAX), aht = CFG.AHT * S.ahtSkill * (1 + S.dodgy * CFG.DODGY_AHT_MAX), A = n.calls * aht / CFG.OPEN_SECONDS;
+        var sl = dayServiceLevel(n.calls, phones, aht);
+        calls += n.calls; answered += sl * n.calls; if (n.calls > 50) { occSum += occupancy(phones, A); occN++; }
       }
-      var baseDays = sum(plan.rost);
-      var otTotal = sum(otDays);
+      var baseDays = sum(plan.rost), otTotal = sum(otDays);
       return { sla: calls > 0 ? answered / calls : 1, cost: laborCost(baseDays, otTotal), occ: occN ? occSum / occN : 0, otTotal: otTotal, baseDays: baseDays };
     }
-
     function refreshProjection() {
       var otCap = Math.round(S.hc * NDAYS() * CFG.OT_CAP_FRAC);
       if ($('ot-lab')) $('ot-lab').textContent = plan.ot + ' / ' + otCap + ' agent-days (+' + money(plan.ot * CFG.DAY_COST * CFG.OT_MULT) + ')';
-      var p = projectWeek();
-      var slaCls = p.sla >= S.committed ? 'good' : (p.sla >= S.committed - 0.04 ? 'warn' : 'bad');
-      var trainee = trainees() * CFG.TRAINEE_WK_COST;
-      var net = CFG.WEEK_REVENUE - p.cost - trainee;
+      var p = projectWeek(), slaCls = p.sla >= S.committed ? 'good' : (p.sla >= S.committed - 0.04 ? 'warn' : 'bad'), trainee = trainees() * CFG.TRAINEE_WK_COST, net = CFG.WEEK_REVENUE - p.cost - trainee;
       var used = sum(plan.rost), capW = S.hc * NDAYS(), overDay = plan.rost.some(function (x) { return x > S.hc; });
       if ($('run')) $('run').disabled = (used > capW || overDay);
       if ($('run-warn')) $('run-warn').textContent = (used > capW) ? 'Over weekly capacity — hire, use OT, or cut a day.' : (overDay ? 'A day exceeds headcount.' : '');
@@ -859,112 +698,67 @@
        RUN THE WEEK
        ======================================================================= */
     function trueDaily(day) {
-      var hol = holidayOn(dateFor(S.week, day));
-      var m = CFG.DOW[day] * CFG.SEASON[S.week];
-      if (hol) m *= CFG.HOLIDAY_VOL;
-      if (S.campaign) m *= S.campaign.real;
-      m *= rand(0.94, 1.06);
+      var hol = holidayOn(dateFor(S.week, day)), m = CFG.DOW[day] * CFG.SEASON[S.week];
+      if (hol) m *= CFG.HOLIDAY_VOL; if (S.campaign) m *= S.campaign.real; m *= rand(0.94, 1.06);
       return Math.max(0, Math.round(CFG.BASE_CALLS * m));
     }
-
     function runWeek() {
       if (!S.mods) S.mods = freshMods();
-      var otDays = allocateOT(plan.rost, plan.needs, plan.ot);
-      var dayRes = [], calls = 0, answered = 0, occSum = 0, occN = 0, abandoned = 0;
+      var otDays = allocateOT(plan.rost, plan.needs, plan.ot), dayRes = [], calls = 0, answered = 0, occSum = 0, occN = 0, abandoned = 0;
       var realAbs = clamp(plan.expAbs + (S.mods.absenceAdd || 0), 0, 0.6);
-
       for (var d = 0; d < NDAYS(); d++) {
-        var hol = holidayOn(dateFor(S.week, d));
-        var dCalls = Math.round(trueDaily(d) * (S.mods.volMult || 1));
-
+        var hol = holidayOn(dateFor(S.week, d)), dCalls = Math.round(trueDaily(d) * (S.mods.volMult || 1));
         var absToday = clamp(realAbs * rand(0.8, 1.2), 0, 0.7);
         var phones = (plan.rost[d] + otDays[d]) * (1 - absToday) * (1 - plan.shrink) * (1 - S.dodgy * CFG.DODGY_AVAIL_MAX);
         var aht = CFG.AHT * S.ahtSkill * (1 + S.dodgy * CFG.DODGY_AHT_MAX) * (S.mods.ahtMult || 1);
         var A = dCalls * aht / CFG.OPEN_SECONDS;
-        var sl = serviceLevel(phones, A, aht, CFG.SLA_T);
-        var occ = occupancy(phones, A);
-        var aband = A >= phones ? Math.round(dCalls * clamp((A - phones) / Math.max(A, 1), 0, 0.5)) : Math.round(dCalls * (1 - sl) * 0.06);
-
-        calls += dCalls; answered += sl * dCalls; abandoned += aband;
-        if (dCalls > 50) { occSum += occ; occN++; }
-        dayRes.push({ d: d, hol: hol, calls: dCalls, sl: sl, occ: occ });
+        var sl = dayServiceLevel(dCalls, phones, aht), occ = occupancy(phones, A), aband = dayAbandoned(dCalls, phones, aht);
+        calls += dCalls; answered += sl * dCalls; abandoned += aband; if (dCalls > 50) { occSum += occ; occN++; }
+        dayRes.push({ d: d, hol: hol, calls: dCalls, sl: sl, occ: occ, phones: phones, aht: aht });
       }
-
-      var sla = calls > 0 ? answered / calls : 1;
-      var occAvg = occN ? occSum / occN : 0;
-      var baseDays = sum(plan.rost), otTotal = sum(otDays);
-      var cost = laborCost(baseDays, otTotal);
-      var traineeCost = trainees() * CFG.TRAINEE_WK_COST;
-      var otFrac = baseDays > 0 ? otTotal / baseDays : 0;
-
-      // forecast accuracy
-      var fcast = S.forecastWeekly || 0;
-      var fErr = calls > 0 ? Math.abs(fcast - calls) / calls : 0;
+      var sla = calls > 0 ? answered / calls : 1, occAvg = occN ? occSum / occN : 0, baseDays = sum(plan.rost), otTotal = sum(otDays);
+      var cost = laborCost(baseDays, otTotal), traineeCost = trainees() * CFG.TRAINEE_WK_COST, otFrac = baseDays > 0 ? otTotal / baseDays : 0;
+      var fcastDays = S.forecastDays.slice(), fcast = sum(fcastDays), fErr = calls > 0 ? Math.abs(fcast - calls) / calls : 0;
 
       var penalty = 0, bonus = 0;
-      if (sla < CFG.SLA_TARGET) penalty = (CFG.SLA_TARGET - sla) * CFG.PENALTY_SCALE;
-      else bonus = Math.min(CFG.BONUS_CAP, (sla - CFG.SLA_TARGET) * CFG.BONUS_SCALE);
-      var pnl = CFG.WEEK_REVENUE + bonus - cost - traineeCost - penalty;
-      var budgetBefore = S.budget;
-      S.budget += pnl;
+      if (sla < CFG.SLA_TARGET) penalty = (CFG.SLA_TARGET - sla) * CFG.PENALTY_SCALE; else bonus = Math.min(CFG.BONUS_CAP, (sla - CFG.SLA_TARGET) * CFG.BONUS_SCALE);
+      var pnl = CFG.WEEK_REVENUE + bonus - cost - traineeCost - penalty, budgetBefore = S.budget; S.budget += pnl;
 
       var engBefore = S.engagement, eDelta = 0;
-      if (occAvg > 0.88) eDelta -= (occAvg - 0.88) * 60;
-      else if (occAvg < 0.78) eDelta += (0.78 - occAvg) * 18;
-      eDelta -= otFrac * 18;
-      if (S.weekInits.engagement) eDelta += 8;
-      if (S.trust.team < 45) eDelta -= 2;
-      eDelta += (65 - S.engagement) * 0.05;
+      if (occAvg > 0.88) eDelta -= (occAvg - 0.88) * 60; else if (occAvg < 0.78) eDelta += (0.78 - occAvg) * 18;
+      eDelta -= otFrac * 18; if (S.weekInits.engagement) eDelta += 8; if (S.trust.team < 45) eDelta -= 2; eDelta += (65 - S.engagement) * 0.05;
       S.engagement = clamp(S.engagement + eDelta, 0, 100);
+      var dodgyTarget = clamp(0.30 - S.engagement / 400 - S.trust.team / 500, 0.04, 0.45); S.dodgy = clamp(S.dodgy + (dodgyTarget - S.dodgy) * 0.35, 0, 1);
 
-      var dodgyTarget = clamp(0.30 - S.engagement / 400 - S.trust.team / 500, 0.04, 0.45);
-      S.dodgy = clamp(S.dodgy + (dodgyTarget - S.dodgy) * 0.35, 0, 1);
-
-      var burnout = 1 + Math.max(0, occAvg - 0.85) * 4 + Math.max(0, 60 - S.engagement) / 100 * 2 + otFrac * 1.5;
-      var expQuits = S.hc * 0.008 * burnout;
+      var burnout = 1 + Math.max(0, occAvg - 0.85) * 4 + Math.max(0, 60 - S.engagement) / 100 * 2 + otFrac * 1.5, expQuits = S.hc * 0.008 * burnout;
       if (S.engagement < 35) expQuits += 1;
-      var quits = Math.floor(expQuits) + (Math.random() < (expQuits % 1) ? 1 : 0);
-      quits = Math.min(quits, Math.max(0, S.hc - 1));
-      var quitNames = [];
-      for (var q = 0; q < quits && q < 3; q++) quitNames.push(pick(AGENT_NAMES));
-      S.hc -= quits;
+      var quits = Math.floor(expQuits) + (Math.random() < (expQuits % 1) ? 1 : 0); quits = Math.min(quits, Math.max(0, S.hc - 1));
+      var quitNames = []; for (var q = 0; q < quits && q < 3; q++) quitNames.push(pick(AGENT_NAMES)); S.hc -= quits;
 
-      var graduated = 0;
-      for (var p2 = 0; p2 < S.pipeline.length; p2++) S.pipeline[p2].weeksLeft -= 1;
-      S.pipeline = S.pipeline.filter(function (c) { if (c.weeksLeft <= 0) { graduated += c.size; return false; } return true; });
-      S.hc += graduated;
+      var graduated = 0; for (var p2 = 0; p2 < S.pipeline.length; p2++) S.pipeline[p2].weeksLeft -= 1;
+      S.pipeline = S.pipeline.filter(function (c) { if (c.weeksLeft <= 0) { graduated += c.size; return false; } return true; }); S.hc += graduated;
 
       var tBefore = { ops: S.trust.ops, fin: S.trust.fin, client: S.trust.client, team: S.trust.team };
-      var hit = sla >= S.committed;
-      var reward = S.ambition === 'ambitious' ? 7 : S.ambition === 'realistic' ? 4 : 2;
-      var punish = S.ambition === 'ambitious' ? 9 : S.ambition === 'realistic' ? 5 : 3;
-      var cd = hit ? reward : -punish;
+      var hit = sla >= S.committed, reward = S.ambition === 'ambitious' ? 7 : S.ambition === 'realistic' ? 4 : 2, punish = S.ambition === 'ambitious' ? 9 : S.ambition === 'realistic' ? 5 : 3, cd = hit ? reward : -punish;
       applyTrust({ client: cd, ops: Math.round(cd * 0.6) });
       if (sla >= CFG.SLA_TARGET + 0.03) applyTrust({ client: 1, ops: 1 });
       if (sla < CFG.SLA_TARGET - 0.10) applyTrust({ client: -2, ops: -2 });
-      applyTrust({ fin: pnl >= 0 ? 1 : -2 });
-      if (occAvg < 0.55 && calls > 0) applyTrust({ fin: -1 });
-      if (fErr <= 0.05) applyTrust({ ops: 1 });           // accurate forecasting builds credibility
-      else if (fErr >= 0.20) applyTrust({ ops: -1 });
+      applyTrust({ fin: pnl >= 0 ? 1 : -2 }); if (occAvg < 0.55 && calls > 0) applyTrust({ fin: -1 });
+      if (fErr <= 0.05) applyTrust({ ops: 1 }); else if (fErr >= 0.20) applyTrust({ ops: -1 });
       applyTrust({ team: (S.engagement >= engBefore ? 1 : -1) + (quits >= 2 ? -2 : 0) });
 
       S.ytdCalls += calls; S.ytdAnswered += answered;
-      S.callHistory.push({ label: shortWeek(S.week), total: calls, forecast: fcast });
+      S.callHistory.push({ label: shortWeek(S.week), total: calls, forecast: fcast, days: dayRes.map(function (x) { return x.calls; }) });
       if (S.callHistory.length > 12) S.callHistory = S.callHistory.slice(-12);
       S.history.push({ week: S.week, sla: sla, ytd: ytdSLA(), budget: S.budget, eng: S.engagement, hc: S.hc });
       S.lastWeek = { sla: sla, committed: S.committed, occ: occAvg };
-      S.reviewData = makeReview(dayRes);
+      S.reviewData = makeReview(dayRes); S.reviewTab = 'audit';
+      // default the call-flow view to the worst day
+      var worst = 0; for (var wi = 1; wi < dayRes.length; wi++) if (dayRes[wi].sl < dayRes[worst].sl) worst = wi; S.reviewDay = worst;
 
-      S.lastResult = { dayRes: dayRes, sla: sla, occ: occAvg, calls: calls, abandoned: abandoned, cost: cost + traineeCost, pnl: pnl, penalty: penalty, bonus: bonus,
-        engBefore: engBefore, engAfter: S.engagement, quits: quits, quitNames: quitNames, graduated: graduated, budgetBefore: budgetBefore,
-        tBefore: tBefore, tAfter: { ops: S.trust.ops, fin: S.trust.fin, client: S.trust.client, team: S.trust.team }, hit: hit, otTotal: otTotal,
-        forecast: fcast, fErr: fErr };
-
-      // forecast carries forward as a sensible default next week
-      S.forecastWeekly = null;
-      save();
-      renderHUD();
-      drawResults(S.lastResult);
+      S.lastResult = { dayRes: dayRes, sla: sla, occ: occAvg, calls: calls, abandoned: abandoned, cost: cost + traineeCost, pnl: pnl, penalty: penalty, bonus: bonus, engBefore: engBefore, engAfter: S.engagement, quits: quits, quitNames: quitNames, graduated: graduated, budgetBefore: budgetBefore, tBefore: tBefore, tAfter: { ops: S.trust.ops, fin: S.trust.fin, client: S.trust.client, team: S.trust.team }, hit: hit, otTotal: otTotal, forecast: fcast, forecastDays: fcastDays, fErr: fErr };
+      S.forecastDays = null;
+      save(); renderHUD(); drawResults(S.lastResult);
     }
 
     /* =======================================================================
@@ -974,7 +768,6 @@
       S.phase = 'results'; save();
       var c = [];
       c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' + advisorResultTip(res) + '</div></div>');
-
       c.push('<div class="panel"><h3>📊 Week ' + (S.week + 1) + ' results — ' + weekLabel(S.week) + '</h3>');
       var slaCls = res.sla >= CFG.SLA_TARGET ? 'good' : (res.sla >= CFG.SLA_TARGET - 0.05 ? 'warn' : 'bad');
       c.push('<div class="kpi-strip">' +
@@ -983,15 +776,10 @@
         '<div class="kpi"><div class="k">Avg occupancy</div><div class="v ' + (res.occ > 0.9 ? 'bad' : res.occ > 0.85 ? 'warn' : 'good') + '">' + pct(res.occ) + '</div></div>' +
         '<div class="kpi"><div class="k">Forecast error</div><div class="v ' + (res.fErr <= 0.05 ? 'good' : res.fErr >= 0.12 ? 'bad' : 'warn') + '">' + pct(res.fErr) + '</div><div class="small muted">fc ' + res.forecast.toLocaleString() + ' · act ' + res.calls.toLocaleString() + '</div></div>' +
         '<div class="kpi"><div class="k">Weekly P&amp;L</div><div class="v ' + (res.pnl >= 0 ? 'good' : 'bad') + '">' + money(res.pnl) + '</div></div></div>');
-
       c.push('<table class="grid" style="margin-top:8px"><thead><tr><th>Day</th><th>Forecast</th><th>Actual calls</th><th>Service level</th><th>Occupancy</th></tr></thead><tbody>');
       for (var i = 0; i < res.dayRes.length; i++) {
         var dr = res.dayRes[i];
-        c.push('<tr class="' + (dr.hol ? 'hol' : '') + '"><td class="day"><b>' + DOW[dr.d] + '</b> ' + fmtDate(dateFor(S.week, dr.d)) + (dr.hol ? ' 🗓️' : '') + '</td>' +
-          '<td>' + forecastCallsRetro(dr.d).toLocaleString() + '</td>' +
-          '<td>' + dr.calls.toLocaleString() + '</td>' +
-          '<td class="' + (dr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(dr.sl) + '</td>' +
-          '<td class="' + (dr.occ > 0.9 ? 'bad' : '') + '">' + pct(dr.occ) + '</td></tr>');
+        c.push('<tr class="' + (dr.hol ? 'hol' : '') + '"><td class="day"><b>' + DOW[dr.d] + '</b> ' + fmtDate(dateFor(S.week, dr.d)) + (dr.hol ? ' 🗓️' : '') + '</td><td>' + (res.forecastDays[dr.d] || 0).toLocaleString() + '</td><td>' + dr.calls.toLocaleString() + '</td><td class="' + (dr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(dr.sl) + '</td><td class="' + (dr.occ > 0.9 ? 'bad' : '') + '">' + pct(dr.occ) + '</td></tr>');
       }
       c.push('</tbody></table></div>');
 
@@ -1013,129 +801,186 @@
       c.push('<div class="panel"><h4>👥 People &amp; stakeholders</h4><div class="log">');
       for (var l = 0; l < log.length; l++) c.push('<div class="li">' + log[l] + '</div>');
       c.push('</div></div>');
-
       c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="toreview">Review the week\'s data 🔍 ▶</button></div>');
-
       $('screen').innerHTML = c.join('');
       $('toreview').addEventListener('click', enterReview);
       setStatus('Week ' + (S.week + 1) + ' done. Now dig into the data before next Monday.');
     }
-    // recompute a day's forecast for the results table (forecastWeekly is cleared post-run, so use the stored result)
-    function forecastCallsRetro(day) {
-      var hol = holidayOn(dateFor(S.week, day));
-      var base = (S.lastResult.forecast || 0) * dowShare(day);
-      if (hol) base *= CFG.HOLIDAY_VOL;
-      return Math.round(base);
-    }
 
     /* =======================================================================
-       DATA REVIEW — investigate agent behaviour & arrival patterns.
+       DATA REVIEW — call-flow drill-down + 24-agent / 3-team audit.
        ======================================================================= */
     function makeReview(dayRes) {
-      var names = shuffle(AGENT_NAMES).slice(0, 6);
-      var teamAht = Math.round(CFG.AHT * S.ahtSkill);
-      var agents = [];
-      for (var i = 0; i < 6; i++) {
-        agents.push({ name: names[i], calls: Math.round(rand(380, 520)), aht: Math.round(teamAht * rand(0.92, 1.08)), aux: r1(rand(6, 12)), hold: r1(rand(2, 6)), culprit: false });
+      var pool = shuffle(AGENT_NAMES).slice(0, 24), teamAht = CFG.AHT * S.ahtSkill, agents = [];
+      for (var i = 0; i < 24; i++) {
+        agents.push({
+          id: i, name: pool[i], team: TEAMS[Math.floor(i / 8)],
+          calls: Math.round(rand(420, 520)),
+          aht: Math.round(teamAht * rand(0.92, 1.08)),
+          aux: Math.round(rand(6, 12) * 10) / 10,
+          acw: Math.round(rand(5, 10) * 10) / 10,
+          hold: Math.round(rand(2, 6) * 10) / 10,
+          adh: Math.round(rand(92, 99) * 10) / 10,
+          issue: null
+        });
       }
-      var ci = Math.floor(Math.random() * 6);
-      var dim = pick(['aux', 'aht', 'hold']);
-      var a = agents[ci]; a.culprit = true; a.dim = dim;
-      if (dim === 'aux') { a.aux = r1(rand(24, 34)); a.calls = Math.round(a.calls * 0.6); }
-      else if (dim === 'aht') { a.aht = Math.round(teamAht * rand(1.4, 1.65)); a.calls = Math.round(a.calls * 0.7); }
-      else { a.hold = r1(rand(18, 26)); a.calls = Math.round(a.calls * 0.75); }
-
-      // arrival-pattern insight (informational — helps next week's forecast)
-      var peakDay = DOW[dayRes.reduce(function (best, dr, idx, arr) { return dr.calls > arr[best].calls ? idx : best; }, 0)];
-      var arrivals = [
-        'Volume peaked on <b>' + peakDay + '</b> this week — front-load your roster earlier in the week.',
-        'Calls arrived heaviest in the late morning; mid-afternoon ran quieter than the daily average.',
-        'A short, sharp spike hit after lunch most days — brief understaffing drove a chunk of the abandonment.',
-        'Mornings ran hotter than the forecast shape assumed — consider weighting earlier intervals.'
-      ];
-      return { agents: agents, culprit: ci, dim: dim, teamAht: teamAht, arrival: pick(arrivals), resolved: false, outcome: '' };
+      // number of real issues: almost always >=1, scales mildly with dodgy index
+      var r = Math.random(), extra = S.dodgy > 0.22 ? 1 : 0, nIssues;
+      if (r < 0.07) nIssues = 0; else if (r < 0.45) nIssues = 1 + extra; else if (r < 0.80) nIssues = 2 + extra; else nIssues = 3 + extra;
+      nIssues = Math.min(nIssues, 5);
+      var idxs = shuffle(agents.map(function (_, i) { return i; })).slice(0, nIssues);
+      for (var j = 0; j < idxs.length; j++) {
+        var a = agents[idxs[j]], dim = pick(['aux', 'aht', 'hold', 'acw', 'adh']); a.issue = dim;
+        if (dim === 'aux') { a.aux = Math.round(rand(16, 24) * 10) / 10; a.calls = Math.round(a.calls * 0.78); }
+        else if (dim === 'aht') { a.aht = Math.round(teamAht * rand(1.22, 1.45)); a.calls = Math.round(a.calls * 0.82); }
+        else if (dim === 'hold') { a.hold = Math.round(rand(11, 17) * 10) / 10; a.calls = Math.round(a.calls * 0.88); }
+        else if (dim === 'acw') { a.acw = Math.round(rand(15, 22) * 10) / 10; a.calls = Math.round(a.calls * 0.85); }
+        else { a.adh = Math.round(rand(80, 88) * 10) / 10; }
+      }
+      return { agents: agents, sortKey: 'team', sortDir: 1, submitted: false, flagged: {}, outcome: '' };
     }
 
     function enterReview() {
       S.phase = 'review'; save();
-      var R = S.reviewData;
       var c = [];
-      c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' +
-        (R.resolved ? 'Reviewing the data every week is how you catch problems before the client does.' :
-          'Read the agent stats against the team average. Someone gaming AUX, wrap or hold will stick out — flag them to a Team Leader to act.') + '</div></div>');
-
-      // arrival insight
-      c.push('<div class="panel"><h4>📞 How &amp; when calls arrived</h4><p class="small">' + R.arrival + '</p></div>');
-
-      // agent audit
-      c.push('<div class="panel"><h3>🕵️ Agent behaviour audit</h3>' +
-        '<p class="small">' + (R.resolved ? 'Audit closed.' : 'Spot the agent whose numbers are out of line with the team, then escalate to their Team Leader.') + '</p>');
-      c.push('<table class="grid"><thead><tr><th>Agent</th><th>Calls<br>handled</th><th>AHT</th><th>Not-ready<br>(AUX) %</th><th>Hold %</th>' + (R.resolved ? '' : '<th>Action</th>') + '</tr></thead><tbody>');
-      for (var i = 0; i < R.agents.length; i++) {
-        var a = R.agents[i];
-        var rowCls = (R.resolved && i === R.culprit) ? 'cul' : '';
-        c.push('<tr class="' + rowCls + '"><td class="day">' + a.name + (R.resolved && i === R.culprit ? ' ⚠️' : '') + '</td>' +
-          '<td>' + a.calls + '</td><td>' + a.aht + 's</td><td>' + a.aux + '%</td><td>' + a.hold + '%</td>' +
-          (R.resolved ? '' : '<td><button class="btn" data-coach="' + i + '" style="min-width:64px;padding:2px 8px">Coach</button></td>') + '</tr>');
-      }
-      // team average row
-      var avgAht = Math.round(sum(R.agents.map(function (x) { return x.aht; })) / R.agents.length);
-      var avgAux = r1(sum(R.agents.map(function (x) { return x.aux; })) / R.agents.length);
-      var avgHold = r1(sum(R.agents.map(function (x) { return x.hold; })) / R.agents.length);
-      var avgCalls = Math.round(sum(R.agents.map(function (x) { return x.calls; })) / R.agents.length);
-      c.push('<tr class="avg"><td class="day">Team average</td><td>' + avgCalls + '</td><td>' + avgAht + 's</td><td>' + avgAux + '%</td><td>' + avgHold + '%</td>' + (R.resolved ? '' : '<td>—</td>') + '</tr>');
-      c.push('</tbody></table>');
-
-      if (R.resolved) {
-        c.push('<div class="fx-reveal" style="margin-top:8px">' + R.outcome + '</div>');
-      } else {
-        c.push('<div class="row" style="margin-top:8px"><button class="btn" id="noaction">No issues — take no action</button>' +
-          '<span class="small muted">Flagging the wrong person dents team morale, so read the numbers carefully.</span></div>');
-      }
-      c.push('</div>');
-
-      c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="next">' +
-        (S.week + 1 >= CFG.WEEKS ? 'Finish the year ▶' : 'Continue to Monday, Week ' + (S.week + 2) + ' ▶') + '</button></div>');
-
+      c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' + advisorReviewTip() + '</div></div>');
+      c.push('<div class="tabs"><div class="tab ' + (S.reviewTab === 'audit' ? 'active' : '') + '" id="tab-audit">🕵️ Agent audit</div><div class="tab ' + (S.reviewTab === 'flow' ? 'active' : '') + '" id="tab-flow">📞 Call flow</div></div>');
+      c.push('<div class="panel">' + (S.reviewTab === 'flow' ? renderCallFlow() : renderAudit()) + '</div>');
+      c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="next">' + (S.week + 1 >= CFG.WEEKS ? 'Finish the year ▶' : 'Continue to Monday, Week ' + (S.week + 2) + ' ▶') + '</button></div>');
       $('screen').innerHTML = c.join('');
-      if (!R.resolved) {
-        var btns = $('screen').querySelectorAll('button[data-coach]');
-        for (var b = 0; b < btns.length; b++) btns[b].addEventListener('click', function (e) { resolveReview(parseInt(e.target.dataset.coach, 10)); });
-        $('noaction').addEventListener('click', function () { resolveReview(-1); });
-      }
+
+      $('tab-audit').addEventListener('click', function () { S.reviewTab = 'audit'; save(); enterReview(); });
+      $('tab-flow').addEventListener('click', function () { S.reviewTab = 'flow'; save(); enterReview(); });
       $('next').addEventListener('click', nextWeek);
-      setStatus('Data review — investigate the week and act on what you find.');
+
+      if (S.reviewTab === 'flow') {
+        var dbtns = $('screen').querySelectorAll('button[data-rday]');
+        for (var i = 0; i < dbtns.length; i++) dbtns[i].addEventListener('click', function (e) { S.reviewDay = parseInt(e.target.dataset.rday, 10); save(); enterReview(); });
+      } else {
+        var R = S.reviewData;
+        var heads = $('screen').querySelectorAll('th.sortable');
+        for (var hh = 0; hh < heads.length; hh++) heads[hh].addEventListener('click', function (e) {
+          var k = e.target.dataset.sort; if (R.sortKey === k) R.sortDir *= -1; else { R.sortKey = k; R.sortDir = (k === 'name' || k === 'team') ? 1 : -1; } save(); enterReview();
+        });
+        if (!R.submitted) {
+          var fbtn = $('submit-find'); if (fbtn) fbtn.addEventListener('click', submitFindings);
+          var cbx = $('screen').querySelectorAll('input[data-flag]');
+          for (var b = 0; b < cbx.length; b++) cbx[b].addEventListener('change', function () {
+            var n = $('screen').querySelectorAll('input[data-flag]:checked').length; var fc = $('flag-count'); if (fc) fc.textContent = n;
+          });
+        }
+      }
+      setStatus('Data review — drill into the call flow and audit the agents.');
     }
 
-    function resolveReview(idx) {
-      var R = S.reviewData;
-      if (R.resolved) return;
-      R.resolved = true;
-      var culpritName = R.agents[R.culprit].name;
-      var dimText = { aux: 'excessive not-ready (AUX) time', aht: 'inflated handle times', hold: 'parking callers on hold' }[R.dim];
-      if (idx === -1) {
-        R.outcome = '🤷 You let it slide. ' + culpritName + ' was quietly ' + dimText + ' — the dodgy-behaviour index stays where it is.';
-      } else if (idx === R.culprit) {
-        S.dodgy = clamp(S.dodgy - 0.05, 0, 1);
-        S.trust.team = clamp(S.trust.team + 2, 0, 100);
-        R.outcome = '✅ Good catch — ' + culpritName + ' was ' + dimText + '. Escalated to their TL and coached. Dodgy-behaviour index drops to <b>' + pct(S.dodgy) + '</b> and the TLs respect the data-driven call (Team +2).';
-      } else {
-        S.trust.team = clamp(S.trust.team - 1, 0, 100);
-        R.outcome = '❌ ' + R.agents[idx].name + '\'s numbers were within normal range — the real culprit was <b>' + culpritName + '</b> (' + dimText + '). Singling out the wrong person stung morale (Team −1).';
+    function renderCallFlow() {
+      var dr = S.lastResult.dayRes[S.reviewDay], iv = intervalsFor(dr.calls, dr.phones, dr.aht);
+      var c = [];
+      c.push('<h3>📞 Call flow — intraday detail</h3>');
+      c.push('<div class="row" style="margin-bottom:6px">');
+      for (var d = 0; d < S.lastResult.dayRes.length; d++) {
+        var ddr = S.lastResult.dayRes[d];
+        c.push('<button class="btn ' + (d === S.reviewDay ? 'pressed' : '') + '" data-rday="' + d + '" style="min-width:auto;padding:3px 8px">' + DOW[d] + ' <span class="' + (ddr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + Math.round(ddr.sl * 100) + '%</span></button>');
       }
-      save();
-      renderHUD();
-      enterReview();
+      c.push('</div>');
+      c.push('<p class="small">' + DOW[dr.d] + ' ' + fmtDate(dateFor(S.week, dr.d)) + ' — ' + dr.calls.toLocaleString() + ' calls, ~' + Math.round(dr.phones) + ' agents on phones, day SL <b class="' + (dr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(dr.sl) + '</b>.</p>');
+      var maxCalls = 0; for (var m = 0; m < iv.length; m++) maxCalls = Math.max(maxCalls, iv[m].calls);
+      var worstH = 0; for (var w = 1; w < iv.length; w++) if (iv[w].sl < iv[worstH].sl) worstH = w;
+      c.push('<table class="grid"><thead><tr><th>Time</th><th>Calls offered</th><th>Arrivals</th><th>Agents</th><th>Service level</th><th>Abandoned</th></tr></thead><tbody>');
+      for (var h = 0; h < iv.length; h++) {
+        var it = iv[h], barW = maxCalls > 0 ? (it.calls / maxCalls) * 100 : 0;
+        c.push('<tr class="' + (h === worstH && it.sl < CFG.SLA_TARGET ? 'cul' : '') + '"><td class="day">' + CFG.OPEN_HOURS[h] + '</td><td>' + Math.round(it.calls).toLocaleString() + '</td><td><div class="bar"><i style="width:' + barW + '%"></i></div></td><td>' + Math.round(it.phones) + '</td><td class="' + (it.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(it.sl) + '</td><td>' + Math.round(it.aband) + '</td></tr>');
+      }
+      c.push('</tbody></table>');
+      c.push('<p class="small" style="margin-top:6px">' + flowInsight(dr, iv, worstH) + '</p>');
+      return c.join('');
+    }
+    function flowInsight(dr, iv, worstH) {
+      if (dr.sl >= CFG.SLA_TARGET + 0.02) return '✅ This day held up well across every interval — staffing matched the arrival curve.';
+      if (iv[worstH].sl < CFG.SLA_TARGET) return '🔎 Service dipped hardest around <b>' + CFG.OPEN_HOURS[worstH] + '</b> — the arrival peak outran your agents. Front-loading the roster toward the busy intervals would lift this.';
+      return 'ℹ️ Coverage was broadly even; the shortfall was spread across the day rather than one peak.';
+    }
+
+    function renderAudit() {
+      var R = S.reviewData;
+      var cols = [
+        { k: 'name', label: 'Agent', fmt: function (a) { return a.name; } },
+        { k: 'team', label: 'Team', fmt: function (a) { return a.team; } },
+        { k: 'calls', label: 'Calls', fmt: function (a) { return a.calls; } },
+        { k: 'aht', label: 'AHT', fmt: function (a) { return a.aht + 's'; } },
+        { k: 'aux', label: 'AUX%', fmt: function (a) { return a.aux + '%'; } },
+        { k: 'acw', label: 'Wrap%', fmt: function (a) { return a.acw + '%'; } },
+        { k: 'hold', label: 'Hold%', fmt: function (a) { return a.hold + '%'; } },
+        { k: 'adh', label: 'Adh%', fmt: function (a) { return a.adh + '%'; } }
+      ];
+      var rows = R.agents.slice().sort(function (x, y) {
+        var a = x[R.sortKey], b = y[R.sortKey];
+        if (typeof a === 'string') return a < b ? -R.sortDir : a > b ? R.sortDir : 0;
+        return (a - b) * R.sortDir;
+      });
+      var c = [];
+      c.push('<h3>🕵️ Agent behaviour audit — 24 agents, 3 teams</h3>');
+      c.push('<p class="small">' + (R.submitted ? 'Audit submitted. ⚠️ marks the agents who were genuinely out of line.' : 'Compare each agent against the <i>team average</i> row. Click a column header to sort and surface outliers. Tick anyone gaming the system, then submit — <b>flagging someone who\'s fine costs morale</b>, so be sure.') + '</p>');
+      c.push('<div class="scroll-x"><table class="grid audit"><thead><tr>');
+      for (var ci = 0; ci < cols.length; ci++) { var act = R.sortKey === cols[ci].k ? (R.sortDir > 0 ? ' ▲' : ' ▼') : ''; c.push('<th class="sortable" data-sort="' + cols[ci].k + '">' + cols[ci].label + act + '</th>'); }
+      c.push(R.submitted ? '<th>Verdict</th>' : '<th>Flag</th>');
+      c.push('</tr></thead><tbody>');
+      for (var ri = 0; ri < rows.length; ri++) {
+        var a = rows[ri], rowCls = (R.submitted && a.issue) ? 'cul' : '';
+        c.push('<tr class="' + rowCls + '">');
+        for (var cj = 0; cj < cols.length; cj++) c.push('<td' + (cols[cj].k === 'name' ? ' class="day"' : '') + '>' + cols[cj].fmt(a) + (cols[cj].k === 'name' && R.submitted && a.issue ? ' ⚠️' : '') + '</td>');
+        if (R.submitted) {
+          var flagged = !!R.flagged[a.id], mark;
+          if (flagged && a.issue) mark = '<span class="good">✓ caught</span>'; else if (flagged && !a.issue) mark = '<span class="bad">✗ false flag</span>'; else if (!flagged && a.issue) mark = '<span class="warn">⚠ missed</span>'; else mark = '<span class="muted">—</span>';
+          c.push('<td>' + mark + '</td>');
+        } else {
+          c.push('<td><input type="checkbox" data-flag="' + a.id + '"' + (R.flagged[a.id] ? ' checked' : '') + '></td>');
+        }
+        c.push('</tr>');
+      }
+      // team average row
+      var avg = function (k) { return Math.round(sum(R.agents.map(function (x) { return x[k]; })) / R.agents.length * 10) / 10; };
+      c.push('<tr class="avg"><td class="day">Team average</td><td>—</td><td>' + Math.round(avg('calls')) + '</td><td>' + Math.round(avg('aht')) + 's</td><td>' + avg('aux') + '%</td><td>' + avg('acw') + '%</td><td>' + avg('hold') + '%</td><td>' + avg('adh') + '%</td><td>—</td></tr>');
+      c.push('</tbody></table></div>');
+
+      if (R.submitted) {
+        c.push('<div class="fx-reveal" style="margin-top:8px">' + R.outcome + '</div>');
+      } else {
+        c.push('<div class="row" style="margin-top:8px"><button class="btn" id="submit-find">Submit findings</button><span class="small muted">Flagged: <b id="flag-count">' + Object.keys(R.flagged).filter(function (k) { return R.flagged[k]; }).length + '</b> · coaching the right people cuts the dodgy-behaviour index.</span></div>');
+      }
+      return c.join('');
+    }
+
+    function submitFindings() {
+      var R = S.reviewData; if (R.submitted) return;
+      var cbx = $('screen').querySelectorAll('input[data-flag]'); R.flagged = {};
+      for (var i = 0; i < cbx.length; i++) if (cbx[i].checked) R.flagged[parseInt(cbx[i].dataset.flag, 10)] = true;
+      var correct = 0, fp = 0, missed = 0, totalIssues = 0;
+      for (var j = 0; j < R.agents.length; j++) {
+        var a = R.agents[j], flagged = !!R.flagged[a.id];
+        if (a.issue) totalIssues++;
+        if (flagged && a.issue) correct++; else if (flagged && !a.issue) fp++; else if (!flagged && a.issue) missed++;
+      }
+      if (correct > 0) { S.dodgy = clamp(S.dodgy - Math.min(0.10, correct * 0.025), 0, 1); S.trust.team = clamp(S.trust.team + Math.min(4, correct), 0, 100); }
+      if (fp > 0) S.trust.team = clamp(S.trust.team - fp * 2, 0, 100);
+      var parts = [];
+      if (totalIssues === 0 && fp === 0) parts.push('🧐 A clean week — no agents were genuinely out of line, and you didn\'t flag anyone. Good judgement.');
+      else {
+        if (correct > 0) parts.push('✅ <b>' + correct + '</b> correctly coached — dodgy-behaviour index now <b>' + pct(S.dodgy) + '</b>, TLs respect the data-driven calls (Team +' + Math.min(4, correct) + ').');
+        if (fp > 0) parts.push('❌ <b>' + fp + '</b> false flag' + (fp > 1 ? 's' : '') + ' — those agents were within normal range; singling them out stung morale (Team −' + (fp * 2) + ').');
+        if (missed > 0) parts.push('⚠ <b>' + missed + '</b> real issue' + (missed > 1 ? 's' : '') + ' slipped through — they\'re marked now; that behaviour keeps leaking capacity.');
+        if (totalIssues === 0 && fp === 0) {}
+      }
+      R.outcome = parts.join(' '); R.submitted = true;
+      save(); renderHUD(); enterReview();
     }
 
     function nextWeek() {
       if (S.budget < CFG.BANKRUPT) return gameOver('finance');
       if (S.trust.client <= CFG.CLIENT_FLOOR) return gameOver('client');
       if (S.hc < CFG.MIN_HC) return gameOver('ops');
-      S.week++;
-      if (S.week >= CFG.WEEKS) return yearEnd();
-      save();
-      enterMeeting();
+      S.week++; if (S.week >= CFG.WEEKS) return yearEnd();
+      save(); enterMeeting();
     }
 
     /* =======================================================================
@@ -1146,110 +991,86 @@
       var map = {
         finance: ['💸 Funding pulled', 'The budget ran too deep into the red (' + money(S.budget) + '). Finance has pulled the plug on the operation.'],
         client: ['📞 Account lost', 'After chronic service-level misses, client trust hit rock bottom and they\'ve taken the contract elsewhere.'],
-        ops: ['🏚️ Operational collapse', 'Headcount fell to ' + S.hc + ' — there aren\'t enough agents left to run the floor. The wheels came off.']
+        ops: ['🏚️ Operational collapse', 'Headcount fell to ' + S.hc + ' — there aren\'t enough agents left to run the floor.']
       };
       var msg = map[kind];
-      $('screen').innerHTML = '<div class="panel center"><h3>' + msg[0] + '</h3><p>' + msg[1] + '</p>' +
-        '<p class="small muted">You reached Week ' + (S.week + 1) + ' with a YTD service level of <b>' + pct1(ytdSLA()) + '</b>.</p>' +
-        '<p style="margin-top:12px"><button class="btn big-btn" id="restart">Start a new financial year</button></p></div>';
-      $('restart').addEventListener('click', confirmNew);
-      setStatus('Game over.');
+      $('screen').innerHTML = '<div class="panel center"><h3>' + msg[0] + '</h3><p>' + msg[1] + '</p><p class="small muted">You reached Week ' + (S.week + 1) + ' with a YTD service level of <b>' + pct1(ytdSLA()) + '</b>.</p><p style="margin-top:12px"><button class="btn big-btn" id="restart">Start a new financial year</button></p></div>';
+      $('restart').addEventListener('click', confirmNew); setStatus('Game over.');
     }
-
     function yearEnd() {
       S.phase = 'over'; save();
       var y = ytdSLA(), budgetOK = S.budget >= 0, grade, blurb;
-      if (y >= CFG.SLA_TARGET && budgetOK && S.trust.client >= 60) { grade = 'A — WFM Analyst of the Year'; blurb = 'You held the line all year, kept the books black and the client delighted. Textbook workforce management.'; }
-      else if (y >= CFG.SLA_TARGET - 0.01) { grade = budgetOK ? 'B — Target met' : 'B− — Target met, over budget'; blurb = 'You delivered the service level. ' + (budgetOK ? 'Solid year.' : 'It cost more than it should have, but the number is the number.'); }
+      if (y >= CFG.SLA_TARGET && budgetOK && S.trust.client >= 60) { grade = 'A — WFM Analyst of the Year'; blurb = 'You held the line all year, kept the books black and the client delighted.'; }
+      else if (y >= CFG.SLA_TARGET - 0.01) { grade = budgetOK ? 'B — Target met' : 'B− — Target met, over budget'; blurb = 'You delivered the service level. ' + (budgetOK ? 'Solid year.' : 'It cost more than it should have.'); }
       else if (y >= CFG.SLA_TARGET - 0.05) { grade = 'C — Near miss'; blurb = 'So close. A few better-planned weeks and you\'d have held 80.'; }
-      else { grade = 'D — Below standard'; blurb = 'The year-to-date service level slipped well under target. Tough year in the chair.'; }
+      else { grade = 'D — Below standard'; blurb = 'The year-to-date service level slipped well under target.'; }
       if (y > bestSLA()) saveBest(y);
-
-      $('screen').innerHTML = '<div class="panel center"><h3>🎓 Financial year complete!</h3>' +
-        '<div class="kpi-strip" style="margin:10px 0">' +
-          '<div class="kpi"><div class="k">Final YTD service</div><div class="v ' + (y >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(y) + '</div></div>' +
-          '<div class="kpi"><div class="k">Budget</div><div class="v ' + (budgetOK ? 'good' : 'bad') + '">' + money(S.budget) + '</div></div>' +
-          '<div class="kpi"><div class="k">Headcount</div><div class="v">' + S.hc + '</div></div>' +
-          '<div class="kpi"><div class="k">Client trust</div><div class="v">' + Math.round(S.trust.client) + '</div></div></div>' +
-        '<h3 style="margin-top:8px">' + grade + '</h3><p>' + blurb + '</p>' +
-        '<p class="small muted">Best YTD service level on this machine: ' + pct1(bestSLA()) + '</p>' +
-        '<p style="margin-top:12px"><button class="btn big-btn" id="restart">Play another year</button></p></div>';
-      $('restart').addEventListener('click', confirmNew);
-      setStatus('Year complete — ' + grade);
+      $('screen').innerHTML = '<div class="panel center"><h3>🎓 Financial year complete!</h3><div class="kpi-strip" style="margin:10px 0"><div class="kpi"><div class="k">Final YTD service</div><div class="v ' + (y >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(y) + '</div></div><div class="kpi"><div class="k">Budget</div><div class="v ' + (budgetOK ? 'good' : 'bad') + '">' + money(S.budget) + '</div></div><div class="kpi"><div class="k">Headcount</div><div class="v">' + S.hc + '</div></div><div class="kpi"><div class="k">Client trust</div><div class="v">' + Math.round(S.trust.client) + '</div></div></div><h3 style="margin-top:8px">' + grade + '</h3><p>' + blurb + '</p><p class="small muted">Best YTD on this machine: ' + pct1(bestSLA()) + '</p><p style="margin-top:12px"><button class="btn big-btn" id="restart">Play another year</button></p></div>';
+      $('restart').addEventListener('click', confirmNew); setStatus('Year complete — ' + grade);
     }
-
     function bestSLA() { try { return parseFloat(localStorage.getItem('wfm_best') || CFG.SLA_TARGET); } catch (e) { return CFG.SLA_TARGET; } }
     function saveBest(v) { try { localStorage.setItem('wfm_best', String(v)); } catch (e) {} }
 
     /* =======================================================================
-       ADVISOR (Clippo)
+       ADVISOR
        ======================================================================= */
     function advisorMeetingTip(first, prev) {
-      if (first) return 'You start mildly under-staffed on purpose. Weekdays carry all the volume now — Monday is your biggest day.';
+      if (first) return 'Weekdays carry all the volume now — Monday is your biggest day. The grilling answers hide their effect until you pick, so think before you commit.';
       if (prev && prev.sla < prev.committed) return 'You missed your commitment. Owning it costs less trust long-term than spin the data later contradicts.';
-      if (S.engagement < 50) return 'Engagement is low — that\'s feeding sick leave, AUX abuse and attrition all at once. An engagement initiative is cheaper than constant rehiring.';
-      if (S.trust.fin < 45) return 'Finance trust is low, so they won\'t approve hires. Run a tight, profitable week or two to win them back before you ask.';
-      return 'Watch the grilling answers — the room\'s reaction is hidden until you commit to a line, so think before you pick.';
+      if (S.engagement < 50) return 'Engagement is low — that\'s feeding sick leave, AUX abuse and attrition. An engagement initiative is cheaper than constant rehiring.';
+      if (S.trust.fin < 45) return 'Finance trust is low, so they won\'t approve hires. Run a tight, profitable week to win them back.';
+      return 'Catching dodgy agents in the data review compounds — every one you coach drags the whole floor\'s behaviour back toward the average.';
     }
     function advisorForecastTip() {
-      if (S.campaign) return 'The business says the campaign adds ~10%. Your historical campaigns ran hotter — trust your data over their optimism, or you\'ll under-staff.';
-      if (weekHasHoliday(S.week)) return 'Holiday week: a public holiday runs at a fraction of normal volume, so your weekly total should come in lower than a standard week.';
-      if (CFG.SEASON[S.week] >= 1.2) return 'Peak season — the recent average will lag the climb. Forecast above last week, not at it.';
-      return 'The recent average is your anchor; then adjust for the trend, the season and anything in the signals box.';
+      if (S.campaign) return 'The business says the campaign adds ~10%. Your historical campaigns ran hotter — trust your data, or you\'ll under-staff every day this week.';
+      if (weekHasHoliday(S.week)) return 'Holiday week: drop the holiday\'s day right down — a public holiday runs at a fraction of normal volume.';
+      if (CFG.SEASON[S.week] >= 1.2) return 'Peak season — the weekday averages will lag the climb. Forecast above them, especially Monday.';
+      return 'Set each day from its own weekday average, then nudge for the trend and any signals. Monday runs hottest, Friday lightest.';
     }
     function advisorPlanTip() {
       if (CFG.SEASON[S.week] >= 1.2) return 'Heavy week — if you didn\'t hire weeks ago, lean on overtime and accept some occupancy pain.';
-      if (weekHasHoliday(S.week)) return 'Holiday week: volume drops but so does your available staff (leave), and rostering the holiday costs penalty rates. Plan light, not absent.';
-      return '"Roster needed" already grosses up for shrinkage — that\'s why it\'s bigger than "on phones needed". You staff bodies, not just seats.';
+      if (weekHasHoliday(S.week)) return 'Holiday week: volume drops but so does available staff (leave), and rostering the holiday costs penalty rates.';
+      return '"Roster needed" already grosses up for shrinkage — that\'s why it\'s bigger than "on phones needed".';
     }
     function advisorResultTip(res) {
-      if (res.fErr >= 0.15) return 'Your forecast was off by ' + pct(res.fErr) + ' — that\'s most of why the staffing missed. Forecasting accurately is the whole foundation.';
-      if (res.occ > 0.9) return 'Occupancy over 90% hits SLA today and burns the team for next month. High occupancy is borrowed against future attrition.';
-      if (!res.hit && res.sla >= CFG.SLA_TARGET) return 'You beat the 80% target but missed your own commitment — calibration matters as much as performance in that room.';
-      if (res.quits >= 2) return 'That attrition spike will bite in 4 weeks when you\'re short again. Engagement now is cheaper than recruitment later.';
-      if (res.sla < CFG.SLA_TARGET) return 'Under target. Was it the forecast, shrinkage or AHT? The data review will help you find out.';
-      return 'Clean week. Now review the data — catching a dodgy agent compounds over the year.';
+      if (res.fErr >= 0.15) return 'Your forecast was off by ' + pct(res.fErr) + ' — that\'s most of why the staffing missed. Accurate forecasting is the foundation.';
+      if (res.occ > 0.9) return 'Occupancy over 90% hits SLA today and burns the team next month. High occupancy is borrowed against future attrition.';
+      if (!res.hit && res.sla >= CFG.SLA_TARGET) return 'You beat 80% but missed your own commitment — calibration matters as much as performance.';
+      if (res.sla < CFG.SLA_TARGET) return 'Under target. Use the call-flow view to see which intervals broke, and the audit to find behaviour leaking capacity.';
+      return 'Clean week. Now review the data — the call flow shows where time was lost, the audit shows who.';
+    }
+    function advisorReviewTip() {
+      if (S.reviewData && S.reviewData.submitted) return 'Reviewing the data every week is how you catch problems before the client does.';
+      if (S.reviewTab === 'flow') return 'Find the intervals where service dipped — that\'s where your roster and the arrival curve came apart.';
+      return 'Sort by AUX%, Wrap%, Hold%, AHT and Adherence in turn — a real outlier floats to the top of one of them. The team-average row is your benchmark.';
     }
 
     /* =======================================================================
        DIALOGS / MENU
        ======================================================================= */
     function dialog(title, bodyHTML, actions) {
-      $('dlg-title').textContent = title;
-      $('dlg-body').innerHTML = bodyHTML;
+      $('dlg-title').textContent = title; $('dlg-body').innerHTML = bodyHTML;
       var act = $('dlg-actions'); act.innerHTML = '';
-      (actions || [{ t: 'OK', f: closeDialog }]).forEach(function (a) {
-        var b = document.createElement('button'); b.className = 'btn'; b.textContent = a.t;
-        b.addEventListener('click', a.f); act.appendChild(b);
-      });
+      (actions || [{ t: 'OK', f: closeDialog }]).forEach(function (a) { var b = document.createElement('button'); b.className = 'btn'; b.textContent = a.t; b.addEventListener('click', a.f); act.appendChild(b); });
       $('dlg').style.display = 'flex';
     }
     function closeDialog() { $('dlg').style.display = 'none'; }
-
-    function confirmNew() {
-      dialog('New game', 'Start a fresh financial year? Your current game will be erased.', [
-        { t: 'Start fresh', f: function () { closeDialog(); newGame(); } },
-        { t: 'Cancel', f: closeDialog }
-      ]);
-    }
+    function confirmNew() { dialog('New game', 'Start a fresh financial year? Your current game will be erased.', [{ t: 'Start fresh', f: function () { closeDialog(); newGame(); } }, { t: 'Cancel', f: closeDialog }]); }
     function showHelp() {
       dialog('How to Play — WFM Tycoon',
         '<p>You are <b>Workforce Management</b> for a contact centre open <b>Monday–Friday</b>. Survive a 52-week financial year keeping the <b>service level near ' + pct(CFG.SLA_TARGET) + '</b>.</p>' +
         '<p style="margin-top:8px"><b>Each week:</b></p><ol style="margin-left:18px">' +
-        '<li><b>Monday meeting</b> — answer the grilling (effects are hidden until you pick — one option is a trap), spend <b>political capital</b> on asks, then <b>commit</b> to a number.</li>' +
-        '<li><b>Forecast</b> — study the historical data and signals, then <b>set the week\'s expected call volume yourself</b>. Your number drives staffing.</li>' +
+        '<li><b>Monday meeting</b> — answer the grilling (effects hidden until you pick; one option is a trap), spend <b>capital</b> on asks, then <b>commit</b> to a number.</li>' +
+        '<li><b>Forecast</b> — read the weekly &amp; daily history and signals, then <b>set each day\'s expected calls yourself</b>.</li>' +
         '<li><b>Plan</b> — spread your workforce across Mon–Fri to cover your forecast.</li>' +
-        '<li><b>Run</b> — reality hits (sick leave, dodgy AUX/wrap, volume swings) and the actuals land.</li>' +
-        '<li><b>Review the data</b> — investigate agent behaviour and arrival patterns; catch the agent gaming the system and coach them via their TL.</li>' +
+        '<li><b>Run</b> — reality hits and the actuals land.</li>' +
+        '<li><b>Review</b> — drill into the <b>call flow</b> (hour-by-hour) to see where service broke, and audit <b>24 agents across 3 teams</b> to catch anyone gaming AUX/wrap/hold/AHT/adherence. Coach the right ones; false flags cost morale.</li>' +
         '</ol>' +
         '<p style="margin-top:8px"><b>You lose if:</b> the budget collapses, the client walks, or the floor empties through attrition.</p>' +
-        '<p style="margin-top:8px" class="muted">Tips: forecast accuracy is everything — under-forecast and you under-staff; training takes ' + CFG.TRAIN_WEEKS + ' weeks so hire ahead of the December peak; high occupancy = future burnout. Progress autosaves.</p>',
+        '<p style="margin-top:8px" class="muted">Tips: forecast accuracy is everything; sort the audit columns to surface outliers against the team average; training takes ' + CFG.TRAIN_WEEKS + ' weeks so hire ahead of the peak. Progress autosaves.</p>',
         [{ t: 'Got it', f: closeDialog }]);
     }
-    function showAbout() {
-      dialog('About', '<p><b>WFM Tycoon — Service Level 80</b></p><p>A workforce-management sim: player-driven forecasting, Erlang staffing, shrinkage, data review, and the politics of the Monday meeting. Built for mondayjeffrey.com.</p><p class="small muted">Erlang C engine, AU public-holiday calendar, Mon–Fri operation, FY26/27.</p>', [{ t: 'Close', f: closeDialog }]);
-    }
-
+    function showAbout() { dialog('About', '<p><b>WFM Tycoon — Service Level 80</b></p><p>A workforce-management sim: daily forecasting, Erlang staffing, intraday call-flow analysis, a 24-agent behaviour audit, and the politics of the Monday meeting. Built for mondayjeffrey.com.</p><p class="small muted">Erlang C engine, AU public-holiday calendar, Mon–Fri operation, FY26/27.</p>', [{ t: 'Close', f: closeDialog }]); }
     function setStatus(s) { $('status-left').textContent = s; $('status-right').textContent = 'YTD ' + pct1(ytdSLA()) + ' · ' + money(S.budget); }
 
     /* =======================================================================
@@ -1264,7 +1085,6 @@
       else if (S.phase === 'over') { if (S.week >= CFG.WEEKS) yearEnd(); else enterMeeting(); }
       else enterMeeting();
     }
-
     $('m-new').addEventListener('click', confirmNew);
     $('m-help').addEventListener('click', showHelp);
     $('m-about').addEventListener('click', showAbout);
@@ -1277,22 +1097,18 @@
       if (!S.weekInits) S.weekInits = { engagement: false, coaching: false, training: false };
       if (!S.callHistory) S.callHistory = [];
       if (!S.history) S.history = [];
+      if (S.reviewTab == null) S.reviewTab = 'audit';
+      if (S.reviewDay == null) S.reviewDay = 0;
       resume();
     } else {
       renderHUDPlaceholder();
-      $('screen').innerHTML = '<div class="panel center"><h3>📞 WFM Tycoon — Service Level 80</h3>' +
-        '<p>Run workforce management for a contact centre across one financial year.</p>' +
-        '<p class="small muted">Forecast the calls yourself from real data, staff with Erlang, fight shrinkage, sick leave, dodgy phone behaviour, attrition and the budget — review the data each week and front up to the business every Monday. Hold the service level at <b>' + pct(CFG.SLA_TARGET) + '</b> (open Mon–Fri).</p>' +
-        '<p style="margin-top:14px"><button class="btn big-btn" id="start">Start the financial year ▶</button></p>' +
-        '<p class="small"><a href="#" id="howto">How to play</a></p></div>';
+      $('screen').innerHTML = '<div class="panel center"><h3>📞 WFM Tycoon — Service Level 80</h3><p>Run workforce management for a contact centre across one financial year.</p><p class="small muted">Forecast each day from real data, staff with Erlang, fight shrinkage, sick leave, dodgy phone behaviour, attrition and the budget — drill into the call flow and audit the floor each week, and front up to the business every Monday. Hold the service level at <b>' + pct(CFG.SLA_TARGET) + '</b> (open Mon–Fri).</p><p style="margin-top:14px"><button class="btn big-btn" id="start">Start the financial year ▶</button></p><p class="small"><a href="#" id="howto">How to play</a></p></div>';
       $('start').addEventListener('click', newGame);
       $('howto').addEventListener('click', function (e) { e.preventDefault(); showHelp(); });
       setStatusBoot();
     }
-
     function renderHUDPlaceholder() { $('hud').innerHTML = '<div class="hud-cell" style="grid-column:1/-1"><div class="k">Welcome</div><div class="v">WFM Tycoon</div><div class="hud-sub">Press start to begin FY26/27</div></div>'; }
     function setStatusBoot() { $('status-left').textContent = 'Ready. Press start to begin.'; $('status-right').textContent = 'Best YTD ' + pct1(bestSLA()); }
-
   })();
   </script>
 </body>
