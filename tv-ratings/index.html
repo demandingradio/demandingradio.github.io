@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Ratings - Monday Jeffrey</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* Back-to-desktop link — full-page apps have no Win95 window chrome,
+           so this is how visitors return to the hub (matches Footy/Cosmic). */
+        .back-link {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 100;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.16);
+            transform: translateY(-2px);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            font-size: 3em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            margin-bottom: 10px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { filter: brightness(1); }
+            to { filter: brightness(1.2); }
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px 25px;
+            font-size: 1.1em;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.3);
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        button {
+            padding: 15px 40px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 10px 30px -10px rgba(102, 126, 234, 0.5);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px -10px rgba(102, 126, 234, 0.7);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #667eea;
+        }
+
+        .loading::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        .error {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #ff6b6b;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .results {
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .show-title {
+            font-size: 2em;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        .heatmap-container {
+            overflow-x: auto;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+        }
+
+        .heatmap {
+            display: inline-block;
+            min-width: 100%;
+        }
+
+        .heatmap-row {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 2px;
+            align-items: center;
+        }
+
+        .heatmap-label {
+            width: 60px;
+            text-align: right;
+            padding-right: 15px;
+            font-weight: 600;
+            color: #a0a0a0;
+            font-size: 0.9em;
+        }
+
+        .heatmap-cell {
+            width: 60px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            font-size: 0.85em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+
+        .heatmap-cell.empty {
+            background: transparent;
+            cursor: default;
+        }
+
+        .heatmap-cell.empty:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .rating-great {
+            background: #27ae60;
+            color: #000;
+        }
+
+        .rating-good {
+            background: #f1c40f;
+            color: #000;
+        }
+
+        .rating-regular {
+            background: #e67e22;
+            color: #000;
+        }
+
+        .rating-bad {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .rating-garbage {
+            background: #2c3e50;
+            color: #fff;
+        }
+
+        .rating-na {
+            background: #34495e;
+            color: #fff;
+        }
+
+        .season-header {
+            font-weight: 700;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 5px;
+        }
+
+        .average-row .heatmap-cell {
+            background: rgba(102, 126, 234, 0.3) !important;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .divider {
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 10px 0;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .heatmap-cell.low-votes {
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .heatmap-cell.low-votes::after {
+            content: '*';
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            font-size: 0.7em;
+            opacity: 0.6;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 3px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.85em;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .tooltip.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .heatmap-cell {
+                width: 45px;
+                height: 30px;
+                font-size: 0.75em;
+            }
+
+            .search-container {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .back-link {
+                position: static;
+                margin-bottom: 16px;
+                align-self: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">&larr; Desktop</a>
+
+    <div class="container">
+        <h1>TV Show Rating Heatmap</h1>
+        <p class="subtitle">Visualize episode ratings across all seasons</p>
+
+        <div class="search-container">
+            <input type="text" id="showInput" placeholder="Enter TV show name (e.g., Breaking Bad, The Office)" autofocus>
+            <button id="searchBtn" onclick="searchShow()">Search</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        const API_KEY = "68c0d507";
+        const TMDB_API_KEY = "452505076383ea1ca45efbfd8cf9ac67";
+        const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+        const resultsDiv = document.getElementById('results');
+        const searchBtn = document.getElementById('searchBtn');
+        const showInput = document.getElementById('showInput');
+        const tooltip = document.getElementById('tooltip');
+
+        // Cache for TMDB show IDs
+        const tmdbShowCache = {};
+
+        // Load cache from session storage
+        try {
+            const cached = sessionStorage.getItem('tmdbShowCache');
+            if (cached) {
+                Object.assign(tmdbShowCache, JSON.parse(cached));
+            }
+        } catch (e) {
+            console.error('Cache load error:', e);
+        }
+
+        // Save cache to session storage
+        function saveCache() {
+            try {
+                sessionStorage.setItem('tmdbShowCache', JSON.stringify(tmdbShowCache));
+            } catch (e) {
+                console.error('Cache save error:', e);
+            }
+        }
+
+        showInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                searchShow();
+            }
+        });
+
+        async function searchTMDBShow(showName) {
+            try {
+                console.log(`Searching TMDB for: ${showName}`);
+
+                // Extract year if present (e.g., "The Office (2005)" -> "The Office", "2005")
+                const yearMatch = showName.match(/^(.+?)\s*\((\d{4})\)$/);
+                let searchQuery = showName;
+                let year = null;
+
+                if (yearMatch) {
+                    searchQuery = yearMatch[1].trim();
+                    year = yearMatch[2];
+                }
+
+                let searchUrl = `${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchQuery)}`;
+                if (year) {
+                    searchUrl += `&first_air_date_year=${year}`;
+                }
+
+                console.log(`TMDB Search URL: ${searchUrl}`);
+                const response = await fetch(searchUrl);
+                console.log(`TMDB Search Response Status: ${response.status}`);
+
+                if (!response.ok) {
+                    throw new Error(`TMDB API error: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log(`TMDB Search Results:`, data);
+
+                if (data.results && data.results.length > 0) {
+                    console.log(`Found TMDB show: ${data.results[0].name} (ID: ${data.results[0].id})`);
+                    return data.results[0].id;
+                }
+                console.log('No TMDB results found');
+                return null;
+            } catch (error) {
+                console.error('TMDB search error:', error);
+                return null;
+            }
+        }
+
+        async function getTMDBEpisodeRating(tmdbShowId, season, episode) {
+            try {
+                const episodeUrl = `${TMDB_BASE_URL}/tv/${tmdbShowId}/season/${season}/episode/${episode}?api_key=${TMDB_API_KEY}`;
+                console.log(`Fetching TMDB episode S${season}E${episode}: ${episodeUrl}`);
+
+                const response = await fetch(episodeUrl);
+
+                if (!response.ok) {
+                    console.error(`TMDB episode fetch failed: ${response.status} ${response.statusText}`);
+                    return 'N/A';
+                }
+
+                const data = await response.json();
+
+                if (data.vote_average && data.vote_count > 0) {
+                    // Accept any rating with at least 1 vote, but track the source
+                    const rating = data.vote_average.toFixed(1);
+                    console.log(`TMDB episode S${season}E${episode}: Rating ${rating} (${data.vote_count} votes)`);
+                    return { rating, votes: data.vote_count, source: 'tmdb' };
+                } else {
+                    console.log(`TMDB episode S${season}E${episode}: No votes`);
+                }
+                return null;
+            } catch (error) {
+                console.error(`TMDB episode fetch error for S${season}E${episode}:`, error);
+                return null;
+            }
+        }
+
+        // Batch fetch TMDB ratings with rate limiting
+        async function batchFetchTMDBRatings(tmdbShowId, episodes) {
+            const results = [];
+            const batchSize = 5; // Process 5 episodes at a time
+
+            for (let i = 0; i < episodes.length; i += batchSize) {
+                const batch = episodes.slice(i, i + batchSize);
+                const batchPromises = batch.map(ep =>
+                    getTMDBEpisodeRating(tmdbShowId, ep.season, ep.episode)
+                        .then(result => ({ ...ep, ...(result || {}) }))
+                );
+
+                const batchResults = await Promise.all(batchPromises);
+                results.push(...batchResults);
+
+                // Small delay between batches to avoid rate limiting
+                if (i + batchSize < episodes.length) {
+                    await new Promise(resolve => setTimeout(resolve, 250));
+                }
+            }
+
+            return results;
+        }
+
+        function getRatingClass(rating) {
+            if (rating === 'N/A' || rating === '-') return 'rating-na';
+
+            const ratingFloat = parseFloat(rating);
+            if (ratingFloat >= 8.5) return 'rating-great';
+            if (ratingFloat >= 7.5) return 'rating-good';
+            if (ratingFloat >= 6.5) return 'rating-regular';
+            if (ratingFloat >= 5.5) return 'rating-bad';
+            return 'rating-garbage';
+        }
+
+        async function searchShow() {
+            const showName = showInput.value.trim();
+            if (!showName) return;
+
+            searchBtn.disabled = true;
+            resultsDiv.innerHTML = '<div class="loading">Fetching show data</div>';
+
+            try {
+                // First, find the show
+                let showUrl = `https://www.omdbapi.com/?t=${encodeURIComponent(showName)}&type=series&apikey=${API_KEY}`;
+                let response = await fetch(showUrl);
+                let showData = await response.json();
+
+                if (showData.Response !== 'True') {
+                    // Try search instead
+                    const searchUrl = `https://www.omdbapi.com/?s=${encodeURIComponent(showName)}&type=series&apikey=${API_KEY}`;
+                    const searchResponse = await fetch(searchUrl);
+                    const searchData = await searchResponse.json();
+
+                    if (searchData.Response === 'True' && searchData.Search) {
+                        const firstResult = searchData.Search[0];
+                        showUrl = `https://www.omdbapi.com/?i=${firstResult.imdbID}&apikey=${API_KEY}`;
+                        response = await fetch(showUrl);
+                        showData = await response.json();
+                    } else {
+                        throw new Error(`No TV show found with the name '${showName}'`);
+                    }
+                }
+
+                const totalSeasons = parseInt(showData.totalSeasons) || 1;
+                const showTitle = showData.Title || showName;
+
+                // Fetch all seasons
+                const seasonsData = {};
+                const seasonAverages = {};
+                let maxEpisodes = 0;
+                const validSeasons = [];
+                let tmdbShowId = null;
+                const allEpisodesNeedingTMDB = [];
+                let tmdbSuccessCount = 0;
+
+                resultsDiv.innerHTML = `<div class="loading">Loading ${totalSeasons} seasons</div>`;
+
+                for (let season = 1; season <= totalSeasons; season++) {
+                    const seasonUrl = showData.imdbID
+                        ? `https://www.omdbapi.com/?i=${showData.imdbID}&Season=${season}&apikey=${API_KEY}`
+                        : `https://www.omdbapi.com/?t=${encodeURIComponent(showName)}&Season=${season}&apikey=${API_KEY}`;
+
+                    const seasonResponse = await fetch(seasonUrl);
+                    const seasonData = await seasonResponse.json();
+
+                    if (seasonData.Response === 'True' && seasonData.Episodes) {
+                        validSeasons.push(season);
+                        const episodes = seasonData.Episodes;
+                        seasonsData[season] = {};
+
+                        // Process episodes and collect those needing TMDB
+                        for (const episode of episodes) {
+                            const episodeNum = parseInt(episode.Episode);
+                            const rating = episode.imdbRating;
+
+                            console.log(`S${season}E${episodeNum}: OMDB rating = ${rating}`);
+
+                            seasonsData[season][episodeNum] = {
+                                rating: rating,
+                                title: episode.Title
+                            };
+
+                            if (rating === 'N/A') {
+                                allEpisodesNeedingTMDB.push({ season, episode: episodeNum });
+                            }
+                        }
+
+                        maxEpisodes = Math.max(maxEpisodes, episodes.length);
+                    }
+                }
+
+                // Fetch TMDB ratings if needed
+                console.log(`Total episodes needing TMDB: ${allEpisodesNeedingTMDB.length}`);
+                if (allEpisodesNeedingTMDB.length > 0) {
+                    resultsDiv.innerHTML = `<div class="loading">Fetching additional ratings</div>`;
+
+                    // Check cache or search for TMDB show ID
+                    if (tmdbShowCache[showTitle]) {
+                        tmdbShowId = tmdbShowCache[showTitle];
+                        console.log(`Using cached TMDB ID: ${tmdbShowId}`);
+                    } else {
+                        console.log(`No cached TMDB ID, searching...`);
+                        tmdbShowId = await searchTMDBShow(showTitle);
+                        if (tmdbShowId) {
+                            tmdbShowCache[showTitle] = tmdbShowId;
+                            saveCache();
+                        } else {
+                            console.log('Failed to find show on TMDB');
+                        }
+                    }
+
+                    // Batch fetch all TMDB ratings
+                    if (tmdbShowId) {
+                        console.log(`Fetching ${allEpisodesNeedingTMDB.length} missing ratings from TMDB...`);
+                        const tmdbResults = await batchFetchTMDBRatings(tmdbShowId, allEpisodesNeedingTMDB);
+
+                        // Update ratings with TMDB data
+                        tmdbSuccessCount = 0;
+                        let lowVoteCount = 0;
+                        for (const result of tmdbResults) {
+                            if (result.rating) {
+                                seasonsData[result.season][result.episode].rating = result.rating;
+                                seasonsData[result.season][result.episode].source = 'tmdb';
+                                seasonsData[result.season][result.episode].votes = result.votes;
+                                tmdbSuccessCount++;
+                                if (result.votes < 10) {
+                                    lowVoteCount++;
+                                }
+                            }
+                        }
+                        console.log(`TMDB provided ${tmdbSuccessCount} additional ratings (${lowVoteCount} with <10 votes)`);
+                    }
+                }
+
+                // Calculate season averages after all data is collected
+                for (const season of validSeasons) {
+                    const validRatings = [];
+                    Object.values(seasonsData[season]).forEach(episode => {
+                        if (episode.rating !== 'N/A') {
+                            validRatings.push(parseFloat(episode.rating));
+                        }
+                    });
+
+                    if (validRatings.length > 0) {
+                        seasonAverages[season] = (validRatings.reduce((a, b) => a + b, 0) / validRatings.length).toFixed(1);
+                    } else {
+                        seasonAverages[season] = 'N/A';
+                    }
+                }
+
+                if (validSeasons.length === 0) {
+                    throw new Error(`No episode data found for '${showName}'`);
+                }
+
+                // Display the heatmap
+                let totalEpisodes = 0;
+                let ratedEpisodes = 0;
+                for (const season of validSeasons) {
+                    const episodes = Object.values(seasonsData[season]);
+                    totalEpisodes += episodes.length;
+                    ratedEpisodes += episodes.filter(e => e.rating !== 'N/A').length;
+                }
+
+                // Final summary for debugging
+                console.log('=== Final Data Summary ===');
+                console.log(`Total episodes: ${totalEpisodes}`);
+                console.log(`Rated episodes: ${ratedEpisodes} (${Math.round(ratedEpisodes/totalEpisodes*100)}%)`);
+                console.log(`Missing ratings: ${totalEpisodes - ratedEpisodes}`);
+                if (tmdbShowId) {
+                    console.log(`TMDB search successful - filled ${tmdbSuccessCount} gaps`);
+                }
+                console.log('=======================');
+
+                displayHeatmap(showTitle, seasonsData, seasonAverages, maxEpisodes, validSeasons);
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">${error.message}</div>`;
+            } finally {
+                searchBtn.disabled = false;
+            }
+        }
+
+        function displayHeatmap(showTitle, seasonsData, seasonAverages, maxEpisodes, validSeasons) {
+            let html = `
+                <div class="results">
+                    <h2 class="show-title">${showTitle}</h2>
+                    <div class="heatmap-container">
+                        <div class="heatmap">
+            `;
+
+            // Season headers
+            html += '<div class="heatmap-row">';
+            html += '<div class="heatmap-label">Season</div>';
+            validSeasons.forEach(season => {
+                html += `<div class="heatmap-cell season-header">${season}</div>`;
+            });
+            html += '</div>';
+
+            // Average row
+            html += '<div class="heatmap-row average-row">';
+            html += '<div class="heatmap-label">Avg</div>';
+            validSeasons.forEach(season => {
+                const avg = seasonAverages[season];
+                const displayAvg = avg !== 'N/A' ? avg : '-';
+                html += `<div class="heatmap-cell" data-season="${season}" data-type="average">${displayAvg}</div>`;
+            });
+            html += '</div>';
+
+            // Divider
+            html += '<div class="divider"></div>';
+
+            // Episode rows
+            for (let episode = 1; episode <= maxEpisodes; episode++) {
+                html += '<div class="heatmap-row">';
+                html += `<div class="heatmap-label">${episode}</div>`;
+
+                validSeasons.forEach(season => {
+                    const episodeData = seasonsData[season] && seasonsData[season][episode];
+
+                    if (episodeData) {
+                        const rating = episodeData.rating;
+                        const displayRating = rating !== 'N/A' ? parseFloat(rating).toFixed(1) : '-';
+                        const ratingClass = getRatingClass(rating);
+                        const lowVotes = episodeData.votes && episodeData.votes < 10 ? ' low-votes' : '';
+                        html += `<div class="heatmap-cell ${ratingClass}${lowVotes}"
+                                      data-season="${season}"
+                                      data-episode="${episode}"
+                                      data-rating="${rating}"
+                                      data-title="${episodeData.title || ''}"
+                                      data-votes="${episodeData.votes || ''}"
+                                      data-source="${episodeData.source || 'omdb'}">${displayRating}</div>`;
+                    } else {
+                        html += '<div class="heatmap-cell empty"></div>';
+                    }
+                });
+
+                html += '</div>';
+            }
+
+            html += `
+                        </div>
+                    </div>
+
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color rating-great"></div>
+                            <span>8.5+ Great</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color rating-good"></div>
+                            <span>7.5-8.4 Good</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color rating-regular"></div>
+                            <span>6.5-7.4 Regular</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color rating-bad"></div>
+                            <span>5.5-6.4 Bad</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color rating-garbage"></div>
+                            <span>&lt;5.5 Garbage</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color rating-na"></div>
+                            <span>No Rating</span>
+                        </div>
+                    </div>
+                    <p style="text-align: center; color: #888; font-size: 0.85em; margin-top: 10px;">
+                        * indicates ratings with fewer than 10 votes
+                    </p>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+
+            // Add hover tooltips
+            const cells = document.querySelectorAll('.heatmap-cell[data-title]');
+            cells.forEach(cell => {
+                cell.addEventListener('mouseenter', (e) => {
+                    const title = e.target.dataset.title;
+                    const season = e.target.dataset.season;
+                    const episode = e.target.dataset.episode;
+                    const rating = e.target.dataset.rating;
+                    const votes = e.target.dataset.votes;
+                    const source = e.target.dataset.source;
+
+                    if (title) {
+                        let tooltipText = `S${season}E${episode}: ${title}<br>Rating: ${rating}`;
+                        if (source === 'tmdb') {
+                            tooltipText += ` (TMDB${votes ? `, ${votes} votes` : ''})`;
+                        }
+                        tooltip.innerHTML = tooltipText;
+                        tooltip.classList.add('show');
+                    }
+                });
+
+                cell.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('show');
+                });
+
+                cell.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = e.pageX + 10 + 'px';
+                    tooltip.style.top = e.pageY - 40 + 'px';
+                });
+            });
+        }
+    </script>
+</body>
+</html>
