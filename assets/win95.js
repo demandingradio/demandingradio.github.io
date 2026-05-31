@@ -12,7 +12,8 @@
     { label: 'Cosmic Ascent',icon: '\u{1F680}', href: '/cosmic/',       title: 'Cosmic Ascent' },
     { label: 'WFM Tycoon',   icon: '\u{1F4DE}', href: '/wfm/',          title: 'WFM Tycoon' },
     { label: 'WFM Tycoon Y', icon: '\u{1F4F2}', href: '/wfm-y/',        title: 'WFM Tycoon Y' },
-    { label: 'TV Ratings',   icon: '\u{1F4FA}', href: '/tv-ratings/',   title: 'TV Ratings' }
+    { label: 'TV Ratings',   icon: '\u{1F4FA}', href: '/tv-ratings/',   title: 'TV Ratings' },
+    { label: 'Cave Ball',    icon: '\u{1F535}', href: '/cave-ball/',    title: 'Cave Ball' }
   ];
 
   function renderDesktop(container) {

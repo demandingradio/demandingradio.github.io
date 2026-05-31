@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cave Ball - Monday Jeffrey</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Everything renders to this one full-screen canvas. -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Back to the Win95 desktop hub. -->
+  <a id="back-link" href="../index.html">&larr; Desktop</a>
+
+  <!-- Speed haze (opacity driven by velocity). Never eats clicks. -->
+  <div id="speedfx"></div>
+
+  <!-- HUD overlay (doesn't capture clicks; the canvas is behind it). -->
+  <div id="hud">
+    <div id="topbar">
+      <div class="stat big"><span id="stat-score">0</span><label>SCORE</label></div>
+      <div class="stat"><span id="stat-mult" class="mult">&times;1.0</span><label>SPEED</label></div>
+      <div class="stat time">
+        <div id="timebar"><div id="timefill"></div></div>
+        <span id="stat-time">20.0</span><label>TIME</label>
+      </div>
+      <div class="stat"><span id="stat-crystals">&#9670; 0</span><label>CRYSTALS</label></div>
+      <div class="stat"><span id="stat-dist">0 m</span><label>DISTANCE</label></div>
+      <div class="stat"><span id="stat-best">Best 0</span></div>
+    </div>
+
+    <div id="controls-hint">
+      <strong>CAVE BALL</strong><br>
+      <span class="keys">WASD</span> roll &nbsp;&middot;&nbsp; <span class="keys">Space</span> jump (double-jump!) &nbsp;&middot;&nbsp;
+      grab <span class="cry">&#9670;</span> crystals for time &nbsp;&middot;&nbsp; dodge the pits
+    </div>
+  </div>
+
+  <!-- Game over / restart. -->
+  <div id="gameover" hidden>
+    <div class="go-panel">
+      <h1>GAME OVER</h1>
+      <div id="go-stats"></div>
+      <div id="go-best"></div>
+      <div class="go-hint">press <span class="keys">R</span> or click to roll again</div>
+    </div>
+  </div>
+
+  <!-- Shown only if WebGL fails to start. -->
+  <div id="error" hidden>
+    This game needs WebGL, which your browser couldn't start.<br>
+    Try a different browser or enable hardware acceleration.
+  </div>
+
+  <!-- Three.js (vendored global build) loads first, then the game.
+       Bump ?v= when iterating so browsers don't serve stale code. -->
+  <script src="lib/three.min.js"></script>
+  <!-- Post-processing (vendored r137 non-module builds → attach to global THREE) -->
+  <script src="lib/post/CopyShader.js"></script>
+  <script src="lib/post/LuminosityHighPassShader.js"></script>
+  <script src="lib/post/GammaCorrectionShader.js"></script>
+  <script src="lib/post/EffectComposer.js"></script>
+  <script src="lib/post/RenderPass.js"></script>
+  <script src="lib/post/ShaderPass.js"></script>
+  <script src="lib/post/MaskPass.js"></script>
+  <script src="lib/post/UnrealBloomPass.js"></script>
+  <script src="game.js?v=6"></script>
+</body>
+</html>
