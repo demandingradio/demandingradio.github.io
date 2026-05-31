@@ -27,6 +27,7 @@ FOOTY.Game = class {
     this._buildPlayers();
 
     this.state = 'idle';     // 'idle' | 'playing' | 'paused' | 'celebrating'
+    this.controlMode = 'A'; // 'A' = WASD | 'B' = follow cursor
     this.score = { A: 0, B: 0 };
     this.timeLeft = this.cfg.MATCH.DURATION;
     this.kickoffTimer = 0;   // when > 0, ball is frozen (just-scored / start)
@@ -94,6 +95,7 @@ FOOTY.Game = class {
   startMatch(opts) {
     const mode = (opts && opts.mode) || 'normal';
     this.mode = mode;
+    this.controlMode = 'A';
     this.score.A = 0;
     this.score.B = 0;
     this.timeLeft = this.cfg.MATCH.DURATION;
@@ -274,6 +276,21 @@ FOOTY.Game = class {
       // Lost the ball mid-charge — abort the charge, no kick.
       this.p1.kickHeld = false;
       this.p1.kickChargeTime = 0;
+    }
+
+    // Control B: override movement wish-direction to follow the cursor.
+    // applyInput() still ran above (handles sprint + tackle keys).
+    if (this.controlMode === 'B') {
+      const dx = M.worldX - this.p1.x;
+      const dy = M.worldY - this.p1.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 15) {
+        this.p1.wishDx = dx / dist;
+        this.p1.wishDy = dy / dist;
+      } else {
+        this.p1.wishDx = 0;
+        this.p1.wishDy = 0;
+      }
     }
 
     // 2) Drive both AIs (skipped in freeplay).

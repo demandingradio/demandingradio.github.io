@@ -25,7 +25,8 @@ FOOTY.CONFIG = {
     MAX_SPEED: 320,          // px/sec when chasing
     CARRY_SPEED: 260,        // px/sec when holding the ball (slower)
     ACCEL: 1800,             // how fast players reach max speed
-    FRICTION: 10,            // velocity decay/sec when no input
+    DECEL: 500,              // slower rate used when changing direction sharply
+    FRICTION: 3,             // velocity decay/sec when no input (lower = more slide)
     POSSESSION_RADIUS: 26,   // ball must be within this (on ground) to pick up
     MARK_RADIUS: 36,         // catch radius when ball lands
     PICKUP_COOLDOWN: 0.35,   // after a kick, briefly can't re-grab own ball
@@ -51,6 +52,7 @@ FOOTY.CONFIG = {
                              // (tuned so a flat max kick travels ~55m = 550 units)
     CHARGE_TIME: 0.9,        // sec to reach full power by holding left-click
     LIFT_RATIO: 0.65,        // initial vz = horizontal_speed * this
+    KICK_MOMENTUM: 0.75,     // fraction of carrier velocity added to kick (0 = none, 1 = full)
     INACCURACY_BASE: 0.08,   // baseline angle wobble (radians)
 
     // Overcharge: holding past CHARGE_TIME keeps power at max but adds wobble.

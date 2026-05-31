@@ -123,7 +123,14 @@ FOOTY.Player = class {
     if (this.wishDx !== 0 || this.wishDy !== 0) {
       const targetVx = this.wishDx * maxSpeed;
       const targetVy = this.wishDy * maxSpeed;
-      const blend = Math.min(1, P.ACCEL * dt / maxSpeed);
+      // Dot product of wish direction vs current velocity direction is negative
+      // when the player is trying to reverse — use a slower blend rate so there's
+      // a brief "plant and turn" cost to changing direction sharply.
+      const curSpeed = Math.hypot(this.vx, this.vy);
+      const changingDir = curSpeed > 30 &&
+        (this.vx * this.wishDx + this.vy * this.wishDy) / curSpeed < 0;
+      const rate  = changingDir ? P.DECEL : P.ACCEL;
+      const blend = Math.min(1, rate * dt / maxSpeed);
       this.vx += (targetVx - this.vx) * blend;
       this.vy += (targetVy - this.vy) * blend;
       this.facing = Math.atan2(this.wishDy, this.wishDx);
@@ -237,6 +244,8 @@ FOOTY.Player = class {
       const baseWobble = K.INACCURACY_BASE * (1 - power01 * 0.5);
       const wobble = (Math.random() - 0.5) * 2 * (baseWobble + extra);
       ball.launch(speed, aimAngle + wobble, K.LIFT_RATIO, this, 'kick');
+      ball.vx += this.vx * K.KICK_MOMENTUM;
+      ball.vy += this.vy * K.KICK_MOMENTUM;
       this.pickupCooldown = this.cfg.PLAYER.PICKUP_COOLDOWN;
       this.lastKickRequest = null;
       this.handballRequest = false;

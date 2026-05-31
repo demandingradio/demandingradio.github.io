@@ -54,17 +54,29 @@
     </div>
   </div>
 
+  <!-- Freeplay pause menu — shown instead of #pause when in freeplay mode. -->
+  <div id="pause-freeplay" class="overlay hidden">
+    <div class="menu-box">
+      <h1>PAUSED</h1>
+      <p class="section-label">CONTROLS</p>
+      <button class="big-btn ctrl-btn" id="btn-ctrl-a">A &mdash; WASD</button>
+      <button class="big-btn ctrl-btn" id="btn-ctrl-b">B &mdash; FOLLOW CURSOR</button>
+      <button class="big-btn" id="btn-resume-fp" style="margin-top:16px">RESUME</button>
+      <button class="big-btn" id="btn-to-menu-fp">QUIT TO MENU</button>
+    </div>
+  </div>
+
   <!-- Scripts load in dependency order. Each attaches to window.FOOTY.
        The ?v= query string is bumped when iterating so browsers don't cache
        stale JS. -->
-  <script src="js/config.js?v=5"></script>
-  <script src="js/input.js?v=5"></script>
-  <script src="js/mouse.js?v=5"></script>
-  <script src="js/field.js?v=5"></script>
-  <script src="js/ball.js?v=5"></script>
-  <script src="js/player.js?v=5"></script>
-  <script src="js/ai.js?v=5"></script>
-  <script src="js/game.js?v=5"></script>
-  <script src="js/main.js?v=5"></script>
+  <script src="js/config.js?v=7"></script>
+  <script src="js/input.js?v=7"></script>
+  <script src="js/mouse.js?v=7"></script>
+  <script src="js/field.js?v=7"></script>
+  <script src="js/ball.js?v=7"></script>
+  <script src="js/player.js?v=7"></script>
+  <script src="js/ai.js?v=7"></script>
+  <script src="js/game.js?v=7"></script>
+  <script src="js/main.js?v=7"></script>
 </body>
 </html>

@@ -150,4 +150,21 @@ html, body {
 .big-btn:hover { background: #ffd24a; }
 .big-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
 
+/* Active (selected) control button in the freeplay pause menu. */
+.big-btn.active {
+  background: #ffd24a;
+  outline: 3px solid #fff;
+  outline-offset: -3px;
+}
+
+/* Small section label above a button group. */
+.section-label {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #aaffaa;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
 .hidden { display: none !important; }
