@@ -393,7 +393,7 @@
         lastWeek: null, campaign: null, forecastDays: null, callHistory: [],
         weekInits: { engagement: false, coaching: false, training: false },
         mods: null, reviewData: null, reviewTab: 'audit', reviewDay: 0,
-        lastResult: null, history: [], phase: 'meeting',
+        lastResult: null, history: [], phase: 'handover', handover: true,
         inbox: [], inboxSeq: 1, inboxOpen: false, gameSeconds: 0, nextEmailAt: CFG.INBOX.FIRST,
         emailsHandled: 0, emailsExpired: 0
       };
@@ -401,7 +401,7 @@
         var tot = Math.round(CFG.BASE_CALLS * weekdaySum() * rand(0.97, 1.03));
         S.callHistory.push({ label: 'Pre-FY −' + i, total: tot, forecast: null, days: dowSplit(tot, false) });
       }
-      plan = null; save(); enterMeeting();
+      plan = null; save(); enterHandover();
     }
     function dowSplit(total, withHoliday) {
       var w = [], days = [];
@@ -425,8 +425,8 @@
     function renderHUD() {
       var y = ytdSLA(), yCls = y >= CFG.SLA_TARGET ? 'good' : (y >= CFG.SLA_TARGET - 0.05 ? 'warn' : 'bad'), t = S.trust;
       $('hud').innerHTML =
-        '<div class="hud-cell"><div class="k">Financial Year</div><div class="v">Week ' + (S.week + 1) + '/' + CFG.WEEKS + '</div><div class="hud-sub">' + weekLabel(S.week) + '</div></div>' +
-        '<div class="hud-cell"><div class="k">YTD Service Level</div><div class="v sla ' + yCls + '">' + pct1(y) + '</div><div class="hud-sub">target ' + pct(CFG.SLA_TARGET) + '</div></div>' +
+        '<div class="hud-cell"><div class="k">Financial Year</div><div class="v">' + (S.handover ? 'Handover' : 'Week ' + (S.week + 1) + '/' + CFG.WEEKS) + '</div><div class="hud-sub">' + (S.handover ? 'previous analyst\'s week' : weekLabel(S.week)) + '</div></div>' +
+        '<div class="hud-cell"><div class="k">YTD Service Level</div><div class="v sla ' + (S.ytdCalls > 0 ? yCls : '') + '">' + (S.ytdCalls > 0 ? pct1(y) : '—') + '</div><div class="hud-sub">' + (S.ytdCalls > 0 ? 'target ' + pct(CFG.SLA_TARGET) : (S.handover ? 'starts Week 1' : 'target ' + pct(CFG.SLA_TARGET))) + '</div></div>' +
         '<div class="hud-cell"><div class="k">Budget</div><div class="v ' + (S.budget < 0 ? 'bad' : '') + '">' + money(S.budget) + '</div><div class="hud-sub">contract P&amp;L</div></div>' +
         '<div class="hud-cell"><div class="k">Headcount</div><div class="v">' + S.hc + '</div><div class="hud-sub">+' + trainees() + ' in training</div></div>' +
         '<div class="hud-cell trust"><div class="k">Engagement &amp; Stakeholder Trust</div>' +
@@ -511,9 +511,7 @@
 
       c.push('<div class="panel"><h3>🗓️ Monday Meeting — ' + weekLabel(S.week) + '</h3>');
       if (first) {
-        c.push('<p class="small">Welcome to the chair. You are <b>Workforce Management</b> for this contact centre (open <b>Monday–Friday</b>). ' +
-          'You don\'t run the floor — you <b>forecast</b>, <b>plan</b>, <b>negotiate</b> and <b>review the data</b>, then explain the results here every Monday. ' +
-          'Your job all year: keep the <b>service level around ' + pct(CFG.SLA_TARGET) + '</b> without blowing the budget, burning out the team, or losing the client.</p>');
+        c.push('<p class="small"><b>Your first week in the chair.</b> You\'ve seen how last week ran — now it\'s on you. Set this week\'s commitment, make your asks, then forecast and staff it. Hold the <b>service level near ' + pct(CFG.SLA_TARGET) + '</b> all year.</p>');
       } else {
         var hit = prev.sla >= prev.committed;
         c.push('<p class="small">Last week you committed to <b>' + pct(prev.committed) + '</b> and delivered <b class="' + (hit ? 'good' : 'bad') + '">' + pct1(prev.sla) + '</b> (' + (hit ? 'met ✔' : 'missed ✗') + '). YTD is <b>' + pct1(ytdSLA()) + '</b>.</p>');
@@ -902,7 +900,79 @@
     /* =======================================================================
        DATA REVIEW — call-flow drill-down + 24-agent / 3-team audit.
        ======================================================================= */
-    function makeReview(dayRes) {
+    /* =======================================================================
+       HANDOVER — the game opens on the post step. You inherit the chair and
+       review a pre-played week run by the previous (slightly flawed) analyst,
+       so you have real data before you make a single decision. Doesn't score.
+       ======================================================================= */
+    function enterHandover() {
+      S.handover = true; S.phase = 'handover'; save();
+      var aht = CFG.AHT * S.ahtSkill * (1 + S.dodgy * CFG.DODGY_AHT_MAX);
+      var shrink = CFG.BASE_SHRINK, absc = CFG.BASE_ABSENCE;
+      // predecessor's forecast: solid, but under-cooked the Monday peak
+      var fdays = [], roster = [], dayRes = [];
+      for (var d = 0; d < NDAYS(); d++) {
+        var base = dowAvg(d);
+        var fc = Math.round(base * (d === 0 ? 0.84 : rand(0.97, 1.02)) / 10) * 10; // Mon under-forecast
+        fdays.push(fc);
+        // they staffed to their own (low) forecast
+        var fA = fc * aht / CFG.OPEN_SECONDS;
+        var onPh = requiredOnPhones(fA, aht, CFG.SLA_T, CFG.SLA_TARGET);
+        roster.push(Math.ceil(onPh / Math.max(0.4, (1 - absc) * (1 - shrink))));
+      }
+      var calls = 0, answered = 0, occSum = 0, occN = 0, abandoned = 0;
+      for (var d2 = 0; d2 < NDAYS(); d2++) {
+        var actual = Math.round(dowAvg(d2) * (d2 === 0 ? 1.04 : rand(0.97, 1.03))); // Monday actually ran hot
+        var phones = roster[d2] * (1 - absc) * (1 - shrink) * (1 - S.dodgy * CFG.DODGY_AVAIL_MAX);
+        var A = actual * aht / CFG.OPEN_SECONDS;
+        var sl = dayServiceLevel(actual, phones, aht), occ = occupancy(phones, A), ab = dayAbandoned(actual, phones, aht);
+        calls += actual; answered += sl * actual; abandoned += ab;
+        if (actual > 50) { occSum += occ; occN++; }
+        dayRes.push({ d: d2, hol: holidayOn(dateFor(-1, d2)), calls: actual, sl: sl, occ: occ, phones: phones, aht: aht });
+      }
+      var sla = calls > 0 ? answered / calls : 1, occAvg = occN ? occSum / occN : 0;
+      var fcast = sum(fdays), fErr = calls > 0 ? Math.abs(fcast - calls) / calls : 0;
+      S.lastResult = { dayRes: dayRes, sla: sla, occ: occAvg, calls: calls, abandoned: Math.round(abandoned), forecast: fcast, forecastDays: fdays, fErr: fErr };
+      S.reviewData = makeReview(dayRes, 1); S.reviewTab = 'audit';
+      var worst = 0; for (var w = 1; w < dayRes.length; w++) if (dayRes[w].sl < dayRes[worst].sl) worst = w; S.reviewDay = worst;
+      // seed the handover week as the freshest row of forecasting history
+      S.callHistory.push({ label: shortWeek(-1), total: calls, forecast: fcast, days: dayRes.map(function (x) { return x.calls; }) });
+      if (S.callHistory.length > 12) S.callHistory = S.callHistory.slice(-12);
+      save(); renderHUD(); drawHandoverResults();
+    }
+
+    function drawHandoverResults() {
+      var res = S.lastResult, c = [];
+      c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> Welcome aboard. You\'ve just inherited the WFM chair. Before you decide anything, here\'s how the centre ran <b>last week</b> under the previous analyst — study it, then take over for Week 1. This week is theirs; your scorecard starts Monday.</div></div>');
+      c.push('<div class="panel"><h3>📋 Handover — week of ' + weekLabel(-1) + '</h3>' +
+        '<p class="small">You are <b>Workforce Management</b> for this contact centre (open <b>Monday–Friday</b>). You don\'t run the floor — you <b>forecast</b>, <b>plan</b>, <b>negotiate</b> and <b>review the data</b>, then front up at the Monday meeting. Your job all year: hold the <b>service level near ' + pct(CFG.SLA_TARGET) + '</b>. Here\'s last week\'s result to ground you.</p>');
+      var slaCls = res.sla >= CFG.SLA_TARGET ? 'good' : (res.sla >= CFG.SLA_TARGET - 0.05 ? 'warn' : 'bad');
+      c.push('<div class="kpi-strip">' +
+        '<div class="kpi"><div class="k">Service level</div><div class="v ' + slaCls + '">' + pct1(res.sla) + '</div><div class="small muted">target ' + pct(CFG.SLA_TARGET) + '</div></div>' +
+        '<div class="kpi"><div class="k">Avg occupancy</div><div class="v ' + (res.occ > 0.9 ? 'bad' : res.occ > 0.85 ? 'warn' : 'good') + '">' + pct(res.occ) + '</div></div>' +
+        '<div class="kpi"><div class="k">Forecast error</div><div class="v ' + (res.fErr <= 0.05 ? 'good' : res.fErr >= 0.12 ? 'bad' : 'warn') + '">' + pct(res.fErr) + '</div><div class="small muted">fc ' + res.forecast.toLocaleString() + ' · act ' + res.calls.toLocaleString() + '</div></div>' +
+        '<div class="kpi"><div class="k">Abandoned</div><div class="v">' + res.abandoned.toLocaleString() + '</div></div></div>');
+      c.push('<table class="grid" style="margin-top:8px"><thead><tr><th>Day</th><th>Their forecast</th><th>Actual calls</th><th>Service level</th><th>Occupancy</th></tr></thead><tbody>');
+      for (var i = 0; i < res.dayRes.length; i++) {
+        var dr = res.dayRes[i];
+        c.push('<tr class="' + (dr.hol ? 'hol' : '') + '"><td class="day"><b>' + DOW[dr.d] + '</b> ' + fmtDate(dateFor(-1, dr.d)) + '</td><td>' + (res.forecastDays[dr.d] || 0).toLocaleString() + '</td><td>' + dr.calls.toLocaleString() + '</td><td class="' + (dr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(dr.sl) + '</td><td class="' + (dr.occ > 0.9 ? 'bad' : '') + '">' + pct(dr.occ) + '</td></tr>');
+      }
+      c.push('</tbody></table>');
+      c.push('<p class="small muted" style="margin-top:8px">Notice anything? The data review is where you dig in — find <i>where</i> the week went sideways (the call flow) and <i>who</i> might be gaming the system (the agent audit). It\'s how you\'ll spot what to fix once you\'re in charge.</p></div>');
+      c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="toreview">Review the handover data 🔍 ▶</button></div>');
+      $('screen').innerHTML = c.join('');
+      $('toreview').addEventListener('click', enterReview);
+      setStatus('Handover — study last week\'s result, then take the chair.');
+    }
+
+    function takeTheChair() {
+      S.handover = false; S.phase = 'meeting';
+      S.lastResult = null; S.reviewData = null; S.reviewTab = 'audit';
+      S.gameSeconds = 0; S.nextEmailAt = CFG.INBOX.FIRST; // inbox pressure begins now
+      save(); renderHUD(); renderInboxFab(); enterMeeting();
+    }
+
+    function makeReview(dayRes, forceN) {
       var pool = shuffle(AGENT_NAMES).slice(0, 24), teamAht = CFG.AHT * S.ahtSkill, agents = [];
       for (var i = 0; i < 24; i++) {
         agents.push({
@@ -920,6 +990,7 @@
       var r = Math.random(), extra = S.dodgy > 0.22 ? 1 : 0, nIssues;
       if (r < 0.07) nIssues = 0; else if (r < 0.45) nIssues = 1 + extra; else if (r < 0.80) nIssues = 2 + extra; else nIssues = 3 + extra;
       nIssues = Math.min(nIssues, 5);
+      if (forceN != null) nIssues = forceN;
       var idxs = shuffle(agents.map(function (_, i) { return i; })).slice(0, nIssues);
       for (var j = 0; j < idxs.length; j++) {
         var a = agents[idxs[j]], dim = pick(['aux', 'aht', 'hold', 'acw', 'adh']); a.issue = dim;
@@ -938,12 +1009,13 @@
       c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' + advisorReviewTip() + '</div></div>');
       c.push('<div class="tabs"><div class="tab ' + (S.reviewTab === 'audit' ? 'active' : '') + '" id="tab-audit">🕵️ Agent audit</div><div class="tab ' + (S.reviewTab === 'flow' ? 'active' : '') + '" id="tab-flow">📞 Call flow</div></div>');
       c.push('<div class="panel">' + (S.reviewTab === 'flow' ? renderCallFlow() : renderAudit()) + '</div>');
-      c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="next">' + (S.week + 1 >= CFG.WEEKS ? 'Finish the year ▶' : 'Continue to Monday, Week ' + (S.week + 2) + ' ▶') + '</button></div>');
+      var nextLabel = S.handover ? 'Take the chair — start Week 1 ▶' : (S.week + 1 >= CFG.WEEKS ? 'Finish the year ▶' : 'Continue to Monday, Week ' + (S.week + 2) + ' ▶');
+      c.push('<div class="row"><span class="spacer"></span><button class="btn big-btn" id="next">' + nextLabel + '</button></div>');
       $('screen').innerHTML = c.join('');
 
       $('tab-audit').addEventListener('click', function () { S.reviewTab = 'audit'; save(); enterReview(); });
       $('tab-flow').addEventListener('click', function () { S.reviewTab = 'flow'; save(); enterReview(); });
-      $('next').addEventListener('click', nextWeek);
+      $('next').addEventListener('click', S.handover ? takeTheChair : nextWeek);
 
       if (S.reviewTab === 'flow') {
         var dbtns = $('screen').querySelectorAll('button[data-rday]');
@@ -975,7 +1047,7 @@
         c.push('<button class="btn ' + (d === S.reviewDay ? 'pressed' : '') + '" data-rday="' + d + '" style="min-width:auto;padding:3px 8px">' + DOW[d] + ' <span class="' + (ddr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + Math.round(ddr.sl * 100) + '%</span></button>');
       }
       c.push('</div>');
-      c.push('<p class="small">' + DOW[dr.d] + ' ' + fmtDate(dateFor(S.week, dr.d)) + ' — ' + dr.calls.toLocaleString() + ' calls, ~' + Math.round(dr.phones) + ' agents on phones, day SL <b class="' + (dr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(dr.sl) + '</b>.</p>');
+      c.push('<p class="small">' + DOW[dr.d] + ' ' + fmtDate(dateFor(S.handover ? -1 : S.week, dr.d)) + ' — ' + dr.calls.toLocaleString() + ' calls, ~' + Math.round(dr.phones) + ' agents on phones, day SL <b class="' + (dr.sl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(dr.sl) + '</b>.</p>');
       var maxCalls = 0; for (var m = 0; m < iv.length; m++) maxCalls = Math.max(maxCalls, iv[m].calls);
       var worstH = 0; for (var w = 1; w < iv.length; w++) if (iv[w].sl < iv[worstH].sl) worstH = w;
       c.push('<table class="grid"><thead><tr><th>Time</th><th>Calls offered</th><th>Arrivals</th><th>Agents</th><th>Service level</th><th>Abandoned</th></tr></thead><tbody>');
@@ -1132,6 +1204,7 @@
       return 'Clean week. Now review the data — the call flow shows where time was lost, the audit shows who.';
     }
     function advisorReviewTip() {
+      if (S.handover && !(S.reviewData && S.reviewData.submitted)) return S.reviewTab === 'flow' ? 'This is last week under the old analyst. See how service sagged at the busiest interval? That\'s an under-forecast peak meeting a thin roster — exactly the trap to avoid in your Week 1.' : 'One agent on this floor is quietly out of line. Sort the columns to find them — this is the audit you\'ll run every week from now on. (Risk-free: it\'s the handover week.)';
       if (S.reviewData && S.reviewData.submitted) return 'Reviewing the data every week is how you catch problems before the client does.';
       if (S.reviewTab === 'flow') return 'Find the intervals where service dipped — that\'s where your roster and the arrival curve came apart.';
       return 'Sort by AUX%, Wrap%, Hold%, AHT and Adherence in turn — a real outlier floats to the top of one of them. The team-average row is your benchmark.';
@@ -1261,7 +1334,7 @@
 
     function senderClass(from) { return { Client: 'client', Ops: 'ops', Finance: 'finance', HR: 'hr', 'Team Leader': 'tl' }[from] || 'ops'; }
     function senderTrustKey(from) { return { Client: 'client', Ops: 'ops', Finance: 'fin', HR: 'team', 'Team Leader': 'team' }[from] || 'ops'; }
-    function running() { return S && ['meeting', 'forecast', 'planning', 'results', 'review'].indexOf(S.phase) >= 0; }
+    function running() { return S && !S.handover && ['meeting', 'forecast', 'planning', 'results', 'review'].indexOf(S.phase) >= 0; }
 
     function applyEmailFx(d) {
       if (!d) return;
@@ -1371,7 +1444,8 @@
        ======================================================================= */
     function resume() {
       renderHUD();
-      if (S.phase === 'forecast') enterForecast();
+      if (S.phase === 'handover' && S.lastResult) drawHandoverResults();
+      else if (S.phase === 'forecast') enterForecast();
       else if (S.phase === 'planning') enterPlanning();
       else if (S.phase === 'results' && S.lastResult) drawResults(S.lastResult);
       else if (S.phase === 'review' && S.reviewData) enterReview();
@@ -1392,6 +1466,7 @@
       if (!S.history) S.history = [];
       if (S.reviewTab == null) S.reviewTab = 'audit';
       if (S.reviewDay == null) S.reviewDay = 0;
+      if (S.handover == null) S.handover = false;
       if (!S.inbox) S.inbox = [];
       if (S.inboxSeq == null) S.inboxSeq = 1;
       if (S.gameSeconds == null) S.gameSeconds = 0;
