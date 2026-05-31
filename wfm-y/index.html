@@ -147,6 +147,37 @@
 
     .statusbar { display: flex; justify-content: space-between; gap: 10px; padding: 9px 20px; font-size: 12px; color: var(--txt-mute); border-top: 1px solid var(--line); background: rgba(15,20,32,.6); }
 
+    /* ---------- real-time inbox ---------- */
+    .inbox-fab { position: fixed; right: 22px; bottom: 22px; z-index: 2500; width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 8px 24px rgba(79,140,255,.5); color: #fff; font-size: 25px; display: flex; align-items: center; justify-content: center; transition: transform .18s; }
+    .inbox-fab:hover { transform: translateY(-2px) scale(1.05); }
+    .inbox-fab .inbox-count { position: absolute; top: -4px; right: -4px; min-width: 23px; height: 23px; padding: 0 5px; border-radius: 12px; background: var(--bad); color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg); }
+    .inbox-fab.empty .inbox-count { display: none; }
+    .inbox-fab.empty { background: linear-gradient(135deg, #39455f, #2c3550); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+    .inbox-fab.urgent { animation: fabpulse 1s infinite; }
+    @keyframes fabpulse { 0%,100% { box-shadow: 0 8px 24px rgba(248,113,113,.5); } 50% { box-shadow: 0 8px 36px rgba(248,113,113,.95); } }
+    .inbox-panel { position: fixed; right: 22px; bottom: 92px; z-index: 2500; width: 390px; max-width: calc(100vw - 44px); max-height: 72vh; background: var(--panel); border: 1px solid var(--line2); border-radius: var(--radius); box-shadow: 0 22px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; overflow: hidden; }
+    .inbox-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); font-size: 15px; }
+    .inbox-head .btn { padding: 4px 10px; min-width: 0; }
+    .inbox-flash { padding: 9px 14px; font-size: 12.5px; background: rgba(79,140,255,.12); border-bottom: 1px solid var(--line); color: var(--txt-dim); }
+    .inbox-list { overflow-y: auto; padding: 11px; display: flex; flex-direction: column; gap: 11px; }
+    .mail { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 11px 12px; }
+    .mail.urgent { border-color: var(--bad); box-shadow: 0 0 0 1px rgba(248,113,113,.4); }
+    .mail-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+    .mail-from { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; padding: 2px 8px; border-radius: 99px; }
+    .mail-from.client { background: rgba(124,92,255,.25); color: #cbb9ff; }
+    .mail-from.ops { background: rgba(79,140,255,.22); color: #a9c7ff; }
+    .mail-from.finance { background: rgba(52,211,153,.2); color: #86efc5; }
+    .mail-from.hr { background: rgba(251,191,36,.2); color: #fcd56b; }
+    .mail-from.tl { background: rgba(248,113,113,.2); color: #fca5a5; }
+    .mail-subj { font-weight: 700; font-size: 13.5px; }
+    .mail-body { font-size: 12.5px; color: var(--txt-dim); margin: 4px 0 8px; line-height: 1.5; }
+    .mailbar { height: 5px; border-radius: 99px; background: #0d1320; overflow: hidden; margin-bottom: 9px; }
+    .mailbar > i { display: block; height: 100%; border-radius: 99px; transition: width .4s linear; }
+    .mail-replies { display: flex; flex-direction: column; gap: 5px; }
+    .mail-rep { text-align: left; font-family: inherit; font-size: 12.5px; padding: 8px 11px; border-radius: 8px; background: var(--panel3); border: 1px solid var(--line2); color: var(--txt); cursor: pointer; transition: .12s; }
+    .mail-rep:hover { border-color: var(--accent); background: #32426a; }
+    .inbox-empty { padding: 26px 16px; text-align: center; color: var(--txt-mute); font-size: 13px; }
+
     @media (max-width: 820px) { .hud { grid-template-columns: 1fr 1fr; } .hud-cell.trust { grid-column: span 2; } }
     @media (max-width: 520px) { .hud { grid-template-columns: 1fr; } .hud-cell.trust { grid-column: span 1; } .brand small { display: none; } }
   </style>
@@ -175,6 +206,17 @@
       <div id="status-left">Ready.</div>
       <div id="status-right">WFM Tycoon Y</div>
     </footer>
+  </div>
+
+  <!-- Real-time inbox overlay (independent of the phase screens) -->
+  <button id="inbox-fab" class="inbox-fab empty" style="display:none" title="Inbox">
+    <span class="ic">✉️</span>
+    <span class="inbox-count" id="inbox-count">0</span>
+  </button>
+  <div id="inbox-panel" class="inbox-panel" style="display:none">
+    <div class="inbox-head"><span>📥</span><b>Inbox</b><span class="small muted" id="inbox-sub"></span><span class="spacer"></span><button class="btn" id="inbox-close">✕</button></div>
+    <div class="inbox-flash" id="inbox-flash" style="display:none"></div>
+    <div class="inbox-list" id="inbox-list"></div>
   </div>
 
   <div id="dlg">
@@ -233,6 +275,10 @@
       BANKRUPT: -60000,
       CLIENT_FLOOR: 8,
       MIN_HC: 22,
+
+      // Real-time inbox: emails land while you play and must be cleared before
+      // they expire (ignoring one costs the sender's trust meter). All seconds.
+      INBOX: { TICK_MS: 500, TICK: 0.5, FIRST: 22, MIN_GAP: 28, MAX_GAP: 55, TTL: 75, MAX_ACTIVE: 5, EXPIRE: 5 },
 
       DOW: [1.15, 1.05, 1.00, 0.95, 0.90], // Mon–Fri volume multipliers
       HOLIDAY_VOL: 0.40,
@@ -347,7 +393,9 @@
         lastWeek: null, campaign: null, forecastDays: null, callHistory: [],
         weekInits: { engagement: false, coaching: false, training: false },
         mods: null, reviewData: null, reviewTab: 'audit', reviewDay: 0,
-        lastResult: null, history: [], phase: 'meeting'
+        lastResult: null, history: [], phase: 'meeting',
+        inbox: [], inboxSeq: 1, inboxOpen: false, gameSeconds: 0, nextEmailAt: CFG.INBOX.FIRST,
+        emailsHandled: 0, emailsExpired: 0
       };
       for (var i = 4; i >= 1; i--) {
         var tot = Math.round(CFG.BASE_CALLS * weekdaySum() * rand(0.97, 1.03));
@@ -1110,12 +1158,213 @@
         '<li><b>Run</b> — reality hits and the actuals land.</li>' +
         '<li><b>Review</b> — drill into the <b>call flow</b> (hour-by-hour) to see where service broke, and audit <b>24 agents across 3 teams</b> to catch anyone gaming AUX/wrap/hold/AHT/adherence. Coach the right ones; false flags cost morale.</li>' +
         '</ol>' +
+        '<p style="margin-top:8px"><b>📥 The inbox (real time):</b> emails land throughout play and sit in the floating ✉️ corner button. Each has a countdown — open it and pick <b>1 of 4 replies</b> (effects hidden until you choose; one is usually a trap). <b>Ignore one and it expires, costing that stakeholder\'s trust.</b> The clock pauses when you switch tabs.</p>' +
         '<p style="margin-top:8px"><b>You lose if:</b> the budget collapses, the client walks, or the floor empties through attrition.</p>' +
-        '<p style="margin-top:8px" class="muted">Tips: forecast accuracy is everything; sort the audit columns to surface outliers against the team average; training takes ' + CFG.TRAIN_WEEKS + ' weeks so hire ahead of the peak. Progress autosaves.</p>',
+        '<p style="margin-top:8px" class="muted">Tips: forecast accuracy is everything; keep the inbox clear so trust doesn\'t bleed; sort the audit columns to surface outliers against the team average; training takes ' + CFG.TRAIN_WEEKS + ' weeks so hire ahead of the peak. Progress autosaves.</p>',
         [{ t: 'Got it', f: closeDialog }]);
     }
     function showAbout() { dialog('About', '<p><b>WFM Tycoon Y — Service Level 80</b></p><p>A workforce-management sim: daily forecasting, Erlang staffing, intraday call-flow analysis, a 24-agent behaviour audit, and the politics of the Monday meeting. Built for mondayjeffrey.com.</p><p class="small muted">Erlang C engine, AU public-holiday calendar, Mon–Fri operation, FY26/27.</p>', [{ t: 'Close', f: closeDialog }]); }
     function setStatus(s) { $('status-left').textContent = s; $('status-right').textContent = 'YTD ' + pct1(ytdSLA()) + ' · ' + money(S.budget); }
+
+    /* =======================================================================
+       INBOX — real-time email pressure. Ticks in real seconds while the tab is
+       visible and a game is in play; an ignored email costs the sender's trust.
+       The widget is a fixed overlay independent of the phase screens, so it
+       never disturbs in-progress selections.
+       ======================================================================= */
+    var EMAIL_BANK = [
+      { from: 'Client', subj: 'Escalation: furious customer', body: 'A customer has escalated to us directly after a 40-minute wait. They want someone senior to respond today.',
+        opts: [
+          { t: 'Personally call them to apologise and explain the fix.', d: { client: 4 } },
+          { t: 'Ask the Team Leader to call them back.', d: { client: 1, team: -1 } },
+          { t: 'Send a templated apology email.', d: { client: 0 } },
+          { t: 'Reply that wait times aren\'t a WFM issue.', d: { client: -7 } } ] },
+      { from: 'Ops', subj: 'Board needs SLA numbers — now', body: 'The exec board meets in an hour and wants this week\'s service-level position. Can you send it through?',
+        opts: [
+          { t: 'Send the verified figures with a one-line summary.', d: { ops: 3 } },
+          { t: 'Send rough numbers fast, caveat them.', d: { ops: 1 } },
+          { t: 'Ask them to push the item to next week.', d: { ops: -1 } },
+          { t: 'Ignore it — they have dashboards.', d: { ops: -6 } } ] },
+      { from: 'Finance', subj: 'Overtime spend is over plan', body: 'OT is tracking above budget again. Finance wants to understand why before sign-off.',
+        opts: [
+          { t: 'Justify it with the coverage and SLA data.', d: { fin: 3 } },
+          { t: 'Commit to trimming OT next week.', d: { fin: 1, team: -1 } },
+          { t: 'Say it\'s simply necessary, no detail.', d: { fin: -2 } },
+          { t: 'Tell them to just approve it.', d: { fin: -6 } } ] },
+      { from: 'HR', subj: 'Agent grievance lodged', body: 'An agent has formally complained that their roster keeps changing at short notice.',
+        opts: [
+          { t: 'Meet the agent with their TL to talk it through.', d: { team: 4, eng: 1 } },
+          { t: 'Forward it to the Team Leader to own.', d: { team: 1 } },
+          { t: 'Commit to a roster-stability review.', d: { team: 2 } },
+          { t: 'Dismiss it — rosters change, that\'s the job.', d: { team: -6, eng: -2 } } ] },
+      { from: 'Team Leader', subj: 'Move team huddle to 10am?', body: 'The TLs want to run the weekly huddle at 10am — right in the morning call peak.',
+        opts: [
+          { t: 'No — protect peak coverage; reschedule to a lull.', d: { ops: 2 } },
+          { t: 'Allow it, but add overtime to cover.', d: { fin: -2, team: 1 } },
+          { t: 'Allow it just this once.', d: { ops: -2 } },
+          { t: 'Sure, whenever suits the team.', d: { ops: -4, team: 1 } } ] },
+      { from: 'Client', subj: 'Can we get a custom report?', body: 'The client wants a bespoke weekly breakdown of contact reasons. New format.',
+        opts: [
+          { t: 'Build it properly and walk them through it.', d: { client: 3 } },
+          { t: 'Send the closest existing report.', d: { client: 1 } },
+          { t: 'Delegate it to an analyst to produce.', d: { client: 2 } },
+          { t: 'Decline — we\'re too busy for extras.', d: { client: -5 } } ] },
+      { from: 'Ops', subj: 'Occupancy looks brutal today', body: 'Ops has noticed occupancy sitting above 90% and is worried about the team.',
+        opts: [
+          { t: 'Explain the occupancy/SLA trade-off with data.', d: { ops: 2 } },
+          { t: 'Agree and promise to add staff where you can.', d: { ops: 1, fin: -1 } },
+          { t: 'Brush it off — they\'ll be fine.', d: { ops: -2, team: -1 } },
+          { t: 'Say occupancy is meaningless anyway.', d: { ops: -6 } } ] },
+      { from: 'Finance', subj: 'Budget review — Thursday', body: 'Finance wants a half-hour to walk the line items of your cost centre.',
+        opts: [
+          { t: 'Prepare a clean cost breakdown beforehand.', d: { fin: 3 } },
+          { t: 'Send a deputy with the numbers.', d: { fin: 0 } },
+          { t: 'Turn up and wing it.', d: { fin: -2 } },
+          { t: 'Decline the meeting.', d: { fin: -5 } } ] },
+      { from: 'HR', subj: 'Sick leave spiking', body: 'Absence is well up this fortnight and HR is flagging possible burnout.',
+        opts: [
+          { t: 'Launch a wellbeing check-in across teams.', d: { team: 3, eng: 2, budget: -2000 } },
+          { t: 'Note it for the next people review.', d: { team: 1 } },
+          { t: 'Tell agents to return to work sooner.', d: { team: -3, eng: -1 } },
+          { t: 'Ignore it — people get sick.', d: { team: -5 } } ] },
+      { from: 'Team Leader', subj: 'Star agent might quit', body: 'One of your best agents has hinted they\'re interviewing elsewhere.',
+        opts: [
+          { t: 'Fast-track a retention conversation today.', d: { team: 3, eng: 2 } },
+          { t: 'Offer a small retention bonus.', d: { budget: -1500, team: 2 } },
+          { t: 'Let the TL quietly handle it.', d: { team: 0 } },
+          { t: 'Shrug — everyone\'s replaceable.', d: { team: -7, eng: -3 } } ] },
+      { from: 'Client', subj: 'Thank you — great week!', body: 'The client emailed praise for last week\'s turnaround. Even good news wants a reply.',
+        opts: [
+          { t: 'Thank them and share the credit with the team.', d: { client: 2, eng: 2 } },
+          { t: 'Acknowledge it briefly.', d: { client: 1 } },
+          { t: 'Forward it to the team only.', d: { eng: 1 } },
+          { t: 'Leave it on read.', d: { client: -2 } } ] },
+      { from: 'Ops', subj: 'Media asking about wait times', body: 'A local journalist is asking about our hold times for a story.',
+        opts: [
+          { t: 'Loop in Comms with accurate context.', d: { ops: 2, client: 1 } },
+          { t: 'Give a careful quick quote yourself.', d: { client: -2 } },
+          { t: 'Decline to comment.', d: { ops: 0 } },
+          { t: 'Wing an off-the-cuff answer to the reporter.', d: { client: -6 } } ] },
+      { from: 'Finance', subj: 'Invoice needs approval today', body: 'A supplier invoice is sitting in your queue and is due for payment.',
+        opts: [
+          { t: 'Review the line items and approve.', d: { fin: 2 } },
+          { t: 'Query one charge that looks off.', d: { fin: 1 } },
+          { t: 'Approve it without reading.', d: { fin: -1 } },
+          { t: 'Sit on it past the due date.', d: { fin: -4 } } ] },
+      { from: 'Team Leader', subj: 'Morale dipping after a hard week', body: 'The floor took a battering this week and the TLs say spirits are low.',
+        opts: [
+          { t: 'Shout the team a lunch to reset.', d: { budget: -1500, eng: 3, team: 2 } },
+          { t: 'Send a genuine thank-you note.', d: { eng: 1 } },
+          { t: 'Acknowledge it to the TLs.', d: { team: 1 } },
+          { t: 'Tell them to toughen up.', d: { eng: -3, team: -4 } } ] }
+    ];
+
+    function senderClass(from) { return { Client: 'client', Ops: 'ops', Finance: 'finance', HR: 'hr', 'Team Leader': 'tl' }[from] || 'ops'; }
+    function senderTrustKey(from) { return { Client: 'client', Ops: 'ops', Finance: 'fin', HR: 'team', 'Team Leader': 'team' }[from] || 'ops'; }
+    function running() { return S && ['meeting', 'forecast', 'planning', 'results', 'review'].indexOf(S.phase) >= 0; }
+
+    function applyEmailFx(d) {
+      if (!d) return;
+      for (var k in d) {
+        if (k === 'eng') S.engagement = clamp(S.engagement + d[k], 0, 100);
+        else if (k === 'budget') S.budget += d[k];
+        else if (S.trust[k] != null) S.trust[k] = clamp(S.trust[k] + d[k], 0, 100);
+      }
+    }
+    function emailFxText(d) {
+      var map = { ops: 'Ops', fin: 'Finance', client: 'Client', team: 'TLs', eng: 'Team' };
+      var keys = Object.keys(d);
+      if (!keys.length) return 'no impact';
+      return keys.map(function (k) { if (k === 'budget') return (d[k] >= 0 ? '+' : '') + money(d[k]); return map[k] + ' ' + (d[k] >= 0 ? '+' : '') + d[k]; }).join(', ');
+    }
+    function barColor(u) { return u > 0.5 ? 'linear-gradient(90deg,#34d399,#10b981)' : u > 0.25 ? 'linear-gradient(90deg,#fbbf24,#f59e0b)' : 'linear-gradient(90deg,#f87171,#ef4444)'; }
+    function urgency(m) { return clamp(1 - (S.gameSeconds - m.landed) / m.ttl, 0, 1); }
+
+    function spawnEmail() {
+      if (S.inbox.length >= CFG.INBOX.MAX_ACTIVE) return false;
+      var active = S.inbox.map(function (m) { return m.tpl; });
+      var choices = [];
+      for (var i = 0; i < EMAIL_BANK.length; i++) if (active.indexOf(i) < 0) choices.push(i);
+      if (!choices.length) return false;
+      var idx = pick(choices), tpl = EMAIL_BANK[idx];
+      S.inbox.push({ id: S.inboxSeq++, tpl: idx, from: tpl.from, subj: tpl.subj, body: tpl.body, opts: tpl.opts, order: shuffle(tpl.opts.map(function (_, i) { return i; })), landed: S.gameSeconds, ttl: tpl.ttl || CFG.INBOX.TTL });
+      return true;
+    }
+    function answerEmail(id, optIdx) {
+      var m = null, i; for (i = 0; i < S.inbox.length; i++) if (S.inbox[i].id === id) { m = S.inbox[i]; break; }
+      if (!m) return;
+      applyEmailFx(m.opts[optIdx].d);
+      S.inbox.splice(i, 1); S.emailsHandled++;
+      flashInbox('✉️ Replied to ' + m.from + ' — ' + emailFxText(m.opts[optIdx].d));
+      save(); renderHUD(); renderInboxFab(); if (S.inboxOpen) renderInboxList();
+    }
+    function expireEmail(m) {
+      var key = senderTrustKey(m.from), d = {}; d[key] = -CFG.INBOX.EXPIRE;
+      applyEmailFx(d); S.emailsExpired++;
+      flashInbox('⏰ Ignored email from ' + m.from + ' — ' + emailFxText(d), true);
+    }
+    function flashInbox(msg, bad) {
+      S._inboxFlash = { msg: msg, bad: !!bad, at: S.gameSeconds };
+      var f = $('inbox-flash'); if (f && S.inboxOpen) { f.style.display = 'block'; f.innerHTML = (bad ? '<span class="bad">' : '') + msg + (bad ? '</span>' : ''); }
+    }
+
+    function inboxTick() {
+      if (!running()) { renderInboxFab(); return; }
+      if (document.hidden) return;
+      S.gameSeconds += CFG.INBOX.TICK;
+      if (S.gameSeconds >= S.nextEmailAt) {
+        if (spawnEmail()) { S.nextEmailAt = S.gameSeconds + rand(CFG.INBOX.MIN_GAP, CFG.INBOX.MAX_GAP); if (S.inboxOpen) renderInboxList(); }
+        else { S.nextEmailAt = S.gameSeconds + 8; }
+      }
+      var changed = false;
+      for (var i = S.inbox.length - 1; i >= 0; i--) { var m = S.inbox[i]; if (S.gameSeconds - m.landed >= m.ttl) { expireEmail(m); S.inbox.splice(i, 1); changed = true; } }
+      if (changed) { renderHUD(); save(); if (S.inboxOpen) renderInboxList(); }
+      if (S._inboxFlash && S.gameSeconds - S._inboxFlash.at > 4) { S._inboxFlash = null; var f = $('inbox-flash'); if (f) f.style.display = 'none'; }
+      renderInboxFab();
+      if (S.inboxOpen) updateCountdowns();
+    }
+
+    function renderInboxFab() {
+      var fab = $('inbox-fab'); if (!fab) return;
+      if (!running()) { fab.style.display = 'none'; var p = $('inbox-panel'); if (p) p.style.display = 'none'; return; }
+      fab.style.display = 'flex';
+      var n = S.inbox.length;
+      $('inbox-count').textContent = n;
+      fab.classList.toggle('empty', n === 0);
+      fab.classList.toggle('urgent', S.inbox.some(function (m) { return urgency(m) < 0.34; }));
+    }
+    function openInbox() { S.inboxOpen = true; var p = $('inbox-panel'); if (p) p.style.display = 'flex'; renderInboxList(); }
+    function closeInbox() { S.inboxOpen = false; var p = $('inbox-panel'); if (p) p.style.display = 'none'; }
+    function toggleInbox() { if (S.inboxOpen) closeInbox(); else openInbox(); }
+
+    function renderInboxList() {
+      var list = $('inbox-list'); if (!list) return;
+      var f = $('inbox-flash');
+      if (f) { if (S._inboxFlash) { f.style.display = 'block'; f.innerHTML = (S._inboxFlash.bad ? '<span class="bad">' : '') + S._inboxFlash.msg + (S._inboxFlash.bad ? '</span>' : ''); } else f.style.display = 'none'; }
+      $('inbox-sub').textContent = S.inbox.length ? '· ' + S.inbox.length + ' to clear' : '';
+      if (!S.inbox.length) { list.innerHTML = '<div class="inbox-empty">📭 Inbox zero. Nice — keep it that way.</div>'; return; }
+      var c = [];
+      for (var i = 0; i < S.inbox.length; i++) {
+        var m = S.inbox[i], u = urgency(m);
+        c.push('<div class="mail ' + (u < 0.34 ? 'urgent' : '') + '" id="mail-' + m.id + '">');
+        c.push('<div class="mail-top"><span class="mail-from ' + senderClass(m.from) + '">' + m.from + '</span><span class="mail-subj">' + m.subj + '</span></div>');
+        c.push('<div class="mailbar"><i id="mailbar-' + m.id + '" style="width:' + (u * 100) + '%;background:' + barColor(u) + '"></i></div>');
+        c.push('<div class="mail-body">' + m.body + '</div>');
+        c.push('<div class="mail-replies">');
+        for (var j = 0; j < m.order.length; j++) { var oi = m.order[j]; c.push('<button class="mail-rep" data-mail="' + m.id + '" data-opt="' + oi + '">' + m.opts[oi].t + '</button>'); }
+        c.push('</div></div>');
+      }
+      list.innerHTML = c.join('');
+      var btns = list.querySelectorAll('.mail-rep');
+      for (var b = 0; b < btns.length; b++) btns[b].addEventListener('click', function (e) { answerEmail(parseInt(e.currentTarget.dataset.mail, 10), parseInt(e.currentTarget.dataset.opt, 10)); });
+    }
+    function updateCountdowns() {
+      for (var i = 0; i < S.inbox.length; i++) {
+        var m = S.inbox[i], u = urgency(m);
+        var bar = $('mailbar-' + m.id); if (bar) { bar.style.width = (u * 100) + '%'; bar.style.background = barColor(u); }
+        var card = $('mail-' + m.id); if (card) card.classList.toggle('urgent', u < 0.34);
+      }
+    }
 
     /* =======================================================================
        BOOT
@@ -1143,6 +1392,13 @@
       if (!S.history) S.history = [];
       if (S.reviewTab == null) S.reviewTab = 'audit';
       if (S.reviewDay == null) S.reviewDay = 0;
+      if (!S.inbox) S.inbox = [];
+      if (S.inboxSeq == null) S.inboxSeq = 1;
+      if (S.gameSeconds == null) S.gameSeconds = 0;
+      if (S.nextEmailAt == null) S.nextEmailAt = S.gameSeconds + CFG.INBOX.FIRST;
+      if (S.emailsHandled == null) S.emailsHandled = 0;
+      if (S.emailsExpired == null) S.emailsExpired = 0;
+      S.inboxOpen = false;
       resume();
     } else {
       renderHUDPlaceholder();
@@ -1153,6 +1409,20 @@
     }
     function renderHUDPlaceholder() { $('hud').innerHTML = '<div class="hud-cell" style="grid-column:1/-1"><div class="k">Welcome</div><div class="v">WFM Tycoon Y</div><div class="hud-sub">Press start to begin FY26/27</div></div>'; }
     function setStatusBoot() { $('status-left').textContent = 'Ready. Press start to begin.'; $('status-right').textContent = 'Best YTD ' + pct1(bestSLA()); }
+
+    // Inbox wiring + real-time ticker
+    $('inbox-fab').addEventListener('click', toggleInbox);
+    $('inbox-close').addEventListener('click', closeInbox);
+    setInterval(inboxTick, CFG.INBOX.TICK_MS);
+    renderInboxFab();
+
+    // debug hook (mirrors footy's window.__footy) — harmless console helper
+    window.__wfmy = {
+      state: function () { return S; },
+      spawn: function (n) { var k = n || 1, r = 0; for (var i = 0; i < k; i++) if (spawnEmail()) r++; renderInboxFab(); if (S && S.inboxOpen) renderInboxList(); return r; },
+      fwd: function (s) { if (S) { S.gameSeconds += (s || 30); } return S ? S.gameSeconds : null; },
+      tick: inboxTick
+    };
   })();
   </script>
 </body>
