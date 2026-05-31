@@ -29,6 +29,8 @@
     slopeAccel:    75,
     maxSpeed:      50,
     airControl:    0.4,
+    turnRate:      3.4,        // (grip-steer) rad/s your heading slews toward the input — higher = sharper turns
+    airTurnScale:  0.5,        // fraction of that grip available while airborne
     gravity:       40,
     jumpSpeed:     15,
     maxJumps:      2,
@@ -40,8 +42,8 @@
     camHeight:     6.0,
     camLookHeight: 1.4,
     camFollowLerp: 7,
-    camYawLerp:    2.4,
-    camYawSpeedGate: 2.5,
+    camYawLerp:    8.0,        // snappy: camera swings behind your heading fast, so turns track
+    camYawSpeedGate: 1.2,      // re-aim even at lower speed
 
     // --- Cave streaming ---
     chunkSize:     40,
@@ -574,7 +576,22 @@
     const dl = Math.hypot(dx, dz);
 
     const accel = (grounded ? 1 : CFG.airControl) * CFG.moveAccel;
-    if (dl > 0.0001) { dx /= dl; dz /= dl; vel.x += dx * accel * dt; vel.z += dz * accel * dt; }
+    if (dl > 0.0001) {
+      dx /= dl; dz /= dl;
+      vel.x += dx * accel * dt; vel.z += dz * accel * dt;
+      // (1) Grip-steer: rotate the ball's momentum toward the input heading so turns
+      // are crisp at any speed (instead of waiting for sideways force to overcome it).
+      const h = Math.hypot(vel.x, vel.z);
+      if (h > 0.5) {
+        const va = Math.atan2(vel.x, vel.z);
+        const da = shortestAngle(va, Math.atan2(dx, dz));
+        if (Math.abs(da) < 2.4) {                      // skip a hard reverse so S still brakes (no U-turn whip)
+          const turn = CFG.turnRate * (grounded ? 1 : CFG.airTurnScale) * dt;
+          const na = va + (Math.abs(da) < turn ? da : (da < 0 ? -turn : turn));
+          vel.x = h * Math.sin(na); vel.z = h * Math.cos(na);
+        }
+      }
+    }
 
     if (grounded && CFG.slopeAccel) {
       const e = 0.75;
@@ -781,6 +798,7 @@
     stats: function () { return { score: score, multiplier: multiplier, timeLeft: timeLeft, distance: distance, crystals: crystalsGot, best: best }; },
     chunkCount: function () { return chunks.size; },
     grounded: function () { return grounded; }, jumpsUsed: function () { return jumpsUsed; },
+    camYaw: function () { return camYaw; },
     bloom: function () { return useBloom; },
     sample: function (x, z) { return { floor: +floorHeight(x, z).toFixed(2), ceil: +ceilingHeight(x, z).toFixed(2), region: +region(x, z).toFixed(3) }; },
     startRun: startRun, die: die,
