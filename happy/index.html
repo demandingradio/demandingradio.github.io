@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>What makes a good life?</title>
+<meta name="description" content="One day, forty-two voices — ancient philosophy and modern science — on the meaning of a good life. The few things they all agree on." />
+<meta name="robots" content="noindex" />
+<meta property="og:title" content="What makes a good life?" />
+<meta property="og:description" content="Forty-two voices, ancient and modern. The handful of answers they share." />
+<meta name="theme-color" content="#f6f1e8" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%23e0a85a'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..560;1,9..144,300..480&family=Newsreader:ital,opsz,wght@0,6..72,380..500;1,6..72,400..460&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#f6f1e8;
+    --paper-deep:#efe7d8;
+    --ink:#22201a;
+    --body:#3a352c;
+    --muted:#857a69;
+    --line:#ddd2bf;
+
+    --p1:#c97a61; --p1-ink:#ad543c;   /* dawn  — belonging */
+    --p2:#cd9040; --p2-ink:#a96f22;   /* morning — character */
+    --p3:#bf9f3c; --p3-ink:#937a20;   /* noon  — meaning */
+    --p4:#6f9c79; --p4-ink:#4c7a59;   /* afternoon — peace */
+    --p5:#6781ad; --p5-ink:#475f8c;   /* dusk  — practice */
+
+    --ease:cubic-bezier(.2,.65,.2,1);
+    --measure:43rem;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--body);
+    font-family:"Newsreader",Georgia,"Times New Roman",serif;
+    font-optical-sizing:auto;
+    font-size:clamp(1.06rem,1rem + .45vw,1.24rem);
+    line-height:1.78;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+
+  ::selection{background:#e9c88f;color:#241f16}
+
+  .wrap{max-width:var(--measure);margin:0 auto;padding:0 26px}
+
+  /* ---------- texture + progress ---------- */
+  .grain{
+    position:fixed;inset:0;z-index:60;pointer-events:none;
+    opacity:.06;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .progress{
+    position:fixed;top:0;left:0;height:2px;width:0;z-index:70;
+    background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3),var(--p4),var(--p5));
+    transition:width .12s linear;
+  }
+
+  /* ---------- hero ---------- */
+  .hero{
+    position:relative;min-height:100svh;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    text-align:center;overflow:hidden;padding:8vh 26px 0;
+  }
+  .sun{
+    position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);
+    width:min(120vw,1100px);aspect-ratio:1;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%,
+      rgba(245,205,140,.62) 0%,
+      rgba(231,168,110,.34) 26%,
+      rgba(214,150,120,.14) 46%,
+      rgba(246,241,232,0) 66%);
+    z-index:0;filter:blur(8px);
+    animation:breathe 13s var(--ease) infinite;
+  }
+  @keyframes breathe{
+    0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.92}
+    50%{transform:translate(-50%,-50%) scale(1.07);opacity:1}
+  }
+  .hero .inner{position:relative;z-index:1;max-width:40rem}
+  .hero-eyebrow{
+    font-size:.74rem;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--muted);font-weight:500;margin:0 0 1.6rem;
+  }
+  h1{
+    font-family:"Fraunces",Georgia,serif;
+    font-weight:400;font-optical-sizing:auto;
+    font-size:clamp(2.7rem,8.4vw,5.4rem);
+    line-height:1.02;letter-spacing:-.022em;color:var(--ink);
+    margin:0 0 1.5rem;
+  }
+  h1 em{font-style:italic;font-weight:380}
+  .hero-sub{
+    font-size:clamp(1.1rem,1rem + .6vw,1.35rem);
+    color:#564f43;max-width:30rem;margin:0 auto;font-style:italic;
+    line-height:1.6;
+  }
+  .scroll-cue{
+    position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+    z-index:1;display:flex;flex-direction:column;align-items:center;gap:.7rem;
+    font-size:.66rem;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);
+  }
+  .scroll-cue .stem{width:1px;height:46px;background:linear-gradient(var(--muted),transparent);overflow:hidden;position:relative}
+  .scroll-cue .stem::after{content:"";position:absolute;top:-46px;left:0;width:1px;height:46px;background:linear-gradient(transparent,var(--p2-ink));animation:fall 2.4s var(--ease) infinite}
+  @keyframes fall{0%{transform:translateY(0)}60%,100%{transform:translateY(92px)}}
+
+  /* fade hero in on load */
+  .hero .reveal-h{opacity:0;transform:translateY(20px);transition:opacity 1.2s var(--ease),transform 1.2s var(--ease)}
+  body.ready .hero .reveal-h{opacity:1;transform:none}
+  body.ready .hero .reveal-h:nth-child(2){transition-delay:.12s}
+  body.ready .hero .reveal-h:nth-child(3){transition-delay:.26s}
+
+  /* ---------- intro ---------- */
+  .intro{padding:14vh 0 8vh}
+  .intro p{font-size:clamp(1.2rem,1.05rem + .8vw,1.6rem);line-height:1.66;color:var(--ink);margin:0 0 1.3rem;font-weight:400}
+  .intro .small{font-size:1.05rem;color:var(--muted);font-style:italic;line-height:1.7}
+  .lede-mark{font-family:"Fraunces",serif;font-style:italic}
+
+  /* ---------- pillars ---------- */
+  .pillar{position:relative;padding:clamp(7rem,15vh,12rem) 0;isolation:isolate}
+  .pillar::before{
+    content:"";position:absolute;inset:0;z-index:-1;
+    background:radial-gradient(120% 60% at 18% 0%,var(--wash) 0%,transparent 60%);
+    opacity:.8;
+  }
+  .p1{--accent:var(--p1);--accent-ink:var(--p1-ink);--wash:rgba(201,122,97,.10)}
+  .p2{--accent:var(--p2);--accent-ink:var(--p2-ink);--wash:rgba(205,144,64,.10)}
+  .p3{--accent:var(--p3);--accent-ink:var(--p3-ink);--wash:rgba(191,159,60,.11)}
+  .p4{--accent:var(--p4);--accent-ink:var(--p4-ink);--wash:rgba(111,156,121,.12)}
+  .p5{--accent:var(--p5);--accent-ink:var(--p5-ink);--wash:rgba(103,129,173,.12)}
+
+  .num{
+    font-family:"Fraunces",serif;font-weight:340;
+    font-size:clamp(3.4rem,9vw,6rem);line-height:.8;
+    color:var(--accent);opacity:.26;letter-spacing:-.02em;
+    display:block;margin-bottom:.5rem;
+  }
+  .kicker{
+    font-size:.74rem;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--accent-ink);font-weight:500;margin:0 0 1.7rem;
+    display:flex;align-items:center;gap:.85rem;
+  }
+  .kicker::before{content:"";width:26px;height:1px;background:var(--accent-ink);opacity:.6}
+  .statement{
+    font-family:"Fraunces",serif;font-weight:400;font-optical-sizing:auto;
+    font-size:clamp(1.95rem,3.1vw + 1rem,3.15rem);
+    line-height:1.12;letter-spacing:-.018em;color:var(--ink);
+    margin:0 0 1.6rem;text-wrap:balance;
+  }
+  .lead{font-size:1.16em;color:var(--ink);margin:0 0 1.25rem;line-height:1.62}
+  .pillar p.body{margin:0 0 1.2rem}
+  em.hi{font-style:italic;color:var(--accent-ink)}
+  .voices{
+    margin:2rem 0 0;font-size:.74rem;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--accent-ink);font-weight:500;line-height:2.1;
+  }
+  .voices span{white-space:nowrap}
+  .voices .dot{color:var(--accent);opacity:.55;margin:0 .15em}
+
+  /* reveal-on-scroll, staggered */
+  .pillar .inner > *{opacity:0;transform:translateY(22px);transition:opacity .85s var(--ease),transform .85s var(--ease)}
+  .pillar.in .inner > *{opacity:1;transform:none}
+  .pillar.in .inner > *:nth-child(2){transition-delay:.07s}
+  .pillar.in .inner > *:nth-child(3){transition-delay:.14s}
+  .pillar.in .inner > *:nth-child(4){transition-delay:.21s}
+  .pillar.in .inner > *:nth-child(5){transition-delay:.28s}
+  .pillar.in .inner > *:nth-child(6){transition-delay:.35s}
+  .pillar.in .inner > *:nth-child(7){transition-delay:.42s}
+
+  /* thin divider between pillars */
+  .rule{height:1px;max-width:var(--measure);margin:0 auto;background:var(--line)}
+
+  /* ---------- closing ---------- */
+  .closing{padding:16vh 0 9vh;text-align:center}
+  .closing .kicker{justify-content:center;color:var(--muted)}
+  .closing .kicker::before{display:none}
+  .closing-statement{
+    font-family:"Fraunces",serif;font-weight:400;
+    font-size:clamp(2rem,3vw + 1rem,3.2rem);line-height:1.12;
+    letter-spacing:-.018em;color:var(--ink);margin:0 auto 2rem;max-width:24rem;text-wrap:balance;
+  }
+  .closing p{margin:0 auto 1.3rem;max-width:33rem;color:var(--body)}
+  .closing .law{font-style:italic;color:var(--ink)}
+  .closing .reveal{opacity:0;transform:translateY(22px);transition:opacity .9s var(--ease),transform .9s var(--ease)}
+  .closing.in .reveal{opacity:1;transform:none}
+  .closing.in .reveal:nth-child(2){transition-delay:.08s}
+  .closing.in .reveal:nth-child(3){transition-delay:.16s}
+  .closing.in .reveal:nth-child(4){transition-delay:.24s}
+
+  /* ---------- chorus ---------- */
+  .chorus{padding:6vh 0 14vh;text-align:center}
+  .chorus .kicker{justify-content:center;color:var(--muted);margin-bottom:2.2rem}
+  .chorus .kicker::before{display:none}
+  .chorus .names{
+    max-width:46rem;margin:0 auto;font-family:"Fraunces",serif;
+    font-size:clamp(1.05rem,.9rem + .7vw,1.4rem);line-height:2.1;color:#4c463a;
+    font-weight:380;letter-spacing:.005em;
+  }
+  .chorus .names .dot{color:#c2a86f;margin:0 .35em}
+  .chorus .names b{font-weight:480;color:var(--ink)}
+  .chorus.in .names{opacity:0;transform:translateY(20px);animation:rise 1s var(--ease) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  /* ---------- footer ---------- */
+  footer{padding:0 0 8vh;text-align:center}
+  footer .line{max-width:30rem;margin:0 auto 1.6rem;color:var(--muted);font-size:.96rem;font-style:italic;line-height:1.7}
+  .totop{
+    background:none;border:1px solid var(--line);border-radius:999px;
+    color:var(--muted);font-family:inherit;font-size:.72rem;letter-spacing:.2em;
+    text-transform:uppercase;padding:.7rem 1.4rem;cursor:pointer;transition:.3s var(--ease);
+  }
+  .totop:hover{color:var(--ink);border-color:var(--muted);background:var(--paper-deep)}
+
+  /* short viewports: drop the scroll cue so it never collides with the subtitle */
+  @media (max-height:720px){
+    .scroll-cue{display:none}
+    .hero{justify-content:center;padding-top:0}
+  }
+
+  /* phones */
+  @media (max-width:540px){
+    :root{--measure:33rem}
+    .wrap{padding:0 22px}
+    h1{font-size:clamp(2.5rem,11vw,3.4rem)}
+    .num{font-size:clamp(3rem,16vw,4.4rem)}
+    .voices{line-height:2.3}
+  }
+
+  /* ---------- motion off ---------- */
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    .sun{animation:none}
+    .scroll-cue .stem::after{animation:none}
+    .hero .reveal-h,
+    .pillar .inner > *,
+    .closing .reveal,
+    .chorus .names{opacity:1 !important;transform:none !important;animation:none !important;transition:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="sun" aria-hidden="true"></div>
+  <div class="inner">
+    <p class="hero-eyebrow reveal-h">An inquiry, gathered in a day</p>
+    <h1 class="reveal-h">What makes<br /><em>a good life?</em></h1>
+    <p class="hero-sub reveal-h">For one day I asked everyone I could — across twenty-five centuries and a dozen cultures. Here is the little they all agree on.</p>
+  </div>
+  <div class="scroll-cue" aria-hidden="true"><span>scroll</span><span class="stem"></span></div>
+</header>
+
+<!-- INTRO -->
+<section class="intro">
+  <div class="wrap">
+    <p>Aristotle and the Stoics. The Buddha and the Tao. The eighty‑five‑year Harvard study and the science of happiness. Camus, Confucius, Ubuntu, Nietzsche, the world's faiths.</p>
+    <p><span class="lede-mark">Forty‑two voices</span> — ancient and modern, faith and doubt. They quarrel about almost everything. Except, roughly, <em>five things.</em></p>
+    <p class="small">It takes about three minutes to read. That's the whole point.</p>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- 1 · BELONGING -->
+<section class="pillar p1">
+  <div class="wrap inner">
+    <span class="num">01</span>
+    <p class="kicker">Belonging</p>
+    <h2 class="statement">We are made out of one another.</h2>
+    <p class="lead">Close relationships are the single strongest ingredient of a good life — and the arena where it's actually lived.</p>
+    <p class="body">The 85‑year Harvard Study found the <em class="hi">quality</em> of your bonds predicts health, happiness, and how long you live better than money or fame — and that loneliness wears on the body like smoking. Older voices go further: you become a person <em class="hi">through</em> others. <em>I am because we are.</em></p>
+    <p class="body">And love, they insist, is less a feeling you fall into than a practice — real presence, care, and above all giving. The web of belonging even reaches past people to the living world: meet it with gratitude, not extraction. All flourishing is mutual.</p>
+    <p class="voices"><span>The Harvard Study</span><span class="dot">·</span><span>Aristotle</span><span class="dot">·</span><span>Confucius</span><span class="dot">·</span><span>Ubuntu</span><span class="dot">·</span><span>Buber</span><span class="dot">·</span><span>Fromm</span><span class="dot">·</span><span>Neff</span><span class="dot">·</span><span>Kimmerer</span></p>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- 2 · CHARACTER -->
+<section class="pillar p2">
+  <div class="wrap inner">
+    <span class="num">02</span>
+    <p class="kicker">Character</p>
+    <h2 class="statement">Tend the person you are becoming.</h2>
+    <p class="lead">Character is the core of a good life — and it's largely up to you, given a fair chance.</p>
+    <p class="body">Aristotle, the Stoics, and the Buddha agree: the good life is built from cultivated virtue — wisdom, courage, justice, compassion — practised until it becomes habit, aimed at the mean between extremes. To the Stoics, this is the <em class="hi">only</em> thing that's truly yours; the rest is just material for it to work on.</p>
+    <p class="body">But "up to you" quietly assumes a floor not everyone stands on. Real freedoms — health, safety, schooling, a chance to belong and take part — are the ground flourishing grows from. So a good life is also a matter of justice, not will alone.</p>
+    <p class="voices"><span>Aristotle</span><span class="dot">·</span><span>the Stoics</span><span class="dot">·</span><span>the Buddha</span><span class="dot">·</span><span>Sen &amp; Nussbaum</span></p>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- 3 · MEANING -->
+<section class="pillar p3">
+  <div class="wrap inner">
+    <span class="num">03</span>
+    <p class="kicker">Meaning</p>
+    <h2 class="statement">Give yourself to something larger than yourself.</h2>
+    <p class="lead">Meaning has three parts — and you build all three.</p>
+    <p class="body"><em class="hi">Coherence:</em> your life hangs together as a story you author. <em class="hi">Purpose:</em> you have direction — and the hope, the will and the ways, to follow it. <em class="hi">Significance:</em> your life matters. You grow them by devotion to something beyond yourself — a cause, people, a calling, something that outlasts you.</p>
+    <p class="body">And where the universe hands you no purpose, you can make one anyway. As Frankl learned in the camps: we can bear almost any <em>how</em> if we have a <em>why</em> — and no amount of success substitutes for it. Meaning isn't the same as feeling good; it's built by giving, and it can cost you.</p>
+    <p class="voices"><span>Frankl</span><span class="dot">·</span><span>Camus</span><span class="dot">·</span><span>Steger</span><span class="dot">·</span><span>Erikson</span><span class="dot">·</span><span>Keltner</span><span class="dot">·</span><span>Tolstoy</span><span class="dot">·</span><span>Baumeister</span></p>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- 4 · PEACE -->
+<section class="pillar p4">
+  <div class="wrap inner">
+    <span class="num">04</span>
+    <p class="kicker">Peace</p>
+    <h2 class="statement">Hold it all a little more lightly.</h2>
+    <p class="lead">Peace is an inner stance, not a circumstance.</p>
+    <p class="body">From four directions — Stoic, Buddhist, Taoist, and Frankl — the same counsel arrives: govern what's yours, your judgments and your responses, and release the rest. <em class="hi">Wabi‑sabi</em> even finds the imperfect and impermanent beautiful. Turn hardship into growth — through the struggle to rebuild, not the pain itself.</p>
+    <p class="body">At its height, you'd love your life enough to live it all again. And faced squarely rather than fled, even death sharpens life and clarifies what counts — the people, the freedom, the purpose. For billions, faith reaches the same quiet by another road.</p>
+    <p class="voices"><span>Epictetus</span><span class="dot">·</span><span>the Buddha</span><span class="dot">·</span><span>Lao Tzu</span><span class="dot">·</span><span>Nietzsche</span><span class="dot">·</span><span>Epicurus</span><span class="dot">·</span><span>Gawande</span></p>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- 5 · PRACTICE -->
+<section class="pillar p5">
+  <div class="wrap inner">
+    <span class="num">05</span>
+    <p class="kicker">Practice</p>
+    <h2 class="statement">Build it, quietly, every day.</h2>
+    <p class="lead">A good life is made in the living of ordinary days — favour living well over merely feeling good.</p>
+    <p class="body">Begin with the body: move, sleep, get outside. The longest‑lived people manage it through routine and company, not willpower. Then the things that genuinely nourish — autonomy, mastery, <em class="hi">flow</em>, and reasons that come from within.</p>
+    <p class="body">We adapt fast to money and status, so spend on experiences over things, give rather than get, choose gratitude over comparison and rest over hustle. Meaning needn't be grand — a single reason to get up will do. And tend the days you actually live, not just the story you'll remember.</p>
+    <p class="voices"><span>the Blue Zones</span><span class="dot">·</span><span>Csikszentmihalyi</span><span class="dot">·</span><span>Deci &amp; Ryan</span><span class="dot">·</span><span>Emmons</span><span class="dot">·</span><span>ikigai</span><span class="dot">·</span><span>Kahneman</span><span class="dot">·</span><span>Mill</span></p>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- CLOSING -->
+<section class="closing">
+  <div class="wrap">
+    <p class="kicker reveal">And so —</p>
+    <h2 class="closing-statement reveal">Forty‑two voices. The same few answers.</h2>
+    <p class="reveal">Twenty‑five centuries, a dozen cultures, philosophy and hard data — and they keep arriving at the same small clearing. Love. Character. Meaning. Peace. And the daily practice of all four.</p>
+    <p class="reveal law">One quiet law runs under nearly all of it: what you give comes back to you. A good life is less something you find than something you tend — together, and on purpose.</p>
+  </div>
+</section>
+
+<!-- CHORUS -->
+<section class="chorus">
+  <div class="wrap">
+    <p class="kicker">Everyone who was consulted</p>
+    <p class="names">
+      <b>Aristotle</b><span class="dot">·</span>the Harvard Study<span class="dot">·</span>Seligman's PERMA<span class="dot">·</span>the Stoics<span class="dot">·</span><b>Viktor Frankl</b><span class="dot">·</span>the Buddha<span class="dot">·</span>the science of happiness<span class="dot">·</span>Self‑Determination Theory<span class="dot">·</span>awe &amp; self‑transcendence<span class="dot">·</span><b>Camus</b><span class="dot">·</span>Confucius<span class="dot">·</span>the Tao<span class="dot">·</span>Epicurus<span class="dot">·</span>flow<span class="dot">·</span>Erikson<span class="dot">·</span>the world's faiths<span class="dot">·</span><b>Nietzsche</b><span class="dot">·</span>ikigai<span class="dot">·</span>hedonic &amp; eudaimonic<span class="dot">·</span>desire, Stoic &amp; Buddhist<span class="dot">·</span>the capabilities approach<span class="dot">·</span><b>Erich Fromm</b><span class="dot">·</span>the Blue Zones<span class="dot">·</span>the science of meaning<span class="dot">·</span>Schopenhauer<span class="dot">·</span>gratitude<span class="dot">·</span><b>Ubuntu</b><span class="dot">·</span>Josef Pieper<span class="dot">·</span>post‑traumatic growth<span class="dot">·</span>wabi‑sabi<span class="dot">·</span>Baumeister<span class="dot">·</span>J. S. Mill<span class="dot">·</span><b>Tolstoy</b><span class="dot">·</span>meaningful work<span class="dot">·</span>the two selves<span class="dot">·</span>self‑compassion<span class="dot">·</span>narrative identity<span class="dot">·</span><b>Gawande</b><span class="dot">·</span>Aristotle on friendship<span class="dot">·</span>Robin Wall Kimmerer<span class="dot">·</span>Martin Buber<span class="dot">·</span>hope
+    </p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <p class="line">Gathered over a single day — 6 June 2026. No conclusions sold here; only the places where very different people, across a very long time, happened to agree.</p>
+    <button class="totop" id="totop">Back to the top</button>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // hero fade-in once fonts/layout settle
+    requestAnimationFrame(function(){ document.body.classList.add('ready'); });
+
+    // scroll progress
+    var bar = document.getElementById('progress');
+    function onScroll(){
+      var h = document.documentElement;
+      var max = h.scrollHeight - h.clientHeight;
+      var p = max > 0 ? (h.scrollTop || window.pageYOffset) / max : 0;
+      bar.style.width = (p * 100).toFixed(2) + '%';
+    }
+    window.addEventListener('scroll', onScroll, {passive:true});
+    onScroll();
+
+    // reveal sections on scroll
+    var targets = document.querySelectorAll('.pillar, .closing, .chorus');
+    if (reduce || !('IntersectionObserver' in window)){
+      targets.forEach(function(t){ t.classList.add('in'); });
+    } else {
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+        });
+      }, {threshold:0.18, rootMargin:'0px 0px -8% 0px'});
+      targets.forEach(function(t){ io.observe(t); });
+    }
+
+    // back to top
+    document.getElementById('totop').addEventListener('click', function(){
+      window.scrollTo({top:0, behavior: reduce ? 'auto' : 'smooth'});
+    });
+  })();
+</script>
+</body>
+</html>
