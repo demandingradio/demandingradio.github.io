@@ -12,6 +12,7 @@
     { label: 'Cosmic Ascent',icon: '\u{1F680}', href: '/cosmic/',       title: 'Cosmic Ascent' },
     { label: 'WFM Tycoon',   icon: '\u{1F4DE}', href: '/wfm/',          title: 'WFM Tycoon' },
     { label: 'WFM Tycoon Y', icon: '\u{1F4F2}', href: '/wfm-y/',        title: 'WFM Tycoon Y' },
+    { label: 'WFM Tycoon AU',icon: '\u{1F998}', href: '/wfm-au/',       title: 'WFM Tycoon AU' },
     { label: 'TV Ratings',   icon: '\u{1F4FA}', href: '/tv-ratings/',   title: 'TV Ratings' },
     { label: 'Cave Ball',    icon: '\u{1F535}', href: '/cave-ball/',    title: 'Cave Ball' },
     { label: 'Drive',        icon: '\u{1F697}', href: '/drive/',        title: 'Drive' }
