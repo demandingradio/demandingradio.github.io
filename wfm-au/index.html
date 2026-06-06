@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WFM Tycoon AU - Monday Jeffrey</title>
-  <link rel="icon" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="82" font-size="84">🦘</text></svg>'>
+  <title>WFM Tycoon - Monday Jeffrey</title>
+  <link rel="icon" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="82" font-size="84">📞</text></svg>'>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -209,8 +209,8 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <span class="logo">&#128242;</span>
-        <span>WFM Tycoon AU<small>Service Level 80</small></span>
+        <span class="logo">&#128222;</span>
+        <span>WFM Tycoon<small>Service Level 80</small></span>
       </div>
       <nav class="menu">
         <div class="menu-btn" id="m-new" title="Start a fresh financial year — your current run will be erased.">New Game</div>
@@ -227,7 +227,7 @@
 
     <footer class="statusbar">
       <div id="status-left">Ready.</div>
-      <div id="status-right">WFM Tycoon AU</div>
+      <div id="status-right">WFM Tycoon</div>
     </footer>
   </div>
 
@@ -560,7 +560,7 @@
             '<div class="trust-row" title="Client trust = the contract\'s nerve. Drops on SL misses + viral complaints. Below ' + CFG.CLIENT_FLOOR + ' = client walks (game over)."><span class="tl">Client' + (S.clientCo ? ' <span class="small muted">(' + S.clientCo + ')</span>' : '') + '</span>' + meterBar(t.client) + trustTrend('client') + '</div>' +
             '<div class="trust-row" title="TL trust = your Team Leaders backing you. Hurt by missed coaching, RDO cancellations, and last-minute roster changes. Lifted by honoured RDOs and good catches."><span class="tl">TLs</span>' + meterBar(t.team) + trustTrend('team') + '</div>' +
           '</div></div>';
-      document.title = 'WFM Tycoon AU — ' + (S.handover ? 'Handover' : 'Week ' + (S.week + 1) + '/' + CFG.WEEKS) + ' — Monday Jeffrey';
+      document.title = 'WFM Tycoon — ' + (S.handover ? 'Handover' : 'Week ' + (S.week + 1) + '/' + CFG.WEEKS) + ' — Monday Jeffrey';
     }
 
     /* =======================================================================
@@ -1612,7 +1612,7 @@
       $('screen').innerHTML = '<div class="panel center"><h3>' + titleEmoji + ' Financial year complete!</h3><div class="kpi-strip" style="margin:10px 0"><div class="kpi"><div class="k">Final YTD service</div><div class="v ' + (y >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(y) + '</div></div><div class="kpi"><div class="k">Budget</div><div class="v ' + (budgetOK ? 'good' : 'bad') + '">' + money(S.budget) + '</div></div><div class="kpi"><div class="k">Headcount</div><div class="v">' + S.hc + '</div></div><div class="kpi"><div class="k">Client trust</div><div class="v">' + Math.round(S.trust.client) + '</div></div></div><h3 style="margin-top:8px">' + grade + '</h3><p>' + blurb + '</p><p class="small ' + (newBest ? 'good' : 'muted') + '">' + (newBest ? '🏅 <b>NEW BEST!</b> ' + pct1(y) + ' beats previous record of ' + pct1(prevBest) : 'Best YTD on this machine: ' + pct1(prevBest) + (prevBest > y ? ' · ' + Math.round((prevBest - y) * 1000) / 10 + 'pp short this run' : '')) + '</p>' + statsHTML + sparkHTML + achHTML + '<p style="margin-top:16px"><button class="btn big-btn" id="restart" title="Start a fresh financial year — your final grade + best YTD will persist; the rest resets.">Play another year</button> <button class="btn" id="copy-summary" style="margin-left:8px" title="Copy a one-paragraph year summary (grade, SL, budget, achievements, streaks) to the clipboard — paste into Slack / WhatsApp to brag.">📋 Copy summary</button></p></div>';
       $('restart').addEventListener('click', confirmNew); setStatus('Year complete — ' + grade);
       $('copy-summary').addEventListener('click', function () {
-        var summary = 'WFM Tycoon AU FY26/27 — Grade ' + grade + '\nYTD service: ' + pct1(y) + ' (target ' + pct(CFG.SLA_TARGET) + ')\nBudget: ' + money(S.budget) + ' · Headcount: ' + S.hc + ' · Client trust: ' + Math.round(S.trust.client) + '\nCareer: ' + (S.emailsHandled || 0) + ' emails cleared · ' + Object.keys(S.achievements || {}).length + '/' + ACHIEVEMENTS.length + ' achievements · ' + (S.history ? S.history.filter(function (h) { return h.sla >= CFG.SLA_TARGET; }).length : 0) + '/' + (S.history ? S.history.length : 0) + ' weeks hit target · longest streak ' + best + '\nSite: ' + (S.site || 'VIC') + ' · Client: ' + (S.clientCo || '—');
+        var summary = 'WFM Tycoon FY26/27 — Grade ' + grade + '\nYTD service: ' + pct1(y) + ' (target ' + pct(CFG.SLA_TARGET) + ')\nBudget: ' + money(S.budget) + ' · Headcount: ' + S.hc + ' · Client trust: ' + Math.round(S.trust.client) + '\nCareer: ' + (S.emailsHandled || 0) + ' emails cleared · ' + Object.keys(S.achievements || {}).length + '/' + ACHIEVEMENTS.length + ' achievements · ' + (S.history ? S.history.filter(function (h) { return h.sla >= CFG.SLA_TARGET; }).length : 0) + '/' + (S.history ? S.history.length : 0) + ' weeks hit target · longest streak ' + best + '\nSite: ' + (S.site || 'VIC') + ' · Client: ' + (S.clientCo || '—');
         var btn = $('copy-summary');
         var done = function (ok) { btn.textContent = ok ? '✓ Copied' : '✗ Copy blocked'; setTimeout(function () { if (btn) btn.textContent = '📋 Copy summary'; }, 2000); };
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(summary).then(function () { done(true); }, function () { done(false); });
@@ -1710,7 +1710,7 @@
     function closeDialog() { $('dlg').style.display = 'none'; }
     function confirmNew() { dialog('New game', 'Start a fresh financial year? Your current game will be erased.', [{ t: 'Start fresh', f: function () { closeDialog(); newGame(); } }, { t: 'Cancel', f: closeDialog }]); }
     function showHelp() {
-      dialog('How to Play — WFM Tycoon AU',
+      dialog('How to Play — WFM Tycoon',
         '<p>You\'re <b>Workforce Management</b> for an Aussie contact centre open <b>Mon–Fri</b>. Survive a 52-week FY (Jul 2026 – Jun 2027) keeping the <b>service level near ' + pct(CFG.SLA_TARGET) + '</b> while four stakeholders breathe down your neck: <b>Ops</b>, <b>Finance</b>, <b>Client</b>, and your <b>TLs</b>.</p>' +
         '<p style="margin-top:8px"><b>Each week:</b></p><ol style="margin-left:18px">' +
         '<li><b>Monday meeting</b> — answer the grilling (effects hidden \'til you pick; one option is a trap), spend <b>political capital</b> on asks (hire, engagement, coaching, training), then <b>commit</b> to a service-level number for the week.</li>' +
@@ -1742,7 +1742,7 @@
         '<textarea id="save-blob" placeholder="Paste a saved snapshot here, then click Import" style="width:100%;height:64px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px;font:11px/1.3 monospace;resize:vertical"></textarea>' +
         '<p class="small muted" id="save-status">&nbsp;</p>') : '';
       dialog('About',
-        '<p><b>WFM Tycoon AU — Service Level 80</b></p>' +
+        '<p><b>WFM Tycoon — Service Level 80</b></p>' +
         '<p>A workforce-management sim: daily forecasting, Erlang staffing, intraday call-flow analysis, a 24-agent behaviour audit, and the politics of the Monday meeting. Built for mondayjeffrey.com.</p>' +
         '<p class="small muted">Erlang C engine, AU public-holiday calendar, Mon–Fri operation, FY26/27.</p>' +
         pickerHTML + saveHTML,
@@ -2194,12 +2194,12 @@
       resume();
     } else {
       renderHUDPlaceholder();
-      $('screen').innerHTML = '<div class="panel center"><h3>🦘 WFM Tycoon AU — Service Level 80</h3><p>G\'day. You\'re the WFM analyst for an Aussie contact centre running one full FY (Jul 2026 – Jun 2027). Twelve months to hold the line on service level, keep Finance off your back, and dodge the suits.</p><p class="small muted">Forecast each day, staff with Erlang, fight sickies, dodgy AUX, attrition, and the budget. Drill into the call flow, audit the floor (Wallabies / Magpies / Crows) every week, front up to the Monday meeting, and clear the inbox before Macca starts asking awkward questions. Hold the service level at <b>' + pct(CFG.SLA_TARGET) + '</b> Mon–Fri.</p><p style="margin-top:14px"><button class="btn big-btn" id="start">Start the financial year ▶</button></p><p class="small"><a href="#" id="howto">How to play</a></p></div>';
+      $('screen').innerHTML = '<div class="panel center"><h3>📞 WFM Tycoon — Service Level 80</h3><p>G\'day. You\'re the WFM analyst for an Aussie contact centre running one full FY (Jul 2026 – Jun 2027). Twelve months to hold the line on service level, keep Finance off your back, and dodge the suits.</p><p class="small muted">Forecast each day, staff with Erlang, fight sickies, dodgy AUX, attrition, and the budget. Drill into the call flow, audit the floor (Wallabies / Magpies / Crows) every week, front up to the Monday meeting, and clear the inbox before Macca starts asking awkward questions. Hold the service level at <b>' + pct(CFG.SLA_TARGET) + '</b> Mon–Fri.</p><p style="margin-top:14px"><button class="btn big-btn" id="start">Start the financial year ▶</button></p><p class="small"><a href="#" id="howto">How to play</a></p></div>';
       $('start').addEventListener('click', newGame);
       $('howto').addEventListener('click', function (e) { e.preventDefault(); showHelp(); });
       setStatusBoot();
     }
-    function renderHUDPlaceholder() { $('hud').innerHTML = '<div class="hud-cell" style="grid-column:1/-1"><div class="k">Welcome</div><div class="v">WFM Tycoon AU</div><div class="hud-sub">Press start to begin FY26/27</div></div>'; }
+    function renderHUDPlaceholder() { $('hud').innerHTML = '<div class="hud-cell" style="grid-column:1/-1"><div class="k">Welcome</div><div class="v">WFM Tycoon</div><div class="hud-sub">Press start to begin FY26/27</div></div>'; }
     function setStatusBoot() { $('status-left').textContent = 'Ready. Press start to begin.'; var hasBest = false; try { hasBest = localStorage.getItem('wfm_au_best') !== null; } catch (e) {} $('status-right').textContent = hasBest ? 'Best YTD ' + pct1(bestSLA()) : 'First run — set the record.'; }
 
     // Inbox wiring + real-time ticker
