@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Test - Monday Jeffrey</title>
+  <link rel="stylesheet" href="../assets/win95.css">
+  <style>
+    .window { width: 600px; max-width: 96vw; }
+    .pt-body {
+      background: #c0c0c0;
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+    }
+    .pt-pad { padding: 10px 12px 12px; }
+
+    /* ---------- Warning banner ---------- */
+    .warn-banner {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      background: #ffffcc;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+    .warn-banner .ic { font-size: 26px; flex-shrink: 0; line-height: 1; }
+    .warn-banner b { color: #a00000; }
+
+    /* ---------- Input row ---------- */
+    .field-label { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+    .pw-row { display: flex; gap: 6px; align-items: stretch; }
+    .pw-input {
+      flex: 1;
+      min-width: 0;
+      padding: 5px 7px;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      background: #ffffff;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+    .show-btn { min-width: 56px; padding: 4px 8px; }
+
+    .priv-note {
+      font-size: 11px;
+      color: #006000;
+      margin: 6px 0 10px;
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+      line-height: 1.4;
+    }
+    .priv-note .lk { font-size: 14px; }
+
+    /* ---------- Run controls ---------- */
+    .run-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .run-row label { font-size: 12px; }
+    .rig-select {
+      padding: 3px 4px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      background: #ffffff;
+      max-width: 230px;
+    }
+    .crack-btn { font-weight: bold; color: #a00000; min-width: 110px; }
+    .crack-btn:disabled { color: #808080; cursor: default; }
+    .stop-btn { min-width: 64px; }
+
+    /* ---------- Live meter ---------- */
+    .meter { margin-bottom: 4px; }
+    .meter-track {
+      height: 16px;
+      background: #ffffff;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      position: relative;
+      overflow: hidden;
+    }
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: #c00000;
+      transition: width 0.25s ease, background 0.25s ease;
+      background-image: linear-gradient(90deg, rgba(255,255,255,0.25) 25%, transparent 25%,
+        transparent 50%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.25) 75%, transparent 75%);
+      background-size: 8px 8px;
+    }
+    .meter-stats {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 4px 14px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      color: #303030;
+      margin-top: 4px;
+    }
+    .meter-stats b { color: #000080; }
+
+    .section-rule { border: none; border-top: 1px solid #808080; border-bottom: 1px solid #ffffff; margin: 12px 0 10px; }
+
+    /* ---------- Cracking theater ---------- */
+    .theater { display: none; }
+    .theater.show { display: block; }
+
+    .wheels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 8px;
+      background: #000000;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      min-height: 46px;
+      align-content: flex-start;
+    }
+    .wheel {
+      width: 24px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      font-size: 18px;
+      font-weight: bold;
+      color: #33ff66;
+      background: #0a1a0a;
+      border: 1px solid #1f5f2f;
+      text-shadow: 0 0 4px #33ff66;
+    }
+    .wheel.locked {
+      color: #ffffff;
+      background: #0a3a12;
+      border-color: #33ff66;
+      text-shadow: 0 0 6px #66ff88;
+    }
+    .wheel.flash { animation: wheelflash 0.3s ease-out; }
+    @keyframes wheelflash {
+      0% { background: #66ff88; color: #000; transform: scale(1.25); }
+      100% { background: #0a3a12; color: #fff; transform: scale(1); }
+    }
+    .wheel.gaveup { color: #ff5555; border-color: #803030; text-shadow: none; opacity: 0.7; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .stat {
+      background: #c0c0c0;
+      border-top: 1px solid #404040;
+      border-left: 1px solid #404040;
+      border-bottom: 1px solid #ffffff;
+      border-right: 1px solid #ffffff;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+    .stat .k { color: #404040; display: block; }
+    .stat .v { font-family: 'Courier New', monospace; font-weight: bold; font-size: 12px; color: #000080; word-break: break-all; }
+
+    .terminal {
+      margin-top: 6px;
+      background: #000000;
+      color: #c0c0c0;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      font-family: 'Courier New', monospace;
+      font-size: 11.5px;
+      line-height: 1.5;
+      padding: 6px 8px;
+      height: 150px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .term-line .t { color: #6a6a6a; }      /* timestamp / tag */
+    .tl-info { color: #c0c0c0; }
+    .tl-stage { color: #66ccff; font-weight: bold; }
+    .tl-try  { color: #888888; }
+    .tl-hit  { color: #ff5555; font-weight: bold; }
+    .tl-good { color: #33ff66; font-weight: bold; }
+    .tl-warn { color: #ffcc33; }
+    .cursor::after { content: '_'; animation: blink 1s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ---------- Result ---------- */
+    .result { display: none; margin-top: 12px; }
+    .result.show { display: block; }
+    .verdict {
+      padding: 10px 12px;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .verdict .vic { font-size: 38px; line-height: 1; flex-shrink: 0; }
+    .verdict .vmain { flex: 1; }
+    .verdict .vband { font-size: 17px; font-weight: bold; }
+    .verdict .vtime { font-size: 12px; margin-top: 2px; }
+    .verdict .vtime b { font-family: 'Courier New', monospace; }
+    .v-crit { background: #ffd6d6; } .v-crit .vband { color: #a00000; }
+    .v-weak { background: #ffe6cc; } .v-weak .vband { color: #b35900; }
+    .v-mod  { background: #fdfdcc; } .v-mod  .vband { color: #8a7a00; }
+    .v-strong { background: #d6f5d6; } .v-strong .vband { color: #1f7a1f; }
+    .v-vstrong { background: #d6e6ff; } .v-vstrong .vband { color: #14478a; }
+
+    .why {
+      margin-top: 8px;
+      background: #ffffff;
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-bottom: 2px solid #ffffff;
+      border-right: 2px solid #ffffff;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .why h4 { font-size: 12px; margin-bottom: 4px; }
+    .why ul { margin: 4px 0 4px 18px; }
+    .why li { margin-bottom: 3px; }
+    .why .tip { color: #006000; }
+    .why .bad { color: #a00000; }
+    .why code {
+      font-family: 'Courier New', monospace;
+      background: #eee;
+      padding: 0 3px;
+      border: 1px solid #ccc;
+    }
+
+    /* ---------- Dialog ---------- */
+    .dlg-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.25);
+      display: none; align-items: center; justify-content: center;
+      z-index: 3000;
+    }
+    .dlg-overlay.show { display: flex; }
+    .dlg {
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      min-width: 340px; max-width: 460px;
+      box-shadow: 2px 2px 0 #000;
+    }
+    .dlg-title {
+      background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+      color: white; padding: 3px 4px; font-weight: bold; font-size: 12px;
+    }
+    .dlg-body { padding: 16px 18px 8px; display: flex; gap: 14px; align-items: flex-start; }
+    .dlg-icon { font-size: 34px; flex-shrink: 0; line-height: 1; }
+    .dlg-msg  { font-size: 12px; line-height: 1.55; flex: 1; }
+    .dlg-msg h3 { font-size: 13px; margin-bottom: 6px; }
+    .dlg-msg ul { margin: 6px 0 6px 18px; }
+    .dlg-msg li { margin-bottom: 3px; }
+    .dlg-actions { padding: 6px 14px 14px; display: flex; justify-content: center; gap: 8px; }
+
+    /* ---------- Menu dropdown ---------- */
+    .menu-bar { user-select: none; position: relative; }
+    .drop {
+      position: absolute;
+      background: #c0c0c0;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #404040;
+      border-right: 2px solid #404040;
+      box-shadow: 2px 2px 0 #000;
+      min-width: 170px; z-index: 200; display: none;
+    }
+    .drop.show { display: block; }
+    .drop-item { padding: 4px 18px; cursor: pointer; font-size: 12px; }
+    .drop-item:hover { background: #000080; color: #fff; }
+    .drop-sep { border-top: 1px solid #808080; border-bottom: 1px solid #ffffff; margin: 2px 0; }
+  </style>
+</head>
+<body>
+  <div class="desktop"></div>
+
+  <div class="window" data-title="Password Test" data-icon="🔐" data-close-href="../index.html">
+    <div class="title-bar">
+      <div class="title-bar-text">
+        <span>🔐</span><span id="window-title-text">Password Test</span>
+      </div>
+      <div class="title-bar-buttons">
+        <div class="title-btn minimize">_</div>
+        <div class="title-btn maximize">□</div>
+        <div class="title-btn close">×</div>
+      </div>
+    </div>
+
+    <div class="menu-bar">
+      <div class="menu-item" id="menu-file"><u>F</u>ile</div>
+      <div class="menu-item" id="menu-help"><u>H</u>elp</div>
+      <div class="drop" id="drop-file">
+        <div class="drop-item" data-act="reset">New Test</div>
+        <div class="drop-sep"></div>
+        <div class="drop-item" data-act="sound">Sound: On</div>
+        <div class="drop-sep"></div>
+        <div class="drop-item" data-act="exit">Exit</div>
+      </div>
+      <div class="drop" id="drop-help">
+        <div class="drop-item" data-act="how">How it works</div>
+        <div class="drop-item" data-act="tips">Make a strong password</div>
+        <div class="drop-item" data-act="about">About</div>
+      </div>
+    </div>
+
+    <div class="pt-body">
+      <div class="pt-pad">
+        <div class="warn-banner">
+          <div class="ic">⚠️</div>
+          <div>
+            <b>Do NOT type a real password.</b> This is a learning toy — make one up,
+            or test a fake that <em>looks</em> like something you'd use. Never paste a
+            password you actually rely on, here or anywhere.
+          </div>
+        </div>
+
+        <div class="field-label">Enter a password to attack:</div>
+        <div class="pw-row">
+          <input type="password" id="pw-input" class="pw-input" maxlength="64"
+                 autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 placeholder="type a made-up password...">
+          <button class="btn show-btn" id="show-btn">Show</button>
+        </div>
+
+        <div class="priv-note">
+          <span class="lk">🔒</span>
+          <span><b>100% offline.</b> Everything runs in your browser. Your password is never
+          sent anywhere and never saved — watch DevTools &rarr; Network while you test and
+          you'll see your password trigger <b>zero</b> requests. (This is the only kind of
+          "password checker" you should ever trust.)</span>
+        </div>
+
+        <div class="run-row">
+          <label for="rig-select">Attacker:</label>
+          <select id="rig-select" class="rig-select" title="Who is trying to crack it, and how fast can they guess?"></select>
+          <button class="btn crack-btn" id="crack-btn">CRACK IT ▶</button>
+          <button class="btn stop-btn" id="stop-btn" style="display:none;">Stop</button>
+        </div>
+
+        <div class="meter">
+          <div class="meter-track"><div class="meter-fill" id="meter-fill"></div></div>
+          <div class="meter-stats">
+            <span>Length: <b id="m-len">0</b></span>
+            <span>Character set: <b id="m-set">—</b></span>
+            <span>Raw entropy: <b id="m-bits">0 bits</b></span>
+          </div>
+        </div>
+
+        <!-- ===== Cracking theater ===== -->
+        <div class="theater" id="theater">
+          <hr class="section-rule">
+          <div class="wheels" id="wheels"></div>
+          <div class="stats">
+            <div class="stat"><span class="k">Attempts</span><span class="v" id="s-attempts">0</span></div>
+            <div class="stat"><span class="k">Guess rate</span><span class="v" id="s-rate">—</span></div>
+            <div class="stat"><span class="k">Keyspace</span><span class="v" id="s-space">—</span></div>
+            <div class="stat"><span class="k">Time to crack</span><span class="v" id="s-eta">—</span></div>
+          </div>
+          <div class="terminal" id="terminal"></div>
+        </div>
+
+        <!-- ===== Result ===== -->
+        <div class="result" id="result"></div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-cell" id="status-text">Ready. Type a (fake) password.</div>
+      <div class="status-cell" id="status-clock" style="text-align:right; flex:0 0 auto; min-width:54px;">--:--</div>
+    </div>
+  </div>
+
+  <!-- ===== Dialog ===== -->
+  <div class="dlg-overlay" id="dlg">
+    <div class="dlg">
+      <div class="dlg-title" id="dlg-title">Password Test</div>
+      <div class="dlg-body">
+        <div class="dlg-icon" id="dlg-icon">ℹ️</div>
+        <div class="dlg-msg" id="dlg-msg"></div>
+      </div>
+      <div class="dlg-actions" id="dlg-actions"></div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn"><span>⊞</span> Start</a>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
+  </div>
+
+  <script src="common-passwords.js"></script>
+  <script src="../assets/win95.js"></script>
+  <script>
+  /* ============================================================
+   * PASSWORD TEST — Monday Jeffrey edition
+   * A teaching toy that runs an attacker's real escalating
+   * pipeline (common list -> dictionary+rules -> brute force)
+   * and dramatizes the search, while reporting honest math.
+   * 100% client-side. Nothing is sent or stored.
+   * ============================================================ */
+  (function () {
+    'use strict';
+
+    // ---------- Tiny sound engine (same idea as the other apps) ----------
+    let audioCtx, soundOn = true;
+    function tone(f1, f2, dur, gain, type) {
+      if (!soundOn) return;
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type || 'square';
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.value = f1;
+        g.gain.value = gain;
+        o.start();
+        o.frequency.exponentialRampToValueAtTime(f2, audioCtx.currentTime + dur);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur + 0.02);
+        o.stop(audioCtx.currentTime + dur + 0.04);
+      } catch (e) {}
+    }
+    const sfx = {
+      tick:  () => tone(1500, 1500, 0.012, 0.012, 'square'),
+      lock:  () => tone(900, 1300, 0.04, 0.05, 'square'),
+      scan:  () => tone(420 + Math.random()*300, 300, 0.02, 0.015, 'sawtooth'),
+      crack: () => { tone(300,120,0.18,0.06,'sawtooth'); setTimeout(()=>tone(200,80,0.25,0.06,'sawtooth'),140); },
+      safe:  () => { tone(523,659,0.1,0.04,'square'); setTimeout(()=>tone(659,988,0.16,0.04,'square'),110); },
+      err:   () => { tone(220,180,0.14,0.05,'square'); setTimeout(()=>tone(180,150,0.16,0.05,'square'),130); }
+    };
+
+    // ---------- Attacker rigs (guesses per second) ----------
+    // Ballpark, defensible figures. Labelled as estimates in the UI.
+    const RIGS = [
+      { id:'online_lock', label:'Online, locked-out site (~10/sec)', rate:10 },
+      { id:'online',      label:'Online, typical site (~1 thousand/sec)', rate:1e3 },
+      { id:'bcrypt',      label:'Stolen DB, slow hash / bcrypt (~20 thousand/sec)', rate:2e4 },
+      { id:'fast1gpu',    label:'Stolen DB, fast hash, 1 GPU (~10 billion/sec)', rate:1e10 },
+      { id:'cluster',     label:'Stolen DB, GPU cluster (~1 trillion/sec)', rate:1e12 }
+    ];
+    const DEFAULT_RIG = 'fast1gpu';
+
+    // ---------- Wordlists (curated subsets; rank ≈ index) ----------
+    const COMMON_FALLBACK = (
+      'password 123456 123456789 12345678 12345 1234567 1234567890 qwerty abc123 ' +
+      'password1 iloveyou 111111 123123 admin letmein welcome monkey 1234 dragon ' +
+      'sunshine master 000000 qwerty123 football baseball superman batman trustno1 ' +
+      'hello whatever princess starwars login passw0rd zaq12wsx qazwsx michael jordan ' +
+      'harley ranger hunter buster soccer hockey killer george charlie andrew michelle ' +
+      'love jessica asdfgh pepper daniel access 123321 654321 7777777 888888 123qwe ' +
+      'zxcvbnm 11111111 ashley bailey shadow jennifer amanda summer ginger flower ' +
+      'hottie loveme password123 qwertyuiop passport freedom maggie cookie naruto ' +
+      'thomas robert matthew computer tigger purple ncc1701 12341234 121212 696969 ' +
+      'mustang 1q2w3e4r letmein1 admin123 root toor changeme secret samsung google ' +
+      'qwerty1 abcd1234 a1b2c3 password12 iloveyou1 michael1 chocolate liverpool ' +
+      'arsenal chelsea pokemon minecraft superman1 jordan23 11111 666666 555555 ' +
+      'aaaaaa asdfasdf q1w2e3r4 zaq1zaq1 1qaz2wsx welcome1 monday jeffrey'
+    );
+    // Prefer the large breached-password list (loaded from common-passwords.js at page
+    // load — a same-origin asset, NOT a request triggered by your password). Fall back
+    // to the inline starter set if that file is missing (e.g. opened straight off disk).
+    const COMMON = dedupArr(
+      ((window.PT_COMMON_PASSWORDS && window.PT_COMMON_PASSWORDS.length)
+        ? (Array.isArray(window.PT_COMMON_PASSWORDS)
+            ? window.PT_COMMON_PASSWORDS
+            : String(window.PT_COMMON_PASSWORDS).split(/\r?\n/))
+        : COMMON_FALLBACK.split(/\s+/)).map(s => s.toLowerCase())
+    );
+
+    const WORDS = dedup((
+      // common nouns / things
+      'dragon monkey sunshine shadow master football baseball superman batman princess ' +
+      'flower summer winter spring autumn orange purple silver golden diamond cookie ' +
+      'pepper ginger coffee butter guitar rocket thunder lightning wizard knight castle ' +
+      'forest river ocean mountain tiger lion eagle falcon panda koala wombat kangaroo ' +
+      'cricket rabbit turtle dolphin shark whale phoenix unicorn ninja samurai viking ' +
+      'pirate captain soldier hunter ranger hello welcome freedom liberty justice victory ' +
+      'legend hero angel devil demon ghost spirit magic dream happy lucky sunny cloud ' +
+      'storm frost flame ember blaze steel iron copper bronze crystal marble jasmine rose ' +
+      'lily daisy violet apple mango cherry banana grape lemon melon peach school teacher ' +
+      'doctor nurse police money house garden window laptop phone music piano violin drums ' +
+      'whiskey pizza burger bacon cheese chicken monster trooper galaxy nebula comet ' +
+      // names
+      'michael jennifer jessica ashley amanda sarah michelle daniel david james robert ' +
+      'john william thomas charlie george andrew joshua matthew anthony emma olivia sophia ' +
+      'bella lucas oscar jack harry oliver charlotte isabella liam noah ava mia ' +
+      // aussie flavour
+      'sydney melbourne brisbane adelaide perth canberra bondi outback dingo emu ' +
+      'kookaburra vegemite collingwood carlton essendon hawthorn richmond geelong ' +
+      'jeffrey monday'
+    ).toLowerCase());
+
+    const KEYWALKS = dedup((
+      'qwerty qwertyuiop qwertyui asdf asdfg asdfgh asdfghjkl zxcv zxcvb zxcvbn zxcvbnm ' +
+      'qazwsx qazwsxedc 1qaz2wsx 1qaz2wsx3edc 1q2w3e 1q2w3e4r 1q2w3e4r5t qweasd qweasdzxc ' +
+      'poiuy poiuyt lkjh lkjhg mnbvc mnbvcxz qweqwe asdasd 147258 159753 12345qwert ' +
+      'qwer 4321 abcd 1234 0987 09876 098765 0123456789'
+    ).toLowerCase());
+
+    const COMMON_SET = new Set(COMMON);
+    const WORD_SET   = new Set(WORDS);
+    const WALK_SET   = new Set(KEYWALKS);
+
+    function dedup(str) { return dedupArr(str.split(/\s+/)); }
+    function dedupArr(arr) {
+      const seen = new Set(), out = [];
+      arr.forEach(w => { if (w && !seen.has(w)) { seen.add(w); out.push(w); } });
+      return out;
+    }
+
+    // ---------- Charset detection ----------
+    function detectCharset(pw) {
+      let lower=false, upper=false, digit=false, sym=false, nonascii=false;
+      for (const ch of pw) {
+        const c = ch.codePointAt(0);
+        if (c > 126) { nonascii = true; }
+        else if (ch >= 'a' && ch <= 'z') lower = true;
+        else if (ch >= 'A' && ch <= 'Z') upper = true;
+        else if (ch >= '0' && ch <= '9') digit = true;
+        else sym = true;
+      }
+      let R = 0; const classes = [];
+      if (lower) { R += 26; classes.push('a-z'); }
+      if (upper) { R += 26; classes.push('A-Z'); }
+      if (digit) { R += 10; classes.push('0-9'); }
+      if (sym)   { R += 33; classes.push('symbols'); }
+      if (nonascii) { R += 100; classes.push('unicode'); }
+      return { R: Math.max(R, 1), classes, lower, upper, digit, sym, nonascii };
+    }
+
+    // ---------- Big-number / time formatting (log10-based, overflow-safe) ----------
+    function log10(x) { return Math.log(x) / Math.LN10; }
+
+    function sci10(l) {                       // l = log10(value) -> "m.mm × 10^e"
+      if (!isFinite(l)) return '∞';
+      if (l < 6) {
+        const v = Math.pow(10, l);
+        return Math.round(v).toLocaleString('en-US');
+      }
+      const e = Math.floor(l);
+      const m = Math.pow(10, l - e);
+      return m.toFixed(2) + ' × 10^' + e;
+    }
+
+    const SCALE = { 3:'thousand', 6:'million', 9:'billion', 12:'trillion', 15:'quadrillion',
+                    18:'quintillion', 21:'sextillion', 24:'septillion', 27:'octillion',
+                    30:'nonillion', 33:'decillion' };
+    function scaleWord(l10, unit) {           // l10 = log10(count) -> "1.2 billion <unit>"
+      const e = Math.floor(l10);
+      if (e < 3) {
+        const v = Math.pow(10, l10);
+        const n = v < 10 ? Math.round(v*10)/10 : Math.round(v);
+        return n.toLocaleString('en-US') + ' ' + unit;
+      }
+      const g = Math.min(33, Math.floor(e/3)*3);
+      const m = Math.pow(10, l10 - g);
+      return (Math.round(m*10)/10) + ' ' + SCALE[g] + ' ' + unit;
+    }
+
+    const AGE_UNIVERSE_YEARS_LOG10 = log10(1.38e10); // ≈ 10.14
+    function humanTime(log10sec) {
+      if (log10sec < -0.3) return 'instantly';        // < ~0.5s
+      const sec = Math.pow(10, log10sec);
+      if (sec < 1)     return 'under a second';
+      if (sec < 60)    return approx(sec) + ' seconds';
+      if (sec < 3600)  return approx(sec/60) + ' minutes';
+      if (sec < 86400) return approx(sec/3600) + ' hours';
+      if (sec < 2.63e6)   return approx(sec/86400) + ' days';
+      if (sec < 3.156e7)  return approx(sec/2.63e6) + ' months';
+      const log10years = log10sec - log10(3.156e7);
+      if (log10years > AGE_UNIVERSE_YEARS_LOG10 + 0.05) {
+        return 'longer than the age of the universe (≈ ' +
+               scaleWord(log10years - AGE_UNIVERSE_YEARS_LOG10, 'times over') + ')';
+      }
+      return scaleWord(log10years, 'years');
+    }
+    function approx(n) {
+      if (n < 10) return Math.round(n*10)/10 + '';
+      return Math.round(n).toLocaleString('en-US');
+    }
+
+    // ---------- Leet de-substitution ----------
+    const LEET = { '@':'a','4':'a','8':'b','(':'c','3':'e','6':'g','1':'i','!':'i','0':'o',
+                   '9':'g','5':'s','$':'s','7':'t','+':'t','2':'z','€':'e','£':'l' };
+    function deLeet(s) {
+      let out = '', subs = 0;
+      for (const ch of s.toLowerCase()) {
+        if (LEET[ch]) { out += LEET[ch]; subs++; }
+        else out += ch;
+      }
+      return { word: out, subs };
+    }
+
+    // ---------- Sequence / repeat detection ----------
+    function isRun(s) {                        // abcdef, 123456, fedcba, 9876
+      if (s.length < 4) return false;
+      let inc = true, dec = true;
+      for (let i = 1; i < s.length; i++) {
+        const d = s.codePointAt(i) - s.codePointAt(i-1);
+        if (d !== 1) inc = false;
+        if (d !== -1) dec = false;
+      }
+      return inc || dec;
+    }
+    function repeatBlock(s) {                  // returns block length if s is block repeated, else 0
+      const n = s.length;
+      for (let b = 1; b <= n/2; b++) {
+        if (n % b !== 0) continue;
+        const block = s.slice(0, b);
+        let ok = true;
+        for (let i = b; i < n; i += b) if (s.slice(i, i+b) !== block) { ok = false; break; }
+        if (ok) return b;
+      }
+      return 0;
+    }
+
+    // ---------- Strip mangling: leading caps + trailing digits/symbols ----------
+    function stripMangle(pw) {
+      let core = pw, prefix = '', suffix = '';
+      const sm = core.match(/^([^a-zA-Z]*)(.*?)([^a-zA-Z]*)$/);
+      // capture trailing non-letters as suffix, leading non-letters as prefix
+      const mTail = core.match(/[^a-zA-Z]+$/);
+      if (mTail) { suffix = mTail[0]; core = core.slice(0, core.length - suffix.length); }
+      const mHead = core.match(/^[^a-zA-Z]+/);
+      if (mHead) { prefix = mHead[0]; core = core.slice(prefix.length); }
+      return { core, prefix, suffix };
+    }
+
+    // ---------- The analyzer: returns the FIRST (cheapest) attack that wins ----------
+    // Result: { method, label, guessLog10, lessons:[], sampleTries:[], crackable:'dict'|'brute',
+    //           reasonGood:bool, charset }
+    function analyze(pw) {
+      const cs = detectCharset(pw);
+      const lower = pw.toLowerCase();
+      const L = [...pw].length;
+
+      // 1) Top common password list (exact, then case-insensitive)
+      let idx = COMMON.indexOf(pw);
+      let ci = idx;
+      if (idx < 0) ci = COMMON.indexOf(lower);
+      if (idx >= 0 || ci >= 0) {
+        const rank = (idx >= 0 ? idx : ci) + 1;
+        return {
+          method: 'common',
+          label: idx >= 0 ? 'Top common-password list'
+                          : 'Top common-password list (ignoring CAPS)',
+          guessLog10: log10(rank),
+          charset: cs,
+          sampleTries: sampleFrom(COMMON, rank),
+          lessons: [
+            ['bad', 'This is literally on the list of most-used passwords on Earth (rank #' + rank + ').'],
+            ['bad', 'Attackers try these <em>first</em>. It falls before the real work even begins.'],
+            (idx < 0 ? ['bad', 'Changing the capitalisation didn\'t help — they test every case.'] : null)
+          ].filter(Boolean)
+        };
+      }
+
+      // 2) Keyboard walks
+      if (WALK_SET.has(lower)) {
+        return {
+          method: 'keywalk',
+          label: 'Keyboard-pattern list',
+          guessLog10: log10(WALK_SET.size + 50),
+          charset: cs,
+          sampleTries: sampleFrom(KEYWALKS, KEYWALKS.indexOf(lower)+1),
+          lessons: [
+            ['bad', 'This is a path traced across the keyboard (like <code>qwerty</code> or <code>1qaz2wsx</code>).'],
+            ['bad', 'It looks random but it\'s in every cracker\'s starter pack.']
+          ]
+        };
+      }
+
+      // 3) Pure sequence / repeat
+      const blk = repeatBlock(pw);
+      if (isRun(pw) || blk > 0) {
+        const note = blk > 0 && blk < pw.length
+          ? 'It\'s just <code>' + esc(pw.slice(0,blk)) + '</code> repeated.'
+          : 'It\'s a straight run of sequential characters.';
+        return {
+          method: 'pattern',
+          label: 'Sequence / repetition rule',
+          guessLog10: log10(2000),
+          charset: cs,
+          sampleTries: ['aaaa','1111','abcabc','123456','abcdef','qweqwe','0000','121212'],
+          lessons: [
+            ['bad', note],
+            ['bad', 'Patterns like this are generated and tested almost for free.']
+          ]
+        };
+      }
+
+      // 4) Dictionary word (exact / case / leet), possibly with mangling
+      const { core, prefix, suffix } = stripMangle(pw);
+      const coreLower = core.toLowerCase();
+      const deleeted = deLeet(coreLower);
+      let baseRank = -1, baseList = null, viaLeet = false;
+      function rankIn(word) {
+        let r = COMMON.indexOf(word); if (r >= 0) return { r, list:'common' };
+        r = WORDS.indexOf(word);      if (r >= 0) return { r, list:'word' };
+        return null;
+      }
+      let hit = core.length >= 3 ? rankIn(coreLower) : null;
+      if (!hit && deleeted.subs > 0 && core.length >= 3) {
+        hit = rankIn(deleeted.word); if (hit) viaLeet = true;
+      }
+      if (hit) {
+        baseRank = hit.r + 1; baseList = hit.list;
+        // mangling cost multiplier (how many variations a rules-based attack tries)
+        let mLog = 0; const mNotes = [];
+        if (prefix || suffix) {
+          const digits = (prefix + suffix).match(/[0-9]/g);
+          const syms   = (prefix + suffix).match(/[^0-9a-zA-Z]/g);
+          if (digits) { mLog += digits.length; mNotes.push(digits.length + ' digit' + (digits.length>1?'s':'')); }
+          if (syms)   { mLog += syms.length * log10(33); mNotes.push(syms.length + ' symbol' + (syms.length>1?'s':'')); }
+        }
+        if (/[A-Z]/.test(pw)) mLog += log10(2);
+        if (viaLeet) mLog += deleeted.subs * log10(2);
+        const dictSize = baseList === 'common' ? COMMON.length : WORDS.length + COMMON.length;
+        const guessLog10 = log10(baseRank) + mLog;
+        const lessons = [];
+        lessons.push(['bad', 'The core is the dictionary word <code>' + esc(deleeted.word) + '</code> ' +
+          '(found in a ~' + dictSize + '-word list, rank #' + baseRank + ').']);
+        if (viaLeet) lessons.push(['bad', 'Leet-speak (<code>@ 0 1 3 $</code>…) is the <em>first</em> thing crackers reverse — it adds almost nothing.']);
+        if (/[A-Z]/.test(pw)) lessons.push(['bad', 'A capital letter (usually at the start) is an assumed rule, not a surprise.']);
+        if (prefix || suffix) lessons.push(['bad', 'Tacking on ' + mNotes.join(' + ') + ' (e.g. a year) is the most predictable trick there is.']);
+        lessons.push(['tip', 'A "word + tweaks" password has the entropy of the <em>word</em>, not of its length.']);
+        return {
+          method: 'dict',
+          label: 'Dictionary attack + mangling rules',
+          guessLog10,
+          charset: cs,
+          base: deleeted.word, prefix, suffix,
+          sampleTries: buildDictSamples(deleeted.word, prefix, suffix, baseList),
+          lessons
+        };
+      }
+
+      // 5) All digits (PIN / date)
+      if (cs.digit && !cs.lower && !cs.upper && !cs.sym && !cs.nonascii) {
+        const looksDate = (L === 6 || L === 8) ;
+        return {
+          method: 'brute',
+          label: looksDate ? 'Digit brute force (looks like a date/PIN)' : 'Digit brute force (PIN)',
+          guessLog10: L * log10(10) - log10(2),
+          charset: cs,
+          brute: true,
+          sampleTries: null,
+          lessons: [
+            ['bad', 'Digits only — just ' + sci10(L*log10(10)) + ' possibilities.'],
+            looksDate ? ['bad', 'It looks like a date. Attackers try real dates (birthdays, anniversaries) before random ones.'] : null,
+            ['tip', 'A 4-digit PIN has ~13 bits of entropy. A short word beats it; a passphrase obliterates it.']
+          ].filter(Boolean)
+        };
+      }
+
+      // 6) Full brute force over detected charset
+      return {
+        method: 'brute',
+        label: 'Brute force (try every combination)',
+        guessLog10: L * log10(cs.R) - log10(2),   // average = half the keyspace
+        charset: cs,
+        brute: true,
+        sampleTries: null,
+        lessons: []
+      };
+    }
+
+    function sampleFrom(list, around) {
+      const out = [];
+      const start = Math.max(0, around - 6);
+      for (let i = start; i < Math.min(list.length, start + 8); i++) out.push(list[i]);
+      return out;
+    }
+    function buildDictSamples(base, prefix, suffix, listName) {
+      const list = listName === 'common' ? COMMON : WORDS;
+      const i = list.indexOf(base);
+      const near = sampleFrom(list, i >= 0 ? i+1 : 0).slice(0, 4);
+      const mangled = [base, cap(base), base+'1', base+'123', cap(base)+'2024', base+'!'];
+      return near.concat(mangled);
+    }
+    function cap(s){ return s ? s[0].toUpperCase()+s.slice(1) : s; }
+
+    // ---------- DOM helpers ----------
+    const $ = id => document.getElementById(id);
+    function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+    // ---------- Live strength meter ----------
+    function updateMeter() {
+      const pw = $('pw-input').value;
+      const L = [...pw].length;
+      const cs = detectCharset(pw);
+      $('m-len').textContent = L;
+      $('m-set').textContent = L ? (cs.classes.join(', ') + ' = ' + cs.R) : '—';
+      const bits = L * (cs.R > 1 ? Math.log2(cs.R) : 0);
+      $('m-bits').textContent = (Math.round(bits)) + ' bits';
+
+      // coarse colour: penalise obviously-listed passwords
+      const fill = $('meter-fill');
+      let pct = Math.min(100, (bits / 90) * 100);
+      let col = '#c00000';
+      const lower = pw.toLowerCase();
+      const obvious = COMMON_SET.has(lower) || WALK_SET.has(lower) || (L>0 && (isRun(pw) || repeatBlock(pw)>0));
+      if (obvious) { pct = Math.min(pct, 8); col = '#c00000'; }
+      else if (bits >= 75) col = '#1f7a1f';
+      else if (bits >= 60) col = '#5fae3a';
+      else if (bits >= 40) col = '#c9a400';
+      else if (bits >= 28) col = '#d07000';
+      fill.style.width = pct + '%';
+      fill.style.background = col;
+    }
+
+    // ---------- Terminal ----------
+    let termCursor = null;
+    function term(text, cls) {
+      const t = $('terminal');
+      if (termCursor) termCursor.classList.remove('cursor');
+      const line = document.createElement('div');
+      line.className = 'term-line ' + (cls || 'tl-info');
+      line.innerHTML = text;
+      line.classList.add('cursor');
+      termCursor = line;
+      t.appendChild(line);
+      t.scrollTop = t.scrollHeight;
+      return line;
+    }
+    function termClear(){ $('terminal').innerHTML=''; termCursor=null; }
+
+    // ---------- Stats display ----------
+    function setStat(id, v){ $(id).textContent = v; }
+    let counterRAF = null;
+    function animateCounter(targetLog10, duration, onDone) {
+      const el = $('s-attempts');
+      const start = performance.now();
+      cancelAnimationFrame(counterRAF);
+      function frame(now) {
+        const p = Math.min(1, (now - start) / duration);
+        const ease = p * p;                          // accelerate
+        const cur = ease * targetLog10;
+        el.textContent = sci10(cur);
+        if (p < 1) counterRAF = requestAnimationFrame(frame);
+        else { el.textContent = sci10(targetLog10); if (onDone) onDone(); }
+      }
+      counterRAF = requestAnimationFrame(frame);
+    }
+
+    // ---------- Wheels ----------
+    let wheelTimers = [];
+    function buildWheels(pw) {
+      const wrap = $('wheels');
+      wrap.innerHTML = '';
+      wheelTimers.forEach(clearInterval); wheelTimers = [];
+      const chars = [...pw];
+      const cap = 44;
+      const shown = chars.slice(0, cap);
+      const pool = wheelPool(pw);
+      shown.forEach(() => {
+        const w = document.createElement('div');
+        w.className = 'wheel';
+        w.textContent = pool[Math.floor(Math.random()*pool.length)];
+        wrap.appendChild(w);
+      });
+      if (chars.length > cap) {
+        const more = document.createElement('div');
+        more.className = 'wheel'; more.style.width='auto'; more.style.padding='0 6px';
+        more.textContent = '+' + (chars.length - cap);
+        wrap.appendChild(more);
+      }
+      return wrap.querySelectorAll('.wheel');
+    }
+    function wheelPool(pw) {
+      const cs = detectCharset(pw);
+      let p = '';
+      if (cs.lower || (!cs.upper && !cs.digit && !cs.sym)) p += 'abcdefghijklmnopqrstuvwxyz';
+      if (cs.upper) p += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      if (cs.digit) p += '0123456789';
+      if (cs.sym || cs.nonascii) p += '!@#$%^&*?-_+=';
+      return p || 'abcdefghijklmnopqrstuvwxyz';
+    }
+    function spinAll(wheels, pw) {
+      const pool = wheelPool(pw);
+      wheels.forEach((w) => {
+        if (w.classList.contains('locked')) return;
+        const t = setInterval(() => {
+          if (w.classList.contains('locked')) return;
+          w.textContent = pool[Math.floor(Math.random()*pool.length)];
+        }, 45);
+        wheelTimers.push(t);
+      });
+    }
+    function stopSpin(){ wheelTimers.forEach(clearInterval); wheelTimers=[]; }
+    function lockWheel(w, ch) {
+      w.classList.add('locked','flash');
+      w.textContent = ch === ' ' ? '␣' : ch;
+      setTimeout(()=>w.classList.remove('flash'), 300);
+      sfx.lock();
+    }
+
+    // ---------- Run state ----------
+    let running = false, aborted = false;
+
+    function setRunningUI(on) {
+      running = on;
+      $('crack-btn').disabled = on;
+      $('crack-btn').textContent = on ? 'CRACKING…' : 'CRACK IT ▶';
+      $('stop-btn').style.display = on ? '' : 'none';
+      $('pw-input').disabled = on;
+      $('rig-select').disabled = on;
+    }
+
+    // ---------- The main show ----------
+    async function runCrack() {
+      if (running) return;
+      const pw = $('pw-input').value;
+      if (!pw) {
+        sfx.err();
+        dialog({ title:'Password Test', icon:'🤨',
+          msg:'<h3>Type something first.</h3>An empty password isn\'t a brave choice, it\'s an open door. (A real one would be cracked in <b>0</b> guesses.)',
+          buttons:[{label:'OK'}] });
+        return;
+      }
+
+      // easter eggs (light)
+      const egg = checkEgg(pw);
+
+      const rig = RIGS.find(r => r.id === $('rig-select').value) || RIGS.find(r=>r.id===DEFAULT_RIG);
+      const res = analyze(pw);
+      const cs = res.charset;
+      const L = [...pw].length;
+      const log10sec = res.guessLog10 - log10(rig.rate);
+      const FEASIBLE = log10sec < log10(3.156e9);     // < ~100 years => attacker wins
+
+      aborted = false;
+      setRunningUI(true);
+      $('result').classList.remove('show');
+      $('result').innerHTML = '';
+      $('theater').classList.add('show');
+      termClear();
+      setStat('s-attempts','0');
+      setStat('s-rate', scaleWord(log10(rig.rate),'/s'));
+      setStat('s-space', sci10(L*log10(cs.R)));
+      setStat('s-eta','calculating…');
+      $('status-text').textContent = 'Attacking…';
+
+      const wheels = buildWheels(pw);
+
+      // ---- Intro ----
+      term('<span class="t">attack@mondayjeffrey</span>:~$ crack --target "********"', 'tl-good');
+      await tick(420);
+      term('target length .... ' + L + ' chars', 'tl-info'); await tick(160);
+      term('charset detected . ' + cs.classes.join(' / ') + '  (' + cs.R + ' symbols)', 'tl-info'); await tick(160);
+      term('attacker rig ..... ' + rig.label, 'tl-info'); await tick(160);
+      term('keyspace ......... ' + cs.R + '^' + L + ' = ' + sci10(L*log10(cs.R)) + ' combinations', 'tl-info');
+      await tick(420);
+      if (aborted) return finishAbort();
+
+      // ---- Escalating stages ----
+      term('', 'tl-info');
+      term('Strategy: try cheap attacks first, brute force last.', 'tl-warn');
+      await tick(450);
+
+      const order = [
+        { key:'common',  name:'STAGE 1  Top common-password list' },
+        { key:'keywalk', name:'STAGE 2  Keyboard patterns' },
+        { key:'pattern', name:'STAGE 3  Sequences & repeats' },
+        { key:'dict',    name:'STAGE 4  Dictionary + mangling rules' },
+        { key:'brute',   name:'STAGE 5  Brute force' }
+      ];
+      // Show each stage up to and including the first that succeeds, then stop.
+      for (const stage of order) {
+        if (aborted) return finishAbort();
+        term(stage.name, 'tl-stage');
+        await tick(380);
+        if (stage.key !== res.method) { await playMiss(stage.key); continue; }
+        if (res.method === 'brute') await playBrute(pw, res, cs, rig, log10sec, FEASIBLE, wheels);
+        else await playDict(pw, res, rig, log10sec, wheels);
+        break;
+      }
+
+      if (aborted) return finishAbort();
+
+      showResult(pw, res, cs, rig, log10sec, FEASIBLE, egg);
+      term('attack@mondayjeffrey:~$ ', 'tl-good');   // settle on a clean prompt
+      setRunningUI(false);
+      $('status-text').textContent = 'Done.';
+    }
+
+    function tick(ms){ if (aborted) return Promise.resolve(); return sleep(ms); }
+
+    // Quick "tried and failed" flourish for stages that aren't the winner
+    async function playMiss(key) {
+      const samples = {
+        common:  ['password','123456','qwerty','letmein','dragon'],
+        keywalk: ['qwerty','asdfgh','1qaz2wsx','zxcvbnm'],
+        pattern: ['aaaa','123456','abcabc','111111'],
+        dict:    ['monkey','sunshine','shadow','football']
+      }[key] || [];
+      for (const s of samples) {
+        if (aborted) return;
+        term('  try: ' + esc(s) + '  ✗', 'tl-try');
+        sfx.scan();
+        await tick(70);
+      }
+      term('  no match — escalating.', 'tl-info');
+      await tick(220);
+    }
+
+    // Dictionary / common / pattern hit: we really would find it. Sweep-lock the wheels.
+    async function playDict(pw, res, rig, log10sec, wheels) {
+      const tries = (res.sampleTries || []).slice();
+      for (const s of tries) {
+        if (aborted) return;
+        term('  try: ' + esc(s) + '  ✗', 'tl-try');
+        sfx.scan();
+        await tick(95);
+      }
+      animateCounter(Math.max(0.5, res.guessLog10), 900);
+      term('  try: ' + esc(pw) + '  ✓', 'tl-hit');
+      sfx.crack();
+      await tick(260);
+      term('>>> MATCH FOUND <<<  cracked via ' + res.label.toLowerCase(), 'tl-hit');
+      // sweep-lock wheels
+      const chars = [...pw];
+      for (let i = 0; i < wheels.length && i < chars.length; i++) {
+        if (aborted) return;
+        lockWheel(wheels[i], chars[i]);
+        await tick(55);
+      }
+      setStat('s-attempts', sci10(res.guessLog10));
+      setStat('s-eta', humanTime(log10sec));
+      await tick(300);
+    }
+
+    // Brute force: spin, lock progressively if feasible; otherwise explode + give up.
+    async function playBrute(pw, res, cs, rig, log10sec, FEASIBLE, wheels) {
+      term('  building keyspace ' + cs.R + '^' + [...pw].length + ' …', 'tl-info');
+      await tick(300);
+      spinAll(wheels, pw);
+      sfx.scan();
+      setStat('s-eta', humanTime(log10sec));
+
+      if (FEASIBLE) {
+        // dramatize a successful crack
+        const total = res.guessLog10;
+        animateCounter(Math.max(0.5, total), 2600);
+        const chars = [...pw];
+        const per = Math.max(70, Math.min(360, 2600 / Math.max(1, chars.length)));
+        term('  searching…', 'tl-info');
+        for (let i = 0; i < wheels.length && i < chars.length; i++) {
+          if (aborted) { stopSpin(); return; }
+          await tick(per);
+          lockWheel(wheels[i], chars[i]);
+        }
+        stopSpin();
+        sfx.crack();
+        term('>>> KEY RECOVERED <<<  ' + esc(pw), 'tl-hit');
+        setStat('s-attempts', sci10(total));
+        await tick(300);
+      } else {
+        // honest: never claim success. Race the counter, then give up.
+        const fakeTarget = Math.min(res.guessLog10, log10(rig.rate) + log10(4)); // ~4 sec of real work
+        let elapsed = 0;
+        const dur = 3800;
+        animateCounter(fakeTarget, dur);
+        const steps = 9;
+        for (let i = 0; i < steps; i++) {
+          if (aborted) { stopSpin(); return; }
+          await tick(dur/steps);
+          sfx.scan();
+          if (i === 2) term('  0.0001% of keyspace explored…', 'tl-try');
+          if (i === 5) term('  still 0.0000% (rounding) explored…', 'tl-try');
+          if (i === 7) term('  this is going to take a while.', 'tl-warn');
+        }
+        stopSpin();
+        // leave wheels scrambled & mark gave-up
+        wheels.forEach(w => { if(!w.classList.contains('locked')) w.classList.add('gaveup'); });
+        sfx.safe();
+        term('>>> SEARCH ABORTED <<<  keyspace too large', 'tl-good');
+        term('  estimated time to exhaust at this rate: ' + humanTime(log10sec), 'tl-good');
+        setStat('s-attempts', '~' + sci10(fakeTarget) + '  (gave up)');
+        await tick(300);
+      }
+    }
+
+    function finishAbort() {
+      stopSpin();
+      cancelAnimationFrame(counterRAF);
+      term('', 'tl-info');
+      term('^C  attack interrupted by user.', 'tl-warn');
+      $('status-text').textContent = 'Stopped.';
+      setRunningUI(false);
+    }
+
+    // ---------- Verdict band ----------
+    function band(log10sec) {
+      if (log10sec < 0)        return { cls:'v-crit',    ic:'💀', name:'INSTANTLY CRACKED' };
+      if (log10sec < 3.556)    return { cls:'v-crit',    ic:'🚨', name:'VERY WEAK' };       // <1h
+      if (log10sec < 6.42)     return { cls:'v-weak',    ic:'⚠️', name:'WEAK' };            // <1mo
+      if (log10sec < 9.5)      return { cls:'v-mod',     ic:'😐', name:'MODERATE' };        // <100y
+      if (log10sec < 17.64)    return { cls:'v-strong',  ic:'🛡️', name:'STRONG' };          // <universe
+      return                          { cls:'v-vstrong', ic:'🏰', name:'VERY STRONG' };
+    }
+
+    function crackPhrase(timeStr, method, feasible) {
+      if (method === 'brute' && !feasible)
+        return 'An attacker would need <b>' + timeStr + '</b> to brute-force it.';
+      if (timeStr === 'instantly')      return 'An attacker cracks it <b>instantly</b>.';
+      if (timeStr === 'under a second') return 'An attacker cracks it in <b>under a second</b>.';
+      return 'An attacker cracks it in <b>' + timeStr + '</b>.';
+    }
+
+    function showResult(pw, res, cs, rig, log10sec, FEASIBLE, egg) {
+      const b = band(log10sec);
+      const L = [...pw].length;
+      const r = $('result');
+      const bits = Math.round(L * Math.log2(cs.R));
+      const timeStr = humanTime(log10sec);
+
+      // Build "why" bullets
+      let lessons = res.lessons.slice();
+      if (res.method === 'brute') {
+        if (FEASIBLE) {
+          lessons.push(['bad', 'No shortcut needed — it\'s short/simple enough to brute force outright.']);
+          if (!cs.upper || !cs.digit || !cs.sym) lessons.push(['tip', 'Add the missing character types and a few more characters — each one multiplies the work.']);
+        } else {
+          lessons.push(['tip', 'No dictionary or pattern shortcut applied, and the keyspace is huge. This is what "strong" looks like.']);
+          lessons.push(['tip', 'Length did the heavy lifting: every extra character multiplies the attacker\'s work by ' + cs.R + '×.']);
+        }
+      }
+
+      const verdictTime = crackPhrase(timeStr, res.method, FEASIBLE);
+
+      let html = '';
+      html += '<div class="verdict ' + b.cls + '">';
+      html += '  <div class="vic">' + b.ic + '</div>';
+      html += '  <div class="vmain">';
+      html += '    <div class="vband">' + b.name + '</div>';
+      html += '    <div class="vtime">' + verdictTime + '</div>';
+      html += '  </div>';
+      html += '</div>';
+
+      html += '<div class="why">';
+      html += '<h4>How it was attacked</h4>';
+      html += 'Winning method: <b>' + esc(res.label) + '</b>.';
+      html += '<ul>';
+      lessons.forEach(([k, t]) => { html += '<li class="' + (k==='tip'?'tip':'bad') + '">' + (k==='tip'?'💡 ':'• ') + t + '</li>'; });
+      html += '</ul>';
+
+      html += '<h4>The numbers</h4><ul>';
+      html += '<li>Length <b>' + L + '</b>, character set <b>' + cs.R + '</b> (' + cs.classes.join(', ') + ')</li>';
+      html += '<li>Raw keyspace if it were random: <code>' + cs.R + '^' + L + '</code> ≈ ' + sci10(L*log10(cs.R)) + ' (' + bits + ' bits)</li>';
+      if (res.method !== 'brute')
+        html += '<li class="bad">But it isn\'t random — the shortcut above means only ≈ <b>' + sci10(res.guessLog10) + '</b> guesses were actually needed.</li>';
+      html += '<li>At ' + scaleWord(log10(rig.rate),'guesses/sec') + ': <b>' + timeStr + '</b></li>';
+      html += '</ul>';
+
+      if (egg) html += '<div class="tip" style="margin-top:6px">' + egg + '</div>';
+
+      html += '<div style="margin-top:8px; font-size:11px; color:#404040; border-top:1px solid #ddd; padding-top:6px">' +
+        '🎬 The spinning wheels are a dramatisation; the <b>numbers</b> above are the real math. ' +
+        'Rates are ballpark estimates. Try a different "Attacker" to see how much the threat model matters.' +
+        '</div>';
+      html += '</div>';
+
+      r.innerHTML = html;
+      r.classList.add('show');
+      if (res.method !== 'brute' || FEASIBLE) sfx.crack(); else sfx.safe();
+      r.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    // ---------- Easter eggs ----------
+    function checkEgg(pw) {
+      const l = pw.toLowerCase();
+      if (l === 'hunter2') return '🕹️ <b>hunter2</b> — to everyone else this just looks like <code>*******</code>. IRC veterans salute you.';
+      if (l.replace(/\s+/g,'') === 'correcthorsebatterystaple')
+        return '🐴 The famous xkcd #936 passphrase. Four random words really are strong — though now that it\'s famous, pick your <em>own</em> four.';
+      if (l === 'password' ) return '🏆 The undisputed champion. #1 on basically every breach list ever compiled.';
+      if (l === 'monday' || l === 'jeffrey' || l === 'mondayjeffrey')
+        return '👋 Nice try, but the site name is the first thing I\'d guess here.';
+      if (/^[a-z]+ [a-z]+( [a-z]+)+$/i.test(pw) && pw.length >= 16)
+        return '📖 Looks like a passphrase — length like this is exactly the right instinct.';
+      return null;
+    }
+
+    // ---------- Dialog ----------
+    function dialog({ title='Password Test', icon='ℹ️', msg='', buttons=[{label:'OK'}] }) {
+      const el = $('dlg');
+      $('dlg-title').textContent = title;
+      $('dlg-icon').textContent  = icon;
+      $('dlg-msg').innerHTML     = msg;
+      const actions = $('dlg-actions');
+      actions.innerHTML = '';
+      return new Promise(resolve => {
+        buttons.forEach(bn => {
+          const btn = document.createElement('button');
+          btn.className = 'btn';
+          btn.textContent = bn.label;
+          btn.onclick = () => { el.classList.remove('show'); resolve(bn.value !== undefined ? bn.value : bn.label); };
+          actions.appendChild(btn);
+        });
+        el.classList.add('show');
+      });
+    }
+
+    // ---------- Reset ----------
+    function resetAll() {
+      aborted = true; stopSpin(); cancelAnimationFrame(counterRAF);
+      setRunningUI(false);
+      $('pw-input').value = '';
+      $('theater').classList.remove('show');
+      $('result').classList.remove('show'); $('result').innerHTML='';
+      termClear();
+      updateMeter();
+      $('status-text').textContent = 'Ready. Type a (fake) password.';
+      $('pw-input').focus();
+    }
+
+    // ---------- Menus ----------
+    function wireMenu(btnId, dropId) {
+      const btn = $(btnId), drop = $(dropId);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = drop.classList.contains('show');
+        document.querySelectorAll('.drop').forEach(d => d.classList.remove('show'));
+        if (!open) {
+          const r = btn.getBoundingClientRect();
+          const wr = btn.closest('.window').getBoundingClientRect();
+          drop.style.left = (r.left - wr.left) + 'px';
+          drop.style.top  = (r.bottom - wr.top) + 'px';
+          drop.classList.add('show');
+        }
+      });
+    }
+
+    function menuAction(act) {
+      if (act === 'reset') resetAll();
+      if (act === 'exit')  window.location.href = '../index.html';
+      if (act === 'sound') {
+        soundOn = !soundOn;
+        document.querySelector('[data-act="sound"]').textContent = 'Sound: ' + (soundOn ? 'On' : 'Off');
+        if (soundOn) sfx.lock();
+      }
+      if (act === 'how') dialog({
+        title:'How it works', icon:'🔍',
+        msg:'<h3>This runs a real attacker\'s playbook</h3>' +
+            'When you hit <b>CRACK IT</b>, the app tries the same strategies a real password cracker uses, ' +
+            'cheapest first:' +
+            '<ul>' +
+            '<li><b>1. Common list</b> — the ' + COMMON.length.toLocaleString() + ' most-breached passwords (real rockyou-derived breach data).</li>' +
+            '<li><b>2. Patterns</b> — keyboard walks (<code>qwerty</code>), sequences, repeats.</li>' +
+            '<li><b>3. Dictionary + rules</b> — real words, plus leet-speak, capitals and appended numbers/years.</li>' +
+            '<li><b>4. Brute force</b> — every combination, last resort.</li>' +
+            '</ul>' +
+            'It stops at the <em>first</em> method that would succeed — that\'s your real weakness.' +
+            '<br><br>The spinning wheels are a dramatisation, but the <b>keyspace, guess-rate and time</b> are honest math. ' +
+            'Nothing leaves your browser.',
+        buttons:[{label:'Got it'}]
+      });
+      if (act === 'tips') dialog({
+        title:'Make a strong password', icon:'🛡️',
+        msg:'<h3>What actually works</h3><ul>' +
+            '<li><b>Length beats complexity.</b> A long passphrase of random words (e.g. 4–5 of them) beats a short <code>P@ss!</code>.</li>' +
+            '<li><b>Make it unique.</b> Never reuse — one breach shouldn\'t unlock everything.</li>' +
+            '<li><b>Use a password manager.</b> Let it generate + remember 20-char random strings.</li>' +
+            '<li><b>Turn on 2FA</b> where you can — it saves you even if the password leaks.</li>' +
+            '<li>Avoid names, dates, <code>word+123</code>, and anything on a keyboard row.</li>' +
+            '</ul>',
+        buttons:[{label:'Thanks'}]
+      });
+      if (act === 'about') dialog({
+        title:'About Password Test', icon:'🔐',
+        msg:'<b>Password Test</b><br>Monday Jeffrey edition<br><br>' +
+            'A toy that teaches password security by <em>showing</em> the crack, not just stating a number. ' +
+            'Runs 100% in your browser — no network, no storage.<br><br>' +
+            '<em>Educational only. Don\'t enter real passwords.</em>',
+        buttons:[{label:'OK'}]
+      });
+    }
+
+    // ---------- Init ----------
+    document.addEventListener('DOMContentLoaded', () => {
+      // populate rigs
+      const sel = $('rig-select');
+      RIGS.forEach(r => {
+        const o = document.createElement('option');
+        o.value = r.id; o.textContent = r.label;
+        sel.appendChild(o);
+      });
+      sel.value = DEFAULT_RIG;
+
+      // input
+      const input = $('pw-input');
+      input.addEventListener('input', updateMeter);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') runCrack();
+        else if (e.key.length === 1) sfx.tick();
+      });
+
+      $('show-btn').addEventListener('click', () => {
+        const showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        $('show-btn').textContent = showing ? 'Show' : 'Hide';
+        $('show-btn').classList.toggle('pressed', !showing);
+      });
+
+      $('crack-btn').addEventListener('click', runCrack);
+      $('stop-btn').addEventListener('click', () => { aborted = true; });
+
+      // menus
+      wireMenu('menu-file','drop-file');
+      wireMenu('menu-help','drop-help');
+      document.addEventListener('click', () => document.querySelectorAll('.drop').forEach(d=>d.classList.remove('show')));
+      document.querySelectorAll('.drop-item').forEach(it => {
+        it.addEventListener('click', (e) => {
+          e.stopPropagation();
+          document.querySelectorAll('.drop').forEach(d=>d.classList.remove('show'));
+          menuAction(it.dataset.act);
+        });
+      });
+
+      // status clock
+      const sc = $('status-clock');
+      const upd = () => { const n=new Date(); sc.textContent =
+        String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); };
+      upd(); setInterval(upd, 10000);
+
+      updateMeter();
+      input.focus();
+    });
+  })();
+  </script>
+</body>
+</html>

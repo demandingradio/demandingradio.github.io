@@ -14,7 +14,8 @@
     { label: 'WFM Tycoon',   icon: '\u{1F4DE}', href: '/wfm-au/',       title: 'WFM Tycoon' },
     { label: 'TV Ratings',   icon: '\u{1F4FA}', href: '/tv-ratings/',   title: 'TV Ratings' },
     { label: 'Cave Ball',    icon: '\u{1F535}', href: '/cave-ball/',    title: 'Cave Ball' },
-    { label: 'Drive',        icon: '\u{1F697}', href: '/drive/',        title: 'Drive' }
+    { label: 'Drive',        icon: '\u{1F697}', href: '/drive/',        title: 'Drive' },
+    { label: 'Password Test',icon: '\u{1F510}', href: '/password-test/', title: 'Password Test' }
   ];
 
   function renderDesktop(container) {
