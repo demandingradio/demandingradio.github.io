@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cortex - Brain Trainer - Monday Jeffrey</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0e1018">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cortex">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="stylesheet" href="../assets/win95.css">
+  <style>
+    /* ---- Cortex full-page app theme (a deliberate non-Win95 exception, like Footy/Boredom) ---- */
+    :root{
+      --bg:#0e1018; --bg2:#161a27; --card:#1c2233; --card2:#232a3e;
+      --ink:#e8ecf6; --muted:#9aa3bd; --line:#2c3450;
+      --accent:#7c5cff; --accent2:#27d3a2; --warn:#ffb547; --bad:#ff5d6c; --good:#3ddc84;
+      --shadow:0 8px 30px rgba(0,0,0,.45);
+      --r:14px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    body{
+      background:radial-gradient(1200px 700px at 80% -10%, #1b2138 0%, var(--bg) 55%) fixed;
+      color:var(--ink);
+      font-family:"Segoe UI",Inter,system-ui,-apple-system,Roboto,Arial,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    #app{min-height:100vh;padding-bottom:48px;display:flex;flex-direction:column}
+    a{color:inherit}
+    button{font-family:inherit}
+
+    /* ---- top bar ---- */
+    .topbar{
+      position:sticky;top:0;z-index:20;
+      display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+      padding:12px 20px;background:rgba(14,16,24,.82);backdrop-filter:blur(8px);
+      border-bottom:1px solid var(--line);
+    }
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:.3px}
+    .brand .logo{font-size:24px;filter:drop-shadow(0 0 10px rgba(124,92,255,.6))}
+    .brand small{color:var(--muted);font-weight:600;font-size:11px;letter-spacing:2px;text-transform:uppercase}
+    .top-stats{display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:wrap}
+    .pill{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);
+      padding:6px 12px;border-radius:999px;font-weight:700;font-size:14px}
+    .pill .sub{color:var(--muted);font-weight:600;font-size:12px}
+    .xpwrap{min-width:160px}
+    .xpbar{height:8px;border-radius:999px;background:#0b0e16;border:1px solid var(--line);overflow:hidden;margin-top:5px}
+    .xpbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0}
+    nav.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px}
+    nav.tabs a{padding:6px 14px;border-radius:999px;color:var(--muted);text-decoration:none;font-weight:700;font-size:14px;cursor:pointer}
+    nav.tabs a.on{background:var(--accent);color:#fff}
+
+    /* ---- main / cards ---- */
+    main{flex:1;width:100%;max-width:1040px;margin:0 auto;padding:22px 20px 40px}
+    .grid{display:grid;gap:16px}
+    .cols-3{grid-template-columns:repeat(3,1fr)}
+    .cols-2{grid-template-columns:repeat(2,1fr)}
+    .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
+      border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
+    .card h2{margin:0 0 4px;font-size:16px}
+    .card h3{margin:0 0 10px;font-size:14px;color:var(--muted);font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+    .muted{color:var(--muted)}
+    .row{display:flex;align-items:center;gap:12px}
+    .spread{justify-content:space-between}
+    .big{font-size:34px;font-weight:800;line-height:1}
+
+    /* hero / today */
+    .hero{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:18px}
+    .quest li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+    .quest li:last-child{border-bottom:0}
+    .check{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;font-size:13px;flex:0 0 auto}
+    .check.done{background:var(--good);border-color:var(--good);color:#06210f}
+    .quest .qname{font-weight:700}
+    .quest .qmeta{margin-left:auto;color:var(--muted);font-size:12px}
+
+    /* module tiles */
+    .tile{display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:transform .12s ease,border-color .12s ease;position:relative;text-decoration:none;color:inherit}
+    .tile:hover{transform:translateY(-3px);border-color:var(--accent)}
+    .tile .ic{font-size:30px}
+    .tile .tname{font-weight:800;font-size:16px}
+    .tile .tdesc{color:var(--muted);font-size:13px;line-height:1.4;flex:1}
+    .tag{align-self:flex-start;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+      padding:3px 9px;border-radius:999px;border:1px solid var(--line)}
+    .tag.ready{color:var(--good);border-color:rgba(61,220,132,.5);background:rgba(61,220,132,.08)}
+    .tag.soon{color:var(--warn);border-color:rgba(255,181,71,.4);background:rgba(255,181,71,.08)}
+    .tile .best{position:absolute;top:14px;right:14px;font-size:12px;color:var(--muted)}
+
+    /* buttons */
+    .btn-x{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card2);
+      color:var(--ink);padding:10px 18px;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer}
+    .btn-x:hover{border-color:var(--accent)}
+    .btn-x.primary{background:linear-gradient(90deg,var(--accent),#5a3fe0);border-color:transparent}
+    .btn-x.ghost{background:transparent}
+    .btn-x:disabled{opacity:.5;cursor:not-allowed}
+
+    /* play area (modules) */
+    .stage{min-height:360px;display:grid;place-items:center;text-align:center;gap:18px}
+    .stage .huge{font-size:64px;font-weight:800}
+
+    /* reaction module */
+    .rt-pad{width:min(560px,90vw);height:300px;border-radius:18px;display:grid;place-items:center;
+      font-size:22px;font-weight:800;cursor:pointer;user-select:none;border:1px solid var(--line);transition:background .05s}
+    .rt-wait{background:#3a2330;color:#ffd0d8}
+    .rt-go{background:var(--good);color:#06210f}
+    .rt-idle{background:var(--card2)}
+    .rt-early{background:var(--bad);color:#2a0710}
+
+    table.stats{width:100%;border-collapse:collapse;font-size:14px}
+    table.stats td,table.stats th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
+    table.stats th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+    table.stats td.r{text-align:right;font-variant-numeric:tabular-nums}
+
+    .toast{position:fixed;left:50%;bottom:64px;transform:translateX(-50%) translateY(20px);
+      background:var(--card);border:1px solid var(--accent);padding:12px 20px;border-radius:12px;
+      box-shadow:var(--shadow);font-weight:700;opacity:0;pointer-events:none;transition:.3s;z-index:50}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+    .calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:8px}
+    .cell{aspect-ratio:1;border-radius:5px;background:#0b0e16;border:1px solid var(--line)}
+    .cell.lvl1{background:rgba(124,92,255,.35)} .cell.lvl2{background:rgba(124,92,255,.7)} .cell.lvl3{background:var(--accent)}
+
+    .ach{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--card2)}
+    .ach.locked{opacity:.45;filter:grayscale(1)}
+    .ach .aic{font-size:26px}
+    .ach .an{font-weight:800}
+    .ach .ad{color:var(--muted);font-size:13px}
+
+    .note{font-size:13px;line-height:1.6;color:var(--muted)}
+    .note b{color:var(--ink)}
+    code{background:#0b0e16;border:1px solid var(--line);padding:1px 6px;border-radius:6px;font-size:12px}
+
+    @media(max-width:820px){
+      .cols-3{grid-template-columns:1fr 1fr}
+      .hero{grid-template-columns:1fr}
+      nav.tabs{order:5;width:100%;justify-content:center}
+    }
+    @media(max-width:560px){.cols-3,.cols-2{grid-template-columns:1fr}}
+
+    /* a11y: visible keyboard focus */
+    a:focus-visible,button:focus-visible,input:focus-visible,.tile:focus-visible,.btn-x:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+    /* reduced motion (system pref or in-app toggle) */
+    @media(prefers-reduced-motion:reduce){.tile{transition:none!important}.tile:hover{transform:none!important}}
+    body.reduce-motion .tile{transition:none}
+    body.reduce-motion .tile:hover{transform:none}
+    /* onboarding overlay */
+    .ob-overlay{position:fixed;inset:0;z-index:100;background:rgba(8,10,16,.82);backdrop-filter:blur(6px);display:grid;place-items:center;padding:20px;overflow:auto}
+    .ob-card{max-width:560px;width:100%;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:26px}
+    .ob-card h1{margin:0 0 6px;font-size:26px}
+    .ob-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+    .ob-opt{border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:12px;cursor:pointer}
+    .ob-opt.sel{border-color:var(--accent);background:rgba(124,92,255,.14)}
+    .ob-opt b{display:block;font-size:15px}
+    .ob-opt span{color:var(--muted);font-size:12px}
+    @media(max-width:480px){.ob-opts{grid-template-columns:1fr}}
+    /* level-up celebration */
+    .levelup{position:fixed;inset:0;z-index:95;display:grid;place-items:center;background:rgba(8,10,16,0);pointer-events:none;transition:background .3s}
+    .levelup.show{background:rgba(8,10,16,.6);pointer-events:auto}
+    .lu-card{transform:scale(.7);opacity:0;transition:transform .35s cubic-bezier(.2,1.5,.4,1),opacity .3s;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--accent);border-radius:20px;padding:26px 42px;text-align:center;box-shadow:0 0 60px rgba(124,92,255,.55)}
+    .levelup.show .lu-card{transform:scale(1);opacity:1}
+    .lu-burst{font-size:50px;animation:luSpin .8s ease}
+    .lu-title{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--accent2);font-weight:800;margin-top:4px}
+    .lu-lvl{font-size:40px;font-weight:900;margin:2px 0 6px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+    @keyframes luSpin{from{transform:rotate(-30deg) scale(.4)}to{transform:rotate(0) scale(1)}}
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="topbar">
+      <div class="brand"><span class="logo">🧠</span><span>Cortex</span><small>brain trainer</small></div>
+      <div class="top-stats">
+        <div class="pill" title="Daily streak">🔥 <span id="t-streak">0</span> <span class="sub">day streak</span></div>
+        <div class="pill xpwrap" title="Experience">
+          <div>
+            <div class="row spread" style="gap:10px"><b>Lv <span id="t-level">1</span></b><span class="sub" id="t-xp">0 / 100 XP</span></div>
+            <div class="xpbar"><i id="t-xpbar"></i></div>
+          </div>
+        </div>
+        <nav class="tabs" id="tabs">
+          <a data-go="#/home">Home</a>
+          <a data-go="#/train">Train</a>
+          <a data-go="#/stats">Stats</a>
+          <a data-go="#/about">Science</a>
+          <a data-go="#/settings">⚙</a>
+        </nav>
+      </div>
+    </div>
+    <main id="screen"></main>
+  </div>
+
+  <div class="taskbar">
+    <a href="../index.html" class="start-btn"><span>⊞</span> Start</a>
+    <div class="taskbar-divider"></div>
+    <div class="taskbar-apps"></div>
+    <div class="clock"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="../assets/win95.js"></script>
+  <script>
+/* ===========================================================================
+   CORTEX — a gamified "make me smarter" brain-training suite
+   100% offline · client-side only · no frameworks · localStorage state
+   Built incrementally by a /loop (every 2 min). THIS HEADER IS THE SOURCE OF
+   TRUTH for the loop: read the roadmap + progress log, then build the next item.
+   ---------------------------------------------------------------------------
+
+   DESIGN PHILOSOPHY (deliberately honest — matches the site's password-test/happy style):
+     The biggest real levers for "getting smarter" are (1) acquiring durable
+     KNOWLEDGE and (2) CONSISTENCY. So Cortex uses game mechanics (streak, XP,
+     levels, quests) to drive daily practice, and weights its "training plan"
+     toward the things with the best evidence:
+       • Spaced repetition (Anki/SM-2)  → strongest evidence; builds real knowledge.
+       • Meditation / focused attention  → solid evidence for attention & stress.
+       • Working-memory & exec-function games (Dual N-Back, Stroop, task-switch)
+         → fun, measurable, train the specific skill; FAR-TRANSFER TO GENERAL IQ
+         IS GENUINELY DEBATED. We say so on the Science page rather than overclaim.
+     The "Cortex Score" is an in-app fitness number, NOT an IQ.
+
+   ARCHITECTURE:
+     - Single-page app. Hash router (#/home #/train #/train/<id> #/stats #/about #/settings).
+     - State in localStorage key `cortex.v1` (see STATE MODEL). All saves via save().
+     - Modules live in the Modules registry. Each module:
+         { id, name, icon, blurb, evidence, status:'ready'|'soon',
+           start(mount, finish) }   // start() runs the exercise UI inside `mount`,
+                                     // calls finish({score, xp, stats}) when done.
+       Adding a module = add an entry with status:'ready' + a start() fn. The grid,
+       routing, XP, streak, daily-quest and stats wiring are all automatic.
+     - Gamification core (XP/level/streak/daily/achievements) is module-agnostic:
+       call recordSession(moduleId, {score, xp, stats}) and everything updates.
+
+   STATE MODEL (cortex.v1):
+     profile:{ xp, createdAt, lastActive }
+     streak:{ current, longest, lastDay }            // lastDay = 'YYYY-MM-DD'
+     daily:{ date, plan:[moduleId...], done:[moduleId...] }
+     modules:{ <id>:{ sessions:int, best:number|null, last:number|null,
+                       history:[{d,score,xp,stats}] (capped) } }
+     srs:{ decks:{...}, cards:{...} }                // added when SRS module lands
+     achievements:[ id... ]                          // unlocked ids
+     settings:{ sound, reducedMotion, onboarded, focus }  // focus: all|memory|focus|knowledge
+     activity:{ 'YYYY-MM-DD': sessionCount }         // for the streak calendar
+
+   ROADMAP (build order — tick as done, keep a one-line PROGRESS LOG entry):
+     [x] 0  Scaffold: theme, router, state core, XP/level/streak, daily-quest,
+            dashboard, stats, Science page, settings (export/import/reset).
+     [x] 1  Reaction Time module (proves the full gamification loop end-to-end).
+     [x] 2  Dual N-Back  (grid position + WebAudio tones; adaptive N; A/L keys).
+     [x] 3  Flashcards / Spaced Repetition (SM-2): 5 seed decks + card editor.
+     [x] 4  Meditation / breath timer (box, 4-7-8, coherent, calm; WebAudio chime).
+     [x] 5  Mental Math (adaptive arithmetic, combos, 60s sprint).
+     [x] 6  Stroop / inhibition (name the ink colour, 45s sprint).
+     [x] 7  Task-switching (cognitive flexibility, switch-cost).
+     [x] 8  Vocabulary (MC definitions; auto-creates SRS cards from misses).
+     --- ALL 8 EXERCISES DONE. Remaining = polish/gamification depth ---
+     [x] 9  Daily-quest generator polish: balanced plan (1 Knowledge + 1 Focus + 1 Game), rotates daily.
+     [x] 10 Achievements: expanded to 15 (toasts already wired).
+     [x] 11 Stats: per-module sparkline charts (canvas), Cortex Score (composite 0-1000) + breakdown.
+     [x] 12 Onboarding (first-run overlay + focus pick) + reduced-motion + focus-visible a11y + mobile.
+     [x] 13 Science page: per-exercise honest notes + real citations + "what beats brain games".
+     ============ ROADMAP COMPLETE (all 8 modules + all polish done) ============
+     Optional extras: [x] SRS keyboard shortcuts  [x] level-up celebration  [x] +2 seed decks (7 total)
+                      [x] PWA/installable (manifest + sw.js + icon.svg)  [x] sound pack (WebAudio)  [ ] daily reminder
+
+   PROGRESS LOG:
+     iter1 (2026-06-08): scaffold + gamification core + Reaction Time. App is
+       playable end-to-end: do a session → earn XP → level up → streak ticks →
+       stats record. Modules 2-8 are 'soon' tiles. NEXT: Dual N-Back (#2).
+     iter2 (2026-06-08): Dual N-Back DONE — 3x3 grid (spatial) + 6 WebAudio tones
+       (auditory), A/L keys + buttons, signal-detection scoring per channel,
+       adaptive N (>=80%→N+1, <50%→N-1) persisted in S.modules.nback.n, leak-safe
+       (cleanup on finish/navigate). NEXT: Flashcards/SRS SM-2 (#3).
+     iter3 (2026-06-08): Flashcards/SRS DONE — SM-2 scheduler (ease/interval/reps,
+       Again/Hard/Good/Easy with interval previews + Hard×0.8/Easy×1.3 tweaks),
+       5 built-in decks (~50 cards: biases, fallacies, capitals, science, vocab)
+       seeded once into S.srs, deck/card editor (add deck/card, delete, custom-deck
+       delete), review queue (due+new, cap 20, Again re-drills in-session), session
+       summary → recordSession. Sub-views render inside mount (no extra routing).
+       NEXT: Meditation/breath timer (#4).
+     iter4 (2026-06-08): Meditation DONE — animated breath circle (CSS scale per
+       phase), 4 patterns (Box 4·4·4·4, Relax 4·7·8, Coherent 5·5, Calm 4·6),
+       1/3/5/10-min sessions, soft WebAudio chimes (toggle→S.settings.sound),
+       live countdown + cycle counter, Finish-early, ≥60s counts → recordSession
+       (xp=min×8), leak-safe cleanup. NEXT: Mental Math (#5).
+     iter5 (2026-06-08): TWO modules. Mental Math — 60s sprint, adaptive difficulty
+       L1-5 (3-correct→up, miss→down), +/-/×/÷ generators, combo multiplier, typed
+       input+Enter. Stroop — 45s sprint, 6-colour swatch pad, 70% incongruent ink,
+       tap ink-colour, tracks accuracy+avg RT. Both shared timed-sprint shape,
+       leak-safe. NEXT: Task-switching (#7).
+     iter6 (2026-06-08): FINAL TWO modules → all 8 done. Task Switch — 45s sprint,
+       parity(odd/even) vs magnitude(low/high) rules switching randomly, relabeled
+       buttons, measures switch cost (avg RT switch − repeat). Vocabulary — 12-Q MC
+       (20-word bank, 3 distractor defs), misses auto-add front/back cards to a
+       'My Vocabulary' SRS deck (dedup by front). NEXT: polish — daily-quest balance
+       (#9), achievements (#10), stats charts (#11), onboarding (#12), Science (#13).
+     iter7 (2026-06-08): POLISH PASS. (#9) Daily quest = Knowledge+Focus+Game, one
+       from each category, rotates by day-number. (#11) Cortex Score — composite
+       0-1000 from per-module fitness vs BENCH targets (best/target capped 100,
+       mean×10); shown on Home progress card + Stats with per-exercise bar
+       breakdown; canvas sparkline trend per exercise in the By-exercise table.
+       (#10) Achievements expanded 7→15 (octopus, streak30, lvl10, sessions100,
+       nback3, zen, scholar, cortex300). NEXT: onboarding + a11y/mobile (#12), Science (#13).
+     iter8 (2026-06-08): ONBOARDING + A11Y/MOBILE (#12). First-run overlay (honest
+       pitch + focus pick: all/memory/focus/knowledge → S.settings.focus, sets
+       onboarded flag); focus adds one extra daily-quest item via FOCUS_EXTRA.
+       Settings → Preferences (Reduce-motion toggle → body.reduce-motion + applyMotionPref;
+       Replay-intro). CSS: :focus-visible outlines, prefers-reduced-motion + .reduce-motion
+       (kills tile hover transform; breath circle kept). Boot shows overlay if !onboarded.
+       NEXT: flesh out Science page (#13) = last roadmap item.
+     iter9 (2026-06-08): SCIENCE PAGE (#13) → ROADMAP COMPLETE. Rewrote /about into
+       5 cards: the uncomfortable truth (Owen 2010 Nature, no far-transfer), the two
+       real levers (spacing effect/Ebbinghaus + testing effect/Roediger-Karpicke;
+       consistency), honest per-exercise notes w/ real refs (Jaeggi 2008, Melby-Lervåg
+       meta-analyses, Goyal 2014 JAMA, Stroop 1935), "things that beat any brain game"
+       (sleep/exercise/hard-learning/reading/attention), Cortex-Score-≠-IQ footer.
+       FEATURE-COMPLETE vs original plan. Future = optional polish only (see roadmap).
+     iter10 (2026-06-08): OPTIONAL EXTRAS. Level-up celebration (recordSession compares
+       level before/after xp; .levelup overlay w/ scale-in, auto-dismiss). SRS keyboard
+       shortcuts (Space/Enter=flip, 1-4=Again/Hard/Good/Easy; module-level kbReveal/kbRate
+       + leak-safe srsKey listener cleaned on hashchange/mount-gone; reset in hub/manage/finish).
+       +2 flashcard decks → 7 total (Mental Models, History Milestones). NEXT: still optional
+       (PWA install, daily reminder, sound) — or stop/push live.
+     iter11 (2026-06-08): PWA / INSTALLABLE. Added manifest.webmanifest (standalone,
+       start_url/scope /cortex/, theme #0e1018), icon.svg (gradient "C" monogram, maskable),
+       sw.js (network-first + offline cache fallback, scope /cortex/ ONLY, versioned cache
+       cortex-v1, skipWaiting/claim). Head: manifest + theme-color + apple-touch-icon/metas.
+       Boot registers SW on load (guarded). Now add-to-home-screen + works with zero
+       connectivity after first load. NEXT optional: daily reminder, sound pack.
+     iter12 (2026-06-08): SOUND PACK. WebAudio synth (no files) Sound={correct,wrong,
+       success,levelUp,achievement,tick}, gated by S.settings.sound; lazy AudioContext
+       resumed on first pointerdown. Hooked: levelUp→levelUp chord, recordSession→success,
+       checkAchievements→achievement, and per-answer correct/wrong in Math/Stroop/Switch.
+       Global 🔊 toggle added to Settings→Preferences (shares S.settings.sound w/ meditation).
+       NEXT optional: daily reminder (last listed extra) — or stop/push live.
+     iter13 (2026-06-08): QA / HARDENING PASS (no new features — fix real bugs).
+       BUG 1: N-Back & Meditation each did `new AudioContext()` per session and never
+       closed it → browsers cap ~6 contexts → audio would break after enough plays.
+       Fixed: both now reuse the shared singleton audioCtx() (same one the sound pack uses).
+       BUG 2: streak display was stale after missed days (showed old 🔥 until next train).
+       Added effectiveStreak() (alive only if last trained today/yesterday, else 0) and used
+       it on Home header, Home progress card, and Stats. recordSession streak logic unchanged.
+
+   HOW THE LOOP SHOULD WORK EACH FIRE:
+     1) Read this header. 2) Pick the next [ ] item (prefer user asks: N-Back, SRS,
+        meditation). 3) Implement it as a Modules entry (status:'ready'+start()).
+     4) Verify in the browser preview (no console errors, the exercise runs &
+        calls finish()). 5) Tick the roadmap + add a PROGRESS LOG line. Keep it
+        offline (no network/CDN). Small, working increments over big rewrites.
+   =========================================================================== */
+
+  'use strict';
+  const KEY='cortex.v1';
+  const $=(s,r=document)=>r.querySelector(s);
+  const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+  const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+  const daysBetween=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+
+  /* ---------- state ---------- */
+  function defaultState(){
+    return {
+      profile:{xp:0,createdAt:todayStr(),lastActive:todayStr()},
+      streak:{current:0,longest:0,lastDay:null},
+      daily:{date:null,plan:[],done:[]},
+      modules:{},
+      srs:{decks:{},cards:{}},
+      achievements:[],
+      settings:{sound:true,reducedMotion:false,onboarded:false,focus:'all'},
+      activity:{}
+    };
+  }
+  let S=load();
+  function load(){
+    try{const raw=localStorage.getItem(KEY);if(!raw)return defaultState();
+      const s=Object.assign(defaultState(),JSON.parse(raw));
+      return s;
+    }catch(e){return defaultState();}
+  }
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+
+  /* ---------- leveling ---------- */
+  // XP needed to go from level L to L+1 (cumulative computed by loop).
+  const xpForLevelStep=L=>100+(L-1)*50;
+  function levelInfo(xp){
+    let lvl=1,need=xpForLevelStep(1),into=xp;
+    while(into>=need){into-=need;lvl++;need=xpForLevelStep(lvl);}
+    return {level:lvl,into:Math.floor(into),need,pct:Math.max(0,Math.min(1,into/need))};
+  }
+
+  /* ---------- Cortex Score: in-app cognitive-fitness composite (0-1000), NOT an IQ ---------- */
+  const BENCH={reaction:90,nback:85,srs:90,breath:10,math:400,stroop:45,switch:35,vocab:11};
+  function moduleFitness(id){const r=S.modules[id];const best=r&&r.best!=null?r.best:0;return Math.max(0,Math.min(100,Math.round(best/(BENCH[id]||100)*100)));}
+  function cortexScore(){const ids=Object.keys(BENCH);return Math.round(ids.reduce((a,id)=>a+moduleFitness(id),0)/ids.length*10);}
+
+  /* ---------- daily quest: one Knowledge + one Focus + one Game, rotating by day ---------- */
+  const QUEST_CATS=[['srs','vocab'],['breath','nback'],['reaction','math','stroop','switch']];
+  const FOCUS_EXTRA={memory:['nback','srs'],focus:['breath','stroop','switch'],knowledge:['srs','vocab']};
+  function ensureDaily(){
+    const t=todayStr();
+    if(S.daily.date!==t){
+      const ready=new Set(Modules.filter(m=>m.status==='ready').map(m=>m.id));
+      const dayNum=Math.floor(new Date(t).getTime()/86400000);
+      const plan=[];
+      QUEST_CATS.forEach((cat,ci)=>{const avail=cat.filter(id=>ready.has(id));if(avail.length)plan.push(avail[(dayNum+ci)%avail.length]);});
+      if(!plan.length)plan.push(...[...ready].slice(0,3));
+      const fx=FOCUS_EXTRA[S.settings&&S.settings.focus];           // personalise: add one extra from chosen focus
+      if(fx){const extra=fx.find(id=>ready.has(id)&&!plan.includes(id));if(extra)plan.push(extra);}
+      S.daily={date:t,plan,done:[]};
+      save();
+    }
+  }
+
+  /* ---------- record a finished session ---------- */
+  function recordSession(id,{score=0,xp=0,stats=null}={}){
+    const t=todayStr();
+    // module record
+    const m=S.modules[id]||(S.modules[id]={sessions:0,best:null,last:null,history:[]});
+    m.sessions++; m.last=score;
+    if(m.best==null||score>m.best)m.best=score;
+    m.history.push({d:t,score,xp,stats});
+    if(m.history.length>200)m.history=m.history.slice(-200);
+
+    // xp + activity (+ level-up celebration)
+    const lvBefore=levelInfo(S.profile.xp).level;
+    S.profile.xp+=xp; S.profile.lastActive=t;
+    const lvAfter=levelInfo(S.profile.xp).level;
+    if(lvAfter>lvBefore)setTimeout(()=>levelUp(lvAfter),450);
+    S.activity[t]=(S.activity[t]||0)+1;
+
+    // streak: count today once any session is logged
+    if(S.streak.lastDay!==t){
+      const gap=S.streak.lastDay?daysBetween(S.streak.lastDay,t):null;
+      S.streak.current=(gap===1)?S.streak.current+1:1;
+      if(S.streak.current>S.streak.longest)S.streak.longest=S.streak.current;
+      S.streak.lastDay=t;
+    }
+
+    // daily quest progress
+    ensureDaily();
+    if(S.daily.plan.includes(id)&&!S.daily.done.includes(id))S.daily.done.push(id);
+
+    save();
+    Sound.success();
+    checkAchievements();
+    paintTop();
+  }
+
+  /* ---------- achievements ---------- */
+  function totalSessions(s){return Object.values(s.modules).reduce((a,m)=>a+(m.sessions||0),0);}
+  const srsReviewed=s=>(s.modules.srs&&s.modules.srs.history?s.modules.srs.history.reduce((a,h)=>a+((h.stats&&h.stats.reviewed)||0),0):0);
+  const ACHS=[
+    {id:'first',ic:'🌱',n:'First Rep',d:'Complete your first exercise.',test:s=>totalSessions(s)>=1},
+    {id:'allrounder',ic:'🎛️',n:'All-Rounder',d:'Try 3 different exercises.',test:s=>Object.keys(s.modules).length>=3},
+    {id:'octopus',ic:'🐙',n:'The Full Workout',d:'Try all 8 exercises.',test:s=>Object.keys(s.modules).filter(k=>BENCH[k]!==undefined).length>=8},
+    {id:'streak3',ic:'🔥',n:'Warming Up',d:'Reach a 3-day streak.',test:s=>s.streak.longest>=3},
+    {id:'streak7',ic:'⚡',n:'Habit Formed',d:'Reach a 7-day streak.',test:s=>s.streak.longest>=7},
+    {id:'streak30',ic:'🌟',n:'Unbreakable',d:'Reach a 30-day streak.',test:s=>s.streak.longest>=30},
+    {id:'lvl5',ic:'🧗',n:'Level 5',d:'Reach level 5.',test:s=>levelInfo(s.profile.xp).level>=5},
+    {id:'lvl10',ic:'🏆',n:'Level 10',d:'Reach level 10.',test:s=>levelInfo(s.profile.xp).level>=10},
+    {id:'sessions25',ic:'🏋️',n:'Gym Regular',d:'Complete 25 exercises.',test:s=>totalSessions(s)>=25},
+    {id:'sessions100',ic:'💯',n:'Centurion',d:'Complete 100 exercises.',test:s=>totalSessions(s)>=100},
+    {id:'quest',ic:'✅',n:'Daily Done',d:'Finish a full daily training plan.',test:s=>s.daily.plan.length>0&&s.daily.done.length>=s.daily.plan.length},
+    {id:'nback3',ic:'🧠',n:'Triple Back',d:'Reach 3-back in Dual N-Back.',test:s=>((s.modules.nback&&s.modules.nback.n)||0)>=3},
+    {id:'zen',ic:'🧘',n:'Inner Calm',d:'Finish 10 meditation sessions.',test:s=>((s.modules.breath&&s.modules.breath.sessions)||0)>=10},
+    {id:'scholar',ic:'📚',n:'Scholar',d:'Review 100 flashcards.',test:s=>srsReviewed(s)>=100},
+    {id:'cortex300',ic:'💎',n:'Sharp Mind',d:'Reach a Cortex Score of 300.',test:s=>cortexScore()>=300}
+  ];
+  function checkAchievements(silent){
+    let unlocked=[];
+    ACHS.forEach(a=>{if(!S.achievements.includes(a.id)){try{if(a.test(S)){S.achievements.push(a.id);unlocked.push(a);}}catch(e){}}});
+    if(unlocked.length){save();if(!silent){Sound.achievement();unlocked.forEach((a,i)=>setTimeout(()=>toast(a.ic+' Achievement: '+a.n),i*900));}}
+  }
+
+  /* ---------- toast + level-up ---------- */
+  let _toastT;
+  function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('show'),2200);}
+  function levelUp(n){
+    if(document.querySelector('.levelup'))return;
+    Sound.levelUp();
+    const ov=el('div','levelup');
+    ov.innerHTML='<div class="lu-card"><div class="lu-burst">⭐</div><div class="lu-title">Level Up</div><div class="lu-lvl">Level '+n+'</div><div class="note" style="margin:0">Nice — keep the streak going.</div></div>';
+    document.body.append(ov);
+    requestAnimationFrame(()=>ov.classList.add('show'));
+    const close=()=>{ov.classList.remove('show');setTimeout(()=>ov.remove(),320);};
+    ov.addEventListener('click',close); setTimeout(close,2800);
+  }
+
+  /* ---------- sound pack (WebAudio synth, offline; gated by S.settings.sound) ---------- */
+  let _ac=null;
+  function audioCtx(){if(_ac)return _ac;try{_ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){_ac=null;}return _ac;}
+  document.addEventListener('pointerdown',function _r(){const c=audioCtx();if(c&&c.state==='suspended')c.resume();},{once:true});
+  function blip(freq,t0,dur,type,vol){const c=audioCtx();if(!c)return;try{const o=c.createOscillator(),g=c.createGain();o.type=type||'sine';o.frequency.value=freq;g.gain.value=0.0001;o.connect(g);g.connect(c.destination);const t=c.currentTime+(t0||0);o.start(t);g.gain.exponentialRampToValueAtTime(vol||0.1,t+0.012);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.stop(t+dur+0.03);}catch(e){}}
+  const Sound={
+    on(){return !(S.settings&&S.settings.sound===false);},
+    correct(){if(this.on()){blip(660,0,0.12,'sine',0.09);blip(990,0.05,0.12,'sine',0.07);}},
+    wrong(){if(this.on())blip(160,0,0.2,'sawtooth',0.06);},
+    success(){if(this.on())[523,659,784].forEach((f,i)=>blip(f,i*0.08,0.18,'sine',0.09));},
+    levelUp(){if(this.on())[523,659,784,1047].forEach((f,i)=>blip(f,i*0.10,0.22,'triangle',0.11));},
+    achievement(){if(this.on())[784,988,1319].forEach((f,i)=>blip(f,i*0.07,0.16,'sine',0.09));},
+    tick(){if(this.on())blip(440,0,0.05,'square',0.05);}
+  };
+
+  /* ---------- header paint ---------- */
+  // Streak shown to the user: alive if trained today or yesterday, else broken (0).
+  function effectiveStreak(){if(!S.streak.lastDay)return 0;const gap=daysBetween(S.streak.lastDay,todayStr());return gap<=1?S.streak.current:0;}
+  function paintTop(){
+    const li=levelInfo(S.profile.xp);
+    $('#t-streak').textContent=effectiveStreak();
+    $('#t-level').textContent=li.level;
+    $('#t-xp').textContent=li.into+' / '+li.need+' XP';
+    $('#t-xpbar').style.width=(li.pct*100).toFixed(1)+'%';
+  }
+
+  /* =========================================================================
+     MODULES REGISTRY  (the loop appends ready modules here)
+     ========================================================================= */
+  const Modules=[
+    /* ---- #1 Reaction Time (implemented) ---- */
+    {
+      id:'reaction', name:'Reaction Time', icon:'⚡', status:'ready',
+      blurb:'Tap the instant the screen turns green. Trains raw processing speed.',
+      evidence:'Processing speed is a real, measurable cognitive dimension; this is mostly a fun baseline + warm-up.',
+      start(mount,finish){
+        const N=5; let i=0; const times=[]; let state='idle',t0=0,timer=null;
+        const pad=el('div','rt-pad rt-idle','Click to start — then tap the moment it turns <b style="margin:0 4px">green</b>');
+        const info=el('div','muted','Trial 0 / '+N);
+        const wrap=el('div','stage'); wrap.append(pad,info);
+        mount.innerHTML=''; mount.append(wrap);
+        function arm(){
+          state='wait'; pad.className='rt-pad rt-wait'; pad.innerHTML='Wait for green…';
+          const delay=900+Math.random()*2200;
+          timer=setTimeout(()=>{state='go';t0=performance.now();pad.className='rt-pad rt-go';pad.innerHTML='TAP!';},delay);
+        }
+        pad.addEventListener('pointerdown',()=>{
+          if(state==='done')return;
+          if(state==='idle'){i=0;times.length=0;info.textContent='Trial 1 / '+N;arm();return;}     // start session (trial 1)
+          if(state==='between'){info.textContent='Trial '+(i+1)+' / '+N;arm();return;}              // next trial, keep progress
+          if(state==='wait'){clearTimeout(timer);state='between';pad.className='rt-pad rt-early';pad.innerHTML='Too early! Click to retry this trial.';return;}
+          if(state==='go'){
+            const ms=Math.round(performance.now()-t0);times.push(ms);i++;
+            if(i>=N){done();} else {state='between';pad.className='rt-pad rt-idle';pad.innerHTML='<b>'+ms+' ms</b> ✔ — click for the next trial';info.textContent='Trial '+i+' / '+N+' — last '+ms+' ms';}
+          }
+        });
+        function done(){
+          state='done';
+          const avg=Math.round(times.reduce((a,b)=>a+b,0)/times.length);
+          const best=Math.min(...times);
+          // score: faster = higher; 600ms→~0, 200ms→~100
+          const score=Math.max(0,Math.round((600-avg)/4));
+          const xp=20+Math.round(score/3);
+          pad.className='rt-pad rt-idle';
+          pad.innerHTML='Avg <b>'+avg+' ms</b> · best '+best+' ms<br><span class="muted">+'+xp+' XP</span>';
+          info.innerHTML='<button class="btn-x primary" id="rt-again">Again</button> &nbsp; <a class="btn-x ghost" data-go="#/train">Back to Train</a>';
+          $('#rt-again').onclick=()=>moduleById('reaction').start(mount,finish);
+          finish({score,xp,stats:{avg,best}});
+          toast('+'+xp+' XP · '+avg+' ms');
+        }
+      }
+    },
+    /* ---- planned (loop fills these in) ---- */
+    /* ---- #2 Dual N-Back (implemented) ---- */
+    {
+      id:'nback', name:'Dual N-Back', icon:'🔢', status:'ready',
+      blurb:'Track position + sound N steps back. The classic working-memory workout.',
+      evidence:'Trains working memory; transfer to general IQ is debated — see Science.',
+      start(mount,finish){
+        const rec=S.modules.nback||{};
+        let n=Math.max(1,Math.min(6,rec.n||2));
+        const SOA=2700, SHOW=650, scored=14, trials=scored+n;
+        const TONES=[261.63,293.66,329.63,392.00,440.00,523.25];
+        const POS=[0,1,2,3,5,6,7,8];           // 8 grid cells (centre = tone indicator)
+        let idx=-1, running=false, tickTimer=null, hideTimer=null, ac=null;
+        const seq=[], posResp=Array(trials).fill(false), sndResp=Array(trials).fill(false);
+        const stt={pos:{hit:0,miss:0,fa:0,cr:0},snd:{hit:0,miss:0,fa:0,cr:0}};
+
+        mount.innerHTML='';
+        const wrap=el('div','stage'); wrap.style.gap='14px';
+        const head=el('div',null,'<div class="big" style="font-size:22px">Dual <span style="color:var(--accent)">'+n+'</span>-Back</div><div class="muted" id="nb-status">Match the square <b>and</b> the tone from <b>'+n+'</b> step'+(n>1?'s':'')+' ago.</div>');
+        const grid=el('div'); grid.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:min(360px,80vw);aspect-ratio:1';
+        const cells=[];
+        for(let k=0;k<9;k++){const c=el('div');c.style.cssText='border:1px solid var(--line);border-radius:14px;background:var(--card2);display:grid;place-items:center;font-size:26px;transition:background .08s,box-shadow .08s';grid.append(c);cells.push(c);}
+        const btns=el('div','row'); btns.style.gap='12px';
+        const posBtn=el('button','btn-x','◻ Position (A)'); const sndBtn=el('button','btn-x','🔊 Sound (L)');
+        posBtn.disabled=sndBtn.disabled=true; btns.append(posBtn,sndBtn);
+        const startBtn=el('button','btn-x primary','▶ Start round');
+        const info=el('div','muted','Press <b>A</b> when the position repeats from '+n+' back · <b>L</b> when the tone repeats. ~30% of trials match.');
+        wrap.append(head,grid,btns,startBtn,info); mount.append(wrap);
+
+        function tone(i){try{if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.value=TONES[i];g.gain.value=0.0001;o.connect(g);g.connect(ac.destination);const t=ac.currentTime;o.start(t);g.gain.exponentialRampToValueAtTime(0.18,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+0.32);o.stop(t+0.34);}catch(e){}}
+        function flash(b){b.style.background='var(--accent)';b.style.borderColor='var(--accent)';setTimeout(()=>{b.style.background='';b.style.borderColor='';},150);}
+        function press(ch){if(!running||idx<0||idx>=trials)return;if(ch==='pos'){posResp[idx]=true;flash(posBtn);}else{sndResp[idx]=true;flash(sndBtn);}}
+        function onKey(e){if(!document.body.contains(grid)){cleanup();return;}if(e.key==='a'||e.key==='A')press('pos');if(e.key==='l'||e.key==='L')press('snd');}
+        function cleanup(){running=false;clearTimeout(tickTimer);clearTimeout(hideTimer);document.removeEventListener('keydown',onKey);window.removeEventListener('hashchange',cleanup);}
+        function genSeq(){for(let k=0;k<trials;k++){let p=POS[Math.floor(Math.random()*POS.length)],s=Math.floor(Math.random()*TONES.length);if(k>=n){if(Math.random()<0.28)p=seq[k-n].p;if(Math.random()<0.28)s=seq[k-n].s;}seq.push({p,s});}}
+        function showStim(k){const cell=cells[seq[k].p];cell.style.background='var(--accent)';cell.style.boxShadow='0 0 22px rgba(124,92,255,.85)';const ctr=cells[4];ctr.textContent='🔊';ctr.style.color='var(--accent2)';tone(seq[k].s);hideTimer=setTimeout(()=>{cell.style.background='var(--card2)';cell.style.boxShadow='none';if(seq[k].p!==4)ctr.textContent='';},SHOW);}
+        function evaluate(k){if(k<n)return;const pm=seq[k].p===seq[k-n].p,sm=seq[k].s===seq[k-n].s;stt.pos[pm?(posResp[k]?'hit':'miss'):(posResp[k]?'fa':'cr')]++;stt.snd[sm?(sndResp[k]?'hit':'miss'):(sndResp[k]?'fa':'cr')]++;}
+        function step(){idx++;if(idx>0)evaluate(idx-1);if(idx>=trials)return finishRound();$('#nb-status').innerHTML='Trial <b>'+(idx+1)+'</b> / '+trials;showStim(idx);tickTimer=setTimeout(step,SOA);}
+        function finishRound(){
+          cleanup(); const pt=trials-n;
+          const accP=(stt.pos.hit+stt.pos.cr)/pt, accS=(stt.snd.hit+stt.snd.cr)/pt, overall=(accP+accS)/2;
+          const score=Math.round(overall*100);
+          const xp=Math.max(10,20+Math.round(score*0.4)+(n-2)*10);
+          const newN=overall>=0.8?Math.min(9,n+1):overall<0.5?Math.max(1,n-1):n;
+          posBtn.disabled=sndBtn.disabled=true; grid.style.opacity='.35';
+          head.innerHTML='<div class="big" style="font-size:22px">Round complete</div>';
+          const pct=x=>Math.round(x*100)+'%';
+          info.innerHTML='<div class="card" style="margin-top:6px;text-align:left;min-width:min(360px,80vw)">'+
+            '<div class="row spread"><span>◻ Position accuracy</span><b>'+pct(accP)+'</b></div>'+
+            '<div class="row spread"><span>🔊 Sound accuracy</span><b>'+pct(accS)+'</b></div>'+
+            '<div class="row spread" style="margin-top:6px;border-top:1px solid var(--line);padding-top:8px"><span>Score</span><b>'+score+' / 100</b></div>'+
+            '<div class="note" style="margin-top:8px">'+(newN>n?'🎉 Leveling up to <b>'+newN+'-back</b> next round!':newN<n?'Dropping to <b>'+newN+'-back</b> — keep at it.':'Staying at <b>'+n+'-back</b>. Reach 80% to level up.')+'</div></div>';
+          startBtn.style.display=''; startBtn.disabled=false; startBtn.textContent='▶ Play again';
+          startBtn.onclick=()=>moduleById('nback').start(mount,finish);
+          finish({score,xp,stats:{n,accP:+accP.toFixed(2),accS:+accS.toFixed(2)}});
+          if(!S.modules.nback)S.modules.nback={}; S.modules.nback.n=newN; save();
+          toast('+'+xp+' XP · '+score+'/100 · '+n+'-back');
+        }
+        startBtn.onclick=()=>{
+          try{ac=audioCtx();if(ac&&ac.state==='suspended')ac.resume();}catch(e){ac=null;}
+          genSeq(); running=true; idx=-1; posBtn.disabled=sndBtn.disabled=false; startBtn.style.display='none';
+          document.addEventListener('keydown',onKey); window.addEventListener('hashchange',cleanup);
+          $('#nb-status').textContent='Get ready…'; tickTimer=setTimeout(step,900);
+        };
+        posBtn.onclick=()=>press('pos'); sndBtn.onclick=()=>press('snd');
+      }
+    },
+    /* ---- #3 Flashcards / Spaced Repetition — SM-2 (implemented) ---- */
+    {
+      id:'srs', name:'Flashcards (SRS)', icon:'🗂️', status:'ready',
+      blurb:'Anki-style spaced repetition. The single best tool for durable knowledge.',
+      evidence:'Strongest evidence here: spacing + retrieval beats re-reading for long-term memory.',
+      start(mount,finish){
+        const SEED=[
+          {name:'Cognitive Biases',cards:[
+            ["Confirmation bias","Favoring information that confirms what you already believe."],
+            ["Sunk cost fallacy","Continuing something because of past investment, not future value."],
+            ["Dunning–Kruger effect","Low-skill people overestimate their own competence."],
+            ["Anchoring","Relying too heavily on the first piece of information seen."],
+            ["Availability heuristic","Judging likelihood by how easily examples come to mind."],
+            ["Hindsight bias","Seeing past events as having been predictable all along."],
+            ["Survivorship bias","Focusing on winners and ignoring the failures you don't see."],
+            ["Loss aversion","Losses feel about twice as painful as equivalent gains."],
+            ["Halo effect","One good trait colours your judgement of everything else."],
+            ["Fundamental attribution error","Blaming others' character but your own circumstances."]
+          ]},
+          {name:'Logical Fallacies',cards:[
+            ["Ad hominem","Attacking the person instead of their argument."],
+            ["Straw man","Misrepresenting an argument to make it easier to attack."],
+            ["Slippery slope","Claiming one step inevitably leads to extreme consequences."],
+            ["False dilemma","Presenting only two options when more exist."],
+            ["Appeal to authority","Treating an authority's opinion as proof by itself."],
+            ["Circular reasoning","The conclusion is quietly assumed in the premise."],
+            ["Post hoc","Assuming A caused B just because B followed A."],
+            ["Appeal to ignorance","Claiming it's true because it hasn't been proven false."],
+            ["No true Scotsman","Redefining a category to dodge a counterexample."],
+            ["Bandwagon","Treating popularity as evidence of truth."]
+          ]},
+          {name:'World Capitals',cards:[
+            ["Australia","Canberra"],["Canada","Ottawa"],["Brazil","Brasília"],["Turkey","Ankara"],
+            ["Switzerland","Bern"],["Kazakhstan","Astana"],["Nigeria","Abuja"],["New Zealand","Wellington"],
+            ["South Africa","Pretoria (administrative)"],["Myanmar","Naypyidaw"]
+          ]},
+          {name:'Science Essentials',cards:[
+            ["What does DNA stand for?","Deoxyribonucleic acid."],
+            ["Speed of light (approx)","~299,792 km/s (3×10⁸ m/s)."],
+            ["The 'powerhouse of the cell'","The mitochondria."],
+            ["First law of thermodynamics","Energy can't be created or destroyed, only transformed."],
+            ["What is entropy?","A measure of disorder; it tends to increase in isolated systems."],
+            ["pH of a neutral solution","7."],
+            ["Newton's second law","Force = mass × acceleration (F = ma)."],
+            ["What is a light-year?","A distance: how far light travels in one year (~9.46 trillion km)."],
+            ["Most abundant gas in Earth's air","Nitrogen (~78%)."],
+            ["What causes the seasons?","Earth's axial tilt — not its distance from the Sun."]
+          ]},
+          {name:'Sharp Vocabulary',cards:[
+            ["Sycophant","Someone who flatters powerful people to gain advantage."],
+            ["Ephemeral","Lasting a very short time."],
+            ["Pragmatic","Dealing with things practically rather than idealistically."],
+            ["Ubiquitous","Present or found everywhere."],
+            ["Equivocate","To use vague language to avoid committing to a position."],
+            ["Salient","Most noticeable or important."],
+            ["Pernicious","Harmful in a gradual, hard-to-notice way."],
+            ["Laconic","Using very few words."],
+            ["Magnanimous","Generous or forgiving, especially toward a rival."],
+            ["Capitulate","To stop resisting; to surrender."]
+          ]},
+          {name:'Mental Models',cards:[
+            ["Opportunity cost","The value of the next-best option you give up when you choose something."],
+            ["Compound interest","Growth on growth — returns that themselves earn more returns over time."],
+            ["Second-order thinking","Asking 'and then what?' — the effects of the effects, not just the first one."],
+            ["Base rate","How common something is in general, before you weigh the specifics of one case."],
+            ["Regression to the mean","Extreme results tend to be followed by more average ones."],
+            ["Supply and demand","Prices rise when demand outstrips supply, and fall when supply outstrips demand."],
+            ["Marginal thinking","Good decisions weigh the next unit (the margin), not the average."],
+            ["Network effect","A product becomes more valuable as more people use it."],
+            ["Occam's razor","Prefer the simplest explanation that still fits the facts."],
+            ["Comparative advantage","It can pay to specialise in what you're relatively best at, then trade."]
+          ]},
+          {name:'History Milestones',cards:[
+            ["Gutenberg's printing press","~1440 — mass-produced books and spread literacy across Europe."],
+            ["Fall of the Western Roman Empire","476 AD."],
+            ["Columbus reaches the Americas","1492."],
+            ["Start of the French Revolution","1789."],
+            ["First powered flight (Wright brothers)","1903."],
+            ["End of World War II","1945."],
+            ["First human on the Moon","1969 — Apollo 11."],
+            ["Fall of the Berlin Wall","1989."],
+            ["World Wide Web made public","1991."],
+            ["Human Genome Project completed","2003."]
+          ]}
+        ];
+        seedIfNeeded();
+        let queue=[], firstQ={}, answered=0, lapses=0, finished=false, kbReveal=null, kbRate=null;
+        const addDays=(ds,n)=>{const d=new Date(ds);d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+        const cardsOf=id=>Object.values(S.srs.cards).filter(c=>c.deckId===id);
+        const dueOf=id=>{const t=todayStr();return cardsOf(id).filter(c=>c.due<=t);};
+        function seedIfNeeded(){ if(Object.keys(S.srs.decks).length)return; SEED.forEach((d,di)=>{const id='d'+di;S.srs.decks[id]={id,name:d.name,builtin:true};d.cards.forEach((c,ci)=>{const cid=id+'c'+ci;S.srs.cards[cid]={id:cid,deckId:id,front:c[0],back:c[1],ease:2.5,interval:0,reps:0,lapses:0,due:todayStr(),lastReview:null};});}); save(); }
+
+        function calc(card,q){
+          let iv=card.interval, reps=card.reps;
+          const ease=Math.max(1.3, card.ease+(0.1-(5-q)*(0.08+(5-q)*0.02)));
+          if(q<3){reps=0;iv=1;}
+          else if(reps===0){reps=1;iv=(q===5?4:1);}
+          else if(reps===1){reps=2;iv=(q===5?8:6);}
+          else {reps++;const mult=q===3?0.8:q===5?1.3:1;iv=Math.max(1,Math.round(iv*ease*mult));}
+          return {interval:iv,reps,ease};
+        }
+        function schedule(card,q){const r=calc(card,q);card.interval=r.interval;card.reps=r.reps;card.ease=r.ease;if(q<3)card.lapses=(card.lapses||0)+1;card.due=addDays(todayStr(),card.interval);card.lastReview=todayStr();}
+        const previewDays=(card,q)=>calc(card,q).interval;
+        const ivLabel=d=> d<=1?'1 day': d<30?d+' days': d<365?Math.round(d/30)+' mo': (d/365).toFixed(1)+' yr';
+
+        function hub(){
+          finished=false; kbReveal=null; kbRate=null; mount.innerHTML='';
+          const t=todayStr(); const wrap=el('div');
+          const totalDue=Object.values(S.srs.cards).filter(c=>c.due<=t).length;
+          wrap.append(el('div',null,'<div class="big" style="font-size:20px">Flashcards</div><div class="muted">Spaced repetition (SM-2) — you review each card right before you’d forget it.</div>'));
+          const reviewAll=el('button','btn-x primary',totalDue?'▶ Review all due ('+totalDue+')':'🎉 All caught up for today');
+          reviewAll.style.margin='12px 0'; reviewAll.disabled=!totalDue; reviewAll.onclick=()=>startReview(null); wrap.append(reviewAll);
+          const list=el('div');
+          Object.values(S.srs.decks).forEach(d=>{
+            const due=dueOf(d.id).length, total=cardsOf(d.id).length;
+            const row=el('div','card'); row.style.cssText='padding:14px;margin-bottom:8px';
+            row.innerHTML='<b>'+d.name+'</b> <span class="muted">· '+total+' cards · '+(due?due+' due':'none due')+'</span>';
+            const br=el('div','row'); br.style.cssText='gap:8px;margin-top:10px';
+            const rev=el('button','btn-x','Review'+(due?' ('+due+')':'')); rev.disabled=!due; rev.onclick=()=>startReview(d.id);
+            const man=el('button','btn-x ghost','Manage'); man.onclick=()=>manage(d.id);
+            br.append(rev,man); row.append(br); list.append(row);
+          });
+          wrap.append(list);
+          const nd=el('div','row'); nd.style.cssText='gap:8px;margin-top:6px';
+          const ndi=el('input'); ndi.placeholder='New deck name…'; ndi.style.cssText='flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--ink)';
+          const ndb=el('button','btn-x','＋ Deck'); ndb.onclick=()=>{const name=ndi.value.trim();if(!name)return;const id='u'+Date.now();S.srs.decks[id]={id,name,builtin:false};save();manage(id);};
+          nd.append(ndi,ndb); wrap.append(nd); mount.append(wrap);
+        }
+
+        function manage(deckId){
+          kbReveal=null; kbRate=null;
+          const d=S.srs.decks[deckId]; if(!d)return hub();
+          mount.innerHTML=''; const wrap=el('div');
+          const back=el('button','btn-x ghost','← All decks'); back.onclick=hub;
+          wrap.append(el('div','big','<span style="font-size:20px">'+d.name+'</span>')); wrap.append(back);
+          const form=el('div','card'); form.style.cssText='margin:12px 0';
+          const fIn=el('textarea'); fIn.placeholder='Front (question / prompt)';
+          const bIn=el('textarea'); bIn.placeholder='Back (answer)';
+          [fIn,bIn].forEach(x=>x.style.cssText='width:100%;min-height:50px;margin:4px 0;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--ink);font-family:inherit');
+          const addBtn=el('button','btn-x primary','＋ Add card');
+          addBtn.onclick=()=>{const f=fIn.value.trim(),b=bIn.value.trim();if(!f||!b)return;const cid='c'+Date.now();S.srs.cards[cid]={id:cid,deckId,front:f,back:b,ease:2.5,interval:0,reps:0,lapses:0,due:todayStr(),lastReview:null};save();manage(deckId);};
+          form.append(el('h3',null,'Add a card'),fIn,bIn,addBtn); wrap.append(form);
+          const cards=cardsOf(deckId); wrap.append(el('div','muted',cards.length+' cards'));
+          cards.forEach(c=>{
+            const row=el('div','card'); row.style.cssText='padding:10px;margin-top:8px';
+            const top=el('div','row spread'); const txt=el('div');
+            const ft=el('div'); ft.textContent=c.front; const bt=el('div','muted'); bt.style.fontSize='13px'; bt.textContent=c.back; txt.append(ft,bt);
+            const del=el('button','btn-x ghost','✕'); del.title='Delete'; del.onclick=()=>{delete S.srs.cards[c.id];save();manage(deckId);};
+            top.append(txt,del); row.append(top); wrap.append(row);
+          });
+          if(!d.builtin){const dd=el('button','btn-x ghost','🗑 Delete deck'); dd.style.marginTop='14px';
+            dd.onclick=()=>{if(confirm('Delete deck “'+d.name+'” and its cards?')){cardsOf(deckId).forEach(c=>delete S.srs.cards[c.id]);delete S.srs.decks[deckId];save();hub();}}; wrap.append(dd);}
+          mount.append(wrap);
+        }
+
+        function startReview(deckId){
+          const t=todayStr(); let pool=Object.values(S.srs.cards).filter(c=>c.due<=t);
+          if(deckId)pool=pool.filter(c=>c.deckId===deckId);
+          for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+          queue=pool.slice(0,20); firstQ={}; answered=0; lapses=0; finished=false;
+          if(!queue.length)return hub(); showCard();
+        }
+        function showCard(){
+          if(!queue.length)return finishSession();
+          const card=queue[0]; mount.innerHTML='';
+          const wrap=el('div','stage'); wrap.style.gap='16px';
+          wrap.append(el('div','muted','Card '+(answered+1)+' · '+queue.length+' left in queue'));
+          const face=el('div','card'); face.style.cssText='width:min(560px,90vw);min-height:150px;display:grid;place-items:center;text-align:center;font-size:22px;padding:24px';
+          const front=el('div'); front.style.fontWeight='700'; front.textContent=card.front; face.append(front); wrap.append(face);
+          const showBtn=el('button','btn-x primary','Show answer  ·  Space'); wrap.append(showBtn);
+          const quit=el('button','btn-x ghost','End session'); quit.onclick=finishSession; wrap.append(quit);
+          function doReveal(){
+            if(!showBtn.isConnected)return;
+            const ans=el('div'); ans.style.cssText='border-top:1px solid var(--line);margin-top:14px;padding-top:14px;color:var(--accent2);font-size:20px'; ans.textContent=card.back; face.append(ans);
+            showBtn.remove();
+            const br=el('div'); br.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(560px,90vw)';
+            [['Again',1],['Hard',3],['Good',4],['Easy',5]].forEach(([lbl,q],i)=>{
+              const b=el('button','btn-x'); b.style.flexDirection='column';
+              b.innerHTML='<b>'+(i+1)+' · '+lbl+'</b><span class="muted" style="font-size:12px">'+(q<3?'soon':ivLabel(previewDays(card,q)))+'</span>';
+              b.onclick=()=>rate(card,q); br.append(b);
+            });
+            wrap.insertBefore(br,quit);
+            kbReveal=null; kbRate=idx=>rate(card,[1,3,4,5][idx]);
+          }
+          showBtn.onclick=doReveal;
+          kbReveal=doReveal; kbRate=null;
+          mount.append(wrap);
+        }
+        function rate(card,q){
+          if(!(card.id in firstQ))firstQ[card.id]=q;
+          answered++; schedule(card,q); if(q<3)lapses++; save();
+          queue.shift(); if(q<3)queue.push(card); showCard();
+        }
+        function finishSession(){
+          if(finished)return; finished=true; kbReveal=null; kbRate=null;
+          const unique=Object.keys(firstQ).length, passed=Object.values(firstQ).filter(q=>q>=3).length;
+          const score=unique?Math.round(100*passed/unique):0, xp=Math.max(5,unique*6+passed*2);
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div','big','Session complete'));
+          wrap.append(el('div','card','<div style="text-align:left;min-width:min(420px,80vw)">'+
+            '<div class="row spread"><span>Cards reviewed</span><b>'+unique+'</b></div>'+
+            '<div class="row spread"><span>Recalled first try (Good/Easy)</span><b>'+passed+'</b></div>'+
+            '<div class="row spread"><span>Lapses (Again)</span><b>'+lapses+'</b></div>'+
+            '<div class="row spread" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Score</span><b>'+score+' / 100</b></div></div>'));
+          const b=el('button','btn-x primary','Back to decks'); b.onclick=hub; wrap.append(b); mount.append(wrap);
+          if(unique>0){finish({score,xp,stats:{reviewed:unique,passed,lapses}});toast('+'+xp+' XP · '+unique+' cards');}
+        }
+        function srsKey(e){
+          if(!document.body.contains(mount)){srsCleanup();return;}
+          if((e.key===' '||e.key==='Enter')&&kbReveal){e.preventDefault();kbReveal();}
+          else if(kbRate&&['1','2','3','4'].includes(e.key)){e.preventDefault();kbRate(+e.key-1);}
+        }
+        function srsCleanup(){document.removeEventListener('keydown',srsKey);window.removeEventListener('hashchange',srsCleanup);}
+        document.addEventListener('keydown',srsKey); window.addEventListener('hashchange',srsCleanup);
+        hub();
+      }
+    },
+    /* ---- #4 Meditation / Breath-focus timer (implemented) ---- */
+    {
+      id:'breath', name:'Meditation', icon:'🧘', status:'ready',
+      blurb:'Guided breath pacing & focus timer. Calm the system, sharpen attention.',
+      evidence:'Solid evidence for attention regulation and stress reduction.',
+      start(mount,finish){
+        const PATTERNS={
+          box:{name:'Box · 4·4·4·4',phases:[['Breathe in',4,1],['Hold',4,1],['Breathe out',4,0.42],['Hold',4,0.42]]},
+          relax:{name:'Relax · 4·7·8',phases:[['Breathe in',4,1],['Hold',7,1],['Breathe out',8,0.42]]},
+          coherent:{name:'Coherent · 5·5',phases:[['Breathe in',5,1],['Breathe out',5,0.42]]},
+          calm:{name:'Calm · 4·6',phases:[['Breathe in',4,1],['Breathe out',6,0.42]]}
+        };
+        let pat='box', mins=5, ac=null, soundOn=S.settings.sound!==false;
+        let running=false, phaseTimer=null, tickTimer=null, startTs=0, cycles=0, elapsed=0;
+
+        function cleanup(){running=false;clearTimeout(phaseTimer);clearTimeout(tickTimer);window.removeEventListener('hashchange',cleanup);}
+        function chime(freq,dur){try{if(!soundOn||!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.value=freq;g.gain.value=0.0001;o.connect(g);g.connect(ac.destination);const t=ac.currentTime;o.start(t);g.gain.exponentialRampToValueAtTime(0.12,t+0.05);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.stop(t+dur+0.03);}catch(e){}}
+
+        function setup(){
+          cleanup(); mount.innerHTML='';
+          const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div',null,'<div class="big" style="font-size:22px">Meditation</div><div class="muted">Follow the circle — let the pace slow you down.</div>'));
+          const psel=el('div'); psel.style.cssText='display:flex;gap:8px;flex-wrap:wrap;justify-content:center';
+          Object.entries(PATTERNS).forEach(([k,v])=>{const b=el('button','btn-x'+(k===pat?' primary':''),v.name);b.onclick=()=>{pat=k;setup();};psel.append(b);});
+          const dsel=el('div'); dsel.style.cssText='display:flex;gap:8px;flex-wrap:wrap;justify-content:center';
+          [1,3,5,10].forEach(d=>{const b=el('button','btn-x'+(d===mins?' primary':''),d+' min');b.onclick=()=>{mins=d;setup();};dsel.append(b);});
+          const snd=el('button','btn-x ghost',(soundOn?'🔊 Chime on':'🔇 Chime off'));snd.onclick=()=>{soundOn=!soundOn;S.settings.sound=soundOn;save();setup();};
+          const startBtn=el('button','btn-x primary','▶ Begin'); startBtn.style.fontSize='17px'; startBtn.onclick=begin;
+          wrap.append(el('div','muted','Pattern'),psel,el('div','muted','Session length'),dsel,snd,startBtn);
+          mount.append(wrap);
+        }
+
+        function begin(){
+          try{ac=audioCtx();if(ac&&ac.state==='suspended')ac.resume();}catch(e){ac=null;}
+          cleanup(); mount.innerHTML=''; running=true; cycles=0; elapsed=0; startTs=Date.now();
+          const total=mins*60, phases=PATTERNS[pat].phases; let pi=0;
+          const wrap=el('div','stage'); wrap.style.gap='16px';
+          const timeEl=el('div','muted','');
+          const ring=el('div'); ring.style.cssText='position:relative;width:min(300px,72vw);height:min(300px,72vw);display:grid;place-items:center';
+          const circle=el('div'); circle.style.cssText='width:64%;height:64%;border-radius:50%;background:radial-gradient(circle at 50% 38%,var(--accent2),#15705a);box-shadow:0 0 55px rgba(39,211,162,.5);transform:scale(0.42);transition:transform 4s ease-in-out;display:grid;place-items:center';
+          const label=el('div'); label.style.cssText='font-size:20px;font-weight:800;color:#04261d;text-align:center'; circle.append(label); ring.append(circle);
+          const cyc=el('div','muted','Cycle 0');
+          const stop=el('button','btn-x ghost','Finish'); stop.onclick=()=>endSession(true);
+          wrap.append(timeEl,ring,cyc,stop); mount.append(wrap);
+          window.addEventListener('hashchange',cleanup);
+
+          function runPhase(){
+            if(!running)return;
+            const p=phases[pi]; label.textContent=p[0];
+            circle.style.transitionDuration=p[1]+'s'; circle.style.transform='scale('+p[2]+')';
+            if(p[0].indexOf('in')>=0)chime(432,0.6); else if(p[0].indexOf('out')>=0)chime(324,0.7);
+            phaseTimer=setTimeout(()=>{
+              pi++; if(pi>=phases.length){pi=0;cycles++;cyc.textContent='Cycle '+cycles;}
+              if(elapsed>=total)return endSession(false);
+              runPhase();
+            },p[1]*1000);
+          }
+          function tick(){
+            if(!running)return;
+            elapsed=Math.round((Date.now()-startTs)/1000);
+            const rem=Math.max(0,total-elapsed);
+            timeEl.textContent=Math.floor(rem/60)+':'+String(rem%60).padStart(2,'0')+' remaining';
+            tickTimer=setTimeout(tick,250);
+          }
+          chime(528,0.9); runPhase(); tick();
+        }
+
+        function endSession(early){
+          if(!running)return; cleanup();
+          chime(528,1.1);
+          const counted=elapsed>=60, minutesCounted=Math.max(1,Math.round(elapsed/60));
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div','big','🧘 '+(early?'Session ended':'Well done')));
+          wrap.append(el('div','card','<div style="text-align:left;min-width:min(360px,80vw)">'+
+            '<div class="row spread"><span>Pattern</span><b>'+PATTERNS[pat].name+'</b></div>'+
+            '<div class="row spread"><span>Time</span><b>'+Math.floor(elapsed/60)+'m '+(elapsed%60)+'s</b></div>'+
+            '<div class="row spread"><span>Breath cycles</span><b>'+cycles+'</b></div>'+
+            (counted?'<div class="row spread" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Earned</span><b>+'+(minutesCounted*8)+' XP</b></div>':'<div class="note" style="margin-top:6px">Sit for at least a minute to earn XP.</div>')+'</div>'));
+          const again=el('button','btn-x primary','Again'); again.onclick=setup; wrap.append(again); mount.append(wrap);
+          if(counted){const xp=minutesCounted*8; finish({score:minutesCounted,xp,stats:{minutes:minutesCounted,pattern:pat,cycles}}); toast('+'+xp+' XP · '+minutesCounted+' min');}
+        }
+
+        setup();
+      }
+    },
+    /* ---- #5 Mental Math (implemented) ---- */
+    {
+      id:'math', name:'Mental Math', icon:'➗', status:'ready',
+      blurb:'Adaptive timed arithmetic. Build real numeracy and speed.',
+      evidence:'Genuine transferable skill — arithmetic fluency compounds.',
+      start(mount,finish){
+        const DUR=60; let running=false, tickTimer=null;
+        let d=2, streak=0, correct=0, wrong=0, points=0, peakD=2, startTs=0, cur=null;
+        const r=(lo,hi)=>lo+Math.floor(Math.random()*(hi-lo+1));
+        function gen(){
+          const ops=['+','-']; if(d>=2)ops.push('×'); if(d>=3)ops.push('÷');
+          const op=ops[Math.floor(Math.random()*ops.length)]; let a,b,ans;
+          if(op==='+'){const hi=d>=4?199:d>=3?99:d>=2?50:20;a=r(2,hi);b=r(2,hi);ans=a+b;}
+          else if(op==='-'){const hi=d>=4?199:d>=3?99:d>=2?50:20;a=r(2,hi);b=r(1,a);ans=a-b;}
+          else if(op==='×'){if(d>=4){a=r(11,25);b=r(11,19);}else if(d>=3){a=r(11,29);b=r(3,9);}else{a=r(2,12);b=r(2,12);}ans=a*b;}
+          else {const bb=d>=4?r(3,12):r(2,9),c=d>=4?r(4,15):r(2,12);a=bb*c;b=bb;ans=c;}
+          return {text:a+' '+op+' '+b,ans};
+        }
+        function cleanup(){running=false;clearTimeout(tickTimer);window.removeEventListener('hashchange',cleanup);}
+        function setup(){
+          cleanup(); mount.innerHTML='';
+          const wrap=el('div','stage'); wrap.style.gap='16px';
+          wrap.append(el('div',null,'<div class="big" style="font-size:22px">Mental Math</div><div class="muted">Solve as many as you can in '+DUR+' seconds — difficulty adapts to you.</div>'));
+          const b=el('button','btn-x primary','▶ Start sprint'); b.style.fontSize='17px'; b.onclick=begin; wrap.append(b);
+          mount.append(wrap);
+        }
+        function begin(){
+          cleanup(); mount.innerHTML=''; running=true; d=2;streak=0;correct=0;wrong=0;points=0;peakD=2; startTs=Date.now();
+          const wrap=el('div','stage'); wrap.style.gap='14px';
+          const hud=el('div','row'); hud.style.cssText='gap:14px;justify-content:center';
+          const tEl=el('div','pill','⏱ '+DUR), sEl=el('div','pill','✔ 0'), cEl=el('div','pill','🔥 x1.0');
+          hud.append(tEl,sEl,cEl);
+          const q=el('div'); q.style.cssText='font-size:44px;font-weight:800;letter-spacing:1px';
+          const inp=el('input'); inp.type='text'; inp.inputMode='numeric'; inp.autocomplete='off';
+          inp.style.cssText='font-size:30px;text-align:center;width:200px;padding:10px;border-radius:12px;border:2px solid var(--line);background:var(--card2);color:var(--ink)';
+          const fb=el('div','muted'); fb.style.minHeight='22px';
+          const quit=el('button','btn-x ghost','End'); quit.onclick=()=>endGame();
+          wrap.append(hud,q,inp,fb,quit); mount.append(wrap);
+          window.addEventListener('hashchange',cleanup);
+          function next(){cur=gen();q.textContent=cur.text+' =';inp.value='';inp.focus();}
+          function submit(){
+            if(!running||inp.value.trim()==='')return; const v=parseInt(inp.value,10); if(isNaN(v))return;
+            if(v===cur.ans){Sound.correct();correct++;streak++;const mult=1+Math.min(streak,10)*0.1;points+=Math.round(10*d*mult);if(streak%3===0&&d<5){d++;if(d>peakD)peakD=d;}fb.style.color='var(--good)';fb.textContent='✓ Correct';}
+            else{Sound.wrong();wrong++;streak=0;if(d>1)d--;fb.style.color='var(--bad)';fb.textContent='✗ '+cur.text+' = '+cur.ans;}
+            sEl.textContent='✔ '+correct; cEl.textContent='🔥 x'+(1+Math.min(streak,10)*0.1).toFixed(1); next();
+          }
+          inp.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
+          function tick(){if(!running)return;const rem=Math.max(0,DUR-Math.round((Date.now()-startTs)/1000));tEl.textContent='⏱ '+rem;if(rem<=0)return endGame();tickTimer=setTimeout(tick,200);}
+          next(); tick();
+        }
+        function endGame(){
+          if(!running)return; cleanup();
+          const total=correct+wrong, acc=total?Math.round(100*correct/total):0, score=points, xp=Math.max(10,15+correct*3);
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div','big','Time!'));
+          wrap.append(el('div','card','<div style="text-align:left;min-width:min(360px,80vw)">'+
+            '<div class="row spread"><span>Correct</span><b>'+correct+'</b></div>'+
+            '<div class="row spread"><span>Accuracy</span><b>'+acc+'%</b></div>'+
+            '<div class="row spread"><span>Peak difficulty</span><b>L'+peakD+'</b></div>'+
+            '<div class="row spread" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Points</span><b>'+points+'</b></div></div>'));
+          const again=el('button','btn-x primary','Again'); again.onclick=begin; wrap.append(again); mount.append(wrap);
+          finish({score,xp,stats:{correct,acc,peakD,points}}); toast('+'+xp+' XP · '+correct+' solved');
+        }
+        setup();
+      }
+    },
+    /* ---- #6 Stroop (implemented) ---- */
+    {
+      id:'stroop', name:'Stroop', icon:'🎨', status:'ready',
+      blurb:'Name the ink colour, not the word. Trains inhibition & attention.',
+      evidence:'Classic measure of inhibitory control / selective attention.',
+      start(mount,finish){
+        const DUR=45;
+        const COLORS=[['Red','#ff5d6c'],['Green','#3ddc84'],['Blue','#4aa3ff'],['Yellow','#ffd23f'],['Purple','#b07cff'],['Orange','#ff9f45']];
+        let running=false,tickTimer=null,startTs=0,correct=0,wrong=0,rt=[],curInk=-1,shownTs=0;
+        function cleanup(){running=false;clearTimeout(tickTimer);window.removeEventListener('hashchange',cleanup);}
+        function setup(){
+          cleanup(); mount.innerHTML='';
+          const wrap=el('div','stage'); wrap.style.gap='16px';
+          wrap.append(el('div',null,'<div class="big" style="font-size:22px">Stroop</div><div class="muted">Tap the <b>colour of the ink</b> — ignore what the word says. '+DUR+'s.</div>'));
+          const b=el('button','btn-x primary','▶ Start'); b.style.fontSize='17px'; b.onclick=begin; wrap.append(b);
+          mount.append(wrap);
+        }
+        function begin(){
+          cleanup(); mount.innerHTML=''; running=true; startTs=Date.now(); correct=0;wrong=0;rt=[];
+          const wrap=el('div','stage'); wrap.style.gap='16px';
+          const hud=el('div','row'); hud.style.cssText='gap:18px;justify-content:center';
+          const tEl=el('div','pill','⏱ '+DUR), sEl=el('div','pill','✔ 0'); hud.append(tEl,sEl);
+          const word=el('div'); word.style.cssText='font-size:54px;font-weight:900;letter-spacing:2px;min-height:64px';
+          const pad=el('div'); pad.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:min(360px,86vw)';
+          const fb=el('div','muted'); fb.style.minHeight='20px';
+          const quit=el('button','btn-x ghost','End'); quit.onclick=()=>endGame();
+          COLORS.forEach((c,i)=>{const bt=el('button');bt.style.cssText='height:54px;border-radius:12px;border:2px solid #0006;background:'+c[1]+';cursor:pointer;font-weight:800;color:#0009';bt.textContent=c[0];bt.dataset.ci=i;bt.onclick=()=>answer(i);pad.append(bt);});
+          wrap.append(hud,word,pad,fb,quit); mount.append(wrap);
+          window.addEventListener('hashchange',cleanup);
+          function nextStim(){const wi=Math.floor(Math.random()*COLORS.length);let ink=wi;if(Math.random()<0.7){while(ink===wi)ink=Math.floor(Math.random()*COLORS.length);}curInk=ink;word.textContent=COLORS[wi][0].toUpperCase();word.style.color=COLORS[ink][1];shownTs=Date.now();}
+          function answer(i){if(!running)return;if(i===curInk){Sound.correct();correct++;rt.push(Date.now()-shownTs);fb.style.color='var(--good)';fb.textContent='✓';}else{Sound.wrong();wrong++;fb.style.color='var(--bad)';fb.textContent='✗';}sEl.textContent='✔ '+correct;nextStim();}
+          function tick(){if(!running)return;const rem=Math.max(0,DUR-Math.round((Date.now()-startTs)/1000));tEl.textContent='⏱ '+rem;if(rem<=0)return endGame();tickTimer=setTimeout(tick,200);}
+          nextStim(); tick();
+        }
+        function endGame(){
+          if(!running)return; cleanup();
+          const total=correct+wrong, acc=total?Math.round(100*correct/total):0, avg=rt.length?Math.round(rt.reduce((a,b)=>a+b,0)/rt.length):0;
+          const score=correct, xp=Math.max(10,15+correct*2);
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div','big','Time!'));
+          wrap.append(el('div','card','<div style="text-align:left;min-width:min(360px,80vw)">'+
+            '<div class="row spread"><span>Correct</span><b>'+correct+'</b></div>'+
+            '<div class="row spread"><span>Accuracy</span><b>'+acc+'%</b></div>'+
+            '<div class="row spread"><span>Avg response</span><b>'+avg+' ms</b></div>'+
+            '<div class="row spread" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Score</span><b>'+score+'</b></div></div>'));
+          const again=el('button','btn-x primary','Again'); again.onclick=begin; wrap.append(again); mount.append(wrap);
+          finish({score,xp,stats:{correct,wrong,acc,avgRT:avg}}); toast('+'+xp+' XP · '+correct+' correct');
+        }
+        setup();
+      }
+    },
+    /* ---- #7 Task-Switching (implemented) ---- */
+    {
+      id:'switch', name:'Task Switch', icon:'🔀', status:'ready',
+      blurb:'Flip rules on the fly. Measures cognitive flexibility (switch cost).',
+      evidence:'Targets cognitive flexibility, an executive-function core.',
+      start(mount,finish){
+        const DUR=45, r=(lo,hi)=>lo+Math.floor(Math.random()*(hi-lo+1));
+        let running=false,tickTimer=null,startTs=0,hits=0,wrong=0,rtSw=[],rtRep=[];
+        let curTask=null,prevTask=null,ans=null,isSwitch=false,shownTs=0;
+        function cleanup(){running=false;clearTimeout(tickTimer);window.removeEventListener('hashchange',cleanup);}
+        function setup(){
+          cleanup(); mount.innerHTML='';
+          const wrap=el('div','stage'); wrap.style.gap='16px';
+          wrap.append(el('div',null,'<div class="big" style="font-size:22px">Task Switch</div><div class="muted">The rule keeps changing — read the cue, then judge the number. '+DUR+'s.</div>'));
+          wrap.append(el('div','note','<b style="color:var(--accent)">ODD / EVEN</b> → is the number odd or even? &nbsp; <b style="color:var(--accent2)">LOW / HIGH</b> → is it below or above 5?'));
+          const b=el('button','btn-x primary','▶ Start'); b.style.fontSize='17px'; b.onclick=begin; wrap.append(b); mount.append(wrap);
+        }
+        function begin(){
+          cleanup(); mount.innerHTML=''; running=true; startTs=Date.now(); hits=0;wrong=0;rtSw=[];rtRep=[];prevTask=null;curTask=null;
+          const wrap=el('div','stage'); wrap.style.gap='14px';
+          const hud=el('div','row'); hud.style.cssText='gap:14px;justify-content:center';
+          const tEl=el('div','pill','⏱ '+DUR), sEl=el('div','pill','✔ 0'); hud.append(tEl,sEl);
+          const cue=el('div'); cue.style.cssText='font-size:22px;font-weight:800;letter-spacing:1px';
+          const numEl=el('div'); numEl.style.cssText='font-size:72px;font-weight:900;min-height:84px';
+          const grid=el('div'); grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px;width:min(360px,86vw)';
+          const b0=el('button','btn-x'),b1=el('button','btn-x'); b0.style.fontSize='18px';b1.style.fontSize='18px';
+          b0.onclick=()=>answer(b0.dataset.r); b1.onclick=()=>answer(b1.dataset.r); grid.append(b0,b1);
+          const fb=el('div','muted'); fb.style.minHeight='20px';
+          const quit=el('button','btn-x ghost','End'); quit.onclick=()=>endGame();
+          wrap.append(hud,cue,numEl,grid,fb,quit); mount.append(wrap);
+          window.addEventListener('hashchange',cleanup);
+          function nextStim(){
+            prevTask=curTask; curTask=Math.random()<0.5?'parity':'magnitude'; isSwitch=prevTask!==null&&curTask!==prevTask;
+            let n; do{n=r(1,9);}while(n===5); numEl.textContent=n;
+            if(curTask==='parity'){cue.textContent='ODD or EVEN?';cue.style.color='var(--accent)';b0.textContent='Even';b0.dataset.r='even';b1.textContent='Odd';b1.dataset.r='odd';ans=n%2===0?'even':'odd';}
+            else{cue.textContent='LOW (<5) or HIGH (>5)?';cue.style.color='var(--accent2)';b0.textContent='Low';b0.dataset.r='low';b1.textContent='High';b1.dataset.r='high';ans=n<5?'low':'high';}
+            shownTs=Date.now();
+          }
+          function answer(resp){
+            if(!running)return; const dt=Date.now()-shownTs;
+            if(resp===ans){Sound.correct();hits++;if(isSwitch)rtSw.push(dt);else rtRep.push(dt);fb.style.color='var(--good)';fb.textContent='✓';}
+            else{Sound.wrong();wrong++;fb.style.color='var(--bad)';fb.textContent='✗';}
+            sEl.textContent='✔ '+hits; nextStim();
+          }
+          function tick(){if(!running)return;const rem=Math.max(0,DUR-Math.round((Date.now()-startTs)/1000));tEl.textContent='⏱ '+rem;if(rem<=0)return endGame();tickTimer=setTimeout(tick,200);}
+          nextStim(); tick();
+        }
+        function endGame(){
+          if(!running)return; cleanup();
+          const total=hits+wrong, acc=total?Math.round(100*hits/total):0;
+          const avgSw=rtSw.length?Math.round(rtSw.reduce((a,b)=>a+b,0)/rtSw.length):0, avgRep=rtRep.length?Math.round(rtRep.reduce((a,b)=>a+b,0)/rtRep.length):0;
+          const cost=(avgSw&&avgRep)?avgSw-avgRep:0, score=hits, xp=Math.max(10,15+hits*2);
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div','big','Time!'));
+          wrap.append(el('div','card','<div style="text-align:left;min-width:min(360px,80vw)">'+
+            '<div class="row spread"><span>Correct</span><b>'+hits+'</b></div>'+
+            '<div class="row spread"><span>Accuracy</span><b>'+acc+'%</b></div>'+
+            '<div class="row spread"><span>Switch cost</span><b>'+(cost>0?'+'+cost+' ms':'—')+'</b></div>'+
+            '<div class="note" style="margin-top:4px">Switch cost = how much slower you are right after the rule changes. Lower is better.</div>'+
+            '<div class="row spread" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Score</span><b>'+score+'</b></div></div>'));
+          const again=el('button','btn-x primary','Again'); again.onclick=begin; wrap.append(again); mount.append(wrap);
+          finish({score,xp,stats:{correct:hits,acc,switchCost:cost}}); toast('+'+xp+' XP · '+hits+' correct');
+        }
+        setup();
+      }
+    },
+    /* ---- #8 Vocabulary (implemented) ---- */
+    {
+      id:'vocab', name:'Vocabulary', icon:'📖', status:'ready',
+      blurb:'Learn new words; misses become flashcards automatically.',
+      evidence:'Vocabulary is real knowledge and a strong correlate of verbal ability.',
+      start(mount,finish){
+        const WORDS=[
+          ["Ephemeral","Lasting for a very short time."],["Ubiquitous","Present or found everywhere."],
+          ["Pragmatic","Dealing with things sensibly and practically."],["Gregarious","Fond of company; sociable."],
+          ["Esoteric","Understood by only a small, specialised group."],["Pernicious","Harmful in a gradual, often hidden way."],
+          ["Tenacious","Holding firmly; persistent and determined."],["Capricious","Given to sudden, unpredictable changes of mood."],
+          ["Magnanimous","Generous or forgiving, especially toward a rival."],["Laconic","Using very few words; terse."],
+          ["Obsequious","Excessively eager to please or obey."],["Ineffable","Too great to be expressed in words."],
+          ["Sycophant","A person who flatters others to gain advantage."],["Equivocate","To use vague language to avoid committing."],
+          ["Salient","Most noticeable or important; prominent."],["Spurious","Not genuine; false despite seeming real."],
+          ["Inchoate","Just begun and not yet fully formed."],["Recalcitrant","Stubbornly resistant to authority or control."],
+          ["Sanguine","Optimistic, especially in a difficult situation."],["Quixotic","Wildly idealistic and impractical."]
+        ];
+        const QN=12; let idx=0, order=[], correct=0, missed=[];
+        function setup(){
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='16px';
+          wrap.append(el('div',null,'<div class="big" style="font-size:22px">Vocabulary</div><div class="muted">Pick the right meaning. Any you miss become flashcards in a <b>My Vocabulary</b> deck.</div>'));
+          const b=el('button','btn-x primary','▶ Start ('+QN+' words)'); b.style.fontSize='17px'; b.onclick=begin; wrap.append(b); mount.append(wrap);
+        }
+        function begin(){
+          order=[...Array(WORDS.length).keys()]; for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+          order=order.slice(0,QN); idx=0; correct=0; missed=[]; question();
+        }
+        function question(){
+          if(idx>=order.length)return done();
+          const wi=order[idx], word=WORDS[wi][0], def=WORDS[wi][1];
+          const pool=WORDS.map((w,i)=>i).filter(i=>i!==wi); for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+          const opts=[def,WORDS[pool[0]][1],WORDS[pool[1]][1],WORDS[pool[2]][1]];
+          for(let i=opts.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[opts[i],opts[j]]=[opts[j],opts[i]];}
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div','muted','Word '+(idx+1)+' / '+order.length+' · score '+correct));
+          const w=el('div'); w.style.cssText='font-size:38px;font-weight:800'; w.textContent=word; wrap.append(w);
+          const list=el('div'); list.style.cssText='display:grid;gap:10px;width:min(560px,92vw)';
+          opts.forEach(o=>{const b=el('button','btn-x'); b.style.cssText='text-align:left;white-space:normal;padding:12px 14px'; b.textContent=o; b.onclick=()=>pick(o===def,word,def,b,list); list.append(b);});
+          wrap.append(list); mount.append(wrap);
+        }
+        function pick(isRight,word,def,btn,list){
+          [...list.children].forEach(b=>b.disabled=true);
+          if(isRight){correct++;btn.style.borderColor='var(--good)';btn.style.background='rgba(61,220,132,.15)';}
+          else{btn.style.borderColor='var(--bad)';btn.style.background='rgba(255,93,108,.12)';missed.push([word,def]);
+            [...list.children].forEach(b=>{if(b.textContent===def)b.style.borderColor='var(--good)';}); addToVocabDeck(word,def);}
+          const nx=el('button','btn-x primary',idx+1>=order.length?'See results':'Next →'); nx.style.marginTop='8px'; nx.onclick=()=>{idx++;question();};
+          mount.querySelector('.stage').append(nx);
+        }
+        function addToVocabDeck(word,def){
+          let deck=Object.values(S.srs.decks).find(d=>d.name==='My Vocabulary');
+          if(!deck){S.srs.decks['uvocab']={id:'uvocab',name:'My Vocabulary',builtin:false};deck=S.srs.decks['uvocab'];}
+          if(!Object.values(S.srs.cards).some(c=>c.deckId===deck.id&&c.front===word)){const cid='vc'+Date.now()+''+Math.floor(Math.random()*1000);S.srs.cards[cid]={id:cid,deckId:deck.id,front:word,back:def,ease:2.5,interval:0,reps:0,lapses:0,due:todayStr(),lastReview:null};}
+          save();
+        }
+        function done(){
+          const acc=order.length?Math.round(100*correct/order.length):0, score=correct, xp=Math.max(10,10+correct*4);
+          mount.innerHTML=''; const wrap=el('div','stage'); wrap.style.gap='14px';
+          wrap.append(el('div','big','📖 Done'));
+          wrap.append(el('div','card','<div style="text-align:left;min-width:min(360px,80vw)">'+
+            '<div class="row spread"><span>Correct</span><b>'+correct+' / '+order.length+'</b></div>'+
+            '<div class="row spread"><span>Accuracy</span><b>'+acc+'%</b></div>'+
+            (missed.length?'<div class="note" style="margin-top:6px">📌 '+missed.length+' word'+(missed.length>1?'s':'')+' added to your <b>My Vocabulary</b> deck for spaced review.</div>':'<div class="note" style="margin-top:6px">Perfect — nothing to review!</div>')+
+            '<div class="row spread" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span>Score</span><b>'+score+'</b></div></div>'));
+          const again=el('button','btn-x primary','Again'); again.onclick=begin; wrap.append(again); mount.append(wrap);
+          finish({score,xp,stats:{correct,total:order.length,acc,added:missed.length}}); toast('+'+xp+' XP · '+correct+'/'+order.length);
+        }
+        setup();
+      }
+    }
+  ];
+  const moduleById=id=>Modules.find(m=>m.id===id);
+
+  /* =========================================================================
+     SCREENS / ROUTER
+     ========================================================================= */
+  function screenHome(){
+    ensureDaily();
+    const li=levelInfo(S.profile.xp);
+    const m=$('#screen'); m.innerHTML='';
+    const hour=new Date().getHours();
+    const greet=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+
+    // hero: today's training + level card
+    const hero=el('div','hero');
+    const quest=el('div','card');
+    quest.append(el('h3',null,"Today's Training"));
+    const ul=el('ul','quest'); ul.style.listStyle='none'; ul.style.margin='0'; ul.style.padding='0';
+    if(!S.daily.plan.length){
+      ul.append(el('li',null,'<span class="muted">More modules unlock here as they\'re built. For now, jump into an exercise below.</span>'));
+    }
+    S.daily.plan.forEach(id=>{
+      const mod=moduleById(id); if(!mod)return;
+      const done=S.daily.done.includes(id);
+      const li2=el('li');
+      li2.innerHTML='<span class="check '+(done?'done':'')+'">'+(done?'✓':'')+'</span>'+
+        '<span class="qname">'+mod.icon+' '+mod.name+'</span>'+
+        '<span class="qmeta">'+(done?'done':'tap to train')+'</span>';
+      li2.style.cursor='pointer'; li2.onclick=()=>go('#/train/'+id);
+      ul.append(li2);
+    });
+    quest.append(ul);
+    const pct=S.daily.plan.length?Math.round(100*S.daily.done.length/S.daily.plan.length):0;
+    quest.append(el('div','note','<br>Daily plan: <b>'+S.daily.done.length+'/'+S.daily.plan.length+'</b> complete ('+pct+'%). Finishing it keeps your 🔥 streak alive.'));
+
+    const lvlCard=el('div','card');
+    lvlCard.append(el('h3',null,'Your Progress'));
+    lvlCard.innerHTML+=
+      '<div class="row spread"><div><div class="muted">Level</div><div class="big">'+li.level+'</div></div>'+
+      '<div style="text-align:right"><div class="muted">Streak</div><div class="big">🔥 '+effectiveStreak()+'</div></div></div>'+
+      '<div class="xpbar" style="margin-top:14px"><i style="width:'+(li.pct*100)+'%"></i></div>'+
+      '<div class="note" style="margin-top:6px">'+li.into+' / '+li.need+' XP to level '+(li.level+1)+'</div>'+
+      '<div class="row spread" style="margin-top:12px;align-items:flex-end"><div><div class="muted">Cortex Score</div><div class="big" style="font-size:26px">'+cortexScore()+'<span class="muted" style="font-size:14px"> / 1000</span></div></div><a class="btn-x ghost" data-go="#/stats" style="padding:6px 12px">Stats →</a></div>'+
+      '<div class="row" style="margin-top:14px;gap:18px">'+
+        '<div><div class="muted">Sessions</div><b>'+totalSessions(S)+'</b></div>'+
+        '<div><div class="muted">Best streak</div><b>'+S.streak.longest+'</b></div>'+
+        '<div><div class="muted">Badges</div><b>'+S.achievements.length+'/'+ACHS.length+'</b></div>'+
+      '</div>';
+    hero.append(quest,lvlCard);
+    m.append(el('div',null,'<div class="row spread" style="margin-bottom:6px"><h1 style="margin:0;font-size:22px">'+greet+' 👋</h1><a class="btn-x primary" data-go="#/train">Start training →</a></div>'));
+    m.append(hero);
+
+    // module grid
+    m.append(el('h3',null,'Exercises'));
+    m.append(moduleGrid());
+  }
+
+  function moduleGrid(){
+    const grid=el('div','grid cols-3');
+    Modules.forEach(mod=>{
+      const rec=S.modules[mod.id];
+      const t=el(mod.status==='ready'?'a':'div','card tile');
+      if(mod.status==='ready'){t.href='#/train/'+mod.id;}
+      t.innerHTML=
+        '<div class="ic">'+mod.icon+'</div>'+
+        '<div class="tname">'+mod.name+'</div>'+
+        '<div class="tdesc">'+mod.blurb+'</div>'+
+        '<span class="tag '+(mod.status==='ready'?'ready':'soon')+'">'+(mod.status==='ready'?'Play':'Soon')+'</span>'+
+        (rec&&rec.best!=null?'<span class="best">best '+rec.best+'</span>':'');
+      if(mod.status!=='ready')t.onclick=()=>toast('🔒 '+mod.name+' is coming soon — being built next!');
+      grid.append(t);
+    });
+    return grid;
+  }
+
+  function screenTrain(){
+    const m=$('#screen'); m.innerHTML='';
+    m.append(el('h1',null,'<span style="font-size:22px">Train</span>'));
+    m.append(el('p','muted','Pick an exercise. Every session earns XP and counts toward your streak.'));
+    m.append(moduleGrid());
+  }
+
+  function screenModule(id){
+    const mod=moduleById(id); const m=$('#screen'); m.innerHTML='';
+    if(!mod||mod.status!=='ready'){m.append(el('div','card','<h2>Coming soon</h2><p class="muted">This module is being built. Check back shortly.</p><a class="btn-x" data-go="#/train">← Back</a>'));return;}
+    m.append(el('div',null,'<div class="row spread"><h1 style="margin:0;font-size:22px">'+mod.icon+' '+mod.name+'</h1><a class="btn-x ghost" data-go="#/train">← Train</a></div>'));
+    m.append(el('p','muted',mod.blurb));
+    const card=el('div','card'); const mount=el('div'); card.append(mount); m.append(card);
+    mod.start(mount,res=>recordSession(id,res));
+  }
+
+  function screenStats(){
+    const m=$('#screen'); m.innerHTML=''; const li=levelInfo(S.profile.xp);
+    m.append(el('h1',null,'<span style="font-size:22px">Stats</span>'));
+    const top=el('div','grid cols-3');
+    [['Level',li.level],['Total XP',S.profile.xp],['Current streak','🔥 '+effectiveStreak()],
+     ['Best streak',S.streak.longest],['Sessions',totalSessions(S)],['Badges',S.achievements.length+'/'+ACHS.length]]
+     .forEach(([k,v])=>{const c=el('div','card');c.innerHTML='<div class="muted">'+k+'</div><div class="big" style="margin-top:6px">'+v+'</div>';top.append(c);});
+    m.append(top);
+
+    // Cortex Score breakdown
+    const csCard=el('div','card'); csCard.style.marginTop='16px';
+    csCard.innerHTML='<div class="row spread"><h3 style="margin:0">Cortex Score</h3><div class="big" style="font-size:30px">'+cortexScore()+'<span class="muted" style="font-size:15px"> / 1000</span></div></div>'+
+      '<div class="note">A composite of your best result in each exercise — your in-app cognitive-fitness number. <b>Not an IQ.</b> It climbs as you improve and as you train more of the exercises.</div>';
+    const bars=el('div'); bars.style.cssText='margin-top:10px;display:grid;gap:6px';
+    Object.keys(BENCH).forEach(id=>{const mod=moduleById(id);const f=moduleFitness(id);
+      const row=el('div'); row.style.cssText='display:grid;grid-template-columns:130px 1fr 34px;align-items:center;gap:10px;font-size:13px';
+      row.innerHTML='<span>'+(mod?mod.icon+' '+mod.name:id)+'</span><span class="xpbar" style="height:10px"><i style="width:'+f+'%"></i></span><span class="muted" style="text-align:right">'+f+'</span>';
+      bars.append(row);});
+    csCard.append(bars); m.append(csCard);
+
+    // streak calendar (last 5 weeks)
+    const cal=el('div','card'); cal.style.marginTop='16px'; cal.append(el('h3',null,'Last 35 days'));
+    const grid=el('div','calendar');
+    for(let k=34;k>=0;k--){const d=new Date();d.setDate(d.getDate()-k);
+      const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const n=S.activity[ds]||0; const cls=n>=3?'lvl3':n===2?'lvl2':n===1?'lvl1':'';
+      const cell=el('div','cell '+cls); cell.title=ds+' · '+n+' session'+(n===1?'':'s'); grid.append(cell);}
+    cal.append(grid); m.append(cal);
+
+    // per-module table with trend sparklines
+    function sparkline(vals,w,h){const c=el('canvas');w=w||100;h=h||26;c.width=w;c.height=h;c.style.cssText='width:'+w+'px;height:'+h+'px;vertical-align:middle';const ctx=c.getContext('2d');if(!vals||vals.length<2)return c;const mn=Math.min(...vals),mx=Math.max(...vals),rng=(mx-mn)||1;ctx.strokeStyle='#7c5cff';ctx.lineWidth=2;ctx.lineJoin='round';ctx.beginPath();vals.forEach((v,i)=>{const x=2+i/(vals.length-1)*(w-4),y=h-3-((v-mn)/rng)*(h-6);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();const lv=vals[vals.length-1],lx=w-2,ly=h-3-((lv-mn)/rng)*(h-6);ctx.fillStyle='#27d3a2';ctx.beginPath();ctx.arc(lx,ly,2.6,0,7);ctx.fill();return c;}
+    const mods=Object.keys(S.modules).filter(id=>BENCH[id]!==undefined);
+    const tcard=el('div','card'); tcard.style.marginTop='16px'; tcard.append(el('h3',null,'By exercise'));
+    if(!mods.length){tcard.append(el('p','muted','No sessions yet — go train!'));}
+    else{
+      const tbl=el('table','stats');
+      tbl.innerHTML='<tr><th>Exercise</th><th class="r">Plays</th><th class="r">Best</th><th class="r">Last</th><th>Trend</th></tr>';
+      mods.forEach(id=>{const mod=moduleById(id);const r=S.modules[id];const tr=el('tr');
+        tr.innerHTML='<td>'+(mod?mod.icon+' '+mod.name:id)+'</td><td class="r">'+r.sessions+'</td><td class="r">'+(r.best==null?'—':r.best)+'</td><td class="r">'+(r.last==null?'—':r.last)+'</td>';
+        const td=el('td'); td.append(sparkline((r.history||[]).slice(-16).map(h=>h.score))); tr.append(td); tbl.append(tr);});
+      tcard.append(tbl);
+    }
+    m.append(tcard);
+
+    // achievements
+    const ac=el('div','card'); ac.style.marginTop='16px'; ac.append(el('h3',null,'Achievements'));
+    const ag=el('div','grid cols-2');
+    ACHS.forEach(a=>{const got=S.achievements.includes(a.id);
+      ag.append(el('div','ach '+(got?'':'locked'),'<div class="aic">'+a.ic+'</div><div><div class="an">'+a.n+'</div><div class="ad">'+a.d+'</div></div>'));});
+    ac.append(ag); m.append(ac);
+  }
+
+  function screenAbout(){
+    const m=$('#screen'); m.innerHTML='';
+    m.append(el('h1',null,'<span style="font-size:22px">The Science (honest version)</span>'));
+
+    const intro=el('div','card');
+    intro.innerHTML='<h3>The uncomfortable truth</h3><p class="note">Most commercial “brain training” has a weak track record. The largest test of it — six weeks across <b>11,430 people</b> (Owen et al., <i>Nature</i>, 2010) — found people improved at the exact tasks they practised, but those gains <b>did not transfer</b> to general reasoning or memory. So Cortex won’t promise to raise your IQ. Instead it’s built around the few things that genuinely do compound.</p>';
+    m.append(intro);
+
+    const levers=el('div','card'); levers.style.marginTop='16px';
+    levers.innerHTML='<h3>The two real levers</h3>'+
+      '<p class="note"><b>1 · Durable knowledge (spaced repetition).</b> Two of the most reliable results in cognitive science: the <b>spacing effect</b> — you remember more when study is spread over time (Ebbinghaus, 1885) — and the <b>testing effect</b> — actively recalling beats re-reading (Roediger &amp; Karpicke, 2006). The Flashcards module runs an SM-2 schedule built on both. This is the part most likely to make you measurably “smarter” in a lasting way, because it builds <b>real knowledge</b>.</p>'+
+      '<p class="note"><b>2 · Consistency.</b> A little, most days, beats the occasional marathon. The streak, XP, levels and daily plan are deliberate behavioural scaffolding — their only job is to get you back tomorrow.</p>';
+    m.append(levers);
+
+    const ex=el('div','card'); ex.style.marginTop='16px'; ex.append(el('h3',null,'Honest notes on each exercise'));
+    const items=[
+      ['🗂️ Flashcards (SRS)','<b>Strongest evidence here.</b> Spacing + retrieval practice is the closest thing to a free lunch in learning. Build your own decks for things you actually want to know — that’s where the real gains are.'],
+      ['🔢 Dual N-Back','Trains <b>working memory</b> (holding and updating information). A famous study (Jaeggi et al., PNAS, 2008) reported fluid-intelligence gains, but later replications and meta-analyses (Melby-Lervåg &amp; Hulme) found it mostly improves the task itself, with little convincing transfer to general intelligence. Do it as a demanding focus workout you can measurably improve — not as an IQ pill.'],
+      ['🧘 Meditation','Evidence is real but <b>moderate</b>: structured mindfulness shows small-to-moderate benefits for stress, anxiety and attention (e.g. Goyal et al., <i>JAMA Internal Medicine</i>, 2014). Best treated as attention and stress practice.'],
+      ['➗ Mental Math','Arithmetic fluency is a <b>genuine, transferable skill</b>. Automating it frees working memory for harder thinking, and the practice sticks.'],
+      ['🎨 Stroop','Measures <b>inhibitory control</b> — overriding the automatic urge to read the word (the Stroop effect, 1935). You’ll get faster; treat the score as a focus gauge.'],
+      ['🔀 Task Switch','Measures <b>cognitive flexibility</b> via “switch cost” — you’re slower right after the rule changes. Gains are largely task-specific, but it’s a sharp attention drill.'],
+      ['⚡ Reaction Time','A clean measure of <b>processing speed</b> — mostly a warm-up and a baseline to watch over time.'],
+      ['📖 Vocabulary','Real knowledge, and a strong correlate of verbal ability. Words you miss become flashcards so they actually stick.']
+    ];
+    const ul=el('ul','note'); ul.style.cssText='margin:0;padding-left:18px';
+    items.forEach(([t,d])=>{const li=el('li'); li.style.marginBottom='9px'; li.innerHTML='<b>'+t+'</b> — '+d; ul.append(li);});
+    ex.append(ul); m.append(ex);
+
+    const beats=el('div','card'); beats.style.marginTop='16px';
+    beats.innerHTML='<h3>Things that beat any brain game</h3>'+
+      '<p class="note">If your real goal is a sharper mind, the biggest levers aren’t games:</p>'+
+      '<ul class="note" style="margin:0;padding-left:18px">'+
+      '<li><b>Sleep</b> — the single most cost-effective cognitive enhancer. Memory is consolidated as you sleep; shortchanging it hits attention, learning and mood hard.</li>'+
+      '<li><b>Aerobic exercise</b> — among the best-supported interventions for brain health and memory across the lifespan.</li>'+
+      '<li><b>Learning genuinely hard things</b> — a language, an instrument, a craft. Difficulty and novelty drive real growth.</li>'+
+      '<li><b>Reading widely</b> — builds knowledge and vocabulary, which is most of what “being smart” looks like day to day.</li>'+
+      '<li><b>Protecting attention</b> — chronic stress and constant distraction quietly erode clear thinking.</li>'+
+      '</ul>'+
+      '<p class="note">Cortex can nudge a few of these — knowledge, a daily habit, a few minutes of calm. The rest is on you, and it matters more.</p>';
+    m.append(beats);
+
+    const foot=el('div','card'); foot.style.marginTop='16px';
+    foot.innerHTML='<p class="note" style="margin:0">The <b>Cortex Score</b> is an in-app fitness number for these specific exercises. It is <b>not</b> an intelligence test and doesn’t predict one. The honest win condition: <b>train a little, most days</b>, and put the most weight on the flashcards. That’s it.</p>';
+    m.append(foot);
+  }
+
+  function screenSettings(){
+    const m=$('#screen'); m.innerHTML='';
+    m.append(el('h1',null,'<span style="font-size:22px">Settings</span>'));
+    const cp=el('div','card'); cp.style.marginBottom='16px'; cp.append(el('h3',null,'Preferences'));
+    const prow=el('div','row'); prow.style.cssText='gap:10px;flex-wrap:wrap';
+    const rm=el('button','btn-x',(S.settings.reducedMotion?'☑':'☐')+' Reduce motion');
+    rm.onclick=()=>{S.settings.reducedMotion=!S.settings.reducedMotion;save();applyMotionPref();screenSettings();};
+    const snd=el('button','btn-x',(S.settings.sound===false?'🔇 Sound off':'🔊 Sound on'));
+    snd.onclick=()=>{S.settings.sound=(S.settings.sound===false);save();if(S.settings.sound!==false)Sound.tick();screenSettings();};
+    const intro=el('button','btn-x ghost','↺ Replay intro'); intro.onclick=()=>showOnboarding();
+    prow.append(rm,snd,intro); cp.append(prow);
+    if(S.settings.focus&&S.settings.focus!=='all')cp.append(el('div','note','Current focus: <b>'+S.settings.focus+'</b> — your daily plan includes an extra '+S.settings.focus+' exercise.'));
+    m.append(cp);
+    const c=el('div','card');
+    c.innerHTML='<h3>Your data</h3><p class="note">Everything is stored locally in this browser only — nothing is uploaded. '+
+      'Export a backup or move it to another device.</p>';
+    const row=el('div','row'); row.style.gap='10px'; row.style.flexWrap='wrap';
+    const exp=el('button','btn-x','⬇ Export backup');
+    exp.onclick=()=>{const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+      const a=el('a');a.href=URL.createObjectURL(blob);a.download='cortex-backup-'+todayStr()+'.json';a.click();};
+    const imp=el('button','btn-x','⬆ Import backup');
+    const file=el('input');file.type='file';file.accept='application/json';file.style.display='none';
+    imp.onclick=()=>file.click();
+    file.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+      r.onload=()=>{try{S=Object.assign(defaultState(),JSON.parse(r.result));checkAchievements(true);save();paintTop();go('#/home');toast('Backup imported');}catch(err){toast('Could not read that file');}};r.readAsText(f);};
+    const reset=el('button','btn-x ghost','🗑 Reset everything');
+    reset.onclick=()=>{if(confirm('Erase all Cortex progress on this device? This cannot be undone.')){localStorage.removeItem(KEY);S=defaultState();save();paintTop();go('#/home');toast('Progress reset');}};
+    row.append(exp,imp,reset,file); c.append(row); m.append(c);
+
+    const c2=el('div','card');c2.style.marginTop='16px';
+    c2.innerHTML='<h3>About</h3><p class="note">Cortex v0.1 · part of the Monday Jeffrey desktop. '+
+      'Built offline, no accounts, no tracking. New exercises are being added regularly.</p>';
+    m.append(c2);
+  }
+
+  /* ---------- router ---------- */
+  function go(hash){if(location.hash===hash)route();else location.hash=hash;}
+  function route(){
+    ensureDaily();
+    const h=location.hash||'#/home';
+    const parts=h.replace(/^#\//,'').split('/'); // ['train','nback']
+    // tab highlight
+    document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.getAttribute('data-go')==='#/'+parts[0]||(parts[0]===''&&a.getAttribute('data-go')==='#/home')));
+    window.scrollTo(0,0);
+    switch(parts[0]){
+      case '':case 'home':return screenHome();
+      case 'train':return parts[1]?screenModule(parts[1]):screenTrain();
+      case 'stats':return screenStats();
+      case 'about':return screenAbout();
+      case 'settings':return screenSettings();
+      default:return screenHome();
+    }
+  }
+
+  // delegate [data-go] clicks anywhere
+  document.addEventListener('click',e=>{const t=e.target.closest('[data-go]');if(t){e.preventDefault();go(t.getAttribute('data-go'));}});
+  window.addEventListener('hashchange',route);
+
+  /* ---------- preferences + onboarding (first run) ---------- */
+  function applyMotionPref(){document.body.classList.toggle('reduce-motion',!!(S.settings&&S.settings.reducedMotion));}
+  function showOnboarding(){
+    if(document.querySelector('.ob-overlay'))return;
+    const ov=el('div','ob-overlay'); const card=el('div','ob-card'); let focus='all';
+    card.innerHTML='<h1>Welcome to Cortex 🧠</h1>'+
+      '<p class="note">A little brain-training gym that runs entirely in your browser — 100% offline, no account.</p>'+
+      '<p class="note">Straight up: most “brain games” mostly make you better at the game. So Cortex leans on the two things that genuinely compound — <b>learning real things</b> (spaced-repetition flashcards) and <b>showing up daily</b>. The XP, levels and streak exist to make the habit stick.</p>'+
+      '<p class="note" style="margin-top:10px"><b>What do you want to lean into?</b></p>';
+    const opts=el('div','ob-opts');
+    [['all','A bit of everything','Balanced daily mix (recommended)'],['memory','Memory','Dual N-Back + flashcards'],['focus','Focus & calm','Meditation + attention games'],['knowledge','Knowledge','Flashcards + vocabulary']]
+      .forEach(([k,t,d])=>{const o=el('div','ob-opt'+(k==='all'?' sel':'')); o.tabIndex=0; o.innerHTML='<b>'+t+'</b><span>'+d+'</span>';
+        const sel=()=>{focus=k;[...opts.children].forEach(c=>c.classList.remove('sel'));o.classList.add('sel');};
+        o.onclick=sel; o.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();sel();}}; opts.append(o);});
+    card.append(opts);
+    const start=el('button','btn-x primary','Start training →'); start.style.cssText='width:100%;justify-content:center;font-size:16px';
+    start.onclick=()=>{S.settings.onboarded=true;S.settings.focus=focus;S.daily.date=null;save();ensureDaily();ov.remove();go('#/home');route();};
+    card.append(start);
+    card.append(el('div','note','You can read the honest science behind each exercise on the <b>Science</b> tab anytime.'));
+    ov.append(card); document.body.append(ov); start.focus();
+  }
+
+  // boot
+  applyMotionPref();
+  paintTop(); ensureDaily(); checkAchievements(true); route();
+  if(!(S.settings&&S.settings.onboarded)) showOnboarding();
+  // register service worker → installable + works fully offline (scope /cortex/ only)
+  if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
+  </script>
+</body>
+</html>

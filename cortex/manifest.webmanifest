@@ -1,0 +1,15 @@
+{
+  "name": "Cortex — Brain Trainer",
+  "short_name": "Cortex",
+  "description": "A gamified, fully-offline brain-training gym: spaced-repetition flashcards, dual n-back, meditation, mental math and more.",
+  "start_url": "/cortex/",
+  "scope": "/cortex/",
+  "display": "standalone",
+  "background_color": "#0e1018",
+  "theme_color": "#0e1018",
+  "orientation": "any",
+  "categories": ["education", "productivity", "health"],
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
