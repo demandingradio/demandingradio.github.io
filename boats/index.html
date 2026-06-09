@@ -311,7 +311,7 @@ const wake=[], ripples=[], toasts=[];
 let audioOn=true, lastSave=0;
 // the chart is drawn LIVE from `explored` + the height field (no giant canvas), so it scales to any world size
 let mmCanvas=null, mmCtx=null, mmImg=null;   // minimap offscreen
-let fmCanvas=null, fmCtx=null, fmOX=0, fmOY=0, fmSpan=1;   // full-map offscreen + the framed charted region
+let fmCanvas=null, fmCtx=null, fmCX=0, fmCY=0, fmSpan=1, fmDirty=true, fmDrag=null, fmRX=0, fmRY=0, fmRSpan=1, fmRenderTs=-1e9;   // full-map: view + drag + last-rendered view (smooth pan/zoom)
 
 function reveal(){
   const cgx=Math.floor(boat.x/EXP), cgy=Math.floor(boat.y/EXP);
@@ -372,17 +372,33 @@ function loadSave(){
 const keys={};
 addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
-  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_'].includes(k)) e.preventDefault();
   if(!started) return;
-  if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) renderFullMap(); }
-  else if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; }
-  else if(k==='p'){ toggleMute(); }
-  else if(k==='='||k==='+'){ TUNE.zoom=clamp(TUNE.zoom+0.12,0.6,1.9); syncTune(); }
+  if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
+  if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; return; }
+  if(k==='p'){ toggleMute(); return; }
+  if(mapOpen){   // while the chart is open, arrows pan and +/- zoom it
+    if(k==='='||k==='+') zoomMap(0.8,null);
+    else if(k==='-'||k==='_') zoomMap(1.25,null);
+    else if(k==='arrowleft'||k==='a') panMap(-0.14,0);
+    else if(k==='arrowright'||k==='d') panMap(0.14,0);
+    else if(k==='arrowup'||k==='w') panMap(0,-0.14);
+    else if(k==='arrowdown'||k==='s') panMap(0,0.14);
+    return;
+  }
+  if(k==='='||k==='+'){ TUNE.zoom=clamp(TUNE.zoom+0.12,0.6,1.9); syncTune(); }
   else if(k==='-'||k==='_'){ TUNE.zoom=clamp(TUNE.zoom-0.12,0.6,1.9); syncTune(); }
   keys[k]=true;
 });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
-addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; fmDrag=null; });
+// full-map zoom (scroll) + pan (drag) with the mouse
+addEventListener('wheel',e=>{ if(!started||!mapOpen) return; e.preventDefault();
+  const r=mapRect(); zoomMap(e.deltaY>0?1.16:0.86, screenToMapWorld(e.clientX,e.clientY,r)); },{passive:false});
+addEventListener('mousedown',e=>{ if(started&&mapOpen) fmDrag={x:e.clientX,y:e.clientY}; });
+addEventListener('mousemove',e=>{ if(!fmDrag||!mapOpen) return; const sc=mapRect().size/fmSpan;
+  fmCX-=(e.clientX-fmDrag.x)/sc; fmCY-=(e.clientY-fmDrag.y)/sc; fmDrag={x:e.clientX,y:e.clientY}; clampMap(); fmDirty=true; });
+addEventListener('mouseup',()=>{ fmDrag=null; });
 
 /* ============================ audio (calm ambience) ============================ */
 let actx=null, masterG=null, windG=null, waveG=null;
@@ -805,56 +821,68 @@ function drawMinimap(){
 }
 
 /* full parchment map (M) — the whole world, painted from explored cells on open -- */
-function renderFullMap(){
-  // frame the charted region (+ boat); or the whole world when fog is off (debug)
-  let minX,minY,maxX,maxY;
-  if(dev.revealAll){ minX=0; minY=0; maxX=WORLD; maxY=WORLD; }
+/* full map (M) — pannable/zoomable chart, drawn the same crisp way as the minimap */
+function mapRect(){ const size=Math.min(CSSW,CSSH)*0.86; return {size, mx:(CSSW-size)/2, my:(CSSH-size)/2}; }
+function screenToMapWorld(cx,cy,r){ return { x:fmCX+((cx-r.mx)/r.size-0.5)*fmSpan, y:fmCY+((cy-r.my)/r.size-0.5)*fmSpan }; }
+function clampMap(){ fmSpan=clamp(fmSpan,1500,WORLD*1.06);
+  fmCX=clamp(fmCX,-fmSpan*0.1,WORLD+fmSpan*0.1); fmCY=clamp(fmCY,-fmSpan*0.1,WORLD+fmSpan*0.1); }
+function zoomMap(factor,cursor){ const ns=clamp(fmSpan*factor,1500,WORLD*1.06);
+  if(cursor){ fmCX=cursor.x-(cursor.x-fmCX)*(ns/fmSpan); fmCY=cursor.y-(cursor.y-fmCY)*(ns/fmSpan); }
+  fmSpan=ns; clampMap(); fmDirty=true; }
+function panMap(fx,fy){ fmCX+=fmSpan*fx; fmCY+=fmSpan*fy; clampMap(); fmDirty=true; }
+function openFullMap(){
+  if(dev.revealAll){ fmCX=boat.x; fmCY=boat.y; fmSpan=20000; }          // a wide-but-readable default; zoom out for the whole world
   else {
-    minX=1e18;minY=1e18;maxX=-1e18;maxY=-1e18;
+    let minX=1e18,minY=1e18,maxX=-1e18,maxY=-1e18;
     explored.forEach(key=>{ const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP, wy=gy*EXP;
       if(wx<minX)minX=wx; if(wx>maxX)maxX=wx; if(wy<minY)minY=wy; if(wy>maxY)maxY=wy; });
     if(minX>maxX){ minX=maxX=boat.x; minY=maxY=boat.y; }
     minX=Math.min(minX,boat.x); maxX=Math.max(maxX,boat.x); minY=Math.min(minY,boat.y); maxY=Math.max(maxY,boat.y);
+    fmCX=(minX+maxX)/2; fmCY=(minY+maxY)/2; fmSpan=Math.max(Math.max(maxX-minX,maxY-minY)*1.25, 2600);
   }
-  const cxw=(minX+maxX)/2, cyw=(minY+maxY)/2;
-  let span=Math.max(maxX-minX, maxY-minY)*(dev.revealAll?1.0:1.2); span=Math.max(span, 2600);
-  fmOX=cxw-span/2; fmOY=cyw-span/2; fmSpan=span;
-  const S = dev.revealAll ? 400 : 900;    // coarser when sampling the whole world (keeps the toggle snappy)
+  clampMap(); fmDirty=true;
+}
+function renderFullMap(){
+  const S = dev.revealAll ? 340 : 520;     // coarser for the whole-world debug reveal, crisp for your charted map
   if(!fmCanvas){ fmCanvas=document.createElement('canvas'); fmCtx=fmCanvas.getContext('2d'); }
   if(fmCanvas.width!==S){ fmCanvas.width=S; fmCanvas.height=S; }
-  const g=fmCtx; g.fillStyle='#e9dcc0'; g.fillRect(0,0,S,S);
-  const sc=S/span;
-  if(dev.revealAll){
-    const img=g.getImageData(0,0,S,S), d=img.data;     // sample the whole framed region (debug reveal)
-    for(let j=0;j<S;j++){ const wy=fmOY+(j+0.5)/sc;
-      for(let i=0;i<S;i++){ const wx=fmOX+(i+0.5)/sc, di=(j*S+i)*4, h=rawHeight(wx,wy);
-        let R,G,B; if(h<SEA){R=182;G=197;B=194;} else if(h<0.066){R=203;G=182;B=129;} else if(h<0.55){R=125;G=154;B=85;} else {R=74;G=104;B=66;}
-        d[di]=R;d[di+1]=G;d[di+2]=B;d[di+3]=255; } }
-    g.putImageData(img,0,0);
-  } else {
-    const cs=Math.max(1,Math.ceil(EXP*sc));
-    explored.forEach(key=>{
-      const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP+EXP*0.5, wy=gy*EXP+EXP*0.5;
-      const h=rawHeight(wx,wy);          // rawHeight (uncached) so we don't thrash the streaming cache
-      g.fillStyle = h<SEA ? '#b6c5c2' : (h<0.066?'#cbb681':(h<0.55?'#7d9a55':'#4a6842'));
-      g.fillRect(((wx-fmOX)*sc)|0,((wy-fmOY)*sc)|0,cs,cs);
-    });
+  const g=fmCtx, img=g.createImageData(S,S), d=img.data, ink=!dev.revealAll;
+  const ox=fmCX-fmSpan/2, oy=fmCY-fmSpan/2, step=fmSpan/S;
+  for(let j=0;j<S;j++){ const wy=oy+(j+0.5)*step;
+    for(let i=0;i<S;i++){ const wx=ox+(i+0.5)*step, di=(j*S+i)*4;
+      let R=233,G=220,B=192;                                  // unknown = blank parchment
+      const inW = wx>=0&&wy>=0&&wx<WORLD&&wy<WORLD;
+      if(!inW){ R=212;G=201;B=174; }                          // beyond the world's edge
+      else if(dev.revealAll || explored.has(Math.floor(wx/EXP)+Math.floor(wy/EXP)*EGW)){
+        const h=rawHeight(wx,wy);
+        if(h<SEA){ const dp=clamp((SEA-h)/0.5,0,1); if(dp<0.16){R=150;G=178;B=178;} else {R=120;G=150;B=170;} }
+        else { const e=clamp(h/1.1,0,1);
+          if(e<0.06){R=206;G=182;B=128;} else if(e<0.5){R=96;G=140;B=80;} else {R=70;G=104;B=66;}
+          if(ink && (rawHeight(wx+EXP,wy)<SEA||rawHeight(wx-EXP,wy)<SEA||rawHeight(wx,wy+EXP)<SEA||rawHeight(wx,wy-EXP)<SEA)){R=74;G=58;B=36;} }
+      }
+      d[di]=R;d[di+1]=G;d[di+2]=B;d[di+3]=255;
+    }
   }
+  g.putImageData(img,0,0);
+  fmRX=fmCX; fmRY=fmCY; fmRSpan=fmSpan;                       // remember the view this canvas was drawn for
 }
 function drawFullMap(){
   ctx.fillStyle='rgba(4,10,22,.72)'; ctx.fillRect(0,0,CSSW,CSSH);
-  const size=Math.min(CSSW,CSSH)*0.86, mx=(CSSW-size)/2, my=(CSSH-size)/2;
+  const r=mapRect(), size=r.size, mx=r.mx, my=r.my;
   ctx.fillStyle='#0c1830'; roundRect(mx-12,my-12,size+24,size+24,16); ctx.fill();
   ctx.save(); ctx.beginPath(); roundRect(mx,my,size,size,8); ctx.clip();
-  ctx.imageSmoothingEnabled=false;
-  if(fmCanvas) ctx.drawImage(fmCanvas, 0,0,fmCanvas.width,fmCanvas.height, mx,my,size,size);
-  else { ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size); }
-  const sc=size/fmSpan, w2px=wx=>mx+(wx-fmOX)*sc, w2py=wy=>my+(wy-fmOY)*sc;
-  // discovered ports inside the framed region
+  ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size);
+  ctx.imageSmoothingEnabled=true;
+  const ox=fmCX-fmSpan/2, oy=fmCY-fmSpan/2, sc=size/fmSpan;
+  // blit the last-rendered canvas positioned for the CURRENT view → pan/zoom slides smoothly between renders
+  if(fmCanvas){ const rx0=fmRX-fmRSpan/2, ry0=fmRY-fmRSpan/2;
+    ctx.drawImage(fmCanvas, mx+(rx0-ox)*sc, my+(ry0-oy)*sc, fmRSpan*sc, fmRSpan*sc); }
+  const w2px=wx=>mx+(wx-ox)*sc, w2py=wy=>my+(wy-oy)*sc;
+  // ports in view
   for(const c of cores){ if(!c.port) continue; if(!c.found && !dev.revealAll) continue;
-    if(c.x<fmOX||c.x>fmOX+fmSpan||c.y<fmOY||c.y>fmOY+fmSpan) continue;
+    if(c.x<ox||c.x>ox+fmSpan||c.y<oy||c.y>oy+fmSpan) continue;
     const px=w2px(c.x), py=w2py(c.y);
-    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,3.5,0,TAU); ctx.fill();
+    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,3.3,0,TAU); ctx.fill();
     ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
     if(c.found){ ctx.fillStyle='#5a3a1c'; ctx.font='10px Georgia,serif'; ctx.textAlign='left'; ctx.fillText(c.city, px+6, py+3); }
   }
@@ -862,21 +890,21 @@ function drawFullMap(){
   ctx.save(); ctx.translate(w2px(boat.x),w2py(boat.y)); ctx.rotate(boat.a+Math.PI/2);
   ctx.fillStyle='#c0202a'; ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(6,7); ctx.lineTo(0,4); ctx.lineTo(-6,7); ctx.closePath(); ctx.fill();
   ctx.strokeStyle='#fff'; ctx.lineWidth=1.2; ctx.stroke(); ctx.restore();
-  // scale bar — so the size of the world still reads
+  // scale bar
   const nice=[200,500,1000,2000,5000,10000,20000,50000]; let u=nice[0];
-  for(const n of nice){ if(n <= fmSpan*0.28) u=n; }
-  const barPx=u*sc;
+  for(const n of nice){ if(n<=fmSpan*0.28) u=n; } const barPx=u*sc;
   ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=2; ctx.beginPath();
   ctx.moveTo(mx+16,my+size-16); ctx.lineTo(mx+16+barPx,my+size-16); ctx.stroke();
   ctx.fillStyle='#5a3a1c'; ctx.font='10px Georgia,serif'; ctx.textAlign='left';
   ctx.fillText('≈ '+(u>=1000?(u/1000)+'k':u)+' leagues', mx+16, my+size-22);
   ctx.restore();
-  // title + legend
+  // title + controls
   ctx.fillStyle='#f0e4c6'; ctx.font='700 16px Georgia,serif'; ctx.textAlign='center';
   ctx.fillText('✦ The Charted Reaches ✦', CSSW/2, my-20);
   ctx.fillStyle='#b9a880'; ctx.font='12px Georgia,serif';
   const isle=discoveredCount+' isle'+(discoveredCount===1?'':'s'), prt=portCount+' port'+(portCount===1?'':'s');
-  ctx.fillText('M or Esc to close   •   '+isle+' & '+prt+' charted   •   your charted waters', CSSW/2, my+size+30);
+  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   '+isle+' & '+prt+' charted', CSSW/2, my+size+27);
+  ctx.fillStyle='#8194b8'; ctx.fillText('M or Esc to close', CSSW/2, my+size+43);
 }
 
 /* rounded-rect helper (path only) */
@@ -921,7 +949,7 @@ function frame(ts){
   if(started){ ctx.clearRect(0,0,CSSW,CSSH); ctx.drawImage(pix,0,0,IW,IH,0,0,CSSW,CSSH); }
   ctx.imageSmoothingEnabled=true;
   if(started && !mapOpen){ worldTint(); drawHUD(); }
-  if(started && mapOpen) drawFullMap();
+  if(started && mapOpen){ if(fmDirty && ts-fmRenderTs>70){ renderFullMap(); fmRenderTs=ts; fmDirty=false; } drawFullMap(); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
