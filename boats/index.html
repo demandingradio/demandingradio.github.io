@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>BOATS — a cartographer's voyage</title>
+<meta name="theme-color" content="#0e2f63" />
+<style>
+/* =====================================================================
+   BOATS  —  an open-world sailing & cartography game (Monday Jeffrey)
+   ---------------------------------------------------------------------
+   CONCEPT (the whole game, eventually):
+     You are a cartographer-explorer. Sail a procedurally generated sea,
+     chart the world, trade at port cities for gold/fuel/crew, and make
+     landfall on islands that open into a Stardew-mines-style exploration
+     mini-game where you map the island and haul back gold/gems/monster bits.
+     Plus fishing & whaling on the open water.
+
+   STEP ONE (this build) — make SAILING feel satisfying:
+     [x] Procedural seeded ocean, organic islands, depth-shaded SNES water
+     [x] Light-sailing boat physics (forgiving wind) with weighty glide
+     [x] Wind system + compass / point-of-sail feedback + drifting ripples
+     [x] Fog-of-war CARTOGRAPHY: live corner chart + full parchment map (M)
+     [x] Islands discovered & named; port cities as beacons (not yet enterable)
+     [x] Calm ambient audio (waves + wind + soft drone), mute toggle
+     [x] localStorage save; "new voyage"
+     [x] Live FEEL-TUNING panel (T) — slide the values, tell me what clicks
+
+   ROADMAP (next iterations, after the feel is right):
+     - Port trading (gold / fuel / crew), crew of 5 to run the ship
+     - Landfall -> island exploration mini-game (the dungeon-crawl)
+     - Fishing & whaling
+     - Weather / day-night, bigger world, naming your own discoveries
+
+   No build step. Plain HTML/Canvas/JS. Lives at /boats (no desktop icon).
+   ===================================================================== */
+:root{ --ink:#08111f; --paper:#e9dcc0; }
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;overflow:hidden;background:#08111f;
+  font-family:"Segoe UI",system-ui,Avenir,Arial,sans-serif;color:#e7eefb;
+  -webkit-user-select:none;user-select:none;touch-action:none;}
+canvas{position:absolute;inset:0;display:block;}
+.hidden{display:none!important;}
+
+/* quiet way back to the desktop */
+#back{position:absolute;left:14px;top:11px;z-index:40;color:#cfe0ff;opacity:.62;
+  text-decoration:none;font-size:13px;letter-spacing:.4px;transition:opacity .2s;
+  text-shadow:0 1px 3px rgba(0,0,0,.7);}
+#back:hover{opacity:1;}
+
+/* mute button */
+#mute{position:absolute;right:14px;top:11px;z-index:40;cursor:pointer;
+  font-size:18px;opacity:.7;background:rgba(8,17,31,.5);border:1px solid #2b3a5c;
+  border-radius:9px;padding:4px 9px;color:#e7eefb;line-height:1;transition:opacity .2s;}
+#mute:hover{opacity:1;}
+
+/* feel-tuning panel */
+#tune{position:absolute;right:14px;top:52px;z-index:45;width:268px;display:none;
+  background:rgba(10,18,34,.93);border:1px solid #2c3a5e;border-radius:12px;
+  padding:13px 14px 11px;box-shadow:0 12px 40px rgba(0,0,0,.6);backdrop-filter:blur(7px);
+  font-size:12px;max-height:calc(100vh - 66px);overflow-y:auto;}
+#tune h3{margin:0 0 3px;font-size:13px;letter-spacing:.5px;color:#bcd2ff;}
+#tune .sub{color:#8aa0c8;font-size:11px;margin:0 0 10px;line-height:1.4;}
+#tune .row{margin:7px 0;}
+#tune .row label{display:flex;justify-content:space-between;align-items:baseline;
+  font-weight:600;color:#dbe6ff;margin-bottom:2px;}
+#tune .row label b{color:#7fd6c8;font-variant-numeric:tabular-nums;font-weight:700;}
+#tune input[type=range]{width:100%;accent-color:#5fb8d6;height:16px;}
+#tune .btns{display:flex;gap:7px;margin-top:11px;}
+#tune button{flex:1;font:inherit;font-size:11px;cursor:pointer;color:#dfeaff;
+  background:#1a2a48;border:1px solid #34466e;border-radius:7px;padding:6px 4px;}
+#tune button:hover{background:#22375e;}
+#tune .hint{color:#7e93ba;font-size:10.5px;margin-top:8px;line-height:1.4;}
+#tune .pt-sep{height:1px;background:#2a3a5c;margin:12px 0 6px;}
+#tune h4{margin:6px 0 6px;font-size:12px;color:#bcd2ff;letter-spacing:.4px;}
+#tune .ptrow{display:flex;align-items:center;gap:8px;margin:6px 0;}
+#tune .ptrow>span:first-child{width:58px;color:#aebfe0;font-weight:600;font-size:11px;}
+#tune .ptbtns{display:flex;gap:4px;flex-wrap:wrap;flex:1;}
+#tune .ptb{font:inherit;font-size:11px;cursor:pointer;color:#cdd9f3;background:#16243f;
+  border:1px solid #2e4267;border-radius:6px;padding:4px 8px;}
+#tune .ptb:hover{background:#1e3157;}
+#tune .ptb.on{background:#3a6ea5;border-color:#7aa6dd;color:#fff;}
+
+/* title / start overlay */
+#title{position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  background:radial-gradient(120% 120% at 50% 35%, #123a6b 0%, #0b223f 45%, #07101d 100%);}
+#title.hidden{display:none;}
+#title h1{font-size:clamp(38px,8vw,84px);margin:0;letter-spacing:.14em;font-weight:800;
+  color:#eaf3ff;text-shadow:0 3px 0 #0a2240, 0 0 40px rgba(120,190,255,.35);}
+#title .tag{margin:10px 0 30px;color:#a9c4ec;font-size:clamp(13px,2.4vw,17px);letter-spacing:.22em;
+  text-transform:uppercase;}
+#title .start{font:inherit;cursor:pointer;font-size:19px;font-weight:700;letter-spacing:.04em;
+  color:#08213d;background:linear-gradient(#ffe8a6,#f4c869);border:none;border-radius:12px;
+  padding:13px 34px;box-shadow:0 7px 0 #b78a2e, 0 12px 30px rgba(0,0,0,.4);transition:transform .08s;}
+#title .start:active{transform:translateY(3px);box-shadow:0 4px 0 #b78a2e,0 10px 24px rgba(0,0,0,.4);}
+#title .start.secondary{background:linear-gradient(#cfe0ff,#9db9e6);box-shadow:0 7px 0 #5f7398,0 12px 30px rgba(0,0,0,.35);color:#0c1f3a;font-size:15px;padding:10px 24px;margin-top:14px;}
+#title .keys{margin-top:30px;color:#86a2cf;font-size:13px;line-height:1.9;max-width:430px;}
+#title .keys b{color:#dce9ff;background:#16294a;border:1px solid #2f456e;border-radius:5px;padding:1px 7px;font-size:12px;}
+#title .keys kbd{color:#dce9ff;background:#16294a;border:1px solid #2f456e;border-radius:5px;padding:1px 7px;font-size:12px;font-family:inherit;}
+.fadein{animation:fade .8s ease both;}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a id="back" href="../index.html" aria-label="Back to the desktop">&larr; desktop</a>
+<div id="mute" title="Sound on/off (P)">🔊</div>
+
+<div id="tune">
+  <h3>⚙ Feel tuning</h3>
+  <p class="sub">Slide until the sailing feels right, then tell me the numbers. (T to hide)</p>
+  <div id="tuneRows"></div>
+  <div class="btns">
+    <button id="tuneReset">Reset</button>
+    <button id="tuneCopy">Copy values</button>
+  </div>
+  <p class="hint">These persist on your machine. Wind: with it = faster, into it = slower.</p>
+  <div class="pt-sep"></div>
+  <h4>▶ Playtest triggers</h4>
+  <div class="ptrow"><span>Time</span><span class="ptbtns" id="ptTime"></span></div>
+  <div class="ptrow"><span>Weather</span><span class="ptbtns" id="ptWeather"></span></div>
+  <p class="hint">Force the time of day or weather to test them. “Auto” hands control back to the natural cycle. (Not saved.)</p>
+</div>
+
+<div id="title">
+  <h1>BOATS</h1>
+  <div class="tag">a cartographer's voyage</div>
+  <button class="start" id="startBtn">⛵ Set sail</button>
+  <button class="start secondary hidden" id="contBtn">Continue voyage</button>
+  <div class="keys">
+    <kbd>W</kbd>/<kbd>↑</kbd> raise sail &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> furl &nbsp; <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> steer<br>
+    <kbd>Space</kbd> drop sail &nbsp; <kbd>M</kbd> map &nbsp; <kbd>+</kbd>/<kbd>−</kbd> zoom &nbsp; <kbd>T</kbd> tune the feel
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================ boot ============================ */
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let DPR=1, CSSW=0, CSSH=0, IW=0, IH=0;
+const PIXEL_SCALE = 3;            // screen px per internal px (chunky SNES feel)
+const pix = document.createElement('canvas');   // low-res world buffer
+const pctx = pix.getContext('2d');
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  CSSW = window.innerWidth; CSSH = window.innerHeight;
+  cv.width = Math.round(CSSW*DPR); cv.height = Math.round(CSSH*DPR);
+  cv.style.width = CSSW+'px'; cv.style.height = CSSH+'px';
+  IW = Math.max(160, Math.round(CSSW/PIXEL_SCALE));
+  IH = Math.max(120, Math.round(CSSH/PIXEL_SCALE));
+  pix.width = IW; pix.height = IH;
+  pctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize); resize();
+
+/* ============================ helpers ============================ */
+const TAU=Math.PI*2, clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=t=>t*t*(3-2*t);
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* ---- value-noise / fBm (seeded) ---- */
+let NSEED=1;
+function hash2(ix,iy){ // -> [0,1)
+  let h = (ix*374761393 + iy*668265263 + NSEED*2246822519) | 0;
+  h = (h ^ (h>>>13)) * 1274126177;
+  h = h ^ (h>>>16);
+  return (h>>>0)/4294967296;
+}
+function vnoise(x,y){
+  const x0=Math.floor(x), y0=Math.floor(y), fx=x-x0, fy=y-y0;
+  const v00=hash2(x0,y0), v10=hash2(x0+1,y0), v01=hash2(x0,y0+1), v11=hash2(x0+1,y0+1);
+  const ux=smooth(fx), uy=smooth(fy);
+  return lerp(lerp(v00,v10,ux), lerp(v01,v11,ux), uy);
+}
+function fbm(x,y,oct){
+  let f=1, a=0.5, sum=0, norm=0;
+  for(let i=0;i<oct;i++){ sum += a*vnoise(x*f,y*f); norm+=a; f*=2; a*=0.5; }
+  return sum/norm; // [0,1]
+}
+
+/* ============================ world ============================ */
+const WORLD = 8200;               // world is a bounded square (world units)
+const TILE_W = 6;                 // world units per render/height cell
+const GW = Math.ceil(WORLD/TILE_W);
+const SEA = 0.0;                  // sea level on the height field
+let HGRID, HSET, cores, SEED, spawn;
+
+function rawHeight(wx,wy){
+  let h = fbm(wx*0.00138, wy*0.00138, 5)*1.05 - 0.66;        // mostly ocean, land at the highs
+  h += (fbm(wx*0.0059+11.3, wy*0.0059-4.7, 3) - 0.5) * 0.18; // coastline detail
+  for(let i=0;i<cores.length;i++){
+    const c=cores[i], dx=wx-c.x, dy=wy-c.y;
+    h += c.amp*Math.exp(-(dx*dx+dy*dy)/(2*c.r*c.r));
+  }
+  return h;
+}
+function heightCell(tx,ty){
+  if(tx<0||ty<0||tx>=GW||ty>=GW) return -1;
+  const idx=ty*GW+tx;
+  if(HSET[idx]) return HGRID[idx];
+  const h = rawHeight(tx*TILE_W+TILE_W*0.5, ty*TILE_W+TILE_W*0.5);
+  HGRID[idx]=h; HSET[idx]=1; return h;
+}
+function heightAt(wx,wy){ return heightCell(Math.floor(wx/TILE_W), Math.floor(wy/TILE_W)); }
+function isWater(wx,wy){ return heightCell(Math.floor(wx/TILE_W), Math.floor(wy/TILE_W)) < SEA; }
+
+const NAME_A=["Mar","Cor","Vel","Tor","Sal","Bre","Lun","Cae","Dun","Far","Wes","Nor","Sol","Bri","Cal","Vor","Hal","Mor","Pen","Ash","Gly","Ker","Tarn","Wyn"];
+const NAME_B=["ant","ula","oss","ith","yre","ond","aze","ico","ova","une","arn","esk","oil","ay","wyn","ora","iste","umb","holm","eth"];
+const SUFF=["Isle","Cay","Atoll","Reef","Rock","Skerry","Holm","Island","Shoals"];
+const PORT_SUFF=["Harbour","Port","Haven","Wharf","Landing"];
+
+function buildWorld(seed){
+  SEED=seed>>>0; NSEED = SEED || 1;
+  const rng = mulberry32(SEED^0x9e3779b9);
+  // height storage (lazy filled)
+  HGRID = new Float32Array(GW*GW); HSET = new Uint8Array(GW*GW);
+  // island cores: a few guaranteed near spawn, rest scattered
+  cores=[];
+  const cx=WORLD/2, cy=WORLD/2;
+  const pickName=()=>NAME_A[(rng()*NAME_A.length)|0]+NAME_B[(rng()*NAME_B.length)|0];
+  // near-spawn ring (so you find land quickly — no empty-ocean boredom)
+  const near=5;
+  for(let i=0;i<near;i++){
+    const ang=rng()*TAU, dist=300+rng()*620;
+    cores.push({x:cx+Math.cos(ang)*dist, y:cy+Math.sin(ang)*dist,
+      r:46+rng()*70, amp:0.62+rng()*0.5, name:pickName(), found:false, port:false});
+  }
+  // scattered across the world
+  for(let i=0;i<26;i++){
+    const x=WORLD*0.08+rng()*WORLD*0.84, y=WORLD*0.08+rng()*WORLD*0.84;
+    if(Math.hypot(x-cx,y-cy)<260) continue;
+    cores.push({x,y, r:44+rng()*96, amp:0.6+rng()*0.62, name:pickName(), found:false, port:false});
+  }
+  // promote a handful of the larger islands to PORT CITIES (beacons)
+  const byBig=[...cores].sort((a,b)=>b.r*b.amp-a.r*a.amp);
+  for(let i=0;i<4;i++){ const c=byBig[i]; c.port=true; c.found=false;
+    c.city = pickName()+" "+PORT_SUFF[(rng()*PORT_SUFF.length)|0]; }
+  // ensure at least one port is reasonably close to spawn
+  let nearPort = cores.find(c=>c.port && Math.hypot(c.x-cx,c.y-cy)<1500);
+  if(!nearPort){ const c=cores.find(c=>Math.hypot(c.x-cx,c.y-cy)<900)||cores[0];
+    c.port=true; c.city=pickName()+" Harbour"; }
+  // find spawn: nearest OPEN water to centre (room to sail, not jammed in a cove)
+  spawn=null; let fb=null;
+  for(let rad=0; rad<90 && !spawn; rad++){
+    for(let a=0;a<24;a++){
+      const ang=a/24*TAU, x=cx+Math.cos(ang)*rad*TILE_W*2, y=cy+Math.sin(ang)*rad*TILE_W*2;
+      if(x<140||y<140||x>WORLD-140||y>WORLD-140) continue;
+      if(heightAt(x,y) < SEA-0.05){
+        if(!fb) fb={x,y};
+        let open=true;
+        for(let k=0;k<8;k++){ const aa=k/8*TAU; if(heightAt(x+Math.cos(aa)*95,y+Math.sin(aa)*95)>=SEA){ open=false; break; } }
+        if(open){ spawn={x,y}; break; }
+      }
+    }
+  }
+  if(!spawn) spawn=fb||{x:cx,y:cy};
+}
+
+/* ============================ colours ============================ */
+// water palette by depth (0 = shallow .. 1 = deep)
+const WPAL=[[111,227,210],[54,184,198],[31,127,176],[22,83,143],[14,47,99],[9,30,68]];
+function waterColor(d){
+  const t=clamp(d,0,1)*(WPAL.length-1); const i=Math.floor(t), f=t-i;
+  const a=WPAL[i], b=WPAL[Math.min(i+1,WPAL.length-1)];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+function landColor(e){
+  if(e<0.045) return [234,216,168];           // beach sand
+  if(e<0.085) return [214,194,138];           // dry sand
+  if(e<0.20) return [120,186,98];             // bright grass
+  if(e<0.40) return [86,158,80];              // meadow
+  if(e<0.66) return [58,120,66];              // forest
+  if(e<0.86) return [104,116,90];             // highland (green-grey, not stark)
+  return [223,230,226];                        // snow — rare high peaks only
+}
+
+/* ============================ state ============================ */
+const SAVE_KEY='mj_boats_v1';
+const DEFAULT_TUNE={ baseSpeed:96, accel:1.4, glide:0.42, turn:1.5, windSpread:0.55, windDrift:1.0, zoom:1.0 };
+let TUNE=Object.assign({},DEFAULT_TUNE);
+const boat={x:0,y:0,a:-Math.PI/2, spd:0, sail:0};   // a=heading (math angle, +x east, y down)
+let camX=0,camY=0;
+let wind={a:0, str:1};
+let time=0, paused=true, started=false;
+let env={L:1, sun:1, dayT:0.3, dayName:'Day', storm:0, flash:0, stormOn:false};
+let dev={timeAuto:true, timeOfDay:0.5, stormAuto:true, stormManual:0};   // playtest overrides (session-only)
+let explored=new Set();                 // packed explore cells (cx + cy*EGW)
+const EXP=12, EGW=Math.ceil(WORLD/EXP); // explore-grid resolution for the chart
+let chart, cctx;                        // persistent parchment chart canvas
+let discoveredCount=0, portCount=0;
+let mapOpen=false;
+const wake=[], ripples=[], toasts=[];
+let audioOn=true, lastSave=0;
+
+/* chart (the cartography record) ----------------------------------- */
+const CPU=0.155;                         // chart px per world unit
+const CHW=Math.round(WORLD*CPU);
+function initChart(){
+  chart=document.createElement('canvas'); chart.width=CHW; chart.height=CHW;
+  cctx=chart.getContext('2d');
+}
+function stampCell(cgx,cgy){
+  const wx=cgx*EXP+EXP/2, wy=cgy*EXP+EXP/2;
+  const h=heightAt(wx,wy);
+  const px=wx*CPU, py=wy*CPU, s=Math.ceil(EXP*CPU)+1;
+  let col;
+  if(h<SEA){ const d=clamp((SEA-h)/0.5,0,1); col = d<0.16? 'rgba(150,178,178,.85)':'rgba(120,150,170,.8)'; }
+  else { const e=clamp(h/0.5,0,1);
+    if(e<0.06) col='rgba(206,182,128,.95)';        // sand
+    else if(e<0.5) col='rgba(96,140,80,.95)';      // green
+    else col='rgba(70,104,66,.95)'; }
+  cctx.fillStyle=col; cctx.fillRect(Math.floor(px),Math.floor(py),s,s);
+  // ink the coastline where this land touches water (or vice-versa)
+  if(h>=SEA){
+    const n=[heightAt(wx+EXP,wy),heightAt(wx-EXP,wy),heightAt(wx,wy+EXP),heightAt(wx,wy-EXP)];
+    if(n.some(v=>v<SEA)){ cctx.fillStyle='rgba(74,58,36,.85)'; cctx.fillRect(Math.floor(px),Math.floor(py),Math.max(1,s-1),Math.max(1,s-1)); }
+  }
+}
+function reveal(){
+  const cgx=Math.floor(boat.x/EXP), cgy=Math.floor(boat.y/EXP);
+  const R=9;
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+    if(dx*dx+dy*dy>R*R) continue;
+    const gx=cgx+dx, gy=cgy+dy; if(gx<0||gy<0||gx>=EGW||gy>=EGW) continue;
+    const key=gx+gy*EGW;
+    if(!explored.has(key)){ explored.add(key); stampCell(gx,gy); }
+  }
+}
+
+/* ============================ discovery / toasts ============================ */
+function toast(msg,sub){ toasts.push({msg,sub:sub||'',t:0,life:4.2}); if(toasts.length>3) toasts.shift(); }
+function checkDiscoveries(){
+  for(const c of cores){
+    if(c.found) continue;
+    const reach=c.r*1.3+74;
+    if((boat.x-c.x)**2+(boat.y-c.y)**2 < reach*reach){
+      c.found=true;
+      if(c.port){ portCount++; toast('⚓  Port sighted',c.city); }
+      else { discoveredCount++; const sx=SUFF[(Math.abs(c.x*7+c.y*13)|0)%SUFF.length];
+        toast('✦  Charted',c.name+' '+sx); c.label=c.name+' '+sx; }
+      queueSave();
+    }
+  }
+}
+
+/* ============================ save / load ============================ */
+function queueSave(){ lastSave=-999; }   // force a save soon
+function doSave(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, audio:audioOn,
+      disc:discoveredCount, ports:portCount,
+      found:cores.filter(c=>c.found).map(c=>[Math.round(c.x),Math.round(c.y)]),
+      explored:Array.from(explored)
+    }));
+  }catch(e){}
+}
+function hasSave(){ try{return !!localStorage.getItem(SAVE_KEY);}catch(e){return false;} }
+function loadSave(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SAVE_KEY)); if(!s) return false;
+    buildWorld(s.seed); initChart();
+    if(s.tune) TUNE=Object.assign({},DEFAULT_TUNE,s.tune);
+    audioOn = s.audio!==false;
+    boat.x=s.boat.x; boat.y=s.boat.y; boat.a=s.boat.a; boat.spd=0; boat.sail=0;
+    discoveredCount=s.disc||0; portCount=s.ports||0;
+    // restore found flags by nearest core to saved coords
+    (s.found||[]).forEach(([x,y])=>{ let best=null,bd=1e9;
+      for(const c of cores){const d=(c.x-x)**2+(c.y-y)**2; if(d<bd){bd=d;best=c;}}
+      if(best&&bd<400){ best.found=true; if(!best.port){ const sx=SUFF[(Math.abs(best.x*7+best.y*13)|0)%SUFF.length]; best.label=best.name+' '+sx; } }
+    });
+    explored=new Set(s.explored||[]);
+    explored.forEach(k=>stampCell(k%EGW, Math.floor(k/EGW)));
+    camX=boat.x; camY=boat.y;
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ============================ input ============================ */
+const keys={};
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if(!started) return;
+  if(k==='m'){ mapOpen=!mapOpen; }
+  else if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; }
+  else if(k==='p'){ toggleMute(); }
+  else if(k==='='||k==='+'){ TUNE.zoom=clamp(TUNE.zoom+0.12,0.6,1.9); syncTune(); }
+  else if(k==='-'||k==='_'){ TUNE.zoom=clamp(TUNE.zoom-0.12,0.6,1.9); syncTune(); }
+  keys[k]=true;
+});
+addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
+
+/* ============================ audio (calm ambience) ============================ */
+let actx=null, masterG=null, windG=null, waveG=null;
+function noiseBuf(secs){
+  const b=actx.createBuffer(1, actx.sampleRate*secs, actx.sampleRate);
+  const d=b.getChannelData(0); let last=0;
+  for(let i=0;i<d.length;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.2; }
+  return b;
+}
+function initAudio(){
+  if(actx) return;
+  try{
+    actx=new (window.AudioContext||window.webkitAudioContext)();
+    masterG=actx.createGain(); masterG.gain.value=audioOn?0.9:0; masterG.connect(actx.destination);
+    // waves (low filtered noise)
+    const ws=actx.createBufferSource(); ws.buffer=noiseBuf(3); ws.loop=true;
+    const wf=actx.createBiquadFilter(); wf.type='lowpass'; wf.frequency.value=520; wf.Q.value=0.6;
+    waveG=actx.createGain(); waveG.gain.value=0.16;
+    ws.connect(wf); wf.connect(waveG); waveG.connect(masterG); ws.start();
+    // wind (band-passed noise, rises with speed/wind)
+    const ns=actx.createBufferSource(); ns.buffer=noiseBuf(3); ns.loop=true;
+    const nf=actx.createBiquadFilter(); nf.type='bandpass'; nf.frequency.value=1100; nf.Q.value=0.8;
+    windG=actx.createGain(); windG.gain.value=0.05;
+    ns.connect(nf); nf.connect(windG); windG.connect(masterG); ns.start();
+    // soft meditative drone (low, very quiet)
+    const chord=[110,164.8,220];
+    chord.forEach((f,i)=>{ const o=actx.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g=actx.createGain(); g.gain.value=0.018-(i*0.004);
+      const lfo=actx.createOscillator(); lfo.frequency.value=0.05+i*0.017;
+      const lg=actx.createGain(); lg.gain.value=0.01; lfo.connect(lg); lg.connect(g.gain);
+      o.connect(g); g.connect(masterG); o.start(); lfo.start(); });
+  }catch(e){ actx=null; }
+}
+function toggleMute(){ audioOn=!audioOn; document.getElementById('mute').textContent=audioOn?'🔊':'🔇';
+  if(masterG) masterG.gain.setTargetAtTime(audioOn?0.9:0, actx.currentTime, 0.1); queueSave(); }
+document.getElementById('mute').onclick=toggleMute;
+function thunder(){ if(!actx||!audioOn) return;
+  try{ const b=actx.createBufferSource(); b.buffer=noiseBuf(1.6);
+    const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=190;
+    const g=actx.createGain(); const t=actx.currentTime;
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.55,t+0.06);
+    g.gain.exponentialRampToValueAtTime(0.0008,t+1.7);
+    b.connect(f); f.connect(g); g.connect(masterG); b.start(t); b.stop(t+1.8);
+  }catch(e){}
+}
+
+/* ============================ update ============================ */
+function update(dt){
+  time+=dt;
+  // ---- environment: day/night + weather (computed every frame, even while paused) ----
+  const DAY_LEN=210;                                   // seconds for a full day+night
+  env.dayT = dev.timeAuto ? (((time/DAY_LEN)+0.30)%1) : dev.timeOfDay;   // playtest can pin the time
+  env.sun=Math.sin(env.dayT*TAU - Math.PI/2);          // -1 = midnight .. +1 = noon
+  env.L=clamp(env.sun*0.5+0.5,0,1);
+  env.dayName = env.sun>0.35?'Day' : (env.sun>-0.12 ? (env.dayT<0.5?'Dawn':'Dusk') : 'Night');
+  const sN=fbm(time*0.011, 7.3, 3);                    // slow weather noise → occasional storms
+  env.storm = dev.stormAuto ? smooth(clamp((sN-0.6)/0.16,0,1)) : dev.stormManual;   // ...or pin the weather
+  env.flash=Math.max(0, env.flash - dt*3.2);
+  if(started && !mapOpen){
+    if(env.storm>0.35 && !env.stormOn){ env.stormOn=true; toast('⛈  A storm is rolling in',''); }
+    if(env.storm<0.12 && env.stormOn){ env.stormOn=false; toast('☀  The skies clear',''); }
+    if(env.storm>0.55 && Math.random()<env.storm*0.012){ env.flash=1; thunder(); }
+  }
+  if(paused||mapOpen) return;
+  // wind meanders gently (calm) — gustier & stronger in a storm
+  wind.a = 0.6 + 0.55*Math.sin(time*0.035*TUNE.windDrift) + 0.3*Math.sin(time*0.013*TUNE.windDrift+1.7)
+           + env.storm*0.7*Math.sin(time*0.6);
+  wind.str = (0.82 + 0.18*Math.sin(time*0.02)) * (1 + env.storm*0.85);
+
+  // steering — need some way (speed) to turn well; never fully locked
+  let turnIn=0;
+  if(keys['arrowleft']||keys['a']) turnIn-=1;
+  if(keys['arrowright']||keys['d']) turnIn+=1;
+  const steer = TUNE.turn*(0.45+0.55*clamp(boat.spd/(TUNE.baseSpeed*0.6),0,1));
+  boat.a += turnIn*steer*dt;
+
+  // sail set (persists — raise it and just steer)
+  if(keys['arrowup']||keys['w']) boat.sail=clamp(boat.sail+0.85*dt,0,1);
+  if(keys['arrowdown']||keys['s']) boat.sail=clamp(boat.sail-1.1*dt,-0.15,1);
+  if(keys[' ']) boat.sail=Math.max(0,boat.sail-2.4*dt);   // drop sail
+
+  // wind efficiency: heading vs where wind blows TO (downwind = fast)
+  const align=Math.cos(boat.a-wind.a);
+  const eff = (1-TUNE.windSpread) + TUNE.windSpread*((align+1)/2)*1.6;   // forgiving: always >0
+  const target = boat.sail*TUNE.baseSpeed*eff*wind.str;
+  const rate = (target>boat.spd? TUNE.accel : TUNE.glide);
+  boat.spd += (target-boat.spd)*(1-Math.exp(-rate*dt));
+
+  // --- move with coastline collision: the shore is a hard edge, but you slide along it ---
+  // safety net: if somehow on land (old save / spawn quirk), drift downhill back to open water
+  if(!isWater(boat.x,boat.y)){
+    const gx=heightAt(boat.x+5,boat.y)-heightAt(boat.x-5,boat.y);
+    const gy=heightAt(boat.x,boat.y+5)-heightAt(boat.x,boat.y-5);
+    const gl=Math.hypot(gx,gy)||1;
+    boat.x-=gx/gl*70*dt; boat.y-=gy/gl*70*dt;
+  }
+  const vx=Math.cos(boat.a)*boat.spd*dt, vy=Math.sin(boat.a)*boat.spd*dt;
+  const ox=boat.x, oy=boat.y;
+  if(isWater(boat.x+vx, boat.y)) boat.x+=vx;            // blocked east/west → slide along a N–S shore
+  if(isWater(boat.x, boat.y+vy)) boat.y+=vy;            // blocked north/south → slide along an E–W shore
+  // if the shore blocked most of our move, set speed to what we actually made:
+  // head-on into the coast → eases to a stop; a glancing angle → keeps gliding along it
+  const moved=Math.hypot(boat.x-ox,boat.y-oy), want=Math.abs(boat.spd*dt);
+  if(want>0.001 && moved<want*0.6) boat.spd=Math.sign(boat.spd)*moved/dt;
+  // gentle world bound
+  const m=40; boat.x=clamp(boat.x,m,WORLD-m); boat.y=clamp(boat.y,m,WORLD-m);
+
+  // camera eases toward boat with look-ahead in travel direction
+  const lead=Math.min(boat.spd,TUNE.baseSpeed)*0.55;
+  const tx=boat.x+Math.cos(boat.a)*lead, ty=boat.y+Math.sin(boat.a)*lead;
+  const ce=1-Math.exp(-3.2*dt); camX+=(tx-camX)*ce; camY+=(ty-camY)*ce;
+
+  reveal(); checkDiscoveries();
+
+  // wake particles
+  if(boat.spd>14){
+    const sr=Math.abs(boat.spd)/TUNE.baseSpeed;
+    if(Math.random()<sr*0.9){
+      const bx=boat.x-Math.cos(boat.a)*9, by=boat.y-Math.sin(boat.a)*9;
+      const side=(Math.random()<0.5?1:-1);
+      wake.push({x:bx+Math.cos(boat.a+Math.PI/2)*side*3, y:by+Math.sin(boat.a+Math.PI/2)*side*3,
+        vx:-Math.cos(boat.a)*8+side*Math.cos(boat.a+Math.PI/2)*10,
+        vy:-Math.sin(boat.a)*8+side*Math.sin(boat.a+Math.PI/2)*10, t:0, life:1.1+Math.random()*0.6, r:1.4});
+    }
+  }
+  for(let i=wake.length-1;i>=0;i--){ const w=wake[i]; w.t+=dt; w.x+=w.vx*dt; w.y+=w.vy*dt; w.r+=4*dt;
+    if(w.t>w.life) wake.splice(i,1); }
+  if(wake.length>180) wake.splice(0, wake.length-180);
+
+  // ambient audio responds to motion
+  if(actx&&audioOn){ const sp=clamp(boat.spd/TUNE.baseSpeed,0,1.2);
+    windG.gain.setTargetAtTime(0.04+sp*0.12*wind.str + env.storm*0.22, actx.currentTime, 0.25);
+    waveG.gain.setTargetAtTime(0.13+sp*0.10 + env.storm*0.16, actx.currentTime, 0.25); }
+
+  // toasts
+  for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
+
+  // periodic save
+  if(time-lastSave>3){ lastSave=time; doSave(); }
+}
+
+/* ============================ render: the sea ============================ */
+function iscale(){ return IH/360*TUNE.zoom; }          // internal px per world unit
+function drawSea(){
+  const s=iscale();
+  const halfW=(IW/2)/s, halfH=(IH/2)/s;
+  const minTX=Math.floor((camX-halfW)/TILE_W)-1, maxTX=Math.ceil((camX+halfW)/TILE_W)+1;
+  const minTY=Math.floor((camY-halfH)/TILE_W)-1, maxTY=Math.ceil((camY+halfH)/TILE_W)+1;
+  const ts=Math.ceil(TILE_W*s)+1;
+  const ox=IW/2-camX*s, oy=IH/2-camY*s;
+  const t=time;
+  for(let ty=minTY;ty<=maxTY;ty++){
+    const wy=ty*TILE_W+TILE_W*0.5;
+    const sy=Math.floor(wy*s-TILE_W*0.5*s+oy);
+    for(let tx=minTX;tx<=maxTX;tx++){
+      const h=heightCell(tx,ty);
+      const wx=tx*TILE_W+TILE_W*0.5;
+      const sx=Math.floor(wx*s-TILE_W*0.5*s+ox);
+      let r,g,b;
+      if(h<SEA){
+        const d=clamp((SEA-h)/0.5,0,1);
+        const c=waterColor(d);
+        // palette-cycle shimmer (the SNES water look) — drifting highlight bands
+        const band=Math.sin(wy*0.16 + t*1.05 + Math.sin(wx*0.05+t*0.2)*1.3);
+        const spark=Math.sin(wx*0.5+wy*0.31 - t*2.0);
+        let lift=(band*0.5+0.5); lift=lift*lift;
+        let bright=(1-d)*9 + lift*(8+(1-d)*16) + (spark>0.93?22:0) + (spark>0.95-env.storm*0.2?env.storm*30:0);
+        r=c[0]+bright; g=c[1]+bright; b=c[2]+bright*1.05;
+        // shore foam where a neighbour is land
+        if(d<0.2){
+          if(heightCell(tx+1,ty)>=SEA||heightCell(tx-1,ty)>=SEA||heightCell(tx,ty+1)>=SEA||heightCell(tx,ty-1)>=SEA){
+            const fo=(Math.sin(t*3+wx*0.2+wy*0.2)*0.5+0.5);
+            r=lerp(r,240,0.45+fo*0.4); g=lerp(g,248,0.45+fo*0.4); b=lerp(b,248,0.4+fo*0.4);
+          }
+        }
+      } else {
+        const e=clamp(h/1.1,0,1);
+        const c=landColor(e);
+        const dither=((hash2(tx,ty)*12)|0)-6;
+        // tiny shading from a NW "sun"
+        const sh=(heightCell(tx-1,ty-1)-h)*40;
+        r=c[0]+dither+sh; g=c[1]+dither+sh; b=c[2]+dither+sh;
+      }
+      pctx.fillStyle='rgb('+(clamp(r,0,255)|0)+','+(clamp(g,0,255)|0)+','+(clamp(b,0,255)|0)+')';
+      pctx.fillRect(sx,sy,ts,ts);
+    }
+  }
+  // sun-glint big soft gradient drifting across the water (fades to nothing at night)
+  const glint=0.10*env.L;
+  const gg=pctx.createRadialGradient(IW*(0.5+0.18*Math.sin(time*0.03)),IH*0.32,0, IW*0.5,IH*0.4,IW*0.7);
+  gg.addColorStop(0,'rgba(255,250,225,'+glint+')'); gg.addColorStop(1,'rgba(255,250,225,0)');
+  pctx.fillStyle=gg; pctx.fillRect(0,0,IW,IH);
+}
+
+function w2pix(wx,wy){ const s=iscale(); return [ (wx-camX)*s+IW/2, (wy-camY)*s+IH/2 ]; }
+
+function drawPorts(){
+  const s=iscale();
+  for(const c of cores){ if(!c.port) continue;
+    const [sx,sy]=w2pix(c.x,c.y);
+    if(sx<-30||sy<-30||sx>IW+30||sy>IH+30) continue;
+    // lighthouse + town blocks
+    const k=Math.max(1.4, 3*s);
+    pctx.fillStyle='#d8c7a0'; pctx.fillRect(sx-3*k,sy,6*k,2*k);
+    pctx.fillStyle='#b14b3a'; pctx.fillRect(sx-2*k,sy-1.6*k,1.6*k,1.6*k);
+    pctx.fillStyle='#caa'; pctx.fillRect(sx+0.4*k,sy-1.2*k,1.2*k,1.2*k);
+    // lighthouse tower
+    pctx.fillStyle='#eee'; pctx.fillRect(sx-0.5*k,sy-3.6*k,1.2*k,3.6*k);
+    const blink=(Math.sin(time*2.2+c.x)*0.5+0.5);
+    const ng=0.5+(1-env.L)*0.95;                       // beacons blaze brighter at night to guide you
+    pctx.fillStyle='rgba(255,236,140,'+clamp((0.4+blink*0.6)*ng,0,1)+')'; pctx.fillRect(sx-0.7*k,sy-4.2*k,1.6*k,1*k);
+    if(blink>0.5){ pctx.fillStyle='rgba(255,236,140,'+clamp((blink-0.5)*0.7*ng,0,1)+')'; pctx.fillRect(sx-2.6*k,sy-4.8*k,5.2*k,2.6*k); }
+  }
+}
+
+function drawWake(){
+  for(const w of wake){ const [sx,sy]=w2pix(w.x,w.y); const a=(1-w.t/w.life)*0.55;
+    pctx.fillStyle='rgba(236,246,250,'+a+')'; const r=Math.max(1,w.r*iscale()*0.5);
+    pctx.fillRect(sx-r,sy-r,r*2,r*2); }
+}
+
+function drawBoat(){
+  const s=iscale(); const [sx,sy]=w2pix(boat.x,boat.y);
+  const L=16*s; // length in px
+  pctx.save(); pctx.translate(sx,sy); pctx.rotate(boat.a + env.storm*0.13*Math.sin(time*2.4));   // rocks in heavy weather
+  // shadow
+  pctx.fillStyle='rgba(0,20,40,0.28)'; pctx.beginPath(); pctx.ellipse(L*0.05,L*0.14,L*0.55,L*0.3,0,0,TAU); pctx.fill();
+  // hull (pointed)
+  pctx.fillStyle='#7a4a26';
+  pctx.beginPath(); pctx.moveTo(L*0.58,0);
+  pctx.quadraticCurveTo(L*0.1,-L*0.34,-L*0.5,-L*0.2);
+  pctx.lineTo(-L*0.5,L*0.2);
+  pctx.quadraticCurveTo(L*0.1,L*0.34,L*0.58,0); pctx.fill();
+  // deck
+  pctx.fillStyle='#9c6a3a';
+  pctx.beginPath(); pctx.moveTo(L*0.46,0);
+  pctx.quadraticCurveTo(L*0.05,-L*0.22,-L*0.38,-L*0.12);
+  pctx.lineTo(-L*0.38,L*0.12);
+  pctx.quadraticCurveTo(L*0.05,L*0.22,L*0.46,0); pctx.fill();
+  // sail — billows to the lee side relative to wind
+  const rel=Math.sin(wind.a-boat.a); const billow=clamp(rel,-1,1);
+  pctx.fillStyle='#f4efe0';
+  pctx.beginPath(); pctx.moveTo(L*0.16,0);
+  pctx.quadraticCurveTo(-L*0.1+L*0.18*billow, billow*L*0.5, -L*0.28, billow*L*0.06);
+  pctx.lineTo(L*0.16,0); pctx.closePath(); pctx.fill();
+  pctx.strokeStyle='#cfc6ad'; pctx.lineWidth=Math.max(0.6,s*0.4);
+  pctx.beginPath(); pctx.moveTo(L*0.16,L*0.04); pctx.lineTo(L*0.16,-L*0.04); pctx.stroke(); // mast
+  pctx.restore();
+  // bow foam when moving briskly
+  if(boat.spd>TUNE.baseSpeed*0.4){
+    const bx=boat.x+Math.cos(boat.a)*9, by=boat.y+Math.sin(boat.a)*9; const [fx,fy]=w2pix(bx,by);
+    const a=clamp((boat.spd/TUNE.baseSpeed-0.4)*0.7,0,0.5);
+    pctx.fillStyle='rgba(240,248,252,'+a+')'; const r=Math.max(1,2*s);
+    pctx.fillRect(fx-r,fy-r,r*2,r*2);
+  }
+}
+
+/* ============================ render: HUD (full-res) ============================ */
+const DIRS8=['N','NE','E','SE','S','SW','W','NW'];
+function bearingName(vx,vy){ let d=(Math.atan2(vx,-vy)*180/Math.PI+360)%360; return DIRS8[Math.round(d/45)%8]; }
+
+function drawCompass(){
+  const cx=CSSW/2, cy=58, R=40;
+  ctx.save();
+  ctx.fillStyle='rgba(8,17,31,.42)'; ctx.strokeStyle='rgba(150,180,220,.5)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,TAU); ctx.fill(); ctx.stroke();
+  // ticks + N
+  ctx.fillStyle='#bcd2ff'; ctx.font='10px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<4;i++){ const a=i*Math.PI/2-Math.PI/2; const lab=['N','E','S','W'][i];
+    ctx.fillStyle=i===0?'#ff8e7a':'#9fb6dd'; ctx.fillText(lab, cx+Math.cos(a)*(R-9), cy+Math.sin(a)*(R-9)); }
+  // wind arrow (where it blows TO)
+  ctx.strokeStyle='rgba(150,210,255,.85)'; ctx.lineWidth=2.4;
+  const wvx=Math.cos(wind.a), wvy=Math.sin(wind.a);
+  ctx.beginPath(); ctx.moveTo(cx-wvx*(R-14), cy-wvy*(R-14)); ctx.lineTo(cx+wvx*(R-14), cy+wvy*(R-14)); ctx.stroke();
+  ctx.fillStyle='rgba(150,210,255,.95)';
+  ctx.beginPath(); ctx.moveTo(cx+wvx*(R-8), cy+wvy*(R-8));
+  ctx.lineTo(cx+wvx*(R-16)-wvy*4, cy+wvy*(R-16)+wvx*4);
+  ctx.lineTo(cx+wvx*(R-16)+wvy*4, cy+wvy*(R-16)-wvx*4); ctx.fill();
+  // boat heading (gold)
+  const hvx=Math.cos(boat.a), hvy=Math.sin(boat.a);
+  ctx.fillStyle='#ffd27a';
+  ctx.beginPath(); ctx.moveTo(cx+hvx*(R-5), cy+hvy*(R-5));
+  ctx.lineTo(cx-hvx*9-hvy*6, cy-hvy*9+hvx*6);
+  ctx.lineTo(cx-hvx*9+hvy*6, cy-hvy*9-hvx*6); ctx.fill();
+  ctx.restore();
+}
+
+function pointOfSail(){
+  const al=Math.cos(boat.a-wind.a);
+  if(al>0.6) return ['Running','▼','#7fe3a0'];
+  if(al>0.2) return ['Broad reach','◣','#9fe0c0'];
+  if(al>-0.2) return ['Beam reach','◀','#cfe6a0'];
+  if(al>-0.6) return ['Close reach','◤','#e6cf8a'];
+  return ['Beating','▲','#e6a07a'];
+}
+function drawHUD(){
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  // bottom-left: speed + sail + point of sail
+  const x=18, y=CSSH-22;
+  const kn=(Math.abs(boat.spd)*0.11).toFixed(1);
+  ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(x-8,y-58,196,72,10); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='700 30px system-ui'; ctx.fillText(kn, x, y-22);
+  ctx.fillStyle='#9fb6dd'; ctx.font='11px system-ui'; ctx.fillText('KNOTS', x+58, y-24);
+  // sail bar
+  const sw=170, sp=clamp(boat.sail,0,1);
+  ctx.fillStyle='#16294a'; roundRect(x,y-12,sw,7,4); ctx.fill();
+  ctx.fillStyle='#5fc2d6'; roundRect(x,y-12,sw*sp,7,4); ctx.fill();
+  if(boat.sail<0){ ctx.fillStyle='#e6896f'; roundRect(x,y-12,-sw*0.25*boat.sail/0.15,7,4); ctx.fill(); }
+  const pos=pointOfSail();
+  ctx.fillStyle=pos[2]; ctx.font='700 12px system-ui';
+  ctx.fillText(pos[1]+' '+pos[0], x, y+11);
+  ctx.fillStyle='#8aa0c8'; ctx.font='11px system-ui';
+  ctx.fillText('Sail '+Math.round(sp*100)+'%   •   Wind '+bearingName(Math.cos(wind.a),Math.sin(wind.a)), x+96, y+11);
+
+  // top-left under back-link: discoveries
+  ctx.fillStyle='rgba(8,17,31,.4)'; roundRect(12,34,176,30,9); ctx.fill();
+  ctx.fillStyle='#dfeaff'; ctx.font='700 13px system-ui';
+  ctx.fillText('✦ '+discoveredCount+' charted', 22, 54);
+  ctx.fillStyle='#9fc6e6'; ctx.fillText('⚓ '+portCount, 132, 54);
+
+  drawCompass();
+  // time of day + weather, tucked under the compass
+  const wIcon = env.storm>0.4?'⛈' : env.dayName==='Night'?'🌙' : env.dayName==='Day'?'☀' : '🌅';
+  const wCond = env.storm>0.45?'Storm' : env.storm>0.12?'Squally' : 'Clear';
+  ctx.textAlign='center'; ctx.font='600 12px system-ui';
+  const wt=wIcon+'  '+env.dayName+' · '+wCond, ww=ctx.measureText(wt).width+22;
+  ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(CSSW/2-ww/2,101,ww,22,9); ctx.fill();
+  ctx.fillStyle='#dbe7fb'; ctx.fillText(wt, CSSW/2, 116); ctx.textAlign='left';
+  drawMinimap();
+  drawIslandLabels();
+  drawToasts();
+  drawVignette();
+}
+
+function drawIslandLabels(){
+  ctx.textAlign='center'; ctx.font='12px Georgia,serif';
+  for(const c of cores){ if(!c.found) continue;
+    const dx=c.x-boat.x, dy=c.y-boat.y; if(dx*dx+dy*dy>900*900) continue;
+    const [sx,sy]=w2pix(c.x,c.y); const cssx=sx*(CSSW/IW), cssy=sy*(CSSH/IH);
+    if(cssx<40||cssx>CSSW-40||cssy<70||cssy>CSSH-70) continue;
+    const label=c.port?('⚓ '+c.city):c.label;
+    if(!label) continue;
+    ctx.fillStyle='rgba(8,17,31,.5)'; const w=ctx.measureText(label).width+12;
+    roundRect(cssx-w/2,cssy-40,w,18,7); ctx.fill();
+    ctx.fillStyle=c.port?'#ffe6a6':'#eef5ff'; ctx.fillText(label, cssx, cssy-27);
+  }
+  ctx.textAlign='left';
+}
+
+function drawToasts(){
+  ctx.textAlign='center';
+  let yy=CSSH*0.26;
+  for(const t of toasts){
+    const k=t.t<0.4? t.t/0.4 : t.t>t.life-0.6? (t.life-t.t)/0.6 : 1; const a=clamp(k,0,1);
+    ctx.globalAlpha=a;
+    ctx.fillStyle='rgba(10,20,38,.78)'; const w=Math.max(180, ctx.measureText(t.sub).width+80);
+    roundRect(CSSW/2-w/2, yy, w, 50, 12); ctx.fill();
+    ctx.fillStyle='#ffe6a6'; ctx.font='700 15px system-ui'; ctx.fillText(t.msg, CSSW/2, yy+21);
+    ctx.fillStyle='#eaf2ff'; ctx.font='600 16px Georgia,serif'; ctx.fillText(t.sub, CSSW/2, yy+40);
+    ctx.globalAlpha=1; yy+=60;
+  }
+  ctx.textAlign='left';
+}
+
+function drawVignette(){
+  const g=ctx.createRadialGradient(CSSW/2,CSSH*0.46,CSSH*0.3, CSSW/2,CSSH*0.5,CSSH*0.85);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(3,10,22,0.42)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,CSSW,CSSH);
+}
+
+/* minimap — the live chart in the corner ------------------------- */
+function drawMinimap(){
+  const size=Math.min(196, CSSW*0.24), pad=14;
+  const mx=CSSW-size-pad, my=CSSH-size-pad;
+  const span=1500;                          // world units shown across the minimap
+  ctx.save();
+  // parchment frame
+  ctx.fillStyle='#0c1830'; roundRect(mx-4,my-4,size+8,size+8,12); ctx.fill();
+  ctx.strokeStyle='#3a4c70'; ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); roundRect(mx,my,size,size,9); ctx.clip();
+  ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size);  // unknown = blank parchment
+  // blit chart region around boat
+  const srcSpan=span*CPU, sxc=boat.x*CPU-srcSpan/2, syc=boat.y*CPU-srcSpan/2;
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(chart, sxc,syc,srcSpan,srcSpan, mx,my,size,size);
+  // faint grid
+  ctx.strokeStyle='rgba(90,70,40,.12)'; ctx.lineWidth=1;
+  for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(mx+size*i/5,my); ctx.lineTo(mx+size*i/5,my+size); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx,my+size*i/5); ctx.lineTo(mx+size,my+size*i/5); ctx.stroke(); }
+  // port markers (always known beacons)
+  for(const c of cores){ if(!c.port) continue;
+    const px=mx+(c.x-boat.x)/span*size+size/2, py=my+(c.y-boat.y)/span*size+size/2;
+    if(px<mx||px>mx+size||py<my||py>my+size) continue;
+    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,3.2,0,TAU); ctx.fill();
+    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
+  }
+  // boat marker (arrow)
+  const bx=mx+size/2, by=my+size/2;
+  ctx.translate(bx,by); ctx.rotate(boat.a+Math.PI/2);
+  ctx.fillStyle='#c0202a'; ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(5,6); ctx.lineTo(0,3); ctx.lineTo(-5,6); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+  // label
+  ctx.fillStyle='rgba(8,17,31,.5)'; roundRect(mx,my-2,52,16,6); ctx.fill();
+  ctx.fillStyle='#cfe0ff'; ctx.font='10px system-ui'; ctx.textAlign='left'; ctx.fillText('CHART', mx+8, my+10);
+}
+
+/* full parchment map (M) ----------------------------------------- */
+function drawFullMap(){
+  ctx.fillStyle='rgba(4,10,22,.72)'; ctx.fillRect(0,0,CSSW,CSSH);
+  const size=Math.min(CSSW,CSSH)*0.82, mx=(CSSW-size)/2, my=(CSSH-size)/2;
+  // parchment
+  ctx.fillStyle='#0c1830'; roundRect(mx-12,my-12,size+24,size+24,16); ctx.fill();
+  ctx.fillStyle='#e9dcc0'; roundRect(mx,my,size,size,8); ctx.fill();
+  ctx.save(); ctx.beginPath(); roundRect(mx,my,size,size,8); ctx.clip();
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(chart, 0,0,CHW,CHW, mx,my,size,size);     // whole known world
+  // ports
+  const sc=size/WORLD;
+  for(const c of cores){ if(!c.port) continue;
+    const px=mx+c.x*sc, py=my+c.y*sc;
+    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,4,0,TAU); ctx.fill();
+    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1.2; ctx.stroke();
+    if(c.found){ ctx.fillStyle='#5a3a1c'; ctx.font='11px Georgia,serif'; ctx.textAlign='left'; ctx.fillText(c.city, px+7, py+4); }
+  }
+  // named islands
+  for(const c of cores){ if(c.port||!c.found||!c.label) continue;
+    const px=mx+c.x*sc, py=my+c.y*sc;
+    ctx.fillStyle='#3e5a3a'; ctx.font='italic 10px Georgia,serif'; ctx.textAlign='center'; ctx.fillText(c.label, px, py-6);
+  }
+  // boat
+  ctx.save(); ctx.translate(mx+boat.x*sc,my+boat.y*sc); ctx.rotate(boat.a+Math.PI/2);
+  ctx.fillStyle='#c0202a'; ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(6,7); ctx.lineTo(0,4); ctx.lineTo(-6,7); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=1.2; ctx.stroke(); ctx.restore();
+  ctx.restore();
+  // title + legend (on the dark backdrop — keep it light)
+  ctx.fillStyle='#f0e4c6'; ctx.font='700 16px Georgia,serif'; ctx.textAlign='center';
+  ctx.fillText('✦ The Charted Reaches ✦', CSSW/2, my-20);
+  ctx.fillStyle='#b9a880'; ctx.font='12px Georgia,serif';
+  const isle=discoveredCount+' isle'+(discoveredCount===1?'':'s'), prt=portCount+' port'+(portCount===1?'':'s');
+  ctx.fillText('M or Esc to close   •   '+isle+' & '+prt+' charted', CSSW/2, my+size+30);
+}
+
+/* rounded-rect helper (path only) */
+function roundRect(x,y,w,h,r){ ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+/* ============================ main loop ============================ */
+let last=0;
+/* atmospheric overlays — day/night tint, storm gloom, rain, lightning (over the sea, under the HUD) */
+function worldTint(){
+  const warm=clamp(1-Math.abs(env.sun)/0.32,0,1)*0.16;            // golden dawn/dusk wash
+  if(warm>0.003){ ctx.fillStyle='rgba(255,168,92,'+warm+')'; ctx.fillRect(0,0,CSSW,CSSH); }
+  const dark=(1-env.L)*0.55;                                      // night darkening (cool navy)
+  if(dark>0.003){ ctx.fillStyle='rgba(10,16,42,'+dark+')'; ctx.fillRect(0,0,CSSW,CSSH); }
+  if(env.storm>0.02){                                            // storm gloom + driving rain
+    ctx.fillStyle='rgba(38,46,66,'+(env.storm*0.4)+')'; ctx.fillRect(0,0,CSSW,CSSH);
+    const n=Math.floor(env.storm*260), slant=Math.cos(wind.a)*0.7+0.25;
+    ctx.strokeStyle='rgba(202,216,242,'+(0.34*env.storm)+')'; ctx.lineWidth=1.1; ctx.beginPath();
+    for(let i=0;i<n;i++){ const spd=360+(i*53%260), y=((time*spd+i*271)%(CSSH+44))-22,
+      x=((i*131.7)%CSSW + y*slant)%CSSW;
+      ctx.moveTo(x,y); ctx.lineTo(x-slant*22-2, y+24); }
+    ctx.stroke();
+  }
+  const vig=env.storm*0.4+(1-env.L)*0.22;                         // tighter horizon when it's dark/stormy
+  if(vig>0.01){ const g=ctx.createRadialGradient(CSSW/2,CSSH*0.5,CSSH*0.25, CSSW/2,CSSH*0.5,CSSH*0.82);
+    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(2,6,16,'+clamp(vig,0,0.72)+')');
+    ctx.fillStyle=g; ctx.fillRect(0,0,CSSW,CSSH); }
+  if(env.flash>0.01){ ctx.fillStyle='rgba(228,236,255,'+(env.flash*0.5)+')'; ctx.fillRect(0,0,CSSW,CSSH); }  // lightning
+}
+
+function frame(ts){
+  const dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
+  update(dt);
+  // draw world to low-res buffer
+  if(started){
+    drawSea(); drawPorts(); drawWake(); drawBoat();
+  }
+  // composite to screen
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.imageSmoothingEnabled=false;
+  if(started){ ctx.clearRect(0,0,CSSW,CSSH); ctx.drawImage(pix,0,0,IW,IH,0,0,CSSW,CSSH); }
+  ctx.imageSmoothingEnabled=true;
+  if(started && !mapOpen){ worldTint(); drawHUD(); }
+  if(started && mapOpen) drawFullMap();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ============================ tuning panel ============================ */
+const TUNE_DEF=[
+  ['baseSpeed','Top speed',40,180,1],
+  ['accel','Pickup',0.4,3.5,0.05],
+  ['glide','Coast / glide',0.1,2.0,0.02],
+  ['turn','Turn rate',0.8,3.5,0.05],
+  ['windSpread','Wind matters',0,0.85,0.02],
+  ['windDrift','Wind shiftiness',0,2.5,0.05],
+  ['zoom','Zoom',0.6,1.9,0.02],
+];
+function buildTunePanel(){
+  const host=document.getElementById('tuneRows'); host.innerHTML='';
+  TUNE_DEF.forEach(([k,label,min,max,step])=>{
+    const row=document.createElement('div'); row.className='row';
+    row.innerHTML='<label>'+label+' <b id="tv_'+k+'">'+TUNE[k]+'</b></label>'+
+      '<input type="range" id="ts_'+k+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+TUNE[k]+'">';
+    host.appendChild(row);
+    row.querySelector('input').addEventListener('input',e=>{
+      TUNE[k]=parseFloat(e.target.value); document.getElementById('tv_'+k).textContent=TUNE[k]; queueSave();
+    });
+  });
+}
+function syncTune(){ TUNE_DEF.forEach(([k])=>{ const s=document.getElementById('ts_'+k), v=document.getElementById('tv_'+k);
+  if(s){s.value=TUNE[k];} if(v){v.textContent=TUNE[k];} }); }
+document.getElementById('tuneReset').onclick=()=>{ TUNE=Object.assign({},DEFAULT_TUNE); syncTune(); queueSave(); };
+document.getElementById('tuneCopy').onclick=()=>{ const s=JSON.stringify(TUNE);
+  navigator.clipboard&&navigator.clipboard.writeText(s); toast('Feel values copied','paste them to me'); };
+
+/* playtest triggers — force time of day / weather on demand */
+function buildPlaytest(){
+  const times=[['Auto',null],['Dawn',0.25],['Day',0.5],['Dusk',0.75],['Night',0.0]];
+  const weath=[['Auto','auto'],['Clear',0],['Storm',1]];
+  const tEl=document.getElementById('ptTime'), wEl=document.getElementById('ptWeather');
+  tEl.innerHTML=''; wEl.innerHTML='';
+  times.forEach(([label,val])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
+    b.dataset.val=(val===null?'auto':String(val));
+    b.onclick=()=>{ if(val===null) dev.timeAuto=true; else { dev.timeAuto=false; dev.timeOfDay=val; } refreshPlaytest(); };
+    tEl.appendChild(b); });
+  weath.forEach(([label,val])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
+    b.dataset.val=String(val);
+    b.onclick=()=>{ if(val==='auto') dev.stormAuto=true; else { dev.stormAuto=false; dev.stormManual=val; } refreshPlaytest(); };
+    wEl.appendChild(b); });
+  refreshPlaytest();
+}
+function refreshPlaytest(){
+  document.querySelectorAll('#ptTime .ptb').forEach(b=>{ const v=b.dataset.val;
+    const on = dev.timeAuto ? v==='auto' : (v!=='auto' && Math.abs(parseFloat(v)-dev.timeOfDay)<0.001);
+    b.classList.toggle('on',on); });
+  document.querySelectorAll('#ptWeather .ptb').forEach(b=>{ const v=b.dataset.val;
+    const on = dev.stormAuto ? v==='auto' : (v!=='auto' && parseFloat(v)===dev.stormManual);
+    b.classList.toggle('on',on); });
+}
+
+/* ============================ start / boot ============================ */
+function begin(fresh){
+  if(fresh){ buildWorld((Math.random()*1e9)>>>0); initChart();
+    boat.x=spawn.x; boat.y=spawn.y; boat.a=-Math.PI/2; boat.spd=0; boat.sail=0;
+    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0;
+  }
+  buildTunePanel(); syncTune(); buildPlaytest();
+  document.getElementById('mute').textContent=audioOn?'🔊':'🔇';
+  document.getElementById('title').classList.add('hidden');
+  started=true; paused=false; last=performance.now();
+  initAudio();
+  toast('Set a heading','W to raise sail, M for your chart');
+}
+document.getElementById('startBtn').onclick=()=>begin(true);
+document.getElementById('contBtn').onclick=()=>{ if(loadSave()) begin(false); else begin(true); };
+
+// show "continue" if a voyage exists
+if(hasSave()){
+  document.getElementById('contBtn').classList.remove('hidden');
+  document.getElementById('startBtn').textContent='⛵ New voyage';
+}
+// build an initial world so the buffer isn't empty if they peek
+buildWorld(12345); initChart(); boat.x=spawn.x; boat.y=spawn.y; camX=boat.x; camY=boat.y;
+
+addEventListener('keydown',e=>{ if(e.key==='Escape') mapOpen=false; });
+addEventListener('beforeunload', ()=>{ if(started) doSave(); });
+</script>
+</body>
+</html>
