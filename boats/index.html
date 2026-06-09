@@ -41,6 +41,18 @@ html,body{margin:0;height:100%;overflow:hidden;background:#08111f;
   -webkit-user-select:none;user-select:none;touch-action:none;}
 canvas{position:absolute;inset:0;display:block;}
 .hidden{display:none!important;}
+#rename{position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 120% at 50% 40%, rgba(18,58,107,.55), rgba(7,16,29,.86));}
+#rename .rbox{background:linear-gradient(#1a2c4d,#13233f);border:1px solid #34466e;border-radius:16px;
+  padding:26px 30px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.6);max-width:90vw;}
+#rename .rtitle{font-size:20px;font-weight:800;color:#ffe6a6;letter-spacing:.06em;margin-bottom:6px;}
+#rename p{color:#bcd2ff;margin:0 0 16px;font-size:14px;}
+#rename input{font:inherit;font-size:18px;text-align:center;padding:10px 14px;border-radius:10px;
+  border:1px solid #3a4f7a;background:#0c1830;color:#eaf2ff;width:280px;max-width:70vw;outline:none;}
+#rename input:focus{border-color:#7aa6dd;}
+#rename button{display:block;margin:16px auto 0;font:inherit;font-weight:700;font-size:15px;cursor:pointer;
+  color:#08213d;background:linear-gradient(#ffe8a6,#f4c869);border:none;border-radius:10px;padding:10px 26px;box-shadow:0 6px 0 #b78a2e;}
+#rename button:active{transform:translateY(2px);box-shadow:0 4px 0 #b78a2e;}
 
 /* quiet way back to the desktop */
 #back{position:absolute;left:14px;top:11px;z-index:40;color:#cfe0ff;opacity:.62;
@@ -122,6 +134,9 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="ptrow"><span>Weather</span><span class="ptbtns" id="ptWeather"></span></div>
   <div class="ptrow"><span>Fog</span><span class="ptbtns" id="ptFog"></span></div>
   <p class="hint">Force the time of day or weather to test them. “Auto” hands control back to the natural cycle. (Not saved.)</p>
+  <div class="pt-sep"></div>
+  <h4>⚔ Island combat</h4>
+  <div id="tuneIslandRows"></div>
 </div>
 
 <div id="title">
@@ -132,6 +147,15 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="keys">
     <kbd>W</kbd>/<kbd>↑</kbd> raise sail &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> furl &nbsp; <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> steer<br>
     <kbd>Space</kbd> drop sail &nbsp; <kbd>M</kbd> map &nbsp; <kbd>+</kbd>/<kbd>−</kbd> zoom &nbsp; <kbd>T</kbd> tune the feel
+  </div>
+</div>
+
+<div id="rename" class="hidden">
+  <div class="rbox">
+    <div class="rtitle">✦ Isle charted &amp; cleared ✦</div>
+    <p>Name your discovery, cartographer:</p>
+    <input id="renameInput" maxlength="22" autocomplete="off" />
+    <button id="renameBtn">Name it</button>
   </div>
 </div>
 
@@ -344,9 +368,11 @@ function queueSave(){ lastSave=-999; }   // force a save soon
 function doSave(){
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, audio:audioOn,
+      seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, itune:ITUNE, audio:audioOn, cargo:cargo,
       disc:discoveredCount, ports:portCount,
       found:cores.filter(c=>c.found).map(c=>c.idx),
+      cleared:cores.filter(c=>c.cleared).map(c=>c.idx),
+      names:cores.filter(c=>c.customName).map(c=>[c.idx,c.customName]),
       explored:Array.from(explored)
     }));
   }catch(e){}
@@ -357,11 +383,15 @@ function loadSave(){
     const s=JSON.parse(localStorage.getItem(SAVE_KEY)); if(!s) return false;
     buildWorld(s.seed);
     if(s.tune) TUNE=Object.assign({},DEFAULT_TUNE,s.tune);
+    if(s.itune) ITUNE=Object.assign({},DEFAULT_ITUNE,s.itune);
+    if(s.cargo) cargo=Object.assign(loot0(),s.cargo);
     audioOn = s.audio!==false;
     boat.x=s.boat.x; boat.y=s.boat.y; boat.a=s.boat.a; boat.spd=0; boat.sail=0;
     discoveredCount=s.disc||0; portCount=s.ports||0;
     (s.found||[]).forEach(idx=>{ const c=cores[idx]; if(c){ c.found=true;
       if(!c.port){ const sx=SUFF[(Math.abs((c.x*7+c.y*13)|0))%SUFF.length]; c.label=c.name+' '+sx; } } });
+    (s.cleared||[]).forEach(idx=>{ if(cores[idx]) cores[idx].cleared=true; });
+    (s.names||[]).forEach(([idx,nm])=>{ if(cores[idx]) cores[idx].customName=nm; });
     explored=new Set(s.explored||[]);
     camX=boat.x; camY=boat.y;
     return true;
@@ -372,11 +402,17 @@ function loadSave(){
 const keys={};
 addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
-  if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_'].includes(k)) e.preventDefault();
-  if(!started) return;
-  if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
+  if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_','j','k'].includes(k)) e.preventDefault();
+  if(!started || renaming) return;
   if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; return; }
   if(k==='p'){ toggleMute(); return; }
+  if(mode==='island'){                          // ---- on foot ----
+    if(k==='j'||k===' ') doSlash();
+    else if(k==='k') doShoot();
+    else if(k==='e'){ if(ISL && (player.x-ISL.landing.x)**2+(player.y-ISL.landing.y)**2 < (ISL.TS*1.7)**2) leaveIsland(false); }
+    keys[k]=true; return;
+  }
+  if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
   if(mapOpen){   // while the chart is open, arrows pan and +/- zoom it
     if(k==='='||k==='+') zoomMap(0.8,null);
     else if(k==='-'||k==='_') zoomMap(1.25,null);
@@ -386,6 +422,7 @@ addEventListener('keydown',e=>{
     else if(k==='arrowdown'||k==='s') panMap(0,0.14);
     return;
   }
+  if(k==='e' && nearLand){ enterIsland(nearLand); return; }   // landfall
   if(k==='='||k==='+'){ TUNE.zoom=clamp(TUNE.zoom+0.12,0.6,1.9); syncTune(); }
   else if(k==='-'||k==='_'){ TUNE.zoom=clamp(TUNE.zoom-0.12,0.6,1.9); syncTune(); }
   keys[k]=true;
@@ -512,6 +549,11 @@ function update(dt){
   const ce=1-Math.exp(-3.2*dt); camX+=(tx-camX)*ce; camY+=(ty-camY)*ce;
 
   reveal(); checkDiscoveries();
+
+  // landfall detection: is the boat at an island's coast?
+  nearLand=null; { let bd=1e18;
+    for(const c of coresNear(boat.x,boat.y,420)){ const reach=(c.r*1.9+50)**2, d=(boat.x-c.x)**2+(boat.y-c.y)**2;
+      if(d<reach && d<bd){ bd=d; nearLand=c; } } }
 
   // wake particles
   if(boat.spd>14){
@@ -730,6 +772,10 @@ function drawHUD(){
   ctx.fillStyle='#dbe7fb'; ctx.fillText(wt, CSSW/2, 116); ctx.textAlign='left';
   drawMinimap();
   drawIslandLabels();
+  if(nearLand){ ctx.textAlign='center'; const nm=nearLand.customName||nearLand.name||'this isle';
+    const t='⚓  Press  E  to explore '+nm+(nearLand.cleared?'  ✓':''); ctx.font='700 15px system-ui';
+    const w=ctx.measureText(t).width+30; ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-96,w,34,11); ctx.fill();
+    ctx.fillStyle='#ffe6a6'; ctx.fillText(t, CSSW/2, CSSH-74); ctx.textAlign='left'; }
   drawToasts();
   drawVignette();
 }
@@ -740,8 +786,9 @@ function drawIslandLabels(){
     const dx=c.x-boat.x, dy=c.y-boat.y; if(dx*dx+dy*dy>900*900) continue;
     const [sx,sy]=w2pix(c.x,c.y); const cssx=sx*(CSSW/IW), cssy=sy*(CSSH/IH);
     if(cssx<40||cssx>CSSW-40||cssy<70||cssy>CSSH-70) continue;
-    const label=c.port?('⚓ '+c.city):c.label;
+    let label = c.port?('⚓ '+c.city) : (c.customName||c.label);
     if(!label) continue;
+    if(c.cleared && !c.port) label='✓ '+label;
     ctx.fillStyle='rgba(8,17,31,.5)'; const w=ctx.measureText(label).width+12;
     roundRect(cssx-w/2,cssy-40,w,18,7); ctx.fill();
     ctx.fillStyle=c.port?'#ffe6a6':'#eef5ff'; ctx.fillText(label, cssx, cssy-27);
@@ -912,6 +959,240 @@ function roundRect(x,y,w,h,r){ ctx.beginPath();
   ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
   ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
+/* ============================================================ *
+ *  ISLAND MODE — landfall: top-down "clear the clearings" crawl
+ * ============================================================ */
+let mode='sea';                 // 'sea' | 'island'
+let nearLand=null;              // island the boat can explore (sea mode)
+let ISL=null, itime=0;
+const W_WALL=0, W_GROUND=1, W_PATH=2, W_GATE=3;
+const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, invul:0};
+let enemies=[], inodes=[], iproj=[], ifx=[], ifloat=[];
+let tripLoot=loot0(), cargo=loot0();
+let securedCount=0, islandCleared=false, renaming=null, icamX=0, icamY=0;
+function loot0(){ return {gold:0,gems:0,ore:0,bits:0,herb:0,relic:0}; }
+const LOOT_ICON={gold:'🪙',gems:'💎',ore:'⛏',bits:'🦴',herb:'🌿',relic:'🏺'};
+const DEFAULT_ITUNE={ moveSpeed:80, slashRange:30, slashDmg:2, slashCD:0.33, arrowSpeed:215, arrowDmg:1,
+  boarHP:4, boarSpeed:60, boarCharge:170, snakeHP:2, enemyDmg:1, spawnCount:1.0, clearSize:1.0 };
+let ITUNE=Object.assign({},DEFAULT_ITUNE);
+
+function sfx(name){ if(!actx||!audioOn||!masterG) return; try{
+  const o=actx.createOscillator(), g=actx.createGain(); o.connect(g); g.connect(masterG); const t=actx.currentTime;
+  let f=440,d=0.1,ty='square';
+  if(name==='slash'){f=300;d=0.08;ty='sawtooth';} else if(name==='shoot'){f=720;d=0.07;ty='triangle';}
+  else if(name==='hurt'){f=150;d=0.2;ty='square';} else if(name==='break'){f=210;d=0.12;ty='square';}
+  else if(name==='secure'){f=620;d=0.3;ty='sine';} else if(name==='land'){f=320;d=0.22;ty='sine';}
+  o.type=ty; o.frequency.setValueAtTime(f,t);
+  if(name==='secure') o.frequency.exponentialRampToValueAtTime(f*2,t+0.25);
+  if(name==='shoot') o.frequency.exponentialRampToValueAtTime(f*0.5,t+d);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.16,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  o.start(t); o.stop(t+d+0.02);
+}catch(e){} }
+
+/* ---- generation: a chain of clearings carved out of a wall of forest ---- */
+function genIsland(core){
+  const rng=mulberry32((((core.idx+1)*2654435761)>>>0) ^ 0xB0A75);
+  const N=clamp(2+Math.round((core.r-46)/22),1,6);
+  const TS=20, cr=Math.max(4,Math.round(5.5*ITUNE.clearSize)), space=cr*2+5;
+  const pts=[[0,0]]; let px=0,py=0;
+  for(let i=1;i<N;i++){ const ang=-Math.PI/2+(rng()-0.5)*1.6; px+=Math.round(Math.cos(ang)*space); py+=Math.round(Math.sin(ang)*space); pts.push([px,py]); }
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  for(const[x,y]of pts){minx=Math.min(minx,x);miny=Math.min(miny,y);maxx=Math.max(maxx,x);maxy=Math.max(maxy,y);}
+  const mg=cr+4, W=(maxx-minx)+mg*2, H=(maxy-miny)+mg*2;
+  const ctr=pts.map(([x,y])=>[x-minx+mg, y-miny+mg]);
+  const tiles=new Uint8Array(W*H);
+  const set=(tx,ty,v)=>{ if(tx>=0&&ty>=0&&tx<W&&ty<H) tiles[ty*W+tx]=v; };
+  const disk=(cx,cy,r,v)=>{ for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(dx*dx+dy*dy<=r*r) set(cx+dx,cy+dy,v); };
+  const line=(x0,y0,x1,y1,w,v)=>{ const st=Math.max(Math.abs(x1-x0),Math.abs(y1-y0))*2+1; for(let s=0;s<=st;s++){const t=s/st; disk(Math.round(x0+(x1-x0)*t),Math.round(y0+(y1-y0)*t),w,v);} };
+  for(let i=0;i<N;i++) disk(ctr[i][0],ctr[i][1],cr,W_GROUND);
+  for(let i=1;i<N;i++) line(ctr[i-1][0],ctr[i-1][1],ctr[i][0],ctr[i][1],1,W_PATH);
+  const gates=[];
+  for(let i=1;i<N;i++){ const a=ctr[i], b=ctr[i-1], dx=b[0]-a[0],dy=b[1]-a[1],l=Math.hypot(dx,dy)||1;
+    const gx=Math.round(a[0]+dx/l*(cr+1)), gy=Math.round(a[1]+dy/l*(cr+1)), cells=[];
+    for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){ const tx=gx+ox,ty=gy+oy; if(tx>=0&&ty>=0&&tx<W&&ty<H){ const v=tiles[ty*W+tx]; if(v===W_PATH||v===W_GROUND){ tiles[ty*W+tx]=W_GATE; cells.push([tx,ty]); } } }
+    gates.push({from:i-1, cells, open:false}); }
+  const clearings=[]; enemies=[]; inodes=[];
+  for(let i=0;i<N;i++){
+    const cl={id:i, x:(ctr[i][0]+0.5)*TS, y:(ctr[i][1]+0.5)*TS, r:cr*TS, secured:i===0, enemyCount:0};
+    clearings.push(cl);
+    const nn = i===0 ? 1+(rng()*2|0) : 2+(rng()*3|0);
+    for(let k=0;k<nn;k++){ const p=randIn(cl,rng,TS,tiles,W); if(!p) continue;
+      const r=rng(), type = r<0.45?'rock' : r<0.78?'herb' : 'ruin';
+      inodes.push({x:p.x,y:p.y, type, hp:type==='rock'?3:type==='ruin'?4:1, r:9, dead:false}); }
+    if(i>0){ const ec=Math.max(2,Math.round((2+(rng()*2|0))*ITUNE.spawnCount));
+      for(let k=0;k<ec;k++){ const p=randIn(cl,rng,TS,tiles,W); if(!p) continue;
+        if(rng()<0.5) enemies.push({type:'boar', x:p.x,y:p.y, r:11, hp:ITUNE.boarHP, clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0});
+        else enemies.push({type:'snake', x:p.x,y:p.y, r:9, hp:ITUNE.snakeHP, clear:i, st:'idle', tmr:rng()*1.5, vx:0,vy:0, flash:0});
+        cl.enemyCount++; }
+    }
+  }
+  for(const g of gates) if(clearings[g.from].secured){ g.open=true; for(const[tx,ty]of g.cells) tiles[ty*W+tx]=W_PATH; }
+  securedCount=clearings.filter(c=>c.secured).length; islandCleared=securedCount>=N;
+  iproj=[]; ifx=[]; ifloat=[];
+  ISL={core, W,H,TS, tiles, clearings, gates, N, landing:{x:clearings[0].x, y:clearings[0].y}};
+  player.x=ISL.landing.x; player.y=ISL.landing.y+cr*TS*0.35; player.fx=0; player.fy=-1;
+  player.hp=player.maxhp; player.invul=0.6; player.slashCD=0; player.shootCD=0; player.slashT=0;
+}
+function randIn(cl,rng,TS,tiles,W){ for(let t=0;t<22;t++){ const a=rng()*TAU, d=rng()*cl.r*0.78, x=cl.x+Math.cos(a)*d, y=cl.y+Math.sin(a)*d, tx=(x/TS)|0, ty=(y/TS)|0; if(tiles[ty*W+tx]===W_GROUND) return {x,y}; } return null; }
+function islTile(x,y){ if(!ISL) return W_WALL; const tx=(x/ISL.TS)|0, ty=(y/ISL.TS)|0; if(tx<0||ty<0||tx>=ISL.W||ty>=ISL.H) return W_WALL; return ISL.tiles[ty*ISL.W+tx]; }
+function islWalk(x,y){ const t=islTile(x,y); return t===W_GROUND||t===W_PATH; }
+function islFree(x,y,r){ return islWalk(x-r,y)&&islWalk(x+r,y)&&islWalk(x,y-r)&&islWalk(x,y+r); }
+function moveSlide(o,dx,dy){ const r=o.r*0.7; if(islFree(o.x+dx,o.y,r)) o.x+=dx; if(islFree(o.x,o.y+dy,r)) o.y+=dy; }
+
+/* ---- enter / leave ---- */
+function enterIsland(core){ mode='island'; mapOpen=false; nearLand=null; genIsland(core); tripLoot=loot0(); icamX=player.x; icamY=player.y;
+  toast('⚓  Landfall', core.customName||core.name||'an uncharted isle'); sfx('land'); }
+function leaveIsland(ko){
+  if(ko){ toast('💀  Knocked out','you lost your haul'); tripLoot=loot0(); }
+  else { let any=false; for(const k in tripLoot){ if(tripLoot[k]>0){ cargo[k]+=tripLoot[k]; any=true; } }
+    if(islandCleared && ISL){ ISL.core.cleared=true; startRename(ISL.core); }
+    else toast(any?'Haul stowed aboard':'Back aboard', any?lootSummary(tripLoot):''); tripLoot=loot0(); }
+  mode='sea'; enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; ISL=null; queueSave();
+}
+function lootSummary(l){ const p=[]; for(const k in l) if(l[k]>0) p.push(l[k]+' '+k); return p.join(', '); }
+function startRename(core){ renaming=core; const ov=document.getElementById('rename'), inp=document.getElementById('renameInput');
+  inp.value=core.customName||core.name||''; ov.classList.remove('hidden'); setTimeout(()=>{inp.focus(); inp.select();},40); }
+function finishRename(){ if(!renaming) return; const v=document.getElementById('renameInput').value.trim().slice(0,22);
+  if(v) renaming.customName=v; renaming.cleared=true; document.getElementById('rename').classList.add('hidden'); renaming=null; queueSave(); }
+
+/* ---- combat ---- */
+function doSlash(){ if(player.slashCD>0) return; player.slashCD=ITUNE.slashCD; player.slashT=0.16;
+  ifx.push({k:'slash', x:player.x,y:player.y, a:Math.atan2(player.fy,player.fx), t:0, life:0.16});
+  for(const en of enemies){ const dx=en.x-player.x,dy=en.y-player.y,d=Math.hypot(dx,dy)||1;
+    if(d<ITUNE.slashRange+en.r && (dx*player.fx+dy*player.fy)/d>0.3) hurtEnemy(en,ITUNE.slashDmg,dx/d,dy/d); }
+  for(const nd of inodes){ if(nd.dead) continue; const dx=nd.x-player.x,dy=nd.y-player.y,d=Math.hypot(dx,dy)||1;
+    if(d<ITUNE.slashRange+nd.r && (dx*player.fx+dy*player.fy)/d>0.2) hitNode(nd); }
+  sfx('slash');
+}
+function doShoot(){ if(player.shootCD>0) return; player.shootCD=0.28;
+  iproj.push({k:'arrow', x:player.x+player.fx*10, y:player.y+player.fy*10, vx:player.fx*ITUNE.arrowSpeed, vy:player.fy*ITUNE.arrowSpeed, life:1.2}); sfx('shoot'); }
+function hurtEnemy(en,dmg,nx,ny){ en.hp-=dmg; en.flash=0.12; en.x+=nx*6; en.y+=ny*6; if(en.hp<=0) killEnemy(en); }
+function killEnemy(en){ const i=enemies.indexOf(en); if(i<0) return; enemies.splice(i,1);
+  burst(en.x,en.y, en.type==='boar'?'#9a6b43':'#6fae5a');
+  addLoot('bits',1); if(Math.random()<0.5) addLoot('gold',1+(Math.random()*2|0)); if(Math.random()<0.12) addLoot('gems',1);
+  const cl=ISL.clearings[en.clear]; if(cl){ cl.enemyCount--; if(cl.enemyCount<=0) secureClearing(cl); }
+}
+function hitNode(nd){ nd.hp--; burst(nd.x,nd.y, nd.type==='rock'?'#9aa0a8':nd.type==='ruin'?'#caa56a':'#7fbf5a');
+  if(nd.hp<=0){ nd.dead=true; sfx('break');
+    if(nd.type==='rock'){ addLoot('ore',1+(Math.random()*2|0)); if(Math.random()<0.3) addLoot('gems',1); }
+    else if(nd.type==='ruin'){ addLoot('gold',2+(Math.random()*4|0)); if(Math.random()<0.4) addLoot('relic',1); if(Math.random()<0.2) addLoot('gems',1); }
+    else addLoot('herb',1+(Math.random()*2|0));
+  }
+}
+function addLoot(k,n){ tripLoot[k]+=n; ifloat.push({x:player.x,y:player.y-14, txt:'+'+n+' '+(LOOT_ICON[k]||k), t:0, life:0.9, c:'#ffe9a6'}); }
+function burst(x,y,c){ for(let i=0;i<9;i++){ const a=Math.random()*TAU, s=24+Math.random()*70; ifx.push({k:'p', x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, t:0, life:0.4+Math.random()*0.3, c}); } }
+function secureClearing(cl){ if(cl.secured) return; cl.secured=true; securedCount++; sfx('secure');
+  for(const g of ISL.gates) if(g.from===cl.id && !g.open){ g.open=true; for(const[tx,ty]of g.cells) ISL.tiles[ty*ISL.W+tx]=W_PATH; }
+  ifloat.push({x:cl.x, y:cl.y, txt:'✓ Secured', t:0, life:1.6, c:'#7fe3a0', big:true});
+  if(securedCount>=ISL.N){ islandCleared=true; toast('✦  Island cleared!','return to your boat to name it'); }
+}
+function hurtPlayer(nx,ny){ if(player.invul>0) return; player.hp-=ITUNE.enemyDmg; player.invul=0.85; player.x+=nx*14; player.y+=ny*14; sfx('hurt'); if(player.hp<=0) leaveIsland(true); }
+
+/* ---- island update ---- */
+function updateIsland(dt){
+  itime+=dt;
+  player.slashCD=Math.max(0,player.slashCD-dt); player.shootCD=Math.max(0,player.shootCD-dt);
+  player.slashT=Math.max(0,player.slashT-dt); player.invul=Math.max(0,player.invul-dt);
+  let mvx=0,mvy=0;
+  if(keys['arrowleft']||keys['a']) mvx-=1; if(keys['arrowright']||keys['d']) mvx+=1;
+  if(keys['arrowup']||keys['w']) mvy-=1; if(keys['arrowdown']||keys['s']) mvy+=1;
+  if(mvx||mvy){ const l=Math.hypot(mvx,mvy); mvx/=l; mvy/=l; player.fx=mvx; player.fy=mvy; moveSlide(player, mvx*ITUNE.moveSpeed*dt, mvy*ITUNE.moveSpeed*dt); }
+  for(const en of enemies){ en.flash=Math.max(0,en.flash-dt);
+    const dx=player.x-en.x, dy=player.y-en.y, d=Math.hypot(dx,dy)||1;
+    if(en.type==='boar') updateBoar(en,dx,dy,d,dt); else updateSnake(en,dx,dy,d,dt);
+    if(d<en.r+player.r) hurtPlayer(-dx/d,-dy/d);
+  }
+  for(let i=iproj.length-1;i>=0;i--){ const pr=iproj[i]; pr.x+=pr.vx*dt; pr.y+=pr.vy*dt; pr.life-=dt;
+    let gone = pr.life<=0 || !islWalk(pr.x,pr.y), L=Math.hypot(pr.vx,pr.vy)||1;
+    if(!gone){ if(pr.k==='arrow'){ for(const en of enemies){ if((en.x-pr.x)**2+(en.y-pr.y)**2 < (en.r+3)**2){ hurtEnemy(en,ITUNE.arrowDmg,pr.vx/L,pr.vy/L); gone=true; break; } } }
+      else if(pr.k==='spit'){ if((player.x-pr.x)**2+(player.y-pr.y)**2 < (player.r+4)**2){ hurtPlayer(pr.vx/L,pr.vy/L); gone=true; } } }
+    if(gone){ if(pr.k==='arrow') burst(pr.x,pr.y,'#e9e2c8'); iproj.splice(i,1); }
+  }
+  for(let i=ifx.length-1;i>=0;i--){ const f=ifx[i]; f.t+=dt; if(f.k==='p'){ f.x+=f.vx*dt; f.y+=f.vy*dt; f.vx*=0.9; f.vy*=0.9; } if(f.t>f.life) ifx.splice(i,1); }
+  for(let i=ifloat.length-1;i>=0;i--){ const f=ifloat[i]; f.t+=dt; f.y-=14*dt; if(f.t>f.life) ifloat.splice(i,1); }
+  const ce=1-Math.exp(-8*dt); icamX+=(player.x-icamX)*ce; icamY+=(player.y-icamY)*ce;
+  for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
+}
+function updateBoar(en,dx,dy,d,dt){ en.tmr-=dt;
+  if(en.st==='charge'){ moveSlide(en, en.vx*dt, en.vy*dt);
+    if(en.tmr<=0 || !islWalk(en.x+en.vx*0.04, en.y+en.vy*0.04)){ en.st='recover'; en.tmr=0.7; en.vx=en.vy=0; } }
+  else if(en.st==='windup'){ if(en.tmr<=0){ en.st='charge'; en.tmr=0.7; en.vx=dx/d*ITUNE.boarCharge; en.vy=dy/d*ITUNE.boarCharge; } }
+  else if(en.st==='recover'){ if(en.tmr<=0) en.st='idle'; }
+  else { if(d<175){ en.st='windup'; en.tmr=0.5; } }
+}
+function updateSnake(en,dx,dy,d,dt){ en.tmr-=dt;
+  if(d<250){ const nx=dx/d, ny=dy/d, want=120; let mv = d<want-15?-1 : d>want+15?1 : 0;
+    moveSlide(en, (nx*mv*ITUNE.boarSpeed*0.7 - ny*24)*dt, (ny*mv*ITUNE.boarSpeed*0.7 + nx*24)*dt);
+    if(en.tmr<=0 && d<300){ en.tmr=1.5; iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*98, vy:ny*98, life:2.4}); } }
+}
+
+/* ---- island render ---- */
+function islScale(){ return IH/200; }
+function iw2p(x,y){ const s=islScale(); return [ (x-icamX)*s+IW/2, (y-icamY)*s+IH/2 ]; }
+function drawIslandWorld(){
+  const s=islScale(); pctx.fillStyle='#22361f'; pctx.fillRect(0,0,IW,IH);
+  const halfW=(IW/2)/s, halfH=(IH/2)/s, TS=ISL.TS;
+  const minTX=Math.max(0,((icamX-halfW)/TS|0)-1), maxTX=Math.min(ISL.W-1,((icamX+halfW)/TS|0)+1);
+  const minTY=Math.max(0,((icamY-halfH)/TS|0)-1), maxTY=Math.min(ISL.H-1,((icamY+halfH)/TS|0)+1);
+  const ts=Math.ceil(TS*s)+1;
+  for(let ty=minTY;ty<=maxTY;ty++)for(let tx=minTX;tx<=maxTX;tx++){ const t=ISL.tiles[ty*ISL.W+tx]; const sx=Math.floor((tx*TS-icamX)*s+IW/2), sy=Math.floor((ty*TS-icamY)*s+IH/2); let col;
+    if(t===W_WALL) col = hash2(tx,ty)<0.5?'#2c4a28':'#264121';
+    else if(t===W_PATH) col='#9a8557';
+    else if(t===W_GATE) col='#54421f';
+    else col = hash2(tx*2,ty*2)<0.5?'#5a9a4a':'#4f8e44';
+    pctx.fillStyle=col; pctx.fillRect(sx,sy,ts,ts);
+  }
+  for(const nd of inodes){ if(nd.dead) continue; const [sx,sy]=iw2p(nd.x,nd.y), r=nd.r*s;
+    if(nd.type==='rock'){ pctx.fillStyle='#8a909a'; pctx.fillRect(sx-r,sy-r*0.8,r*2,r*1.6); pctx.fillStyle='#6f757f'; pctx.fillRect(sx-r,sy+r*0.1,r*2,r*0.7); }
+    else if(nd.type==='ruin'){ pctx.fillStyle='#c8b07a'; pctx.fillRect(sx-r,sy-r,r*2,r*2); pctx.fillStyle='#9c7f50'; pctx.fillRect(sx-r*0.25,sy-r,r*0.5,r*2); }
+    else { pctx.fillStyle='#3f8f4a'; pctx.beginPath(); pctx.arc(sx,sy,r,0,TAU); pctx.fill(); pctx.fillStyle='#9fe0a0'; pctx.fillRect(sx-1,sy-r,2,r*0.8); } }
+  for(const cl of ISL.clearings){ if(!cl.secured||cl.id===0) continue; const [sx,sy]=iw2p(cl.x,cl.y);
+    pctx.fillStyle='#caa'; pctx.fillRect(sx-1,sy-13*s,2,13*s); pctx.fillStyle='#7fe3a0'; pctx.fillRect(sx+1,sy-13*s,7*s,5*s); }
+  for(const pr of iproj){ const [sx,sy]=iw2p(pr.x,pr.y);
+    if(pr.k==='arrow'){ const a=Math.atan2(pr.vy,pr.vx); pctx.strokeStyle='#efe6c8'; pctx.lineWidth=Math.max(1,1.6*s); pctx.beginPath(); pctx.moveTo(sx,sy); pctx.lineTo(sx-Math.cos(a)*8*s, sy-Math.sin(a)*8*s); pctx.stroke(); }
+    else { pctx.fillStyle='#9cd36a'; pctx.beginPath(); pctx.arc(sx,sy,Math.max(1.5,3*s),0,TAU); pctx.fill(); } }
+  for(const en of enemies){ const [sx,sy]=iw2p(en.x,en.y), r=en.r*s;
+    pctx.fillStyle='rgba(0,20,10,.25)'; pctx.beginPath(); pctx.ellipse(sx,sy+r*0.6,r,r*0.5,0,0,TAU); pctx.fill();
+    if(en.type==='boar'){ pctx.fillStyle = en.flash>0?'#fff':(en.st==='windup'?'#cc7a5a':en.st==='charge'?'#b06a40':'#7a4f30');
+      pctx.beginPath(); pctx.ellipse(sx,sy,r,r*0.82,0,0,TAU); pctx.fill(); pctx.fillStyle='#eee'; pctx.fillRect(sx+en.r*0.5*s,sy-1.5,Math.max(1.5,r*0.4),2); }
+    else { pctx.fillStyle = en.flash>0?'#fff':'#5fae4f'; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.8,r,0,0,TAU); pctx.fill(); pctx.fillStyle='#dff'; pctx.fillRect(sx-1.5,sy-r*0.5,3,2); } }
+  for(const f of ifx){ if(f.k!=='slash') continue; const [sx,sy]=iw2p(f.x,f.y), prog=clamp(f.t/f.life,0,1), sweep=-0.85+prog*1.7;
+    pctx.strokeStyle='rgba(255,255,255,'+(0.8*(1-prog))+')'; pctx.lineWidth=Math.max(1.5,3*s);
+    pctx.beginPath(); pctx.arc(sx,sy, ITUNE.slashRange*0.72*s, f.a+sweep-0.28, f.a+sweep+0.28); pctx.stroke(); }
+  const [pxp,pyp]=iw2p(player.x,player.y), pr=player.r*s;
+  pctx.fillStyle='rgba(0,20,10,.25)'; pctx.beginPath(); pctx.ellipse(pxp,pyp+pr*0.6,pr,pr*0.5,0,0,TAU); pctx.fill();
+  pctx.fillStyle=(player.invul>0 && Math.floor(itime*18)%2)?'#fff':'#e2eaf6'; pctx.beginPath(); pctx.arc(pxp,pyp,pr,0,TAU); pctx.fill();
+  pctx.fillStyle='#27406a'; pctx.fillRect(pxp+player.fx*pr*0.55-1.5, pyp+player.fy*pr*0.55-1.5, 3,3);
+  for(const f of ifx){ if(f.k!=='p') continue; const [sx,sy]=iw2p(f.x,f.y); pctx.globalAlpha=clamp(1-f.t/f.life,0,1); pctx.fillStyle=f.c; pctx.fillRect(sx-1,sy-1,2.6,2.6); pctx.globalAlpha=1; }
+}
+function islandHUD(){
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.font='19px system-ui'; for(let i=0;i<player.maxhp;i++){ ctx.fillStyle=i<player.hp?'#ff5d6c':'#42263a'; ctx.fillText('♥', 18+i*21, 42); }
+  if(!ISL) return;
+  let cur=null; for(const cl of ISL.clearings) if((player.x-cl.x)**2+(player.y-cl.y)**2 < cl.r*cl.r){ cur=cl; break; }
+  const pad=140, tw=Math.max(190, pad+ISL.N*24), bx=CSSW/2-tw/2;
+  ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(bx,14,tw,36,10); ctx.fill();
+  ctx.fillStyle='#dfeaff'; ctx.font='700 14px system-ui'; ctx.fillText('Secured '+securedCount+' / '+ISL.N, bx+12, 37);
+  for(let i=0;i<ISL.N;i++){ const cl=ISL.clearings[i], cxp=bx+pad+i*24+10, cyp=32; let col,lab='';
+    if(i===0){ col='#7fa6dd'; lab='⚓'; } else if(cl.secured){ col='#3ddc84'; lab='✓'; }
+    else if(cur===cl){ col='#ffce54'; lab=''+cl.enemyCount; } else col='#52617e';
+    if(i<ISL.N-1){ ctx.strokeStyle=cl.secured?'#3ddc84':'#39455f'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cxp+9,cyp); ctx.lineTo(cxp+15,cyp); ctx.stroke(); }
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cxp,cyp,9,0,TAU); ctx.fill();
+    if(lab){ ctx.fillStyle='#0c1830'; ctx.font='700 11px system-ui'; ctx.textAlign='center'; ctx.fillText(lab,cxp,cyp+4); ctx.textAlign='left'; } }
+  if(cur && !cur.secured && cur.id>0){ ctx.fillStyle='#ffd27a'; ctx.font='700 13px system-ui'; ctx.textAlign='center'; ctx.fillText('Enemies remaining: '+cur.enemyCount, CSSW/2, 68); ctx.textAlign='left'; }
+  ctx.textAlign='right'; ctx.font='13px system-ui'; let parts=[]; for(const k in tripLoot) if(tripLoot[k]>0) parts.push((LOOT_ICON[k]||k)+' '+tripLoot[k]);
+  const ht='Haul:  '+(parts.length?parts.join('   '):'—'), hw=ctx.measureText(ht).width+20;
+  ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(CSSW-14-hw,22,hw,26,8); ctx.fill(); ctx.fillStyle='#ffe9a6'; ctx.fillText(ht, CSSW-24, 40); ctx.textAlign='left';
+  ctx.textAlign='center';
+  for(const f of ifloat){ const sxp=((f.x-icamX)*islScale()+IW/2)*(CSSW/IW), syp=((f.y-icamY)*islScale()+IH/2)*(CSSH/IH); ctx.globalAlpha=clamp(1-f.t/f.life,0,1); ctx.fillStyle=f.c; ctx.font=(f.big?'700 22px':'700 14px')+' system-ui'; ctx.fillText(f.txt, sxp, syp); ctx.globalAlpha=1; }
+  const atBoat=(player.x-ISL.landing.x)**2+(player.y-ISL.landing.y)**2 < (ISL.TS*1.7)**2;
+  if(atBoat){ const t='⚓  Press  E  to set sail'+(islandCleared?' & name this isle':' (stow haul)'); ctx.font='700 14px system-ui'; const w=ctx.measureText(t).width+30;
+    ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-94,w,32,10); ctx.fill(); ctx.fillStyle='#ffe6a6'; ctx.fillText(t, CSSW/2, CSSH-73); }
+  ctx.font='12px system-ui'; const ch='WASD move   •   J slash   •   K shoot   •   reach ⚓ to leave', cw=ctx.measureText(ch).width+24;
+  ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(CSSW/2-cw/2,CSSH-44,cw,26,9); ctx.fill(); ctx.fillStyle='#cdd9f3'; ctx.fillText(ch, CSSW/2, CSSH-26);
+  ctx.textAlign='left'; drawToasts();
+}
+
 /* ============================ main loop ============================ */
 let last=0;
 /* atmospheric overlays — day/night tint, storm gloom, rain, lightning (over the sea, under the HUD) */
@@ -938,6 +1219,14 @@ function worldTint(){
 
 function frame(ts){
   const dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
+  if(started && mode==='island'){            // ---- island exploration mode ----
+    updateIsland(dt);
+    drawIslandWorld();
+    ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=false;
+    ctx.clearRect(0,0,CSSW,CSSH); ctx.drawImage(pix,0,0,IW,IH,0,0,CSSW,CSSH);
+    ctx.imageSmoothingEnabled=true; islandHUD();
+    requestAnimationFrame(frame); return;
+  }
   update(dt);
   // draw world to low-res buffer
   if(started){
@@ -1014,12 +1303,38 @@ function refreshPlaytest(){
 }
 
 /* ============================ start / boot ============================ */
+/* island combat tuning rows + rename overlay wiring */
+const ITUNE_DEF=[
+  ['moveSpeed','Move speed',40,140,2],
+  ['slashDmg','Slash damage',0.5,6,0.5],
+  ['slashCD','Slash cooldown',0.12,0.7,0.02],
+  ['slashRange','Slash reach',16,50,1],
+  ['arrowSpeed','Arrow speed',120,360,5],
+  ['arrowDmg','Arrow damage',0.5,5,0.5],
+  ['boarHP','Boar HP',1,12,1],
+  ['boarCharge','Boar charge',80,320,5],
+  ['snakeHP','Snake HP',1,8,1],
+  ['enemyDmg','Enemy damage',0,3,1],
+  ['spawnCount','Enemy count ×',0.4,2.5,0.1],
+  ['clearSize','Clearing size ×',0.6,1.8,0.1],
+];
+function buildIslandTune(){ const host=document.getElementById('tuneIslandRows'); if(!host) return; host.innerHTML='';
+  ITUNE_DEF.forEach(([k,label,min,max,step])=>{ const row=document.createElement('div'); row.className='row';
+    row.innerHTML='<label>'+label+' <b id="iv_'+k+'">'+ITUNE[k]+'</b></label><input type="range" id="is_'+k+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+ITUNE[k]+'">';
+    host.appendChild(row);
+    row.querySelector('input').addEventListener('input',e=>{ ITUNE[k]=parseFloat(e.target.value); document.getElementById('iv_'+k).textContent=ITUNE[k]; queueSave(); });
+  });
+}
+document.getElementById('renameBtn').onclick=finishRename;
+document.getElementById('renameInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') finishRename(); });
+
 function begin(fresh){
   if(fresh){ buildWorld((Math.random()*1e9)>>>0);
     boat.x=spawn.x; boat.y=spawn.y; boat.a=-Math.PI/2; boat.spd=0; boat.sail=0;
-    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0;
+    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; cargo=loot0();
   }
-  buildTunePanel(); syncTune(); buildPlaytest();
+  mode='sea'; nearLand=null;
+  buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune();
   document.getElementById('mute').textContent=audioOn?'🔊':'🔇';
   document.getElementById('title').classList.add('hidden');
   started=true; paused=false; last=performance.now();
