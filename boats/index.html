@@ -181,27 +181,47 @@ function fbm(x,y,oct){
 }
 
 /* ============================ world ============================ */
-const WORLD = 8200;               // world is a bounded square (world units)
-const TILE_W = 6;                 // world units per render/height cell
-const GW = Math.ceil(WORLD/TILE_W);
-const SEA = 0.0;                  // sea level on the height field
-let HGRID, HSET, cores, SEED, spawn;
+const WORLD = 82000;             // a big bounded square ocean — ~14 min to cross at full sail
+const TILE_W = 6;                // world units per render/height cell
+const SEA = 0.0;                 // sea level on the height field
+let cores, SEED, spawn, buckets;
+const BUCKET = 520;              // spatial-hash cell for island lookup (> max core influence)
 
+function bkey(bx,by){ return bx*100003+by; }
+function coresNear(wx,wy,margin){          // only the islands whose influence may reach (wx,wy)
+  const out=[];
+  const x0=Math.floor((wx-margin)/BUCKET), x1=Math.floor((wx+margin)/BUCKET);
+  const y0=Math.floor((wy-margin)/BUCKET), y1=Math.floor((wy+margin)/BUCKET);
+  for(let by=y0;by<=y1;by++) for(let bx=x0;bx<=x1;bx++){
+    const arr=buckets.get(bkey(bx,by)); if(arr) for(let i=0;i<arr.length;i++) out.push(arr[i]);
+  }
+  return out;
+}
 function rawHeight(wx,wy){
   let h = fbm(wx*0.00138, wy*0.00138, 5)*1.05 - 0.66;        // mostly ocean, land at the highs
   h += (fbm(wx*0.0059+11.3, wy*0.0059-4.7, 3) - 0.5) * 0.18; // coastline detail
-  for(let i=0;i<cores.length;i++){
-    const c=cores[i], dx=wx-c.x, dy=wy-c.y;
-    h += c.amp*Math.exp(-(dx*dx+dy*dy)/(2*c.r*c.r));
-  }
+  const near=coresNear(wx,wy,430);
+  for(let i=0;i<near.length;i++){ const c=near[i], dx=wx-c.x, dy=wy-c.y;
+    h += c.amp*Math.exp(-(dx*dx+dy*dy)/(2*c.r*c.r)); }
   return h;
 }
+// lazy chunk height cache — streams a bounded window around the boat so the world can be huge
+const CHUNK=32;
+let hchunks=new Map(); const MAXCHUNKS=560;
 function heightCell(tx,ty){
-  if(tx<0||ty<0||tx>=GW||ty>=GW) return -1;
-  const idx=ty*GW+tx;
-  if(HSET[idx]) return HGRID[idx];
-  const h = rawHeight(tx*TILE_W+TILE_W*0.5, ty*TILE_W+TILE_W*0.5);
-  HGRID[idx]=h; HSET[idx]=1; return h;
+  const cx=tx>>5, cy=ty>>5, ck=cx*100003+cy;          // CHUNK=32 → shift 5
+  let ch=hchunks.get(ck);
+  if(!ch){ ch={h:new Float32Array(CHUNK*CHUNK), s:new Uint8Array(CHUNK*CHUNK), cx, cy}; hchunks.set(ck,ch);
+    if(hchunks.size>MAXCHUNKS) evictChunks(); }
+  const li=(ty-(cy<<5))*CHUNK + (tx-(cx<<5));
+  if(ch.s[li]) return ch.h[li];
+  const v=rawHeight(tx*TILE_W+TILE_W*0.5, ty*TILE_W+TILE_W*0.5);
+  ch.h[li]=v; ch.s[li]=1; return v;
+}
+function evictChunks(){                                 // drop the chunks farthest from the boat
+  const bcx=boat.x/TILE_W/CHUNK, bcy=boat.y/TILE_W/CHUNK;
+  const all=[...hchunks.values()].sort((a,b)=>((b.cx-bcx)**2+(b.cy-bcy)**2)-((a.cx-bcx)**2+(a.cy-bcy)**2));
+  for(let i=0;i<all.length-MAXCHUNKS+80;i++) hchunks.delete(all[i].cx*100003+all[i].cy);
 }
 function heightAt(wx,wy){ return heightCell(Math.floor(wx/TILE_W), Math.floor(wy/TILE_W)); }
 function isWater(wx,wy){ return heightCell(Math.floor(wx/TILE_W), Math.floor(wy/TILE_W)) < SEA; }
@@ -214,39 +234,35 @@ const PORT_SUFF=["Harbour","Port","Haven","Wharf","Landing"];
 function buildWorld(seed){
   SEED=seed>>>0; NSEED = SEED || 1;
   const rng = mulberry32(SEED^0x9e3779b9);
-  // height storage (lazy filled)
-  HGRID = new Float32Array(GW*GW); HSET = new Uint8Array(GW*GW);
-  // island cores: a few guaranteed near spawn, rest scattered
-  cores=[];
+  hchunks=new Map();                          // reset the streaming height cache
+  cores=[]; buckets=new Map();
   const cx=WORLD/2, cy=WORLD/2;
   const pickName=()=>NAME_A[(rng()*NAME_A.length)|0]+NAME_B[(rng()*NAME_B.length)|0];
-  // near-spawn ring (so you find land quickly — no empty-ocean boredom)
-  const near=5;
-  for(let i=0;i<near;i++){
-    const ang=rng()*TAU, dist=300+rng()*620;
-    cores.push({x:cx+Math.cos(ang)*dist, y:cy+Math.sin(ang)*dist,
-      r:46+rng()*70, amp:0.62+rng()*0.5, name:pickName(), found:false, port:false});
+  function addCore(c){ c.idx=cores.length; cores.push(c);
+    const k=bkey(Math.floor(c.x/BUCKET),Math.floor(c.y/BUCKET));
+    let arr=buckets.get(k); if(!arr){arr=[]; buckets.set(k,arr);} arr.push(c); }
+  // guaranteed islands near spawn so you find land quickly
+  for(let i=0;i<5;i++){ const ang=rng()*TAU, dist=320+rng()*640;
+    addCore({x:cx+Math.cos(ang)*dist, y:cy+Math.sin(ang)*dist, r:46+rng()*70, amp:0.62+rng()*0.5, name:pickName(), found:false, port:false}); }
+  // ~3000 islands scattered across the whole ocean (same density as before, just a far bigger world)
+  for(let i=0;i<3000;i++){
+    const x=WORLD*0.02+rng()*WORLD*0.96, y=WORLD*0.02+rng()*WORLD*0.96;
+    if((x-cx)**2+(y-cy)**2 < 240*240) continue;
+    const port=rng()<0.12;
+    const c={x,y, r:44+rng()*100, amp:0.6+rng()*0.62, name:pickName(), found:false, port};
+    if(port) c.city=pickName()+" "+PORT_SUFF[(rng()*PORT_SUFF.length)|0];
+    addCore(c);
   }
-  // scattered across the world
-  for(let i=0;i<26;i++){
-    const x=WORLD*0.08+rng()*WORLD*0.84, y=WORLD*0.08+rng()*WORLD*0.84;
-    if(Math.hypot(x-cx,y-cy)<260) continue;
-    cores.push({x,y, r:44+rng()*96, amp:0.6+rng()*0.62, name:pickName(), found:false, port:false});
-  }
-  // promote a handful of the larger islands to PORT CITIES (beacons)
-  const byBig=[...cores].sort((a,b)=>b.r*b.amp-a.r*a.amp);
-  for(let i=0;i<4;i++){ const c=byBig[i]; c.port=true; c.found=false;
-    c.city = pickName()+" "+PORT_SUFF[(rng()*PORT_SUFF.length)|0]; }
-  // ensure at least one port is reasonably close to spawn
-  let nearPort = cores.find(c=>c.port && Math.hypot(c.x-cx,c.y-cy)<1500);
-  if(!nearPort){ const c=cores.find(c=>Math.hypot(c.x-cx,c.y-cy)<900)||cores[0];
-    c.port=true; c.city=pickName()+" Harbour"; }
+  // make sure there's a port within early reach of spawn
+  const cand=coresNear(cx,cy,2800);
+  if(cand.length && !cand.some(c=>c.port)){ let best=cand[0],bd=1e18;
+    for(const c of cand){ const d=(c.x-cx)**2+(c.y-cy)**2; if(d<bd){bd=d;best=c;} }
+    best.port=true; best.city=pickName()+" Harbour"; }
   // find spawn: nearest OPEN water to centre (room to sail, not jammed in a cove)
   spawn=null; let fb=null;
-  for(let rad=0; rad<90 && !spawn; rad++){
+  for(let rad=0; rad<120 && !spawn; rad++){
     for(let a=0;a<24;a++){
       const ang=a/24*TAU, x=cx+Math.cos(ang)*rad*TILE_W*2, y=cy+Math.sin(ang)*rad*TILE_W*2;
-      if(x<140||y<140||x>WORLD-140||y>WORLD-140) continue;
       if(heightAt(x,y) < SEA-0.05){
         if(!fb) fb={x,y};
         let open=true;
@@ -277,7 +293,7 @@ function landColor(e){
 }
 
 /* ============================ state ============================ */
-const SAVE_KEY='mj_boats_v1';
+const SAVE_KEY='mj_boats_v2';   // v2 = the big streamed world (v1 saves were a different, tiny world)
 const DEFAULT_TUNE={ baseSpeed:96, accel:1.4, glide:0.42, turn:1.5, windSpread:0.55, windDrift:1.0, zoom:1.0 };
 let TUNE=Object.assign({},DEFAULT_TUNE);
 const boat={x:0,y:0,a:-Math.PI/2, spd:0, sail:0};   // a=heading (math angle, +x east, y down)
@@ -286,59 +302,36 @@ let wind={a:0, str:1};
 let time=0, paused=true, started=false;
 let env={L:1, sun:1, dayT:0.3, dayName:'Day', storm:0, flash:0, stormOn:false};
 let dev={timeAuto:true, timeOfDay:0.5, stormAuto:true, stormManual:0};   // playtest overrides (session-only)
-let explored=new Set();                 // packed explore cells (cx + cy*EGW)
-const EXP=12, EGW=Math.ceil(WORLD/EXP); // explore-grid resolution for the chart
-let chart, cctx;                        // persistent parchment chart canvas
+let explored=new Set();                 // packed explore cells (gx + gy*EGW)
+const EXP=14, EGW=Math.ceil(WORLD/EXP); // explore-grid resolution (the fog-of-war record)
 let discoveredCount=0, portCount=0;
 let mapOpen=false;
 const wake=[], ripples=[], toasts=[];
 let audioOn=true, lastSave=0;
+// the chart is drawn LIVE from `explored` + the height field (no giant canvas), so it scales to any world size
+let mmCanvas=null, mmCtx=null, mmImg=null;   // minimap offscreen
+let fmCanvas=null, fmCtx=null, fmOX=0, fmOY=0, fmSpan=1;   // full-map offscreen + the framed charted region
 
-/* chart (the cartography record) ----------------------------------- */
-const CPU=0.155;                         // chart px per world unit
-const CHW=Math.round(WORLD*CPU);
-function initChart(){
-  chart=document.createElement('canvas'); chart.width=CHW; chart.height=CHW;
-  cctx=chart.getContext('2d');
-}
-function stampCell(cgx,cgy){
-  const wx=cgx*EXP+EXP/2, wy=cgy*EXP+EXP/2;
-  const h=heightAt(wx,wy);
-  const px=wx*CPU, py=wy*CPU, s=Math.ceil(EXP*CPU)+1;
-  let col;
-  if(h<SEA){ const d=clamp((SEA-h)/0.5,0,1); col = d<0.16? 'rgba(150,178,178,.85)':'rgba(120,150,170,.8)'; }
-  else { const e=clamp(h/0.5,0,1);
-    if(e<0.06) col='rgba(206,182,128,.95)';        // sand
-    else if(e<0.5) col='rgba(96,140,80,.95)';      // green
-    else col='rgba(70,104,66,.95)'; }
-  cctx.fillStyle=col; cctx.fillRect(Math.floor(px),Math.floor(py),s,s);
-  // ink the coastline where this land touches water (or vice-versa)
-  if(h>=SEA){
-    const n=[heightAt(wx+EXP,wy),heightAt(wx-EXP,wy),heightAt(wx,wy+EXP),heightAt(wx,wy-EXP)];
-    if(n.some(v=>v<SEA)){ cctx.fillStyle='rgba(74,58,36,.85)'; cctx.fillRect(Math.floor(px),Math.floor(py),Math.max(1,s-1),Math.max(1,s-1)); }
-  }
-}
 function reveal(){
   const cgx=Math.floor(boat.x/EXP), cgy=Math.floor(boat.y/EXP);
-  const R=9;
+  const R=8;
   for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
     if(dx*dx+dy*dy>R*R) continue;
     const gx=cgx+dx, gy=cgy+dy; if(gx<0||gy<0||gx>=EGW||gy>=EGW) continue;
-    const key=gx+gy*EGW;
-    if(!explored.has(key)){ explored.add(key); stampCell(gx,gy); }
+    explored.add(gx+gy*EGW);
   }
 }
 
 /* ============================ discovery / toasts ============================ */
 function toast(msg,sub){ toasts.push({msg,sub:sub||'',t:0,life:4.2}); if(toasts.length>3) toasts.shift(); }
 function checkDiscoveries(){
-  for(const c of cores){
+  for(const c of coresNear(boat.x,boat.y,330)){
     if(c.found) continue;
     const reach=c.r*1.3+74;
     if((boat.x-c.x)**2+(boat.y-c.y)**2 < reach*reach){
       c.found=true;
       if(c.port){ portCount++; toast('⚓  Port sighted',c.city); }
-      else { discoveredCount++; const sx=SUFF[(Math.abs(c.x*7+c.y*13)|0)%SUFF.length];
+      else { discoveredCount++; const sx=SUFF[(Math.abs((c.x*7+c.y*13)|0))%SUFF.length];
         toast('✦  Charted',c.name+' '+sx); c.label=c.name+' '+sx; }
       queueSave();
     }
@@ -352,7 +345,7 @@ function doSave(){
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, audio:audioOn,
       disc:discoveredCount, ports:portCount,
-      found:cores.filter(c=>c.found).map(c=>[Math.round(c.x),Math.round(c.y)]),
+      found:cores.filter(c=>c.found).map(c=>c.idx),
       explored:Array.from(explored)
     }));
   }catch(e){}
@@ -361,18 +354,14 @@ function hasSave(){ try{return !!localStorage.getItem(SAVE_KEY);}catch(e){return
 function loadSave(){
   try{
     const s=JSON.parse(localStorage.getItem(SAVE_KEY)); if(!s) return false;
-    buildWorld(s.seed); initChart();
+    buildWorld(s.seed);
     if(s.tune) TUNE=Object.assign({},DEFAULT_TUNE,s.tune);
     audioOn = s.audio!==false;
     boat.x=s.boat.x; boat.y=s.boat.y; boat.a=s.boat.a; boat.spd=0; boat.sail=0;
     discoveredCount=s.disc||0; portCount=s.ports||0;
-    // restore found flags by nearest core to saved coords
-    (s.found||[]).forEach(([x,y])=>{ let best=null,bd=1e9;
-      for(const c of cores){const d=(c.x-x)**2+(c.y-y)**2; if(d<bd){bd=d;best=c;}}
-      if(best&&bd<400){ best.found=true; if(!best.port){ const sx=SUFF[(Math.abs(best.x*7+best.y*13)|0)%SUFF.length]; best.label=best.name+' '+sx; } }
-    });
+    (s.found||[]).forEach(idx=>{ const c=cores[idx]; if(c){ c.found=true;
+      if(!c.port){ const sx=SUFF[(Math.abs((c.x*7+c.y*13)|0))%SUFF.length]; c.label=c.name+' '+sx; } } });
     explored=new Set(s.explored||[]);
-    explored.forEach(k=>stampCell(k%EGW, Math.floor(k/EGW)));
     camX=boat.x; camY=boat.y;
     return true;
   }catch(e){ return false; }
@@ -384,7 +373,7 @@ addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
   if(!started) return;
-  if(k==='m'){ mapOpen=!mapOpen; }
+  if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) renderFullMap(); }
   else if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; }
   else if(k==='p'){ toggleMute(); }
   else if(k==='='||k==='+'){ TUNE.zoom=clamp(TUNE.zoom+0.12,0.6,1.9); syncTune(); }
@@ -591,7 +580,8 @@ function w2pix(wx,wy){ const s=iscale(); return [ (wx-camX)*s+IW/2, (wy-camY)*s+
 
 function drawPorts(){
   const s=iscale();
-  for(const c of cores){ if(!c.port) continue;
+  const margin=Math.hypot(IW,IH)/s/2 + 120;
+  for(const c of coresNear(camX,camY,margin)){ if(!c.port) continue;
     const [sx,sy]=w2pix(c.x,c.y);
     if(sx<-30||sy<-30||sx>IW+30||sy>IH+30) continue;
     // lighthouse + town blocks
@@ -729,7 +719,7 @@ function drawHUD(){
 
 function drawIslandLabels(){
   ctx.textAlign='center'; ctx.font='12px Georgia,serif';
-  for(const c of cores){ if(!c.found) continue;
+  for(const c of coresNear(boat.x,boat.y,920)){ if(!c.found) continue;
     const dx=c.x-boat.x, dy=c.y-boat.y; if(dx*dx+dy*dy>900*900) continue;
     const [sx,sy]=w2pix(c.x,c.y); const cssx=sx*(CSSW/IW), cssy=sy*(CSSH/IH);
     if(cssx<40||cssx>CSSW-40||cssy<70||cssy>CSSH-70) continue;
@@ -763,30 +753,43 @@ function drawVignette(){
   ctx.fillStyle=g; ctx.fillRect(0,0,CSSW,CSSH);
 }
 
-/* minimap — the live chart in the corner ------------------------- */
+/* minimap — the live chart in the corner, painted from what you've explored ----- */
 function drawMinimap(){
   const size=Math.min(196, CSSW*0.24), pad=14;
   const mx=CSSW-size-pad, my=CSSH-size-pad;
   const span=1500;                          // world units shown across the minimap
+  const MM=98;
+  if(!mmImg){ mmCanvas=document.createElement('canvas'); mmCanvas.width=MM; mmCanvas.height=MM;
+    mmCtx=mmCanvas.getContext('2d'); mmImg=mmCtx.createImageData(MM,MM); }
+  const data=mmImg.data, x0=boat.x-span/2, y0=boat.y-span/2, step=span/MM;
+  for(let j=0;j<MM;j++){ const wy=y0+(j+0.5)*step;
+    for(let i=0;i<MM;i++){ const wx=x0+(i+0.5)*step, di=(j*MM+i)*4;
+      let R=233,G=220,B=192;                 // unknown = blank parchment
+      if(wx>=0&&wy>=0&&wx<WORLD&&wy<WORLD && explored.has(Math.floor(wx/EXP)+Math.floor(wy/EXP)*EGW)){
+        const h=heightAt(wx,wy);
+        if(h<SEA){ const d=clamp((SEA-h)/0.5,0,1); if(d<0.16){R=150;G=178;B=178;} else {R=120;G=150;B=170;} }
+        else { const e=clamp(h/1.1,0,1);
+          if(e<0.06){R=206;G=182;B=128;} else if(e<0.5){R=96;G=140;B=80;} else {R=70;G=104;B=66;}
+          if(heightAt(wx+EXP,wy)<SEA||heightAt(wx-EXP,wy)<SEA||heightAt(wx,wy+EXP)<SEA||heightAt(wx,wy-EXP)<SEA){R=74;G=58;B=36;} }
+      }
+      data[di]=R; data[di+1]=G; data[di+2]=B; data[di+3]=255;
+    }
+  }
+  mmCtx.putImageData(mmImg,0,0);
   ctx.save();
-  // parchment frame
   ctx.fillStyle='#0c1830'; roundRect(mx-4,my-4,size+8,size+8,12); ctx.fill();
   ctx.strokeStyle='#3a4c70'; ctx.lineWidth=2; ctx.stroke();
   ctx.beginPath(); roundRect(mx,my,size,size,9); ctx.clip();
-  ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size);  // unknown = blank parchment
-  // blit chart region around boat
-  const srcSpan=span*CPU, sxc=boat.x*CPU-srcSpan/2, syc=boat.y*CPU-srcSpan/2;
   ctx.imageSmoothingEnabled=true;
-  ctx.drawImage(chart, sxc,syc,srcSpan,srcSpan, mx,my,size,size);
-  // faint grid
+  ctx.drawImage(mmCanvas, 0,0,MM,MM, mx,my,size,size);
   ctx.strokeStyle='rgba(90,70,40,.12)'; ctx.lineWidth=1;
   for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(mx+size*i/5,my); ctx.lineTo(mx+size*i/5,my+size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(mx,my+size*i/5); ctx.lineTo(mx+size,my+size*i/5); ctx.stroke(); }
-  // port markers (always known beacons)
-  for(const c of cores){ if(!c.port) continue;
+  // discovered port markers within range
+  for(const c of coresNear(boat.x,boat.y,span*0.75)){ if(!c.port||!c.found) continue;
     const px=mx+(c.x-boat.x)/span*size+size/2, py=my+(c.y-boat.y)/span*size+size/2;
     if(px<mx||px>mx+size||py<my||py>my+size) continue;
-    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,3.2,0,TAU); ctx.fill();
+    ctx.fillStyle='#b8482f'; ctx.beginPath(); ctx.arc(px,py,3.2,0,TAU); ctx.fill();
     ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
   }
   // boat marker (arrow)
@@ -800,40 +803,65 @@ function drawMinimap(){
   ctx.fillStyle='#cfe0ff'; ctx.font='10px system-ui'; ctx.textAlign='left'; ctx.fillText('CHART', mx+8, my+10);
 }
 
-/* full parchment map (M) ----------------------------------------- */
+/* full parchment map (M) — the whole world, painted from explored cells on open -- */
+function renderFullMap(){
+  // frame the charted region (+ the boat) so the map is useful, not a blank ocean
+  let minX=1e18,minY=1e18,maxX=-1e18,maxY=-1e18;
+  explored.forEach(key=>{ const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP, wy=gy*EXP;
+    if(wx<minX)minX=wx; if(wx>maxX)maxX=wx; if(wy<minY)minY=wy; if(wy>maxY)maxY=wy; });
+  if(minX>maxX){ minX=maxX=boat.x; minY=maxY=boat.y; }
+  minX=Math.min(minX,boat.x); maxX=Math.max(maxX,boat.x); minY=Math.min(minY,boat.y); maxY=Math.max(maxY,boat.y);
+  const cxw=(minX+maxX)/2, cyw=(minY+maxY)/2;
+  let span=Math.max(maxX-minX, maxY-minY)*1.2; span=Math.max(span, 2600);   // min zoom so it isn't absurdly tight
+  fmOX=cxw-span/2; fmOY=cyw-span/2; fmSpan=span;
+  const S=900;
+  if(!fmCanvas){ fmCanvas=document.createElement('canvas'); fmCtx=fmCanvas.getContext('2d'); }
+  if(fmCanvas.width!==S){ fmCanvas.width=S; fmCanvas.height=S; }
+  const g=fmCtx; g.fillStyle='#e9dcc0'; g.fillRect(0,0,S,S);
+  const sc=S/span, cs=Math.max(1,Math.ceil(EXP*sc));
+  explored.forEach(key=>{
+    const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP+EXP*0.5, wy=gy*EXP+EXP*0.5;
+    const h=rawHeight(wx,wy);            // rawHeight (uncached) so we don't thrash the streaming cache
+    g.fillStyle = h<SEA ? '#b6c5c2' : (h<0.066?'#cbb681':(h<0.55?'#7d9a55':'#4a6842'));
+    g.fillRect(((wx-fmOX)*sc)|0,((wy-fmOY)*sc)|0,cs,cs);
+  });
+}
 function drawFullMap(){
   ctx.fillStyle='rgba(4,10,22,.72)'; ctx.fillRect(0,0,CSSW,CSSH);
-  const size=Math.min(CSSW,CSSH)*0.82, mx=(CSSW-size)/2, my=(CSSH-size)/2;
-  // parchment
+  const size=Math.min(CSSW,CSSH)*0.86, mx=(CSSW-size)/2, my=(CSSH-size)/2;
   ctx.fillStyle='#0c1830'; roundRect(mx-12,my-12,size+24,size+24,16); ctx.fill();
-  ctx.fillStyle='#e9dcc0'; roundRect(mx,my,size,size,8); ctx.fill();
   ctx.save(); ctx.beginPath(); roundRect(mx,my,size,size,8); ctx.clip();
-  ctx.imageSmoothingEnabled=true;
-  ctx.drawImage(chart, 0,0,CHW,CHW, mx,my,size,size);     // whole known world
-  // ports
-  const sc=size/WORLD;
-  for(const c of cores){ if(!c.port) continue;
-    const px=mx+c.x*sc, py=my+c.y*sc;
-    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,4,0,TAU); ctx.fill();
-    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1.2; ctx.stroke();
-    if(c.found){ ctx.fillStyle='#5a3a1c'; ctx.font='11px Georgia,serif'; ctx.textAlign='left'; ctx.fillText(c.city, px+7, py+4); }
-  }
-  // named islands
-  for(const c of cores){ if(c.port||!c.found||!c.label) continue;
-    const px=mx+c.x*sc, py=my+c.y*sc;
-    ctx.fillStyle='#3e5a3a'; ctx.font='italic 10px Georgia,serif'; ctx.textAlign='center'; ctx.fillText(c.label, px, py-6);
+  ctx.imageSmoothingEnabled=false;
+  if(fmCanvas) ctx.drawImage(fmCanvas, 0,0,fmCanvas.width,fmCanvas.height, mx,my,size,size);
+  else { ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size); }
+  const sc=size/fmSpan, w2px=wx=>mx+(wx-fmOX)*sc, w2py=wy=>my+(wy-fmOY)*sc;
+  // discovered ports inside the framed region
+  for(const c of cores){ if(!c.port||!c.found) continue;
+    if(c.x<fmOX||c.x>fmOX+fmSpan||c.y<fmOY||c.y>fmOY+fmSpan) continue;
+    const px=w2px(c.x), py=w2py(c.y);
+    ctx.fillStyle='#b8482f'; ctx.beginPath(); ctx.arc(px,py,3.5,0,TAU); ctx.fill();
+    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle='#5a3a1c'; ctx.font='10px Georgia,serif'; ctx.textAlign='left'; ctx.fillText(c.city, px+6, py+3);
   }
   // boat
-  ctx.save(); ctx.translate(mx+boat.x*sc,my+boat.y*sc); ctx.rotate(boat.a+Math.PI/2);
+  ctx.save(); ctx.translate(w2px(boat.x),w2py(boat.y)); ctx.rotate(boat.a+Math.PI/2);
   ctx.fillStyle='#c0202a'; ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(6,7); ctx.lineTo(0,4); ctx.lineTo(-6,7); ctx.closePath(); ctx.fill();
   ctx.strokeStyle='#fff'; ctx.lineWidth=1.2; ctx.stroke(); ctx.restore();
+  // scale bar — so the size of the world still reads
+  const nice=[200,500,1000,2000,5000,10000,20000,50000]; let u=nice[0];
+  for(const n of nice){ if(n <= fmSpan*0.28) u=n; }
+  const barPx=u*sc;
+  ctx.strokeStyle='#5a3a1c'; ctx.lineWidth=2; ctx.beginPath();
+  ctx.moveTo(mx+16,my+size-16); ctx.lineTo(mx+16+barPx,my+size-16); ctx.stroke();
+  ctx.fillStyle='#5a3a1c'; ctx.font='10px Georgia,serif'; ctx.textAlign='left';
+  ctx.fillText('≈ '+(u>=1000?(u/1000)+'k':u)+' leagues', mx+16, my+size-22);
   ctx.restore();
-  // title + legend (on the dark backdrop — keep it light)
+  // title + legend
   ctx.fillStyle='#f0e4c6'; ctx.font='700 16px Georgia,serif'; ctx.textAlign='center';
   ctx.fillText('✦ The Charted Reaches ✦', CSSW/2, my-20);
   ctx.fillStyle='#b9a880'; ctx.font='12px Georgia,serif';
   const isle=discoveredCount+' isle'+(discoveredCount===1?'':'s'), prt=portCount+' port'+(portCount===1?'':'s');
-  ctx.fillText('M or Esc to close   •   '+isle+' & '+prt+' charted', CSSW/2, my+size+30);
+  ctx.fillText('M or Esc to close   •   '+isle+' & '+prt+' charted   •   your charted waters', CSSW/2, my+size+30);
 }
 
 /* rounded-rect helper (path only) */
@@ -938,7 +966,7 @@ function refreshPlaytest(){
 
 /* ============================ start / boot ============================ */
 function begin(fresh){
-  if(fresh){ buildWorld((Math.random()*1e9)>>>0); initChart();
+  if(fresh){ buildWorld((Math.random()*1e9)>>>0);
     boat.x=spawn.x; boat.y=spawn.y; boat.a=-Math.PI/2; boat.spd=0; boat.sail=0;
     camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0;
   }
@@ -958,7 +986,7 @@ if(hasSave()){
   document.getElementById('startBtn').textContent='⛵ New voyage';
 }
 // build an initial world so the buffer isn't empty if they peek
-buildWorld(12345); initChart(); boat.x=spawn.x; boat.y=spawn.y; camX=boat.x; camY=boat.y;
+buildWorld(12345); boat.x=spawn.x; boat.y=spawn.y; camX=boat.x; camY=boat.y;
 
 addEventListener('keydown',e=>{ if(e.key==='Escape') mapOpen=false; });
 addEventListener('beforeunload', ()=>{ if(started) doSave(); });
