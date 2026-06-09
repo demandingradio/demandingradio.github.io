@@ -120,6 +120,7 @@ canvas{position:absolute;inset:0;display:block;}
   <h4>▶ Playtest triggers</h4>
   <div class="ptrow"><span>Time</span><span class="ptbtns" id="ptTime"></span></div>
   <div class="ptrow"><span>Weather</span><span class="ptbtns" id="ptWeather"></span></div>
+  <div class="ptrow"><span>Fog</span><span class="ptbtns" id="ptFog"></span></div>
   <p class="hint">Force the time of day or weather to test them. “Auto” hands control back to the natural cycle. (Not saved.)</p>
 </div>
 
@@ -301,7 +302,7 @@ let camX=0,camY=0;
 let wind={a:0, str:1};
 let time=0, paused=true, started=false;
 let env={L:1, sun:1, dayT:0.3, dayName:'Day', storm:0, flash:0, stormOn:false};
-let dev={timeAuto:true, timeOfDay:0.5, stormAuto:true, stormManual:0};   // playtest overrides (session-only)
+let dev={timeAuto:true, timeOfDay:0.5, stormAuto:true, stormManual:0, revealAll:false};   // playtest overrides (session-only)
 let explored=new Set();                 // packed explore cells (gx + gy*EGW)
 const EXP=14, EGW=Math.ceil(WORLD/EXP); // explore-grid resolution (the fog-of-war record)
 let discoveredCount=0, portCount=0;
@@ -765,7 +766,7 @@ function drawMinimap(){
   for(let j=0;j<MM;j++){ const wy=y0+(j+0.5)*step;
     for(let i=0;i<MM;i++){ const wx=x0+(i+0.5)*step, di=(j*MM+i)*4;
       let R=233,G=220,B=192;                 // unknown = blank parchment
-      if(wx>=0&&wy>=0&&wx<WORLD&&wy<WORLD && explored.has(Math.floor(wx/EXP)+Math.floor(wy/EXP)*EGW)){
+      if(wx>=0&&wy>=0&&wx<WORLD&&wy<WORLD && (dev.revealAll || explored.has(Math.floor(wx/EXP)+Math.floor(wy/EXP)*EGW))){
         const h=heightAt(wx,wy);
         if(h<SEA){ const d=clamp((SEA-h)/0.5,0,1); if(d<0.16){R=150;G=178;B=178;} else {R=120;G=150;B=170;} }
         else { const e=clamp(h/1.1,0,1);
@@ -786,10 +787,10 @@ function drawMinimap(){
   for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(mx+size*i/5,my); ctx.lineTo(mx+size*i/5,my+size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(mx,my+size*i/5); ctx.lineTo(mx+size,my+size*i/5); ctx.stroke(); }
   // discovered port markers within range
-  for(const c of coresNear(boat.x,boat.y,span*0.75)){ if(!c.port||!c.found) continue;
+  for(const c of coresNear(boat.x,boat.y,span*0.75)){ if(!c.port) continue; if(!c.found && !dev.revealAll) continue;
     const px=mx+(c.x-boat.x)/span*size+size/2, py=my+(c.y-boat.y)/span*size+size/2;
     if(px<mx||px>mx+size||py<my||py>my+size) continue;
-    ctx.fillStyle='#b8482f'; ctx.beginPath(); ctx.arc(px,py,3.2,0,TAU); ctx.fill();
+    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,3.2,0,TAU); ctx.fill();
     ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
   }
   // boat marker (arrow)
@@ -805,26 +806,40 @@ function drawMinimap(){
 
 /* full parchment map (M) — the whole world, painted from explored cells on open -- */
 function renderFullMap(){
-  // frame the charted region (+ the boat) so the map is useful, not a blank ocean
-  let minX=1e18,minY=1e18,maxX=-1e18,maxY=-1e18;
-  explored.forEach(key=>{ const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP, wy=gy*EXP;
-    if(wx<minX)minX=wx; if(wx>maxX)maxX=wx; if(wy<minY)minY=wy; if(wy>maxY)maxY=wy; });
-  if(minX>maxX){ minX=maxX=boat.x; minY=maxY=boat.y; }
-  minX=Math.min(minX,boat.x); maxX=Math.max(maxX,boat.x); minY=Math.min(minY,boat.y); maxY=Math.max(maxY,boat.y);
+  // frame the charted region (+ boat); or the whole world when fog is off (debug)
+  let minX,minY,maxX,maxY;
+  if(dev.revealAll){ minX=0; minY=0; maxX=WORLD; maxY=WORLD; }
+  else {
+    minX=1e18;minY=1e18;maxX=-1e18;maxY=-1e18;
+    explored.forEach(key=>{ const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP, wy=gy*EXP;
+      if(wx<minX)minX=wx; if(wx>maxX)maxX=wx; if(wy<minY)minY=wy; if(wy>maxY)maxY=wy; });
+    if(minX>maxX){ minX=maxX=boat.x; minY=maxY=boat.y; }
+    minX=Math.min(minX,boat.x); maxX=Math.max(maxX,boat.x); minY=Math.min(minY,boat.y); maxY=Math.max(maxY,boat.y);
+  }
   const cxw=(minX+maxX)/2, cyw=(minY+maxY)/2;
-  let span=Math.max(maxX-minX, maxY-minY)*1.2; span=Math.max(span, 2600);   // min zoom so it isn't absurdly tight
+  let span=Math.max(maxX-minX, maxY-minY)*(dev.revealAll?1.0:1.2); span=Math.max(span, 2600);
   fmOX=cxw-span/2; fmOY=cyw-span/2; fmSpan=span;
-  const S=900;
+  const S = dev.revealAll ? 400 : 900;    // coarser when sampling the whole world (keeps the toggle snappy)
   if(!fmCanvas){ fmCanvas=document.createElement('canvas'); fmCtx=fmCanvas.getContext('2d'); }
   if(fmCanvas.width!==S){ fmCanvas.width=S; fmCanvas.height=S; }
   const g=fmCtx; g.fillStyle='#e9dcc0'; g.fillRect(0,0,S,S);
-  const sc=S/span, cs=Math.max(1,Math.ceil(EXP*sc));
-  explored.forEach(key=>{
-    const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP+EXP*0.5, wy=gy*EXP+EXP*0.5;
-    const h=rawHeight(wx,wy);            // rawHeight (uncached) so we don't thrash the streaming cache
-    g.fillStyle = h<SEA ? '#b6c5c2' : (h<0.066?'#cbb681':(h<0.55?'#7d9a55':'#4a6842'));
-    g.fillRect(((wx-fmOX)*sc)|0,((wy-fmOY)*sc)|0,cs,cs);
-  });
+  const sc=S/span;
+  if(dev.revealAll){
+    const img=g.getImageData(0,0,S,S), d=img.data;     // sample the whole framed region (debug reveal)
+    for(let j=0;j<S;j++){ const wy=fmOY+(j+0.5)/sc;
+      for(let i=0;i<S;i++){ const wx=fmOX+(i+0.5)/sc, di=(j*S+i)*4, h=rawHeight(wx,wy);
+        let R,G,B; if(h<SEA){R=182;G=197;B=194;} else if(h<0.066){R=203;G=182;B=129;} else if(h<0.55){R=125;G=154;B=85;} else {R=74;G=104;B=66;}
+        d[di]=R;d[di+1]=G;d[di+2]=B;d[di+3]=255; } }
+    g.putImageData(img,0,0);
+  } else {
+    const cs=Math.max(1,Math.ceil(EXP*sc));
+    explored.forEach(key=>{
+      const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP+EXP*0.5, wy=gy*EXP+EXP*0.5;
+      const h=rawHeight(wx,wy);          // rawHeight (uncached) so we don't thrash the streaming cache
+      g.fillStyle = h<SEA ? '#b6c5c2' : (h<0.066?'#cbb681':(h<0.55?'#7d9a55':'#4a6842'));
+      g.fillRect(((wx-fmOX)*sc)|0,((wy-fmOY)*sc)|0,cs,cs);
+    });
+  }
 }
 function drawFullMap(){
   ctx.fillStyle='rgba(4,10,22,.72)'; ctx.fillRect(0,0,CSSW,CSSH);
@@ -836,12 +851,12 @@ function drawFullMap(){
   else { ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size); }
   const sc=size/fmSpan, w2px=wx=>mx+(wx-fmOX)*sc, w2py=wy=>my+(wy-fmOY)*sc;
   // discovered ports inside the framed region
-  for(const c of cores){ if(!c.port||!c.found) continue;
+  for(const c of cores){ if(!c.port) continue; if(!c.found && !dev.revealAll) continue;
     if(c.x<fmOX||c.x>fmOX+fmSpan||c.y<fmOY||c.y>fmOY+fmSpan) continue;
     const px=w2px(c.x), py=w2py(c.y);
-    ctx.fillStyle='#b8482f'; ctx.beginPath(); ctx.arc(px,py,3.5,0,TAU); ctx.fill();
+    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,3.5,0,TAU); ctx.fill();
     ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
-    ctx.fillStyle='#5a3a1c'; ctx.font='10px Georgia,serif'; ctx.textAlign='left'; ctx.fillText(c.city, px+6, py+3);
+    if(c.found){ ctx.fillStyle='#5a3a1c'; ctx.font='10px Georgia,serif'; ctx.textAlign='left'; ctx.fillText(c.city, px+6, py+3); }
   }
   // boat
   ctx.save(); ctx.translate(w2px(boat.x),w2py(boat.y)); ctx.rotate(boat.a+Math.PI/2);
@@ -953,6 +968,11 @@ function buildPlaytest(){
     b.dataset.val=String(val);
     b.onclick=()=>{ if(val==='auto') dev.stormAuto=true; else { dev.stormAuto=false; dev.stormManual=val; } refreshPlaytest(); };
     wEl.appendChild(b); });
+  const fog=[['On',false],['Off (debug)',true]], fEl=document.getElementById('ptFog'); fEl.innerHTML='';
+  fog.forEach(([label,val])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
+    b.dataset.val=String(val);
+    b.onclick=()=>{ dev.revealAll=val; if(mapOpen) renderFullMap(); refreshPlaytest(); };
+    fEl.appendChild(b); });
   refreshPlaytest();
 }
 function refreshPlaytest(){
@@ -962,6 +982,7 @@ function refreshPlaytest(){
   document.querySelectorAll('#ptWeather .ptb').forEach(b=>{ const v=b.dataset.val;
     const on = dev.stormAuto ? v==='auto' : (v!=='auto' && parseFloat(v)===dev.stormManual);
     b.classList.toggle('on',on); });
+  document.querySelectorAll('#ptFog .ptb').forEach(b=>{ b.classList.toggle('on', String(dev.revealAll)===b.dataset.val); });
 }
 
 /* ============================ start / boot ============================ */
