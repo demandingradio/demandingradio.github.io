@@ -330,7 +330,7 @@ let env={L:1, sun:1, dayT:0.3, dayName:'Day', storm:0, flash:0, stormOn:false};
 let dev={timeAuto:true, timeOfDay:0.5, stormAuto:true, stormManual:0, revealAll:false};   // playtest overrides (session-only)
 let explored=new Set();                 // packed explore cells (gx + gy*EGW)
 const EXP=14, EGW=Math.ceil(WORLD/EXP); // explore-grid resolution (the fog-of-war record)
-let discoveredCount=0, portCount=0;
+let discoveredCount=0, portCount=0, clearedCount=0;
 let mapOpen=false;
 const wake=[], ripples=[], toasts=[];
 let audioOn=true, lastSave=0;
@@ -392,6 +392,7 @@ function loadSave(){
     (s.found||[]).forEach(idx=>{ const c=cores[idx]; if(c){ c.found=true;
       if(!c.port){ const sx=SUFF[(Math.abs((c.x*7+c.y*13)|0))%SUFF.length]; c.label=c.name+' '+sx; } } });
     (s.cleared||[]).forEach(idx=>{ if(cores[idx]) cores[idx].cleared=true; });
+    clearedCount=(s.cleared||[]).length;
     (s.names||[]).forEach(([idx,nm])=>{ if(cores[idx]) cores[idx].customName=nm; });
     explored=new Set(s.explored||[]);
     camX=boat.x; camY=boat.y;
@@ -660,6 +661,23 @@ function drawPorts(){
   }
 }
 
+function drawCleared(){          // cleared isles fly your victory flag, visible from the sea
+  const s=iscale();
+  for(const c of cores){ if(!c.cleared||c.port) continue;
+    const [sx,sy]=w2pix(c.x,c.y);
+    if(sx<-30||sy<-30||sx>IW+30||sy>IH+30) continue;
+    const k=Math.max(1.4, 3*s);
+    pctx.fillStyle='#8a8276'; pctx.fillRect(sx-1.2*k,sy-0.4*k,2.4*k,1.2*k);     // stone cairn
+    pctx.fillStyle='#a39a8a'; pctx.fillRect(sx-0.7*k,sy-1.0*k,1.4*k,0.8*k);
+    pctx.fillStyle='#e8e2d2'; pctx.fillRect(sx-0.22*k,sy-4.6*k,0.45*k,4.4*k);   // pole
+    const wv=Math.sin(time*4+c.x*0.01)*0.5;                                     // waving golden pennant
+    pctx.fillStyle='#ffd23f';
+    pctx.beginPath(); pctx.moveTo(sx+0.2*k,sy-4.5*k);
+    pctx.lineTo(sx+2.7*k, sy-3.9*k+wv*k); pctx.lineTo(sx+0.2*k,sy-3.3*k); pctx.closePath(); pctx.fill();
+    const ng=1-env.L;                                                           // a soft gleam at night
+    if(ng>0.3){ pctx.fillStyle='rgba(255,210,63,'+(0.22*ng)+')'; pctx.fillRect(sx-1.6*k,sy-5.2*k,4.6*k,2.4*k); }
+  }
+}
 function drawWake(){
   for(const w of wake){ const [sx,sy]=w2pix(w.x,w.y); const a=(1-w.t/w.life)*0.55;
     pctx.fillStyle='rgba(236,246,250,'+a+')'; const r=Math.max(1,w.r*iscale()*0.5);
@@ -760,10 +778,11 @@ function drawHUD(){
   ctx.fillText('Sail '+Math.round(sp*100)+'%   •   Wind '+bearingName(Math.cos(wind.a),Math.sin(wind.a)), x+96, y+11);
 
   // top-left under back-link: discoveries
-  ctx.fillStyle='rgba(8,17,31,.4)'; roundRect(12,34,176,30,9); ctx.fill();
+  ctx.fillStyle='rgba(8,17,31,.4)'; roundRect(12,34,238,30,9); ctx.fill();
   ctx.fillStyle='#dfeaff'; ctx.font='700 13px system-ui';
   ctx.fillText('✦ '+discoveredCount+' charted', 22, 54);
   ctx.fillStyle='#9fc6e6'; ctx.fillText('⚓ '+portCount, 132, 54);
+  ctx.fillStyle='#ffd86b'; ctx.fillText('⚑ '+clearedCount, 186, 54);
 
   drawCompass();
   // time of day + weather, tucked under the compass
@@ -859,6 +878,13 @@ function drawMinimap(){
     ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,3.2,0,TAU); ctx.fill();
     ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
   }
+  // cleared isles fly a little golden flag on the chart
+  for(const c of coresNear(boat.x,boat.y,span*0.75)){ if(!c.cleared) continue;
+    const px=mx+(c.x-boat.x)/span*size+size/2, py=my+(c.y-boat.y)/span*size+size/2;
+    if(px<mx+4||px>mx+size-6||py<my+8||py>my+size-4) continue;
+    ctx.strokeStyle='#7a5a1c'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(px,py+3); ctx.lineTo(px,py-5); ctx.stroke();
+    ctx.fillStyle='#e7b416'; ctx.beginPath(); ctx.moveTo(px,py-5); ctx.lineTo(px+5.5,py-3.2); ctx.lineTo(px,py-1.4); ctx.closePath(); ctx.fill();
+  }
   // boat marker (arrow)
   const bx=mx+size/2, by=my+size/2;
   ctx.translate(bx,by); ctx.rotate(boat.a+Math.PI/2);
@@ -936,6 +962,17 @@ function drawFullMap(){
     ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
     if(c.found){ ctx.fillStyle='#5a3a1c'; ctx.font='10px Georgia,serif'; ctx.textAlign='left'; ctx.fillText(c.city, px+6, py+3); }
   }
+  // cleared isles — golden flags + your names for them; the chart fills with conquests
+  for(const c of cores){ if(!c.cleared) continue;
+    if(c.x<ox||c.x>ox+fmSpan||c.y<oy||c.y>oy+fmSpan) continue;
+    const px=w2px(c.x), py=w2py(c.y);
+    ctx.strokeStyle='rgba(231,180,22,.4)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(px,py,8,0,TAU); ctx.stroke();
+    ctx.strokeStyle='#7a5a1c'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(px,py+4); ctx.lineTo(px,py-6); ctx.stroke();
+    ctx.fillStyle='#e7b416'; ctx.beginPath(); ctx.moveTo(px,py-6); ctx.lineTo(px+7,py-3.8); ctx.lineTo(px,py-1.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#8a6a14'; ctx.font='italic 10px Georgia,serif'; ctx.textAlign='left';
+    ctx.fillText(c.customName||c.label||c.name, px+11, py+3);
+  }
   // boat
   ctx.save(); ctx.translate(w2px(boat.x),w2py(boat.y)); ctx.rotate(boat.a+Math.PI/2);
   ctx.fillStyle='#c0202a'; ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(6,7); ctx.lineTo(0,4); ctx.lineTo(-6,7); ctx.closePath(); ctx.fill();
@@ -953,7 +990,7 @@ function drawFullMap(){
   ctx.fillText('✦ The Charted Reaches ✦', CSSW/2, my-20);
   ctx.fillStyle='#b9a880'; ctx.font='12px Georgia,serif';
   const isle=discoveredCount+' isle'+(discoveredCount===1?'':'s'), prt=portCount+' port'+(portCount===1?'':'s');
-  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   '+isle+' & '+prt+' charted', CSSW/2, my+size+27);
+  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   '+isle+' & '+prt+' charted'+(clearedCount?'   •   ⚑ '+clearedCount+' cleared':''), CSSW/2, my+size+27);
   ctx.fillStyle='#8194b8'; ctx.fillText('M or Esc to close', CSSW/2, my+size+43);
 }
 
@@ -969,7 +1006,7 @@ let mode='sea';                 // 'sea' | 'island'
 let nearLand=null;              // island the boat can explore (sea mode)
 let ISL=null, itime=0;
 const W_WALL=0, W_GROUND=1, W_PATH=2, W_GATE=3;
-const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, invul:0};
+const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, shootT:0, invul:0};
 let enemies=[], inodes=[], iproj=[], ifx=[], ifloat=[], ipick=[];   // ipick = heart pickups on the ground
 let iflies=[], ileaves=[];      // ambient life: fireflies after dark, drifting leaves
 let hurtFlash=0;                // red screen-edge flash when the player takes a hit
@@ -1054,7 +1091,7 @@ function genIsland(core){
   iproj=[]; ifx=[]; ifloat=[]; ipick=[]; iflies=[]; ileaves=[]; hurtFlash=0;
   ISL={core, W,H,TS, tiles, clearings, gates, N, pal:ISL_PALS[palI], landing:{x:clearings[0].x, y:clearings[0].y}};
   player.x=ISL.landing.x; player.y=ISL.landing.y+cr*TS*0.35; player.fx=0; player.fy=-1;
-  player.hp=player.maxhp; player.invul=0.6; player.slashCD=0; player.shootCD=0; player.slashT=0;
+  player.hp=player.maxhp; player.invul=0.6; player.slashCD=0; player.shootCD=0; player.slashT=0; player.shootT=0;
 }
 function randIn(cl,rng,TS,tiles,W){ for(let t=0;t<22;t++){ const a=rng()*TAU, d=rng()*cl.r*0.78, x=cl.x+Math.cos(a)*d, y=cl.y+Math.sin(a)*d, tx=(x/TS)|0, ty=(y/TS)|0; if(tiles[ty*W+tx]===W_GROUND) return {x,y}; } return null; }
 function islTile(x,y){ if(!ISL) return W_WALL; const tx=(x/ISL.TS)|0, ty=(y/ISL.TS)|0; if(tx<0||ty<0||tx>=ISL.W||ty>=ISL.H) return W_WALL; return ISL.tiles[ty*ISL.W+tx]; }
@@ -1068,7 +1105,7 @@ function enterIsland(core){ mode='island'; setPixScale(2); mapOpen=false; nearLa
 function leaveIsland(ko){
   if(ko){ toast('💀  Knocked out','you lost your haul'); tripLoot=loot0(); }
   else { let any=false; for(const k in tripLoot){ if(tripLoot[k]>0){ cargo[k]+=tripLoot[k]; any=true; } }
-    if(islandCleared && ISL){ ISL.core.cleared=true; startRename(ISL.core); }
+    if(islandCleared && ISL){ if(!ISL.core.cleared) clearedCount++; ISL.core.cleared=true; startRename(ISL.core); }
     else toast(any?'Haul stowed aboard':'Back aboard', any?lootSummary(tripLoot):''); tripLoot=loot0(); }
   mode='sea'; setPixScale(3); enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; ipick=[]; iflies=[]; ileaves=[]; ISL=null; queueSave();
 }
@@ -1076,7 +1113,9 @@ function lootSummary(l){ const p=[]; for(const k in l) if(l[k]>0) p.push(l[k]+' 
 function startRename(core){ renaming=core; const ov=document.getElementById('rename'), inp=document.getElementById('renameInput');
   inp.value=core.customName||core.name||''; ov.classList.remove('hidden'); setTimeout(()=>{inp.focus(); inp.select();},40); }
 function finishRename(){ if(!renaming) return; const v=document.getElementById('renameInput').value.trim().slice(0,22);
-  if(v) renaming.customName=v; renaming.cleared=true; document.getElementById('rename').classList.add('hidden'); renaming=null; queueSave(); }
+  if(v) renaming.customName=v; renaming.cleared=true;
+  toast('⚑  '+(renaming.customName||renaming.name)+' claimed', clearedCount+' isle'+(clearedCount===1?'':'s')+' cleared');
+  document.getElementById('rename').classList.add('hidden'); renaming=null; queueSave(); }
 
 /* ---- combat ---- */
 function doSlash(){ if(player.slashCD>0) return; player.slashCD=ITUNE.slashCD; player.slashT=0.16;
@@ -1090,7 +1129,7 @@ function doSlash(){ if(player.slashCD>0) return; player.slashCD=ITUNE.slashCD; p
     if(touching || (d<ITUNE.slashRange+nd.r && (dx*player.fx+dy*player.fy)/d>0.3)) hitNode(nd); }
   sfx('slash');
 }
-function doShoot(){ if(player.shootCD>0) return; player.shootCD=0.28;
+function doShoot(){ if(player.shootCD>0) return; player.shootCD=0.28; player.shootT=0.2;
   iproj.push({k:'arrow', x:player.x+player.fx*10, y:player.y+player.fy*10, vx:player.fx*ITUNE.arrowSpeed, vy:player.fy*ITUNE.arrowSpeed, life:1.2}); sfx('shoot'); }
 function hurtEnemy(en,dmg,nx,ny){ en.hp-=dmg; en.flash=0.14; en.stun=0.2; en.aggro=true;   // hits interrupt + shove — landing blows keeps you safe
   moveSlide(en, nx*20, ny*20);
@@ -1128,6 +1167,7 @@ function updateIsland(dt){
   itime+=dt; updateEnv(dt);        // the world's clock & weather keep running while ashore
   player.slashCD=Math.max(0,player.slashCD-dt); player.shootCD=Math.max(0,player.shootCD-dt);
   player.slashT=Math.max(0,player.slashT-dt); player.invul=Math.max(0,player.invul-dt);
+  player.shootT=Math.max(0,player.shootT-dt);
   hurtFlash=Math.max(0,hurtFlash-dt*1.7);
   let mvx=0,mvy=0;
   if(keys['arrowleft']||keys['a']) mvx-=1; if(keys['arrowright']||keys['d']) mvx+=1;
@@ -1361,33 +1401,80 @@ function drawIslandWorld(){
         if(((itime*1.8+en.y*0.05)%1)<0.35){ pctx.fillStyle='#ff7d8c'; pctx.fillRect(sx+fcx*r*0.95-1, sy+fcy*r*0.95-1, 2.2, 2.2); } }   // tongue flick
     }
   }
-  // slash — a filled wedge that matches where the sword actually hits
+  // slash — a filled wedge showing the hit zone; the sword itself (drawn on the player) does the sweeping
   for(const f of ifx){ if(f.k!=='slash') continue; const [sx,sy]=iw2p(f.x,f.y), prog=clamp(f.t/f.life,0,1);
     const R=(ITUNE.slashRange+6)*s, a0=f.a-1.0, a1=f.a+1.0, ba=a0+prog*2.0;
-    pctx.fillStyle='rgba(255,255,255,'+(0.3*(1-prog))+')';
+    pctx.fillStyle='rgba(255,255,255,'+(0.26*(1-prog))+')';
     pctx.beginPath(); pctx.moveTo(sx,sy); pctx.arc(sx,sy,R,a0,a1); pctx.closePath(); pctx.fill();
-    pctx.strokeStyle='rgba(255,255,255,'+(0.9*(1-prog*0.7))+')'; pctx.lineWidth=Math.max(1.5,2.6*s);
-    pctx.beginPath(); pctx.moveTo(sx,sy); pctx.lineTo(sx+Math.cos(ba)*R, sy+Math.sin(ba)*R); pctx.stroke();
-    pctx.strokeStyle='rgba(255,255,255,'+(0.5*(1-prog))+')'; pctx.lineWidth=Math.max(1.2,1.8*s);
+    pctx.strokeStyle='rgba(255,255,255,'+(0.55*(1-prog))+')'; pctx.lineWidth=Math.max(1.2,1.8*s);
     pctx.beginPath(); pctx.arc(sx,sy,R*0.96,a0,ba); pctx.stroke(); }
-  // player — outlined explorer with a walk bob, red bandana, and the facing chevron
+  // player — the explorer: stepping boots, khaki coat, satchel strap, brimmed hat, and a sword in hand
   const [pxp,pyp0]=iw2p(player.x,player.y), pr=player.r*s;
-  const bob = player.moving ? Math.abs(Math.sin(itime*9.5))*1.5*s : 0;
+  const pfa=Math.atan2(player.fy,player.fx), pfx=Math.cos(pfa), pfy=Math.sin(pfa), ppx=-pfy, ppy=pfx;
+  const wph=itime*11.5, stride=player.moving? Math.sin(wph)*pr*0.55 : 0;
+  const bob = player.moving ? Math.abs(Math.sin(wph))*1.1*s : 0;
   const pyp=pyp0-bob;
   pctx.fillStyle='rgba(0,20,10,.28)'; pctx.beginPath(); pctx.ellipse(pxp,pyp0+pr*0.6,pr,pr*0.5,0,0,TAU); pctx.fill();
   const blink=(player.invul>0 && Math.floor(itime*18)%2);
-  pctx.fillStyle='#1c2c4a'; pctx.beginPath(); pctx.arc(pxp,pyp,pr*1.18,0,TAU); pctx.fill();
-  pctx.fillStyle=blink?'#fff':'#e8eef8'; pctx.beginPath(); pctx.arc(pxp,pyp,pr,0,TAU); pctx.fill();
-  if(!blink){
-    pctx.fillStyle='#b9c8de'; pctx.beginPath(); pctx.arc(pxp,pyp,pr,0.15,Math.PI-0.15); pctx.fill();     // coat
-    pctx.fillStyle='#c43b2e'; pctx.fillRect(pxp-pr*0.62,pyp-pr*0.72,pr*1.24,pr*0.34);                    // bandana
-    pctx.fillStyle='#e86a50'; pctx.fillRect(pxp+pr*0.45,pyp-pr*0.62,pr*0.5,pr*0.2); }
-  { const fa=Math.atan2(player.fy,player.fx);
-    pctx.fillStyle='#27406a'; pctx.beginPath();
-    pctx.moveTo(pxp+Math.cos(fa)*(pr+3.5*s), pyp+Math.sin(fa)*(pr+3.5*s));
-    pctx.lineTo(pxp+Math.cos(fa+2.4)*pr*0.85, pyp+Math.sin(fa+2.4)*pr*0.85);
-    pctx.lineTo(pxp+Math.cos(fa-2.4)*pr*0.85, pyp+Math.sin(fa-2.4)*pr*0.85);
-    pctx.closePath(); pctx.fill(); }
+  if(blink){ pctx.fillStyle='#fff'; pctx.beginPath(); pctx.arc(pxp,pyp,pr*1.05,0,TAU); pctx.fill(); }
+  else {
+    // boots, stepping along the direction of travel
+    pctx.fillStyle='#3e2c18';
+    pctx.beginPath(); pctx.ellipse(pxp+ppx*pr*0.42+pfx*stride, pyp0+ppy*pr*0.42+pfy*stride, pr*0.3, pr*0.24, pfa, 0, TAU); pctx.fill();
+    pctx.beginPath(); pctx.ellipse(pxp-ppx*pr*0.42-pfx*stride, pyp0-ppy*pr*0.42-pfy*stride, pr*0.3, pr*0.24, pfa, 0, TAU); pctx.fill();
+    // coat (outlined)
+    pctx.fillStyle='#33271a'; pctx.beginPath(); pctx.arc(pxp,pyp,pr*1.12,0,TAU); pctx.fill();
+    pctx.fillStyle='#b9925c'; pctx.beginPath(); pctx.arc(pxp,pyp,pr*0.98,0,TAU); pctx.fill();
+    // satchel strap across the chest
+    pctx.strokeStyle='#5a3a22'; pctx.lineWidth=Math.max(1.5,pr*0.22);
+    pctx.beginPath(); pctx.moveTo(pxp-ppx*pr*0.8-pfx*pr*0.3, pyp-ppy*pr*0.8-pfy*pr*0.3);
+    pctx.lineTo(pxp+ppx*pr*0.55+pfx*pr*0.55, pyp+ppy*pr*0.55+pfy*pr*0.55); pctx.stroke();
+    pctx.strokeStyle='#dcc08a'; pctx.lineWidth=Math.max(1,pr*0.15);                       // collar
+    pctx.beginPath(); pctx.arc(pxp,pyp,pr*0.72, pfa-0.7, pfa+0.7); pctx.stroke();
+    // off-hand swings with the walk
+    pctx.fillStyle='#e8c39a'; pctx.beginPath();
+    pctx.arc(pxp-ppx*pr*1.0-pfx*stride*0.5, pyp-ppy*pr*1.0-pfy*stride*0.5, pr*0.26, 0, TAU); pctx.fill();
+    // head peeking forward, brimmed hat sitting back
+    pctx.fillStyle='#e8c39a'; pctx.beginPath(); pctx.arc(pxp+pfx*pr*0.22, pyp+pfy*pr*0.22, pr*0.5, 0, TAU); pctx.fill();
+    pctx.fillStyle='#6e5128'; pctx.beginPath(); pctx.ellipse(pxp-pfx*pr*0.18, pyp-pfy*pr*0.18, pr*0.74, pr*0.66, 0, 0, TAU); pctx.fill();
+    pctx.fillStyle='#8a6a3c'; pctx.beginPath(); pctx.arc(pxp-pfx*pr*0.2, pyp-pfy*pr*0.2, pr*0.45, 0, TAU); pctx.fill();
+    pctx.strokeStyle='#503a1c'; pctx.lineWidth=Math.max(1,pr*0.14);                       // hat band
+    pctx.beginPath(); pctx.arc(pxp-pfx*pr*0.2, pyp-pfy*pr*0.2, pr*0.34, pfa-1.2, pfa+1.2); pctx.stroke();
+  }
+  // the sword — always in hand; sweeps through the arc on a slash, tucks back while the bow is out
+  { let swA, lunge=0;
+    if(player.slashT>0){ const p=1-player.slashT/0.16; swA=pfa-1.05+p*2.1; lunge=Math.sin(p*Math.PI)*pr*0.35; }
+    else if(player.shootT>0) swA=pfa-2.3;
+    else swA=pfa+0.6;
+    const swc=Math.cos(swA), swn=Math.sin(swA);
+    const hx=pxp+swc*pr*0.95+pfx*lunge, hy=pyp+swn*pr*0.95+pfy*lunge;
+    const bx0=hx+swc*pr*0.18, by0=hy+swn*pr*0.18, bl=pr*1.8;
+    const tipx=hx+swc*bl, tipy=hy+swn*bl;
+    pctx.strokeStyle='#5a3a22'; pctx.lineWidth=Math.max(1.6,pr*0.2);                      // grip
+    pctx.beginPath(); pctx.moveTo(hx-swc*pr*0.35, hy-swn*pr*0.35); pctx.lineTo(hx,hy); pctx.stroke();
+    pctx.strokeStyle='#8a6a3c'; pctx.lineWidth=Math.max(1.6,pr*0.18);                     // crossguard
+    pctx.beginPath(); pctx.moveTo(bx0-swn*pr*0.36, by0+swc*pr*0.36); pctx.lineTo(bx0+swn*pr*0.36, by0-swc*pr*0.36); pctx.stroke();
+    pctx.strokeStyle='#6e7f93'; pctx.lineWidth=Math.max(2.2,pr*0.34);                     // blade outline
+    pctx.beginPath(); pctx.moveTo(bx0,by0); pctx.lineTo(tipx,tipy); pctx.stroke();
+    pctx.strokeStyle='#eef4fb'; pctx.lineWidth=Math.max(1.3,pr*0.18);                     // bright edge
+    pctx.beginPath(); pctx.moveTo(bx0,by0); pctx.lineTo(tipx-swc*1.2, tipy-swn*1.2); pctx.stroke();
+    if(!blink){ pctx.fillStyle='#e8c39a'; pctx.beginPath(); pctx.arc(hx,hy,pr*0.28,0,TAU); pctx.fill(); }   // sword hand
+  }
+  if(player.shootT>0 && !blink){               // bow flash when loosing an arrow
+    const bhx=pxp+pfx*pr*0.95, bhy=pyp+pfy*pr*0.95;
+    pctx.strokeStyle='#7a5230'; pctx.lineWidth=Math.max(1.6,pr*0.2);
+    pctx.beginPath(); pctx.arc(bhx,bhy,pr*0.85,pfa-1.25,pfa+1.25); pctx.stroke();
+    pctx.strokeStyle='#e8e0c8'; pctx.lineWidth=1;
+    pctx.beginPath(); pctx.moveTo(bhx+Math.cos(pfa-1.25)*pr*0.85, bhy+Math.sin(pfa-1.25)*pr*0.85);
+    pctx.lineTo(bhx+Math.cos(pfa+1.25)*pr*0.85, bhy+Math.sin(pfa+1.25)*pr*0.85); pctx.stroke();
+    pctx.fillStyle='#e8c39a'; pctx.beginPath(); pctx.arc(bhx,bhy,pr*0.26,0,TAU); pctx.fill();
+  }
+  // subtle aim tick (the old navy arrow, shrunk to a whisper)
+  pctx.fillStyle='rgba(255,255,255,.5)';
+  pctx.beginPath(); pctx.moveTo(pxp+pfx*pr*1.55, pyp+pfy*pr*1.55);
+  pctx.lineTo(pxp+Math.cos(pfa+2.7)*pr*1.2, pyp+Math.sin(pfa+2.7)*pr*1.2);
+  pctx.lineTo(pxp+Math.cos(pfa-2.7)*pr*1.2, pyp+Math.sin(pfa-2.7)*pr*1.2);
+  pctx.closePath(); pctx.fill();
   // ambient life over the scene: drifting leaves + fireflies
   for(const l of ileaves){ const [sx,sy]=iw2p(l.x,l.y); pctx.globalAlpha=0.85; pctx.fillStyle=pal.hi;
     pctx.fillRect(sx,sy,2.6,1.8); pctx.globalAlpha=1; }
@@ -1474,7 +1561,7 @@ function frameInner(ts){
   update(dt);
   // draw world to low-res buffer
   if(started){
-    drawSea(); drawPorts(); drawWake(); drawBoat();
+    drawSea(); drawPorts(); drawCleared(); drawWake(); drawBoat();
   }
   // composite to screen
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -1574,7 +1661,7 @@ document.getElementById('renameInput').addEventListener('keydown',e=>{ e.stopPro
 function begin(fresh){
   if(fresh){ buildWorld((Math.random()*1e9)>>>0);
     boat.x=spawn.x; boat.y=spawn.y; boat.a=-Math.PI/2; boat.spd=0; boat.sail=0;
-    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; cargo=loot0();
+    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; clearedCount=0; cargo=loot0();
   }
   mode='sea'; nearLand=null;
   buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune();
