@@ -37,8 +37,19 @@
          tally -> fish well -> sell at any port (G), cook at the galley
          (C, bonus hearts ashore), Fish Log (L). 20 species gated by
          depth / night / storm / rare-biome waters. FISHTUNE sliders.
-     - WHALING — harpoon a lone giant, get dragged (the Nantucket sleigh
-       ride); reuses fishing's spawn/log/merchant plumbing
+     [x] WHALING — rare roaming spouts ("Thar she blows", bearing toast);
+         wary-by-species approach (come in slow or she sounds); mouse-
+         aimed harpoon w/ HIT ZONES (flank=clean stick, flukes=glance,
+         head=angers); the SLEIGH RIDE: sail drops, whale drags the
+         boat — A/D track her turns, W haul / S give line (finite),
+         strain needle parts the line; giants SOUND in dive-cycles
+         (give line fast → iron draws clean → chase bubbles → re-stick,
+         each round wearier); fight-only HULL meter (thrash/rock-snag/
+         breach/ram) — 0 = swamped, limp home a minute; spent whale
+         slips under leaving bobbing SPOILS (casks/baleen/ambergris)
+         to magnet-scoop, sold with the catch. ~9 species + biome/night
+         exclusives + THE WHITE (named once-per-world legend, he RAMS).
+         Whale song, breaches, fluke-up dives. WTUNE sliders.
      - Port trading proper (gold / upgrades / crew), crew of 5
 
    No build step. Plain HTML/Canvas/JS. Lives at /boats (no desktop icon).
@@ -179,13 +190,17 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="ptrow"><span>Weather</span><span class="ptbtns" id="ptWeather"></span></div>
   <div class="ptrow"><span>Fog</span><span class="ptbtns" id="ptFog"></span></div>
   <div class="ptrow"><span>Fish</span><span class="ptbtns" id="ptFish"></span></div>
-  <p class="hint">Force the time of day or weather to test them. “Auto” hands control back to the natural cycle. Fish buttons drop a school of that rarity beside the boat. (Not saved.)</p>
+  <div class="ptrow"><span>Whale</span><span class="ptbtns" id="ptWhale"></span></div>
+  <p class="hint">Force the time of day or weather to test them. “Auto” hands control back to the natural cycle. Fish/Whale buttons drop one of that kind beside the boat. (Not saved.)</p>
   <div class="pt-sep"></div>
   <h4>⚔ Island combat</h4>
   <div id="tuneIslandRows"></div>
   <div class="pt-sep"></div>
   <h4>🎣 Fishing</h4>
   <div id="tuneFishRows"></div>
+  <div class="pt-sep"></div>
+  <h4>🐋 Whaling</h4>
+  <div id="tuneWhaleRows"></div>
 </div>
 
 <div id="title">
@@ -195,7 +210,7 @@ canvas{position:absolute;inset:0;display:block;}
   <button class="start secondary hidden" id="contBtn">Continue voyage</button>
   <div class="keys">
     <kbd>W</kbd>/<kbd>↑</kbd> raise sail &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> furl &nbsp; <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> steer<br>
-    <kbd>Space</kbd> drop sail &nbsp; <kbd>M</kbd> map &nbsp; <kbd>F</kbd> cast the net &nbsp; <kbd>C</kbd> cook a catch &nbsp; <kbd>L</kbd> fish log &nbsp; <kbd>T</kbd> tune
+    <kbd>Space</kbd> drop sail &nbsp; <kbd>M</kbd> map &nbsp; <kbd>F</kbd> cast the net &nbsp; <kbd>🖱</kbd> harpoon a spout &nbsp; <kbd>C</kbd> cook &nbsp; <kbd>L</kbd> log &nbsp; <kbd>T</kbd> tune
   </div>
 </div>
 
@@ -447,8 +462,8 @@ function queueSave(){ lastSave=-999; }   // force a save soon
 function doSave(){
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, itune:ITUNE, ituneV:2, ftune:FTUNE, audio:audioOn, cargo:cargo,
-      well:well, flog:flog, fed:fed,
+      seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, itune:ITUNE, ituneV:2, ftune:FTUNE, wtune:WTUNE, audio:audioOn, cargo:cargo,
+      well:well, flog:flog, fed:fed, spoils:spoils, whiteTaken:whiteTaken,
       disc:discoveredCount, ports:portCount,
       found:cores.filter(c=>c.found).map(c=>c.idx),
       cleared:cores.filter(c=>c.cleared).map(c=>c.idx),
@@ -476,7 +491,9 @@ function loadSave(){
     (s.names||[]).forEach(([idx,nm])=>{ if(cores[idx]) cores[idx].customName=nm; });
     biomesFound=new Set(s.biomes||[]);
     FTUNE=Object.assign({},DEFAULT_FTUNE,s.ftune||{});
+    WTUNE=Object.assign({},DEFAULT_WTUNE,s.wtune||{});
     well=s.well||{}; flog=s.flog||{}; fed=s.fed||0;
+    spoils=s.spoils||{}; whiteTaken=!!s.whiteTaken;
     explored=new Set(s.explored||[]);
     camX=boat.x; camY=boat.y;
     return true;
@@ -530,6 +547,12 @@ addEventListener('mousedown',e=>{ if(started&&mapOpen) fmDrag={x:e.clientX,y:e.c
 addEventListener('mousemove',e=>{ if(!fmDrag||!mapOpen) return; const sc=mapRect().size/fmSpan;
   fmCX-=(e.clientX-fmDrag.x)/sc; fmCY-=(e.clientY-fmDrag.y)/sc; fmDrag={x:e.clientX,y:e.clientY}; clampMap(); fmDirty=true; });
 addEventListener('mouseup',()=>{ fmDrag=null; });
+// at sea: a left click lets the harpoon fly (only when a whale is about)
+addEventListener('mousedown',e=>{
+  if(!started || mode!=='sea' || mapOpen || renaming || summaryOpen || invOpen || flogOpen) return;
+  if(e.target!==cv || e.button!==0) return;
+  tryThrowIron();
+});
 // mouse combat on the island: cursor aims, left swings, right shoots
 addEventListener('mousemove',e=>{ mouseX=e.clientX; mouseY=e.clientY; });
 addEventListener('mousedown',e=>{
@@ -621,11 +644,12 @@ function update(dt){
   if(keys['arrowup']||keys['w']) boat.sail=clamp(boat.sail+0.85*dt,0,1);
   if(keys['arrowdown']||keys['s']) boat.sail=clamp(boat.sail-1.1*dt,-0.15,1);
   if(keys[' ']) boat.sail=Math.max(0,boat.sail-2.4*dt);   // drop sail
+  if(hunt&&hunt.attached) boat.sail=0;                    // fast to a whale: the sail is down, W/S work the line
 
   // wind efficiency: heading vs where wind blows TO (downwind = fast)
   const align=Math.cos(boat.a-wind.a);
   const eff = (1-TUNE.windSpread) + TUNE.windSpread*((align+1)/2)*1.6;   // forgiving: always >0
-  const target = boat.sail*TUNE.baseSpeed*eff*wind.str;
+  const target = boat.sail*TUNE.baseSpeed*eff*wind.str*(limpT>0?0.5:1); // swamped = half sail while bailing
   const rate = (target>boat.spd? TUNE.accel : TUNE.glide);
   boat.spd += (target-boat.spd)*(1-Math.exp(-rate*dt));
 
@@ -681,6 +705,7 @@ function update(dt){
     waveG.gain.setTargetAtTime(0.13+sp*0.10 + env.storm*0.16, actx.currentTime, 0.25); }
 
   updateFishing(dt);
+  updateWhaling(dt);
 
   // toasts
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
@@ -1002,6 +1027,7 @@ function updateSchools(dt){
 /* ---- the cork-line: pay out, cross your line, cinch ---- */
 function netKey(){
   if(mode!=='sea'||!started||mapOpen) return;
+  if(hunt){ seaMsg('hands full — a whale is on the line!','#ff9f8a'); return; }
   if(net&&net.phase==='lay'){ net=null; netCD=Math.max(netCD,2); seaMsg('reeled the net back in'); return; }
   if(net) return;                                      // mid-cinch — hands full
   if(netCD>0){ seaMsg('🪡 mending the net — '+Math.ceil(netCD)+'s','#ff9f8a'); return; }
@@ -1122,12 +1148,14 @@ function cookFish(){
   seaMsg('🍲 '+pick.name+' on the galley fire — +'+fed+' ♥ next landfall','#ff8d9c');
 }
 function sellFish(){
-  if(wellN()<=0){ seaMsg('nothing in the well to sell'); return; }
+  if(wellN()+spoilN()<=0){ seaMsg('nothing in the well to sell'); return; }
   const port=nearLand;
   let total=0; const rows=[];
+  for(const k in spoils){ const n=spoils[k]; if(!n) continue; const sd=SPOILS[k];   // whale spoils fetch the big coin
+    total+=n*sd.val; rows.push([sd.icon+' '+sd.name+' ×'+n, (n*sd.val)+'g']); }
   for(const f of [...FISH].sort((a,b)=>b.val-a.val)){ const n=well[f.key]||0; if(!n) continue;
     total+=n*f.val; rows.push([f.icon+' '+f.name+' ×'+n, (n*f.val)+'g']); }
-  cargo.gold+=total; well={}; sfx('chest'); queueSave();
+  cargo.gold+=total; well={}; spoils={}; sfx('chest'); queueSave();
   document.getElementById('sumTitle').textContent='🐟  Catch sold';
   document.getElementById('sumSub').textContent=(port&&port.city)||'the fish merchant';
   document.getElementById('sumRows').innerHTML=rows.map(r=>'<div class="srow"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');
@@ -1139,13 +1167,22 @@ function sellFish(){
 function openFlog(){ if(mode!=='sea'||!started) return; flogOpen=true; renderFlog(); document.getElementById('flog').classList.remove('hidden'); }
 function closeFlog(){ flogOpen=false; document.getElementById('flog').classList.add('hidden'); }
 function renderFlog(){
-  document.getElementById('flogCount').textContent=Object.keys(flog).length+' / '+FISH.length;
+  const fc=FISH.filter(f=>flog[f.key]).length, wc=WHALES.filter(x=>flog[x.key]).length;
+  document.getElementById('flogCount').textContent=fc+' / '+FISH.length+' · 🐋 '+wc+' / '+WHALES.length;
   const g=document.getElementById('flogGrid'); g.innerHTML='';
   for(const f of FISH){ const lg=flog[f.key], tile=document.createElement('div');
     tile.className='itile'+(lg?'':' empty');
     tile.title = lg ? f.name+' ('+FISH_TIER[f.tier]+') — '+f.val+'g each · caught '+lg.n+' · best '+lg.best+' cm · '+f.hint
                     : 'Unknown ('+FISH_TIER[f.tier]+') — seek: '+f.hint;
     tile.innerHTML='<span class="iemoji">'+(lg?f.icon:'❔')+'</span>'+(lg?'<span class="icnt">'+lg.n+'</span>':'');
+    g.appendChild(tile);
+  }
+  for(const x of WHALES){ const lg=flog[x.key], tile=document.createElement('div');   // the leviathans
+    tile.className='itile'+(lg?'':' empty');
+    tile.title = lg ? x.name+' ('+WHALE_TIER[x.tier]+') — taken '+lg.n+' · greatest '+lg.best+' m · '+x.hint
+                    : 'Unknown leviathan ('+WHALE_TIER[x.tier]+') — seek: '+x.hint;
+    tile.style.borderColor = lg ? '#5a7a9a' : '';
+    tile.innerHTML='<span class="iemoji">'+(lg?x.icon:'🌫️')+'</span>'+(lg?'<span class="icnt">'+lg.n+'</span>':'');
     g.appendChild(tile);
   }
 }
@@ -1222,6 +1259,28 @@ function drawSeaFx(){
       pctx.save(); pctx.translate(sx+dx,sy+dy-h2); pctx.rotate(f.a+(pr-0.5)*2.2);
       pctx.fillRect(-1.1*s,-0.7*s,2.2*s,1.2*s); pctx.restore();
       if(pr<0.2||pr>0.85){ pctx.fillStyle='rgba(240,250,252,.8)'; pctx.fillRect(sx+dx-1,sy+dy-1,2.4,1.6); }
+    } else if(f.k==='spout'){                              // the blow — a tall bright plume you can sight from far off
+      const h2=(f.big?17:11)*(f.weak?0.6:1)*s*(pr<0.22?pr/0.22:1);
+      const drift=pr*pr*10*s, wx2=Math.cos(wind.a), wy2=Math.sin(wind.a);
+      const al=Math.min(1,(1.25-pr*1.25))*(f.weak?0.55:1);
+      // the column
+      pctx.fillStyle='rgba(248,253,255,'+al.toFixed(2)+')';
+      for(let j=0;j<5;j++){ const jf=(j+1)/5, jh=h2*jf;
+        const jw=Math.max(1.6,(0.9+j*0.55)*s);
+        pctx.fillRect(sx+wx2*drift*jf-jw/2+Math.sin(f.t*9+j)*0.8, sy-jh+wy2*drift*jf*0.4, jw, Math.max(1.6,1.5*s)); }
+      // the bloom at its crown, fraying into spray
+      const tx2=sx+wx2*drift, ty2=sy-h2+wy2*drift*0.4;
+      pctx.fillStyle='rgba(238,248,252,'+(al*0.75).toFixed(2)+')';
+      pctx.beginPath(); pctx.arc(tx2,ty2,(2.2+pr*4.5)*s,0,TAU); pctx.fill();
+      pctx.fillStyle='rgba(255,255,255,'+(al*0.9).toFixed(2)+')';
+      for(let j=0;j<4;j++){ const ja=j*1.7+f.t*2;
+        pctx.fillRect(tx2+Math.cos(ja)*(2.5+pr*5)*s, ty2+Math.sin(ja)*(1.4+pr*2.5)*s, 1.6, 1.6); }
+      // a sparkle of falling spray beneath the crown
+      if(pr>0.3){ pctx.fillStyle='rgba(228,244,250,'+(al*0.5).toFixed(2)+')';
+        for(let j=0;j<3;j++) pctx.fillRect(tx2+(j-1)*2.4*s, ty2+(2+pr*4)*s+j, 1.4, 1.4); }
+    } else if(f.k==='bub'){                                // bubbles where she swims beneath
+      pctx.strokeStyle='rgba(214,240,248,'+(0.5*(1-pr)).toFixed(2)+')'; pctx.lineWidth=1;
+      pctx.beginPath(); pctx.arc(sx,sy,(0.8+pr*2.4)*s,0,TAU); pctx.stroke();
     } else {
       pctx.strokeStyle='rgba(240,250,252,'+(0.7*(1-pr)).toFixed(2)+')'; pctx.lineWidth=Math.max(1,(f.big?1.6:1)*s*0.8);
       pctx.beginPath(); pctx.arc(sx,sy,(1.5+pr*(f.big?9:5))*s,0,TAU); pctx.stroke();
@@ -1260,15 +1319,16 @@ function drawFishHUD(){
     ctx.font='600 12px system-ui'; const w2=ctx.measureText(t2).width+22;
     ctx.fillStyle='rgba(8,17,31,.45)'; roundRect(CSSW/2-w2/2,CSSH-132,w2,24,8); ctx.fill();
     ctx.fillStyle='#cdd9f3'; ctx.fillText(t2, CSSW/2, CSSH-115);
-  } else {
+  } else if(!hunt){
     let nd=1e18; for(const s2 of schools){ const d2=(s2.x-boat.x)**2+(s2.y-boat.y)**2; if(d2<nd) nd=d2; }
     if(nd<300*300){ const t2='🎣 F — pay out the net';
       ctx.font='600 12px system-ui'; const w2=ctx.measureText(t2).width+22;
       ctx.fillStyle='rgba(8,17,31,.45)'; roundRect(CSSW/2-w2/2,CSSH-132,w2,24,8); ctx.fill();
       ctx.fillStyle='#ffe6a6'; ctx.fillText(t2, CSSW/2, CSSH-115); }
   }
-  if(nearLand && nearLand.port && wellN()>0 && !net){                      // the fish merchant
-    const t2='🐟  Press  G  to sell your catch  ('+wellN()+' fish)';
+  if(nearLand && nearLand.port && (wellN()+spoilN())>0 && !net && !hunt){  // the fish merchant
+    const sn=spoilN();
+    const t2='🐟  Press  G  to sell your catch  ('+wellN()+' fish'+(sn?', '+sn+' spoils':'')+')';
     ctx.font='700 14px system-ui'; const w2=ctx.measureText(t2).width+30;
     ctx.fillStyle='rgba(10,30,24,.82)'; roundRect(CSSW/2-w2/2,CSSH-58,w2,32,11); ctx.fill();
     ctx.fillStyle='#9fe8c0'; ctx.fillText(t2, CSSW/2, CSSH-37);
@@ -1292,6 +1352,716 @@ function buildFishTune(){ const host=document.getElementById('tuneFishRows'); if
     row.innerHTML='<label>'+label+' <b id="fv_'+k+'">'+FTUNE[k]+'</b></label><input type="range" id="fs_'+k+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+FTUNE[k]+'">';
     host.appendChild(row);
     row.querySelector('input').addEventListener('input',e=>{ FTUNE[k]=parseFloat(e.target.value); document.getElementById('fv_'+k).textContent=FTUNE[k]; queueSave(); });
+  });
+}
+
+/* ============================================================ *
+ *  WHALING — the iron & the ride.
+ *  Rare spouts roam the deep. Approach slow (the prize species
+ *  sound if you come in hot), put a mouse-aimed iron in the flank
+ *  (flukes glance, head shots ANGER her), then the sleigh ride:
+ *  sail drops, she is the engine — A/D track her turns, W hauls,
+ *  S gives line. Strain parts the line; giants SOUND in rounds;
+ *  hull at zero = swamped. Spent, she slips under and leaves a
+ *  bobbing field of spoils. And somewhere out there: THE WHITE.
+ * ============================================================ */
+const WHALES=[
+  {key:'pilot',   name:'Pilot Whale',  icon:'🐬', tier:0, len:20, m:[5,7],   girth:0.26, roam:15, run:70,  stam:38,  rounds:1, wary:0,   strainMul:0.7, anger:0.2, breachy:0,
+    where:{},                 spoils:{cask:[2,3]},                       hint:'gentle pods in any sea',          col:{body:'#33404e',back:'#46586a',fin:'#2a3540',det:'#8a98a6'}},
+  {key:'minke',   name:'Minke Whale',  icon:'🐋', tier:0, len:24, m:[7,10],  girth:0.24, roam:18, run:82,  stam:50,  rounds:1, wary:0.4, strainMul:0.8, anger:0.3, breachy:0,
+    where:{},                 spoils:{cask:[3,4]},                       hint:'a quick loner, open water',       col:{body:'#46566a',back:'#5a7084',fin:'#3a4756',det:'#c8d4dc'}},
+  {key:'humpback',name:'Humpback',     icon:'🐳', tier:1, len:36, m:[13,17], girth:0.27, roam:15, run:86,  stam:80,  rounds:2, wary:0.6, strainMul:1.0, anger:0.4, breachy:1,
+    where:{},                 spoils:{cask:[4,6],baleen:[1,2]},          hint:'the breaching show-off',          col:{body:'#2f4356',back:'#3d566c',fin:'#e8f0f4',det:'#dceaf2'}},
+  {key:'right',   name:'Right Whale',  icon:'🐋', tier:1, len:38, m:[14,18], girth:0.33, roam:12, run:60,  stam:95,  rounds:2, wary:0.2, strainMul:1.25,anger:0.2, breachy:0,
+    where:{},                 spoils:{cask:[5,7],baleen:[2,3]},          hint:'slow, placid, heavy in the water',col:{body:'#23282e',back:'#30383f',fin:'#1d2126',det:'#d8d2c0'}},
+  {key:'sperm',   name:'Sperm Whale',  icon:'🐋', tier:2, len:46, m:[16,20], girth:0.28, roam:16, run:100, stam:120, rounds:3, wary:0.8, strainMul:1.3, anger:0.9, breachy:0,
+    where:{deep:1},           spoils:{cask:[6,8],amber:0.45},            hint:'the fierce king of the deep',     col:{body:'#4e4a44',back:'#605a50',fin:'#403c36',det:'#7a736a'}},
+  {key:'blue',    name:'Blue Whale',   icon:'🐳', tier:2, len:68, m:[24,33], girth:0.22, roam:14, run:92,  stam:150, rounds:3, wary:0.7, strainMul:1.6, anger:0.15,breachy:0,
+    where:{deep:1},           spoils:{cask:[10,14],baleen:[4,6]},        hint:'a moving island, far offshore',   col:{body:'#3a5a74',back:'#4a6e8c',fin:'#2f4a60',det:'#9fc2d8'}},
+  {key:'narwhal', name:'Narwhal',      icon:'🦄', tier:3, len:17, m:[4,6],   girth:0.24, roam:18, run:104, stam:45,  rounds:1, wary:1.2, strainMul:0.7, anger:0.3, breachy:0,
+    where:{biome:'frost'},    spoils:{tusk:[1,1],cask:[1,2]},            hint:'the unicorn of frozen seas',      col:{body:'#aebec8',back:'#c4d2da',fin:'#98a8b4',det:'#5a6a76'}},
+  {key:'cinder',  name:'Cinderback',   icon:'🔥', tier:3, len:30, m:[10,14], girth:0.27, roam:16, run:96,  stam:85,  rounds:2, wary:0.7, strainMul:1.1, anger:1.2, breachy:0.5,
+    where:{biome:'scorch'},   spoils:{cask:[4,6],amber:0.2},             hint:'embers ride its back',            col:{body:'#3a2e2a',back:'#48362c',fin:'#2e2420',det:'#ff8a3c'}},
+  {key:'sounder', name:'Pale Sounder', icon:'👻', tier:3, len:28, m:[9,13],  girth:0.25, roam:14, run:90,  stam:80,  rounds:2, wary:1.4, strainMul:1.0, anger:0.3, breachy:0,
+    where:{night:1,deep:1},   spoils:{cask:[4,6],amber:0.3},             hint:'a ghost light after dark',        col:{body:'#c8d4e2',back:'#dde6ef',fin:'#b2c0d2',det:'#8de9ff'}},
+  {key:'white',   name:'THE WHITE',    icon:'🤍', tier:4, len:52, m:[20,22], girth:0.29, roam:17, run:115, stam:190, rounds:4, wary:1.0, strainMul:1.4, anger:2,   breachy:0, rams:1,
+    where:{deep:1},           spoils:{cask:[12,16],amber:2},             hint:'the one the songs warn about',    col:{body:'#e8ecf0',back:'#f6f9fb',fin:'#d8dee6',det:'#8a96a2'}},
+];
+const WHALE_TIER=['gentle giant','worthy hunt','great hunt','strange sea','LEGEND'];
+const SPOILS={ cask:{name:'Whale-oil cask',icon:'🛢',val:8}, baleen:{name:'Baleen plate',icon:'🦴',val:14},
+  amber:{name:'Ambergris',icon:'🫧',val:60}, tusk:{name:'Narwhal tusk',icon:'🦄',val:45} };
+function whaleByKey(k){ return WHALES.find(x=>x.key===k); }
+const DEFAULT_WTUNE={ wSpawn:1, runSpd:1, strainRate:1, lineMax:420, reelSpd:34, stamMul:1, hullMax:100, throwRange:130, waryMul:1 };
+let WTUNE=Object.assign({},DEFAULT_WTUNE);
+let whales=[], hunt=null, whaleSpawnT=4, irons=[], ironCD=0, seadrops=[], seaPickN=0, seaPickT=0;
+let spoils={}, whiteTaken=false, hull=100, limpT=0;
+function spoilN(){ let n=0; for(const k in spoils) n+=spoils[k]; return n; }
+
+/* ---- spawning: rare spouts in the right waters ---- */
+function spawnWhale(sp,x,y){
+  const w={sp, x, y, a:Math.random()*TAU, swimPh:Math.random()*TAU, st:'roam', t:0, depth:0,
+    stam:sp.stam*WTUNE.stamMul, stamMax:sp.stam*WTUNE.stamMul, sndDone:0, curSpd:0,
+    alarm:0, warned:false, told:false, tired:false, anger:sp.anger, seed:(Math.random()*1e9)|0,
+    spoutT:1+Math.random()*3, songT:4+Math.random()*8, burstT:4+Math.random()*4, burst:1, jinkT:2,
+    thrashT:5+Math.random()*4, thrash:0, breachT:sp.breachy?14+Math.random()*20:1e9, breachK:0,
+    ramT:9, ramSt:0, ramVX:0, ramVY:0, underT:0, life:240+Math.random()*120,
+    lenM:Math.round((sp.m[0]+(Math.random()+Math.random())/2*(sp.m[1]-sp.m[0]))*10)/10};
+  whales.push(w); return w;
+}
+function trySpawnWhale(){
+  const cap = whales.length===0 ? 0.16 : whales.length===1 ? 0.03 : 0;
+  if(Math.random() > cap*WTUNE.wSpawn) return;
+  const ang=Math.random()*TAU, dist=750+Math.random()*1500;
+  const x=boat.x+Math.cos(ang)*dist, y=boat.y+Math.sin(ang)*dist;
+  if(x<400||y<400||x>WORLD-400||y>WORLD-400) return;
+  const cx=seaCtx(x,y);
+  if(cx.depth<0.45) return;                                  // whales keep to real water
+  const t=Math.min(1,Math.hypot(x-WORLD/2,y-WORLD/2)/(WORLD*0.5));
+  // a vanishing chance, far out over the deep: an all-white spout
+  if(!whiteTaken && t>0.45 && cx.depth>0.72 && Math.random()<0.012){ spawnWhale(whaleByKey('white'),x,y); return; }
+  const wgt=[50*(1-t*0.4), 26, 13*(1+t*1.3), (cx.bio.size?9:4)*(1+t*1.4)];
+  let roll=Math.random()*(wgt[0]+wgt[1]+wgt[2]+wgt[3]), tier=0;
+  for(let i=0;i<4;i++){ if(roll<wgt[i]){ tier=i; break; } roll-=wgt[i]; }
+  for(let tr=tier; tr>=0; tr--){
+    const cand=WHALES.filter(x2=>x2.tier===tr && fishOK(x2,cx) && (cx.depth>0.6 || x2.tier===0));
+    if(cand.length){ spawnWhale(cand[(Math.random()*cand.length)|0],x,y); return; }
+  }
+}
+function debugSpawnWhale(key){
+  if(mode!=='sea'||!started) return;
+  const sp = key==='exotic' ? whaleByKey(['narwhal','cinder','sounder'][(Math.random()*3)|0]) : whaleByKey(key);
+  for(let tr=0;tr<28;tr++){ const a=Math.random()*TAU, d2=320+Math.random()*200;
+    const x=boat.x+Math.cos(a)*d2, y=boat.y+Math.sin(a)*d2;
+    if(heightAt(x,y)<SEA-0.1){ const w=spawnWhale(sp,x,y); w.life=500;
+      toast('🐋  (debug) '+sp.name,'surfacing nearby'); return; } }
+}
+
+/* ---- the whale herself: states, temper, motion ---- */
+function whaleAvoidLand(w,dt){
+  const look=46+w.curSpd*0.5;
+  if(heightAt(w.x+Math.cos(w.a)*look, w.y+Math.sin(w.a)*look)>=SEA-0.08){
+    const l=heightAt(w.x+Math.cos(w.a-0.7)*look, w.y+Math.sin(w.a-0.7)*look);
+    const r=heightAt(w.x+Math.cos(w.a+0.7)*look, w.y+Math.sin(w.a+0.7)*look);
+    w.a += (l<r?-1:1)*2.6*dt+ (l<r?-0.06:0.06); }
+}
+function whaleMove(w,spd,dt){
+  w.curSpd=spd;
+  const nx=w.x+Math.cos(w.a)*spd*dt, ny=w.y+Math.sin(w.a)*spd*dt;
+  if(heightAt(nx,ny)<SEA-0.04){ w.x=nx; w.y=ny; } else w.a+=1.6;
+  w.x=clamp(w.x,300,WORLD-300); w.y=clamp(w.y,300,WORLD-300);
+  w.swimPh += dt*(1.6+spd*0.028)*(w.thrash>0?2.3:1);
+}
+function updateWhale(w,dt){
+  w.t+=dt; w.life-=dt;
+  const bd=Math.hypot(boat.x-w.x, boat.y-w.y);
+  // the sighting — "Thar she blows!"
+  if(!w.told && bd<1150){ w.told=true;
+    const br2=bearingName(w.x-boat.x, w.y-boat.y);
+    if(w.sp.key==='white') toast('🤍  An all-white spout… THE WHITE','to the '+br2+' — the songs were true');
+    else toast('⛲  Thar she blows!','a '+(w.sp.tier>=2?'great ':'')+'spout to the '+br2);
+    if(actx&&audioOn) whaleSong(0.06, w.sp.key==='white'||w.sp.key==='sounder'); }
+  // song & spout while on the surface
+  if(w.depth<0.3 && (w.st==='roam'||w.st==='hooked'||w.st==='spent')){
+    w.spoutT-=dt;
+    if(w.spoutT<=0){ const tired=w.stam/w.stamMax;
+      w.spoutT=(w.st==='spent'?7:4)+Math.random()*5+(1-tired)*3;
+      const bx=w.x+Math.cos(w.a)*w.sp.len*0.30, by=w.y+Math.sin(w.a)*w.sp.len*0.30;
+      seafx.push({k:'spout', x:bx, y:by, t:0, life:1.5, big:w.sp.len>40, weak:tired<0.45});
+      blowSfx(clamp(1-bd/700,0,1)*0.5); }
+    w.songT-=dt;
+    if(w.songT<=0 && bd<850){ w.songT=11+Math.random()*14;
+      whaleSong(0.055*(1-bd/900), w.sp.key==='white'||w.sp.key==='sounder'); }
+  }
+  // breaching — spectacle, and a hazard up close
+  if(w.breachK>0){ w.breachK+=dt/1.15;
+    if(w.breachK>=1){ w.breachK=0;
+      splashAt(w.x,w.y,true); splashAt(w.x+Math.cos(w.a)*w.sp.len*0.2,w.y+Math.sin(w.a)*w.sp.len*0.2,true);
+      for(let i=0;i<3;i++) seafx.push({k:'spl', x:w.x+(Math.random()-0.5)*w.sp.len*0.8, y:w.y+(Math.random()-0.5)*w.sp.len*0.8, t:-i*0.1, life:0.6, big:true});
+      blowSfx(0.8);
+      if(hunt&&hunt.w===w&&bd<48){ hull-=30; seaMsg('💥 her breach slams the hull!','#ff9f8a'); } } }
+  else if(w.sp.breachy && (w.st==='roam'||w.st==='hooked')){
+    w.breachT-=dt*(w.st==='hooked'?2:1)*(w.sp.breachy);
+    if(w.breachT<=0){ w.breachT=16+Math.random()*22; w.breachK=0.001; } }
+  // states
+  if(w.st==='roam'){
+    if(w.t>1.8+ (w.seed%100)/40 ){ w.t=0; w.a+=(Math.random()-0.5)*0.9; }
+    whaleAvoidLand(w,dt);
+    whaleMove(w, w.sp.roam*(w.tired?0.55:1), dt);
+    w.depth=Math.max(0,w.depth-dt*0.5);
+    // wary species sound away from a hull coming in hot
+    if(!w.tired && w.sp.wary>0 && !(hunt&&hunt.w===w)){
+      const waryR=w.sp.wary*150*WTUNE.waryMul;
+      if(bd<waryR && boat.spd>32){ w.alarm+=dt*(boat.spd/40);
+        const fa=Math.atan2(w.y-boat.y,w.x-boat.x); w.a += Math.sin(fa-w.a)*0.8*dt;   // she edges away
+        if(!w.warned && w.alarm>1.1){ w.warned=true; seaMsg('🐋 she’s wary — slow down…','#9fd2ff'); }
+        if(w.alarm>2.6){ w.st='flee'; w.t=0; seaMsg('🌊 she’s sounded — gone','#9fd2ff'); }
+      } else w.alarm=Math.max(0,w.alarm-dt*0.5);
+    }
+    if(hunt&&hunt.w===w&&!hunt.attached){ w.stam=Math.min(w.stamMax,w.stam+dt*1.1);   // she recovers while you fumble
+      if(w.stam>=w.stamMax){ hunt=null; w.tired=false; toast('🐋  She’s recovered her strength','the hunt is lost'); } }
+    if(w.life<=0 && bd>900 && !(hunt&&hunt.w===w)) w.st='gone';
+  }
+  else if(w.st==='flee'){ whaleAvoidLand(w,dt); whaleMove(w, w.sp.run*0.8, dt);
+    w.depth=Math.min(1,w.depth+dt*0.5);
+    if(w.t>6) w.st='gone'; }
+  else if(w.st==='hooked'){
+    // THE WHITE turns on his tormentor — the ram owns his whole body while it lasts
+    if(w.sp.rams && w.ramSt>0){
+      if(w.ramSt===1){
+        const fa=Math.atan2(boat.y-w.y,boat.x-w.x);
+        const dd=Math.atan2(Math.sin(fa-w.a),Math.cos(fa-w.a));
+        w.a += clamp(dd,-3.6*dt,3.6*dt);
+        whaleMove(w, 16, dt);
+        if(w.t>1.0){ w.ramSt=2; w.t=0; w.ramVX=Math.cos(w.a); w.ramVY=Math.sin(w.a); }
+      } else {
+        w.x+=w.ramVX*170*dt; w.y+=w.ramVY*170*dt; w.curSpd=170; w.swimPh+=dt*7;
+        if(Math.random()<0.4) splashAt(w.x+Math.cos(w.a)*w.sp.len*0.3, w.y+Math.sin(w.a)*w.sp.len*0.3,false);
+        if(bd<26){ hull-=45; const kx=w.ramVX, ky=w.ramVY;
+          if(isWater(boat.x+kx*32,boat.y)) boat.x+=kx*32; if(isWater(boat.x,boat.y+ky*32)) boat.y+=ky*32;
+          splashAt(boat.x,boat.y,true); sfx('hurt'); seaMsg('💥 RAMMED!','#ff5d4a');
+          w.ramSt=0; w.ramT=12+Math.random()*5; w.t=0; }
+        else if(w.t>2.1){ w.ramSt=0; w.ramT=12+Math.random()*5; }
+      }
+      w.depth=Math.max(0,w.depth-dt*0.8);
+      return;
+    }
+    // she runs — away, with jinks and bursts
+    w.jinkT-=dt; w.burstT-=dt; w.thrashT-=dt;
+    if(w.jinkT<=0){ w.jinkT=2.6+Math.random()*3.5; w.a+=(Math.random()<0.5?-1:1)*(0.6+Math.random()*0.8); }
+    if(w.burstT<=0){ w.burstT=5+Math.random()*5; w.burst=1.5; }
+    w.burst=Math.max(1,w.burst-dt*0.35);
+    if(w.thrashT<=0){ w.thrashT=(4.5+Math.random()*4)/(1+w.anger); w.thrash=1.1; }
+    if(w.thrash>0){ w.thrash-=dt; if(Math.random()<0.3) splashAt(w.x+(Math.random()-0.5)*w.sp.len*0.5, w.y+(Math.random()-0.5)*w.sp.len*0.5,false); }
+    const away=Math.atan2(w.y-boat.y, w.x-boat.x);
+    w.a += Math.sin(away-w.a)*0.55*dt*(w.thrash>0?0.2:1);
+    whaleAvoidLand(w,dt);
+    const stam01=w.stam/w.stamMax;
+    whaleMove(w, w.sp.run*(0.42+0.58*stam01)*w.burst*WTUNE.runSpd, dt);
+    w.depth=Math.max(0,w.depth-dt*0.8);
+    if(w.sp.rams){ w.ramT-=dt;
+      if(w.ramT<=0 && bd<420){ w.ramSt=1; w.t=0; seaMsg('🤍 he turns — HE CHARGES!','#ff9f8a'); blowSfx(0.9); } }
+  }
+  else if(w.st==='sound'){                                  // the fluke-up — she's going down
+    whaleMove(w, 18, dt);
+    if(w.t>1.4){ w.t=0;
+      if(hunt&&hunt.w===w&&hunt.attached){ w.st='diveline'; seaMsg('⬇ SHE SOUNDS — give line! (S)','#ffce54'); }
+      else { w.st='under'; w.underT=6+Math.random()*5; } } }
+  else if(w.st==='diveline'){                               // pay out or part — the deep is pulling
+    whaleMove(w, 30, dt);
+    w.depth=Math.min(0.7,w.depth+dt*0.22);
+    if(w.t>3.4){ w.t=0; w.st='under'; w.underT=6+Math.random()*5; w.sndDone++;
+      if(hunt&&hunt.w===w){ hunt.attached=false; hunt.strain=0;
+        seaMsg('⚒ the iron drew clean — follow her!','#ffe9a6'); } } }
+  else if(w.st==='under'){
+    w.depth=Math.min(1,w.depth+dt*0.6);
+    whaleMove(w, 42, dt);
+    if(Math.random()<0.5) seafx.push({k:'bub', x:w.x+(Math.random()-0.5)*14, y:w.y+(Math.random()-0.5)*14, t:0, life:0.9});
+    w.underT-=dt;
+    if(w.underT<=0){ w.st='rise'; w.t=0; } }
+  else if(w.st==='rise'){
+    w.depth=Math.max(0,w.depth-dt*1.4);
+    whaleMove(w, 16, dt);
+    if(w.t>0.9){ w.st='roam'; w.t=0; w.tired=true; w.alarm=0;
+      const bx=w.x+Math.cos(w.a)*w.sp.len*0.30, by=w.y+Math.sin(w.a)*w.sp.len*0.30;
+      splashAt(w.x,w.y,true); seafx.push({k:'spout', x:bx, y:by, t:0, life:1.5, big:w.sp.len>40, weak:true}); blowSfx(0.5);
+      if(hunt&&hunt.w===w) seaMsg('🐋 she rises — wearier. Another iron!','#ffe9a6'); } }
+  else if(w.st==='spent'){
+    w.a+=dt*0.5; whaleMove(w, 7, dt); w.depth=0;
+    if(w.t>2.6){ w.st='slip'; w.t=0;
+      for(let i=0;i<3;i++) seafx.push({k:'spl', x:w.x+(Math.random()-0.5)*w.sp.len*0.6, y:w.y+(Math.random()-0.5)*w.sp.len*0.6, t:-i*0.2, life:0.8, big:true}); } }
+  else if(w.st==='slip'){                                   // she slips beneath, and leaves her bounty
+    w.depth=Math.min(1,w.t/1.8);
+    whaleMove(w, 5, dt);
+    if(w.t>1.8){ w.st='gone'; dropSpoils(w); } }
+}
+function dropSpoils(w){
+  const sp=w.sp; let total=0;
+  for(const k in sp.spoils){ const v=sp.spoils[k]; let n=0;
+    if(Array.isArray(v)) n=v[0]+((Math.random()*(v[1]-v[0]+1))|0);
+    else if(k==='amber'){ n = v>=1 ? Math.round(v) : (Math.random()<v?1:0); }
+    for(let i=0;i<n;i++){ const a=Math.random()*TAU, d2=10+Math.random()*w.sp.len*1.1;
+      seadrops.push({k, x:w.x+Math.cos(a)*d2, y:w.y+Math.sin(a)*d2, t:0, ph:Math.random()*TAU}); total++; } }
+  let lg=flog[sp.key];
+  const isNew=!lg; if(!lg) lg=flog[sp.key]={n:0,best:0};
+  lg.n++; if(w.lenM>lg.best) lg.best=w.lenM;
+  toast('🐋  The hunt is made','her spoils bob on the swell — sail through them');
+  if(isNew) toast('📖  New leviathan — '+sp.icon+' '+sp.name, WHALE_TIER[sp.tier]+' · '+w.lenM+' m');
+  if(sp.key==='white'){ whiteTaken=true; toast('🤍  THE WHITE IS TAKEN','the songs will remember you, cartographer'); }
+  queueSave();
+}
+
+/* ---- the iron: aim, lead her, mind the zones ---- */
+function seaAim(){ const s=iscale();
+  return { x:camX+(mouseX/(CSSW/IW)-IW/2)/s, y:camY+(mouseY/(CSSH/IH)-IH/2)/s }; }
+function tryThrowIron(){
+  if(mode!=='sea'||!started||mapOpen||ironCD>0) return;
+  if(hunt&&hunt.attached){ seaMsg('the line is fast — hands full!'); return; }
+  let near=null,nd=1e18;
+  for(const w of whales){ if(w.st==='gone') continue; const d2=(w.x-boat.x)**2+(w.y-boat.y)**2; if(d2<nd){ nd=d2; near=w; } }
+  if(!near || nd>600*600) return;                           // no whale about — clicks stay quiet
+  const aim=seaAim();
+  const bx=boat.x+Math.cos(boat.a)*8, by=boat.y+Math.sin(boat.a)*8;
+  const dx=aim.x-bx, dy=aim.y-by, d=Math.hypot(dx,dy)||1;
+  const fly=Math.min(d, WTUNE.throwRange);
+  irons.push({x:bx, y:by, vx:dx/d*240, vy:dy/d*240, d:0, maxD:fly, z:5});
+  ironCD=1.3; sfx('shoot',0.6);
+}
+function ironHit(ir){
+  for(const w of whales){
+    if(w.st==='gone'||w.st==='under'||w.st==='flee'||w.depth>0.4) continue;
+    const dirx=Math.cos(w.a), diry=Math.sin(w.a), L=w.sp.len;
+    const nx=w.x+dirx*L*0.34, ny=w.y+diry*L*0.34;            // nose
+    const rx=ir.x-nx, ry=ir.y-ny;
+    const proj=-(rx*dirx+ry*diry);                            // distance back from the nose
+    if(proj<-6||proj>L*0.92) continue;
+    const lat=Math.abs(rx*(-diry)+ry*dirx);
+    if(lat > L*(w.sp.girth||0.26)*0.62+4) continue;
+    return {w, frac:proj/(L*0.86)};
+  }
+  return null;
+}
+function stickIron(w,frac){
+  if(hunt && hunt.w!==w){ seaMsg('one hunt at a time, cartographer'); return; }
+  if(frac>0.8){ sfx('tink'); splashAt(w.x-Math.cos(w.a)*w.sp.len*0.45, w.y-Math.sin(w.a)*w.sp.len*0.45,false);
+    seaMsg('— glanced off the flukes!','#9fd2ff'); return; }
+  const head=frac<0.18;
+  const d=Math.hypot(w.x-boat.x,w.y-boat.y);
+  if(!hunt){ hunt={w, attached:true, L:Math.max(38,d*1.05), strain:24, irons:1, t:0};
+    hull=WTUNE.hullMax;
+  } else { hunt.attached=true; hunt.L=Math.max(38,d*1.05); hunt.strain=24; hunt.irons++; }
+  w.st='hooked'; w.t=0; w.burst=1.6; w.tired=false; w.depth=0;
+  if(head){ w.anger+=0.6; seaMsg('⚠ in the head — she’s FURIOUS','#ff9f8a'); }
+  else seaMsg(hunt.irons>1?'⚒ another iron — fast to her!':'⚒ A SOLID IRON — hold on!','#ffe9a6');
+  sfx('thunk'); splashAt(w.x,w.y,true);
+  for(const s2 of schools){ s2.flee=1.4; const l=Math.hypot(s2.x-w.x,s2.y-w.y)||1; s2.fx=(s2.x-w.x)/l; s2.fy=(s2.y-w.y)/l; }
+}
+function partLine(msg){
+  sfx('snap'); toast('⚡  The line PARTS','she’s away — and keeps the iron');
+  if(hunt&&hunt.w){ hunt.w.st='flee'; hunt.w.t=0; }
+  hunt=null;
+}
+function swampBoat(){
+  sfx('snap',0.5); sfx('hurt');
+  toast('🌊  SWAMPED','she tears free — bailing, half sail for a minute');
+  if(hunt&&hunt.w){ hunt.w.st='flee'; hunt.w.t=0; }
+  hunt=null; limpT=60;
+  for(let i=0;i<5;i++) seafx.push({k:'spl', x:boat.x+(Math.random()-0.5)*20, y:boat.y+(Math.random()-0.5)*20, t:-i*0.12, life:0.7, big:true});
+}
+
+/* ---- the ride: tether, strain, line, hull ---- */
+function updateHunt(dt){
+  if(!hunt) return;
+  const w=hunt.w;
+  if(w.st==='gone'){ hunt=null; return; }
+  hunt.t+=dt;
+  if(!hunt.attached){
+    if(Math.hypot(boat.x-w.x,boat.y-w.y)>1800){ hunt=null; w.tired=false; seaMsg('her trail is lost…','#9fd2ff'); }
+    return;
+  }
+  const ldx=w.x-boat.x, ldy=w.y-boat.y, d=Math.hypot(ldx,ldy)||1, lx=ldx/d, ly=ldy/d;
+  // W hauls her close (tires her fast, strains the line) — S gives line (relief, finite stock)
+  if(keys['w']||keys['arrowup']){ if(hunt.strain<78) hunt.L=Math.max(28,hunt.L-WTUNE.reelSpd*dt); hunt.strain+=8*dt; }
+  if(keys['s']||keys['arrowdown']){ hunt.L=Math.min(WTUNE.lineMax,hunt.L+64*dt); hunt.strain-=36*dt; }
+  let taut=false;
+  if(d>hunt.L){
+    taut=true;
+    const pull=d-hunt.L; let snag=false;
+    const mvx=lx*pull, mvy=ly*pull;
+    if(isWater(boat.x+mvx,boat.y)) boat.x+=mvx; else snag=true;
+    if(isWater(boat.x,boat.y+mvy)) boat.y+=mvy; else snag=true;
+    hunt.snag=snag;
+    const align=Math.cos(boat.a-Math.atan2(ly,lx));           // bow to the pull = safe
+    const sf=clamp(w.curSpd/85,0.3,1.5);
+    hunt.strain += dt*WTUNE.strainRate*w.sp.strainMul*( 12*(0.9-align)*sf + (w.thrash>0?24:0) + (snag?55:0) );
+    if(snag){ hull-=12*dt; if(Math.random()<0.2) splashAt(boat.x,boat.y,false); }
+    if(w.thrash>0 && hunt.strain>78) hull-=14*dt;
+    boat.spd=w.curSpd*0.97;                                   // towed — the ride
+  } else { hunt.strain-=20*dt; hunt.snag=false; }
+  if(w.st==='diveline') hunt.strain += dt*26*WTUNE.strainRate;   // the deep pulls hard — give line!
+  hunt.strain=clamp(hunt.strain,0,100);
+  if(hunt.strain>=100){ partLine(); return; }
+  // she tires while the line is doing its work
+  if(taut && (w.st==='hooked')){
+    w.stam -= dt*1.9*(hunt.L<75?2.3:1);
+    if(w.stam<=0){ w.stam=0; w.st='spent'; w.t=0; hunt=null;
+      toast('🐋  SHE’S SPENT','secured! — she wallows on the swell'); sfx('secure');
+      return; }
+    const nextSound = w.stamMax*(w.sp.rounds-1-w.sndDone)/w.sp.rounds;
+    if(w.sndDone<w.sp.rounds-1 && w.stam<=nextSound){ w.st='sound'; w.t=0;
+      seaMsg('〰 she lifts her flukes…','#9fd2ff'); }
+  }
+  if(hull<=0){ swampBoat(); return; }
+  if(w.anger>0.6 && hunt.strain>85) w.anger=Math.min(2.4,w.anger+dt*0.05);
+}
+
+/* ---- spoils on the swell: scoop the bounty ---- */
+function updateSeadrops(dt){
+  for(let i=seadrops.length-1;i>=0;i--){ const dr=seadrops[i]; dr.t+=dt; dr.ph+=dt*2;
+    const dx=boat.x-dr.x, dy=boat.y-dr.y, q=dx*dx+dy*dy;
+    if(q<95*95){ const dd=Math.sqrt(q)||1, pull=(0.3+0.7*(1-dd/95))*300;
+      dr.x+=dx/dd*pull*dt; dr.y+=dy/dd*pull*dt;
+      if(dd<15){ spoils[dr.k]=(spoils[dr.k]||0)+1; seaPickN=Math.min(seaPickN+1,16); seaPickT=0.9;
+        sfx('pick',Math.pow(1.05,seaPickN));
+        seafloat.push({x:dr.x, y:dr.y, txt:SPOILS[dr.k].icon+' '+SPOILS[dr.k].name, t:0, life:1.1, c:'#ffe9a6'});
+        seadrops.splice(i,1); continue; } }
+    if(dr.t>240) seadrops.splice(i,1);
+  }
+  seaPickT-=dt; if(seaPickT<=0) seaPickN=0;
+}
+
+/* ---- whaling tick ---- */
+function updateWhaling(dt){
+  ironCD=Math.max(0,ironCD-dt);
+  if(limpT>0){ limpT-=dt; if(Math.random()<0.12) splashAt(boat.x+(Math.random()-0.5)*14, boat.y+(Math.random()-0.5)*14,false); }
+  whaleSpawnT-=dt;
+  if(whaleSpawnT<=0){ whaleSpawnT=5; trySpawnWhale();
+    for(let i=whales.length-1;i>=0;i--){ const w=whales[i];
+      if(w.st==='gone' || ((w.x-boat.x)**2+(w.y-boat.y)**2>3400*3400 && !(hunt&&hunt.w===w))) whales.splice(i,1); } }
+  for(const w of whales) updateWhale(w,dt);
+  for(let i=whales.length-1;i>=0;i--) if(whales[i].st==='gone') whales.splice(i,1);
+  updateHunt(dt);
+  for(let i=irons.length-1;i>=0;i--){ const ir=irons[i];
+    const st=Math.hypot(ir.vx,ir.vy)*dt; ir.x+=ir.vx*dt; ir.y+=ir.vy*dt; ir.d+=st;
+    ir.z=5+Math.sin(Math.min(1,ir.d/ir.maxD)*Math.PI)*6;
+    const hit=ironHit(ir);
+    if(hit){ stickIron(hit.w,hit.frac); irons.splice(i,1); continue; }
+    if(ir.d>=ir.maxD){ splashAt(ir.x,ir.y,false); irons.splice(i,1); }
+  }
+  updateSeadrops(dt);
+}
+
+/* ---- whale audio: the song & the blow ---- */
+function whaleSong(vol,eerie){
+  if(!actx||!audioOn||!masterG) return;
+  try{
+    const t=actx.currentTime, f0=(eerie?105:150)+Math.random()*35;
+    for(const [mul,g0] of [[1,1],[1.498,0.45]]){
+      const o=actx.createOscillator(), g=actx.createGain(), f=actx.createBiquadFilter();
+      o.type='sine'; f.type='lowpass'; f.frequency.value=520;
+      o.frequency.setValueAtTime(f0*mul,t);
+      o.frequency.exponentialRampToValueAtTime(f0*mul*(eerie?0.52:0.62), t+3.2+Math.random());
+      o.frequency.exponentialRampToValueAtTime(f0*mul*0.9, t+4.6);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(vol*g0,t+0.9);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+4.8);
+      o.connect(f); f.connect(g); g.connect(masterG); o.start(t); o.stop(t+5);
+    }
+  }catch(e){}
+}
+function blowSfx(vol){
+  if(!actx||!audioOn||!masterG||vol<=0.02) return;
+  try{
+    const t=actx.currentTime, b=actx.createBufferSource(); b.buffer=noiseBuf(0.6);
+    const f=actx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=900; f.Q.value=0.7;
+    const g=actx.createGain();
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.12*vol,t+0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+    b.connect(f); f.connect(g); g.connect(masterG); b.start(t); b.stop(t+0.6);
+  }catch(e){}
+}
+
+/* ---- render: the leviathans (the wonder pass) ---- */
+function drawWhales(){
+  const s=iscale();
+  for(const w of whales){
+    if(w.st==='gone') continue;
+    const [sx,sy]=w2pix(w.x,w.y), m=w.sp.len*s+70;
+    if(sx<-m||sy<-m||sx>IW+m||sy>IH+m) continue;
+    drawWhale(w,s);
+  }
+}
+function drawWhale(w,s){
+  const sp=w.sp, L=sp.len, C=sp.col;
+  const deep=clamp(w.depth,0,1);
+  const sndK = w.st==='sound' ? clamp(w.t/1.4,0,1) : 0;                  // the fluke-up dive
+  const br = w.breachK>0 ? Math.sin(clamp(w.breachK,0,1)*Math.PI) : 0;   // breach arc 0..1..0
+  const scale=1+0.5*br;
+  const dirx=Math.cos(w.a), diry=Math.sin(w.a), pxn=-diry, pyn=dirx;
+  // spine — the whole body swims; the tail sweeps wider than the brow
+  const N=8, pts=[], wid=[];
+  for(let i=0;i<N;i++){
+    const u=i/(N-1);
+    const along=L*(0.30-0.82*u);
+    const sway=Math.sin(w.swimPh-u*2.6)*L*0.05*(0.22+u*u);
+    const [ax,ay]=w2pix(w.x+dirx*along+pxn*sway, w.y+diry*along+pyn*sway);
+    pts.push([ax, ay-L*0.10*br*s]);                                      // she lifts clear when she breaches
+    let k; if(u<0.16) k=0.74+u*1.6; else if(u<0.52) k=1; else k=Math.max(0.14,1-(u-0.52)*1.66);
+    wid.push(Math.max(1.2, L*(sp.girth||0.26)*0.5*k*s*scale));
+  }
+  // far down: a great moving shadow under the blue
+  if(deep>0.45){
+    pctx.globalAlpha=clamp(0.42-deep*0.3,0.05,0.42);
+    pctx.fillStyle='#0f3a52';
+    for(let i=0;i<N;i++){ pctx.beginPath(); pctx.arc(pts[i][0],pts[i][1],wid[i]*(1+deep*0.7),0,TAU); pctx.fill(); }
+    pctx.globalAlpha=1; return;
+  }
+  const bodyA=clamp(1-deep*1.6,0,1)*(1-sndK*0.45);
+  // her footprint — the glassy calm a great body leaves on the water
+  if(deep<0.25){
+    const [fx2,fy2]=w2pix(w.x-dirx*L*0.1, w.y-diry*L*0.1);
+    pctx.save(); pctx.translate(fx2,fy2); pctx.rotate(w.a);
+    pctx.fillStyle='rgba(214,242,248,'+(0.07*bodyA).toFixed(3)+')';
+    pctx.beginPath(); pctx.ellipse(0,0,L*s*0.62,L*s*0.3,0,0,TAU); pctx.fill();
+    pctx.fillStyle='rgba(224,248,252,'+(0.05*bodyA).toFixed(3)+')';
+    pctx.beginPath(); pctx.ellipse(0,0,L*s*0.45,L*s*0.2,0,0,TAU); pctx.fill();
+    pctx.restore();
+  }
+  // shadow — it stays on the water and separates beneath her breach
+  pctx.globalAlpha=0.2*bodyA;
+  pctx.fillStyle='#06222e';
+  const shOff=(0.045+0.34*br)*L*s;
+  for(let i=0;i<N;i++){ pctx.beginPath(); pctx.arc(pts[i][0]+shOff*0.45, pts[i][1]+shOff, wid[i]*0.92/scale, 0, TAU); pctx.fill(); }
+  pctx.globalAlpha=bodyA;
+  // flukes first, beating beneath the tailstock — they bloom upward on the sound
+  const tdx0=pts[N-1][0]-pts[N-2][0], tdy0=pts[N-1][1]-pts[N-2][1], tl=Math.hypot(tdx0,tdy0)||1;
+  const tdx=tdx0/tl, tdy=tdy0/tl, tpx=-tdy, tpy=tdx;
+  const beat=0.78+0.36*Math.sin(w.swimPh-2.9);
+  const fl=L*s*(0.105+0.10*sndK)*scale;
+  for(const sg of [-1,1]){
+    const cxp=pts[N-1][0]+tdx*fl*0.75+tpx*sg*fl*0.85*beat;
+    const cyp=pts[N-1][1]+tdy*fl*0.75+tpy*sg*fl*0.85*beat - sndK*fl*0.8;
+    pctx.save(); pctx.translate(cxp,cyp); pctx.rotate(Math.atan2(tdy,tdx)+sg*(0.9-0.3*beat));
+    pctx.fillStyle='#0c1c26'; pctx.beginPath(); pctx.ellipse(0,0,fl*1.06,fl*0.5,0,0,TAU); pctx.fill();
+    pctx.fillStyle=C.body; pctx.beginPath(); pctx.ellipse(0,0,fl*0.92,fl*0.4,0,0,TAU); pctx.fill();
+    pctx.restore();
+  }
+  // pectoral fins — the humpback wears long white wings
+  { const pa=Math.atan2(pts[3][1]-pts[1][1], pts[3][0]-pts[1][0]);
+    const pl=L*s*(sp.key==='humpback'?0.2:0.1)*scale;
+    for(const sg of [-1,1]){
+      const bx=pts[2][0]-Math.sin(pa)*sg*wid[2]*0.9, by=pts[2][1]+Math.cos(pa)*sg*wid[2]*0.9;
+      pctx.save(); pctx.translate(bx,by); pctx.rotate(pa+sg*(1.08+0.12*Math.sin(w.swimPh*0.7)));
+      pctx.fillStyle='#0c1c26'; pctx.beginPath(); pctx.ellipse(pl*0.5,0,pl*0.58,pl*0.21,0,0,TAU); pctx.fill();
+      pctx.fillStyle=C.fin; pctx.beginPath(); pctx.ellipse(pl*0.5,0,pl*0.5,pl*0.16,0,0,TAU); pctx.fill();
+      pctx.restore();
+    } }
+  // the body — dark outline, then her true colour, blunt at the bow
+  pctx.fillStyle='#0c1c26';
+  for(let i=0;i<N;i++){ pctx.beginPath(); pctx.arc(pts[i][0],pts[i][1],wid[i]*1.13,0,TAU); pctx.fill(); }
+  pctx.fillStyle=C.body;
+  for(let i=0;i<N;i++){ pctx.beginPath(); pctx.arc(pts[i][0],pts[i][1],wid[i],0,TAU); pctx.fill(); }
+  // sperm whales (and the White) carry the great squared brow
+  if(sp.key==='sperm'||sp.key==='white'){
+    pctx.save(); pctx.translate(pts[0][0],pts[0][1]); pctx.rotate(w.a);
+    pctx.fillStyle='#0c1c26'; pctx.fillRect(-wid[0]*0.5,-wid[0]*1.12, L*s*0.17+wid[0]*0.6, wid[0]*2.24);
+    pctx.fillStyle=C.body; pctx.fillRect(-wid[0]*0.5,-wid[0]*0.96, L*s*0.155+wid[0]*0.5, wid[0]*1.92);
+    pctx.restore();
+  }
+  // the lighter ridge down her spine
+  pctx.fillStyle=C.back;
+  for(let i=0;i<N-1;i++){ pctx.beginPath(); pctx.arc(pts[i][0],pts[i][1],wid[i]*0.58,0,TAU); pctx.fill(); }
+  const hsh=(i,j)=>hash2(w.seed+i*13, j*7+(w.seed&63));
+  // mottling — the sea writes on every back
+  if(sp.key==='blue'||sp.key==='narwhal'||sp.key==='minke'){
+    pctx.fillStyle=C.det; pctx.globalAlpha=bodyA*0.5;
+    for(let i=1;i<N-1;i++) for(let j=0;j<2;j++){ if(hsh(i,j)>0.5) continue;
+      pctx.fillRect(pts[i][0]+(hsh(i,j+3)-0.5)*wid[i]*1.4, pts[i][1]+(hsh(i,j+6)-0.5)*wid[i]*1.4,
+        Math.max(1,wid[i]*0.2), Math.max(1,wid[i]*0.16)); }
+    pctx.globalAlpha=bodyA;
+  }
+  if(sp.key==='right'){                                     // callosity patches on her brow
+    pctx.fillStyle=C.det;
+    for(let j=0;j<3;j++) pctx.fillRect(pts[0][0]+(hsh(1,j)-0.5)*wid[0], pts[0][1]+(hsh(2,j)-0.5)*wid[0],
+      Math.max(1.4,wid[0]*0.24), Math.max(1.4,wid[0]*0.2));
+  }
+  if(sp.key==='narwhal'){                                   // the tusk — a spiral lance before her
+    const t0x=pts[0][0]+dirx*wid[0]*0.8, t0y=pts[0][1]+diry*wid[0]*0.8;
+    const t1x=t0x+dirx*L*s*0.46, t1y=t0y+diry*L*s*0.46;
+    pctx.strokeStyle='#0c1c26'; pctx.lineWidth=Math.max(2,L*s*0.03);
+    pctx.beginPath(); pctx.moveTo(t0x,t0y); pctx.lineTo(t1x,t1y); pctx.stroke();
+    pctx.strokeStyle='#f2ecd8'; pctx.lineWidth=Math.max(1,L*s*0.016);
+    pctx.beginPath(); pctx.moveTo(t0x,t0y); pctx.lineTo(t1x,t1y); pctx.stroke();
+    pctx.strokeStyle='rgba(140,130,110,.8)'; pctx.lineWidth=1;
+    for(let j=1;j<4;j++){ const tt=j/4, mx=t0x+(t1x-t0x)*tt, my=t0y+(t1y-t0y)*tt;
+      pctx.beginPath(); pctx.moveTo(mx-pxn*1.6,my-pyn*1.6); pctx.lineTo(mx+pxn*1.6,my+pyn*1.6); pctx.stroke(); }
+  }
+  if(sp.key==='cinder'){                                    // embers ride her ridge, brightest at night
+    for(let i=1;i<N-1;i++){ const gp=0.5+0.5*Math.sin(time*3+i*1.7);
+      pctx.strokeStyle='rgba(255,'+((120+gp*80)|0)+',50,'+(0.45+gp*0.45).toFixed(2)+')'; pctx.lineWidth=Math.max(1,wid[i]*0.16);
+      pctx.beginPath(); pctx.moveTo(pts[i][0]-wid[i]*0.4, pts[i][1]+(hsh(i,1)-0.5)*wid[i]*0.6);
+      pctx.lineTo(pts[i][0]+wid[i]*0.1, pts[i][1]+(hsh(i,2)-0.5)*wid[i]*0.6);
+      pctx.lineTo(pts[i][0]+wid[i]*0.5, pts[i][1]+(hsh(i,3)-0.5)*wid[i]*0.6); pctx.stroke();
+      if(env.L<0.5){ pctx.fillStyle='rgba(255,138,60,'+(0.05+gp*0.05).toFixed(3)+')';
+        pctx.beginPath(); pctx.arc(pts[i][0],pts[i][1],wid[i]*1.7,0,TAU); pctx.fill(); } }
+  }
+  if(sp.key==='sounder'){                                   // ghost-lights along her flank
+    for(let i=1;i<N-1;i++){ const gp=0.5+0.5*Math.sin(time*2.2+i*1.3+(w.seed%7));
+      pctx.fillStyle='rgba(141,233,255,'+(0.35+gp*0.5).toFixed(2)+')';
+      pctx.fillRect(pts[i][0]+(hsh(i,4)-0.5)*wid[i], pts[i][1]+(hsh(i,5)-0.5)*wid[i], 1.6, 1.6);
+      if(env.L<0.55){ pctx.fillStyle='rgba(141,233,255,'+(0.04+gp*0.04).toFixed(3)+')';
+        pctx.beginPath(); pctx.arc(pts[i][0],pts[i][1],wid[i]*1.9,0,TAU); pctx.fill(); } }
+  }
+  if(sp.key==='white'){                                     // old scars; he gleams pale in the dark
+    pctx.strokeStyle=C.det; pctx.lineWidth=Math.max(1,L*s*0.012);
+    for(let j=0;j<4;j++){ const i=1+(j*2)%5;
+      const ox=(hsh(i,j)-0.5)*wid[i], oy=(hsh(j,i)-0.5)*wid[i];
+      pctx.beginPath(); pctx.moveTo(pts[i][0]+ox-wid[i]*0.3, pts[i][1]+oy-wid[i]*0.2);
+      pctx.lineTo(pts[i][0]+ox+wid[i]*0.3, pts[i][1]+oy+wid[i]*0.25); pctx.stroke(); }
+    if(env.L<0.6){ pctx.fillStyle='rgba(240,248,255,0.05)';
+      for(let i=0;i<N;i++){ pctx.beginPath(); pctx.arc(pts[i][0],pts[i][1],wid[i]*2,0,TAU); pctx.fill(); } }
+  }
+  if(w.ramSt===1){                                          // he turns on you — the warning ring
+    const gp=0.5+0.5*Math.sin(time*18);
+    pctx.strokeStyle='rgba(255,93,74,'+(0.4+gp*0.4).toFixed(2)+')'; pctx.lineWidth=2;
+    pctx.beginPath(); pctx.arc(pts[0][0],pts[0][1],wid[0]*1.6+gp*2,0,TAU); pctx.stroke();
+  }
+  // blowhole, wet-back sun glint, waterline foam, bow-wave
+  pctx.fillStyle='#0a1418';
+  pctx.beginPath(); pctx.arc(pts[0][0]+dirx*wid[0]*0.2, pts[0][1]+diry*wid[0]*0.2, Math.max(1,wid[0]*0.16),0,TAU); pctx.fill();
+  if(env.L>0.5 && deep<0.12 && br<0.2){
+    pctx.strokeStyle='rgba(255,250,228,'+(0.3*env.L).toFixed(2)+')'; pctx.lineWidth=Math.max(1,wid[2]*0.18);
+    pctx.beginPath(); pctx.moveTo(pts[1][0]-pxn*wid[1]*0.25, pts[1][1]-pyn*wid[1]*0.25);
+    pctx.lineTo(pts[3][0]-pxn*wid[3]*0.25, pts[3][1]-pyn*wid[3]*0.25); pctx.stroke();
+  }
+  if(deep<0.2 && br<0.3){
+    for(let i=0;i<N;i+=2){ const h2=hash2(i+((time*5)|0), w.seed&255);
+      if(h2<0.55){ const sg=h2<0.27?-1:1;
+        pctx.fillStyle='rgba(238,248,250,'+(0.2+h2*0.5).toFixed(2)+')';
+        pctx.fillRect(pts[i][0]+pxn*sg*wid[i]*1.02, pts[i][1]+pyn*sg*wid[i]*1.02, 1.8, 1.8); } }
+  }
+  if(w.curSpd>55 && deep<0.2){
+    const nx2=pts[0][0]+dirx*wid[0]*1.3, ny2=pts[0][1]+diry*wid[0]*1.3;
+    pctx.strokeStyle='rgba(240,250,252,.55)'; pctx.lineWidth=Math.max(1,1.2*s);
+    pctx.beginPath(); pctx.moveTo(nx2,ny2); pctx.lineTo(nx2-dirx*wid[0]+pxn*wid[0]*1.3, ny2-diry*wid[0]+pyn*wid[0]*1.3);
+    pctx.moveTo(nx2,ny2); pctx.lineTo(nx2-dirx*wid[0]-pxn*wid[0]*1.3, ny2-diry*wid[0]-pyn*wid[0]*1.3); pctx.stroke();
+  }
+  pctx.globalAlpha=1;
+}
+/* ---- render: irons in flight + the line, fast to the fish ---- */
+function drawIrons(){
+  const s=iscale();
+  if(hunt&&hunt.attached&&hunt.w){
+    const w=hunt.w;
+    const [bx,by]=w2pix(boat.x+Math.cos(boat.a)*7, boat.y+Math.sin(boat.a)*7);
+    const [wx2,wy2]=w2pix(w.x-Math.cos(w.a)*w.sp.len*0.1, w.y-Math.sin(w.a)*w.sp.len*0.1);
+    const d=Math.hypot(w.x-boat.x,w.y-boat.y);
+    const slack=clamp((hunt.L-d)/120,0,1);
+    pctx.strokeStyle = hunt.strain>78 ? 'rgba(255,120,90,.9)' : hunt.strain>50 ? 'rgba(255,210,140,.75)' : 'rgba(238,228,200,.6)';
+    pctx.lineWidth=Math.max(1,0.8*s);
+    pctx.beginPath(); pctx.moveTo(bx,by);
+    if(slack>0.02) pctx.quadraticCurveTo((bx+wx2)/2, (by+wy2)/2+slack*26*s, wx2,wy2);
+    else pctx.lineTo(wx2,wy2);
+    pctx.stroke();
+    pctx.fillStyle='#2e3a46'; pctx.fillRect(wx2-1.5,wy2-1.5,3,3);
+  }
+  for(const ir of irons){
+    const [sx,sy]=w2pix(ir.x,ir.y); const a=Math.atan2(ir.vy,ir.vx);
+    const Y=sy-ir.z*s*0.5;
+    const [bx,by]=w2pix(boat.x,boat.y);
+    pctx.strokeStyle='rgba(238,228,200,.3)'; pctx.lineWidth=1;
+    pctx.beginPath(); pctx.moveTo(bx,by); pctx.lineTo(sx,Y); pctx.stroke();
+    pctx.strokeStyle='#6e5a36'; pctx.lineWidth=Math.max(1.4,1.6*s);
+    pctx.beginPath(); pctx.moveTo(sx-Math.cos(a)*6*s, Y-Math.sin(a)*6*s); pctx.lineTo(sx,Y); pctx.stroke();
+    pctx.fillStyle='#aebec8';
+    pctx.beginPath(); pctx.moveTo(sx+Math.cos(a)*4.5*s, Y+Math.sin(a)*4.5*s);
+    pctx.lineTo(sx+Math.cos(a+2.5)*2*s, Y+Math.sin(a+2.5)*2*s);
+    pctx.lineTo(sx+Math.cos(a-2.5)*2*s, Y+Math.sin(a-2.5)*2*s); pctx.closePath(); pctx.fill();
+  }
+}
+/* ---- render: spoils bobbing on the swell ---- */
+function drawSpoilsDrops(){
+  const s=iscale();
+  for(const dr of seadrops){
+    const [sx,sy0]=w2pix(dr.x,dr.y); const sy=sy0+Math.sin(dr.ph)*1.2*s;
+    if(sx<-20||sy<-20||sx>IW+20||sy>IH+20) continue;
+    pctx.fillStyle='rgba(6,30,40,.3)'; pctx.beginPath(); pctx.ellipse(sx,sy0+2*s,3.4*s,1.3*s,0,0,TAU); pctx.fill();
+    if(dr.k==='cask'){
+      pctx.fillStyle='#5a3c1e'; pctx.fillRect(sx-3*s,sy-2.2*s,6*s,4.4*s);
+      pctx.fillStyle='#8a5c2e'; pctx.fillRect(sx-2.4*s,sy-2.2*s,4.8*s,4.4*s);
+      pctx.fillStyle='#3a2c1a'; pctx.fillRect(sx-3*s,sy-0.9*s,6*s,Math.max(1,0.8*s)); pctx.fillRect(sx-3*s,sy+0.4*s,6*s,Math.max(1,0.8*s));
+      pctx.fillStyle='rgba(255,255,255,.35)'; pctx.fillRect(sx-1.6*s,sy-1.8*s,1.2*s,Math.max(1,1*s));
+    } else if(dr.k==='baleen'){
+      pctx.strokeStyle='#0c1c26'; pctx.lineWidth=Math.max(2,1.4*s);
+      pctx.beginPath(); pctx.moveTo(sx-2*s,sy-2.6*s); pctx.lineTo(sx-2.8*s,sy+2.6*s); pctx.stroke();
+      pctx.strokeStyle='#d8d2c0'; pctx.lineWidth=Math.max(1,0.9*s);
+      for(let j=-1;j<=1;j++){ pctx.beginPath(); pctx.moveTo(sx+j*1.6*s,sy-2.6*s); pctx.lineTo(sx+j*1.6*s-0.8*s,sy+2.6*s); pctx.stroke(); }
+    } else if(dr.k==='amber'){
+      const gp=0.5+0.5*Math.sin(time*3+dr.ph);
+      pctx.fillStyle='rgba(232,200,96,'+(0.18+gp*0.2).toFixed(2)+')'; pctx.beginPath(); pctx.arc(sx,sy,4.5*s,0,TAU); pctx.fill();
+      pctx.fillStyle='#e8c860'; pctx.beginPath(); pctx.arc(sx,sy,2.4*s,0,TAU); pctx.fill();
+      pctx.fillStyle='#f8ecb0'; pctx.fillRect(sx-0.8*s,sy-1.4*s,1.4*s,1.2*s);
+    } else {
+      pctx.strokeStyle='#0c1c26'; pctx.lineWidth=Math.max(2,1.6*s);
+      pctx.beginPath(); pctx.moveTo(sx-4*s,sy+2*s); pctx.lineTo(sx+4*s,sy-2*s); pctx.stroke();
+      pctx.strokeStyle='#f2ecd8'; pctx.lineWidth=Math.max(1,0.9*s);
+      pctx.beginPath(); pctx.moveTo(sx-4*s,sy+2*s); pctx.lineTo(sx+4*s,sy-2*s); pctx.stroke();
+    }
+  }
+}
+/* ---- render: the hunt HUD ---- */
+function drawHuntHUD(){
+  ctx.textAlign='center';
+  if(limpT>0){
+    const t2='🌊 bailing… '+Math.ceil(limpT)+'s — half sail';
+    ctx.font='700 13px system-ui'; const w2=ctx.measureText(t2).width+26;
+    ctx.fillStyle='rgba(40,14,18,.72)'; roundRect(CSSW/2-w2/2,128,w2,28,9); ctx.fill();
+    ctx.fillStyle='#ff9f8a'; ctx.fillText(t2, CSSW/2, 147);
+  }
+  let near=null, nd=1e18;
+  for(const w of whales){ if(w.st==='gone'||w.st==='under'||w.st==='flee') continue;
+    const d2=(w.x-boat.x)**2+(w.y-boat.y)**2; if(d2<nd){ nd=d2; near=w; } }
+  if(near && nd<600*600 && !(hunt&&hunt.attached)){      // the harpooner's eye
+    const aim=seaAim(); const inR=Math.hypot(aim.x-boat.x,aim.y-boat.y)<=WTUNE.throwRange;
+    ctx.strokeStyle=inR?'rgba(255,214,107,.9)':'rgba(255,255,255,.4)'; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.arc(mouseX,mouseY,9,0,TAU); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mouseX-13,mouseY); ctx.lineTo(mouseX-5,mouseY); ctx.moveTo(mouseX+5,mouseY); ctx.lineTo(mouseX+13,mouseY);
+    ctx.moveTo(mouseX,mouseY-13); ctx.lineTo(mouseX,mouseY-5); ctx.moveTo(mouseX,mouseY+5); ctx.lineTo(mouseX,mouseY+13); ctx.stroke();
+    if(ironCD>0){ ctx.fillStyle='rgba(255,255,255,.55)'; ctx.font='10px system-ui'; ctx.fillText(ironCD.toFixed(1), mouseX, mouseY+24); }
+    else if(inR){ ctx.fillStyle='rgba(255,214,107,.8)'; ctx.font='700 10px system-ui'; ctx.fillText('LET FLY', mouseX, mouseY+24); }
+  }
+  if(!hunt){ ctx.textAlign='left'; return; }
+  const w=hunt.w;
+  const W2=340, x=CSSW/2-W2/2, y=CSSH-206, bh=10;
+  ctx.fillStyle='rgba(8,17,31,.62)'; roundRect(x-14,y-26,W2+28,100,12); ctx.fill();
+  ctx.fillStyle='#ffe6a6'; ctx.font='700 14px system-ui'; ctx.textAlign='left';
+  ctx.fillText(w.sp.icon+' '+w.sp.name+'  —  round '+Math.min(w.sndDone+1,w.sp.rounds)+' / '+w.sp.rounds, x, y-8);
+  ctx.textAlign='right'; ctx.fillStyle='#9fb6dd'; ctx.font='11px system-ui';
+  ctx.fillText('⚒ '+hunt.irons+' iron'+(hunt.irons>1?'s':''), x+W2, y-8);
+  ctx.textAlign='left'; ctx.font='700 9px system-ui';
+  ctx.fillStyle='#8aa0c8'; ctx.fillText('STRAIN', x, y+8);
+  ctx.fillStyle='#16294a'; roundRect(x+52,y,W2-52,bh,4); ctx.fill();
+  ctx.fillStyle = hunt.strain>78?'#ff5d4a': hunt.strain>50?'#ffce54':'#7fd6c8';
+  if(hunt.strain>1){ roundRect(x+52,y,(W2-52)*hunt.strain/100,bh,4); ctx.fill(); }
+  ctx.fillStyle='rgba(255,255,255,.65)'; ctx.fillRect(x+52+(W2-52)*0.78, y-1, 1.6, bh+2);
+  ctx.fillStyle='#8aa0c8'; ctx.fillText('LINE', x, y+22);
+  ctx.fillStyle='#16294a'; roundRect(x+52,y+14,W2-52,bh,4); ctx.fill();
+  const lf=hunt.attached?hunt.L/WTUNE.lineMax:0;
+  ctx.fillStyle= lf>0.85?'#ff9f8a':'#9fc6e6'; if(lf>0.01){ roundRect(x+52,y+14,(W2-52)*lf,bh,4); ctx.fill(); }
+  ctx.fillStyle='#8aa0c8'; ctx.fillText('WHALE', x, y+36);
+  ctx.fillStyle='#16294a'; roundRect(x+52,y+28,W2-52,bh,4); ctx.fill();
+  const wf=clamp(w.stam/w.stamMax,0,1);
+  ctx.fillStyle='#cfa6e8'; if(wf>0.01){ roundRect(x+52,y+28,(W2-52)*wf,bh,4); ctx.fill(); }
+  ctx.fillStyle='#8aa0c8'; ctx.fillText('HULL', x, y+50);
+  ctx.fillStyle='#16294a'; roundRect(x+52,y+42,W2-52,bh,4); ctx.fill();
+  const hf=clamp(hull/WTUNE.hullMax,0,1);
+  ctx.fillStyle= hf<0.3?'#ff5d4a':'#d8c878'; if(hf>0.01){ roundRect(x+52,y+42,(W2-52)*hf,bh,4); ctx.fill(); }
+  ctx.textAlign='center'; ctx.font='600 11.5px system-ui'; ctx.fillStyle='#dbe7fb';
+  let msg;
+  if(!hunt.attached) msg = w.st==='under' ? '〰 she’s under — follow the bubbles' : w.st==='rise' ? '⛲ she rises!' : 'close in and throw again (click)';
+  else if(w.st==='diveline') msg='⬇ SHE SOUNDS — GIVE LINE (hold S)!';
+  else if(hunt.snag) msg='⚠ SNAGGED — give line, steer off the rocks!';
+  else if(w.thrash>0) msg='she thrashes — ease off, bow to her!';
+  else msg='A/D follow her turns  ·  W haul in  ·  S give line';
+  if(msg) ctx.fillText(msg, CSSW/2, y+64);
+  ctx.textAlign='left';
+}
+/* ---- whaling feel sliders ---- */
+const WTUNE_DEF=[
+  ['wSpawn','Whales about ×',0.2,3,0.1],
+  ['runSpd','Run speed ×',0.5,1.8,0.05],
+  ['strainRate','Strain rate ×',0.4,2,0.05],
+  ['lineMax','Line stock',200,800,10],
+  ['reelSpd','Reel speed',14,70,2],
+  ['stamMul','Whale stamina ×',0.4,2.2,0.1],
+  ['hullMax','Hull strength',40,200,5],
+  ['throwRange','Throw range',70,260,5],
+  ['waryMul','Whale shyness ×',0,2.5,0.1],
+];
+function buildWhaleTune(){ const host=document.getElementById('tuneWhaleRows'); if(!host) return; host.innerHTML='';
+  WTUNE_DEF.forEach(([k,label,min,max,step])=>{ const row=document.createElement('div'); row.className='row';
+    row.innerHTML='<label>'+label+' <b id="wv_'+k+'">'+WTUNE[k]+'</b></label><input type="range" id="ws_'+k+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+WTUNE[k]+'">';
+    host.appendChild(row);
+    row.querySelector('input').addEventListener('input',e=>{ WTUNE[k]=parseFloat(e.target.value); document.getElementById('wv_'+k).textContent=WTUNE[k]; queueSave(); });
   });
 }
 
@@ -1362,9 +2132,9 @@ function drawHUD(){
   ctx.font='12px system-ui';
   ctx.fillStyle = holdN>=holdC ? '#ff9f8a' : '#cdd9f3';
   ctx.fillText('🧺 Hold '+holdN+' / '+holdC+'      🪙 '+cargo.gold, 22, 74);
-  const wn=wellN(), wc=Math.round(FTUNE.well);
+  const wn=wellN(), wc=Math.round(FTUNE.well), spn=spoilN();
   ctx.fillStyle = wn>=wc ? '#ff9f8a' : '#9fd8e8';
-  ctx.fillText('🐟 Well '+wn+' / '+wc+(fed>0?'      🍲 +'+fed+' ♥':''), 22, 94);
+  ctx.fillText('🐟 Well '+wn+' / '+wc+(spn>0?'   🛢 '+spn:'')+(fed>0?'   🍲 +'+fed+' ♥':''), 22, 94);
 
   drawCompass();
   // time of day + weather, tucked under the compass
@@ -1381,6 +2151,7 @@ function drawHUD(){
     const w=ctx.measureText(t).width+30; ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-96,w,34,11); ctx.fill();
     ctx.fillStyle='#ffe6a6'; ctx.fillText(t, CSSW/2, CSSH-74); ctx.textAlign='left'; }
   drawFishHUD();
+  drawHuntHUD();
   drawToasts();
   drawVignette();
 }
@@ -1686,6 +2457,7 @@ function sfx(name,mul){ if(!actx||!audioOn||!masterG) return; try{
   else if(name==='pick'){f=640;d=0.06;ty='triangle';} else if(name==='chest'){f=330;d=0.5;ty='triangle';}
   else if(name==='dig'){f=130;d=0.1;ty='square';} else if(name==='dash'){f=520;d=0.12;ty='triangle';}
   else if(name==='cast'){f=250;d=0.24;ty='sine';} else if(name==='snap'){f=95;d=0.34;ty='sawtooth';}
+  else if(name==='thunk'){f=170;d=0.14;ty='square';}
   o.type=ty; o.frequency.setValueAtTime(f*(mul||1),t);
   if(name==='secure') o.frequency.exponentialRampToValueAtTime(f*2,t+0.25);
   if(name==='chest') o.frequency.exponentialRampToValueAtTime(f*2.4,t+0.4);
@@ -1819,6 +2591,8 @@ function moveSlide(o,dx,dy){ const r=o.r*0.7; if(islFree(o.x+dx,o.y,r)) o.x+=dx;
 
 /* ---- enter / leave ---- */
 function enterIsland(core){ mode='island'; setPixScale(2); mapOpen=false; nearLand=null; net=null; closeFlog();
+  if(hunt){ if(hunt.w){ hunt.w.st='flee'; hunt.w.t=0; } hunt=null; }   // going ashore cuts any line
+  irons=[];
   player.maxhp=5+fed;                          // a hot meal from the galley = bonus hearts for this trip
   genIsland(core); tripLoot=loot0(); icamX=player.x; icamY=player.y;
   const b=ISL.biome;
@@ -2609,7 +3383,7 @@ function frameInner(ts){
   update(dt);
   // draw world to low-res buffer
   if(started){
-    drawSea(); drawPorts(); drawCleared(); drawWake(); drawSchools(); drawNet(); drawBoat(); drawSeaFx();
+    drawSea(); drawPorts(); drawCleared(); drawWake(); drawSchools(); drawWhales(); drawNet(); drawSpoilsDrops(); drawBoat(); drawIrons(); drawSeaFx();
   }
   // composite to screen
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -2673,6 +3447,11 @@ function buildPlaytest(){
     fsh.forEach(([label,val])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
       b.onclick=()=>debugSpawnFish(val);
       fiEl.appendChild(b); }); }
+  const whl=[['Pilot','pilot'],['Humpback','humpback'],['Sperm','sperm'],['Blue','blue'],['Exotic','exotic'],['WHITE','white']], whEl=document.getElementById('ptWhale');
+  if(whEl){ whEl.innerHTML='';
+    whl.forEach(([label,val])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
+      b.onclick=()=>debugSpawnWhale(val);
+      whEl.appendChild(b); }); }
   refreshPlaytest();
 }
 function refreshPlaytest(){
@@ -2722,10 +3501,11 @@ function begin(fresh){
   if(fresh){ buildWorld((Math.random()*1e9)>>>0);
     boat.x=spawn.x; boat.y=spawn.y; boat.a=-Math.PI/2; boat.spd=0; boat.sail=0;
     camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; clearedCount=0; cargo=loot0(); biomesFound=new Set();
-    well={}; flog={}; fed=0;
+    well={}; flog={}; fed=0; spoils={}; whiteTaken=false;
   }
   mode='sea'; nearLand=null; schools=[]; net=null; netCD=0; seafloat=[]; seafx=[]; popQueue=[];
-  buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune(); buildFishTune();
+  whales=[]; hunt=null; irons=[]; seadrops=[]; ironCD=0; limpT=0; whaleSpawnT=6;
+  buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune(); buildFishTune(); buildWhaleTune();
   document.getElementById('mute').textContent=audioOn?'🔊':'🔇';
   document.getElementById('title').classList.add('hidden');
   started=true; paused=false; last=performance.now();
