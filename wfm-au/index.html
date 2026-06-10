@@ -203,6 +203,44 @@
       .inbox-fab { width: 52px; height: 52px; font-size: 22px; right: 14px; bottom: 14px; }
       .inbox-panel { right: 10px; left: 10px; width: auto; bottom: 78px; }
     }
+
+    /* ---- THE FLOOR: live week ---- */
+    .live-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; display: inline-block; animation: live-pulse 1.4s ease infinite; }
+    @keyframes live-pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+    .live-clock { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+    .spd-btn { min-width: auto; padding: 3px 10px; font-size: 11px; }
+    .spd-btn.pressed { outline: 1px solid #4f8cff; background: rgba(79,140,255,.18); }
+    .iv-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; margin-top: 6px; }
+    .iv-slot { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 2px 3px; text-align: center; min-height: 64px; position: relative; }
+    .iv-slot.pend { opacity: .42; }
+    .iv-slot.cur { border-color: #4f8cff; box-shadow: 0 0 0 1px rgba(79,140,255,.5); }
+    .iv-slot.catzone { border-color: rgba(248,113,113,.6); }
+    .iv-bar-wrap { height: 30px; display: flex; align-items: flex-end; justify-content: center; }
+    .iv-bar { width: 70%; border-radius: 3px 3px 0 0; background: #4f8cff; opacity: .9; min-height: 2px; }
+    .iv-slot.slbad .iv-bar { background: #f87171; }
+    .iv-slot.slwarn .iv-bar { background: #fbbf24; }
+    .iv-time { font-size: 9px; opacity: .6; margin-top: 2px; }
+    .iv-sl { font-size: 10px; font-weight: 700; }
+    .chip-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .chipA { font-size: 10px; padding: 2px 7px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); white-space: nowrap; }
+    .chipA.on { border-color: rgba(52,211,153,.5); }
+    .chipA.sick { border-color: rgba(248,113,113,.6); color: #f87171; text-decoration: line-through; opacity: .75; }
+    .chipA.aux { border-color: rgba(251,191,36,.6); color: #fbbf24; }
+    .chipA.ot { border-color: rgba(240,180,0,.8); color: #ffd86a; }
+    .chipA.vto { opacity: .45; text-decoration: line-through; }
+    .wire { max-height: 168px; overflow-y: auto; }
+    .wire .li.warn { color: #fbbf24; }
+    .wire .li.bad { color: #f87171; }
+    .wire .li.good { color: #34d399; }
+    .wire .li.cat { color: #f87171; font-weight: 700; }
+    .dcard { border: 1px solid rgba(240,180,0,.65); background: linear-gradient(135deg, rgba(240,180,0,.10), rgba(184,134,11,.08)); border-radius: 10px; padding: 12px 14px; margin: 10px 0; animation: dcard-in .25s ease; }
+    @keyframes dcard-in { from { transform: translateY(-8px); opacity: 0 } to { transform: none; opacity: 1 } }
+    .dcard h4 { margin: 0 0 4px 0; color: #ffd86a; }
+    .dcard .dbody { font-size: 12.5px; margin-bottom: 8px; }
+    .dcard .opt { display: block; }
+    .dcard.catcard { border-color: rgba(248,113,113,.8); background: linear-gradient(135deg, rgba(248,113,113,.12), rgba(127,29,29,.14)); }
+    .dcard.catcard h4 { color: #fca5a5; }
   </style>
 </head>
 <body>
@@ -304,6 +342,19 @@
       // they expire (ignoring one costs the sender's trust meter). All seconds.
       INBOX: { TICK_MS: 500, TICK: 0.5, FIRST: 22, MIN_GAP: 28, MAX_GAP: 55, TTL: 75, MAX_ACTIVE: 5, EXPIRE: 5 },
 
+      // THE FLOOR — live week. IV_MS = real ms per interval at 1× speed.
+      LIVE: {
+        IV_MS: 1050,
+        CARDS_MAX_DAY: 3,        // pausing decision cards per day, hard cap
+        SPIKE_SL: 0.45,          // interval SL below this can raise a spike card
+        VTO_OCC: 0.62,           // day occupancy below this can raise a VTO card
+        LEAVE_P: 0.38,           // chance per day a leave request lands
+        OT_BOOST: 0.10,          // emergency OT: +10% phones for the rest of the day
+        OT_COST_DAYS: 3,         // emergency OT priced as N agent-days at OT rate
+        BREAK_BOOST: 0.08,       // killing breaks: +8% phones for 2 intervals
+        VTO_CUT: 0.07            // VTO: −7% phones for the rest of the day
+      },
+
       DOW: [1.15, 1.05, 1.00, 0.95, 0.90], // Mon–Fri volume multipliers
       HOLIDAY_VOL: 0.40,
       HOLIDAY_PAY: 2.0,
@@ -342,18 +393,18 @@
       WA:  { '2026-09-28': "King's Birthday (WA)", '2027-03-01': 'Labour Day', '2027-06-07': 'Western Australia Day' }
     };
     var SITES = ['NSW','VIC','QLD','SA','WA'];
-    var CLIENTS = ['Optus','Telstra','CBA','NBN Co','Centrelink'];
+    var CLIENTS = ['AAMI','NRMA Insurance','Suncorp','Allianz','Youi'];
     var CHANNELS = [
       { key: 'voice', label: 'Voice', icon: '📞', volMult: 1.00, ahtMult: 1.00, target: 0.80, hint: 'real-time, hottest channel' },
       { key: 'chat',  label: 'Chat',  icon: '💬', volMult: 0.35, ahtMult: 0.50, target: 0.90, hint: 'concurrent up to 3, shorter handles — held to a tighter SL' },
       { key: 'email', label: 'Email', icon: '✉️', volMult: 0.45, ahtMult: 1.50, target: 0.65, hint: 'async, deeper handle times — looser SL window' }
     ];
     var CLIENT_BIAS = {
-      Optus:      ['Optus', 'TIO', 'NBN', 'Salesforce', 'NOC'],
-      Telstra:    ['Telstra', 'TIO', 'NBN', 'NOC', 'Salesforce'],
-      'NBN Co':   ['NBN', 'NOC', 'Optus', 'Telstra', 'TIO'],
-      CBA:        ['CBA', 'ATO', 'EOFY', 'Finance'],
-      Centrelink: ['ATO', 'EOFY', 'CPSU', 'EBA', 'grievance', 'wrist', 'WorkCover']
+      AAMI:             ['AFCA', 'claimant', 'escalation', 'hail', 'storm'],
+      'NRMA Insurance': ['storm', 'hail', 'claims', 'NOC', 'CAT'],
+      Suncorp:          ['storm', 'CAT', 'claims', 'Salesforce', 'NOC'],
+      Allianz:          ['ATO', 'EOFY', 'Finance', 'report', 'AFCA'],
+      Youi:             ['kudos', 'viral', 'socials', 'escalation', 'claimant']
     };
 
     var START = new Date(2026, 6, 6);
@@ -361,11 +412,11 @@
     var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var TEAMS = ['Wallabies', 'Magpies', 'Crows'];
     var AGENT_NAMES = ['Jess R.','Tom H.','Aisha K.','Dylan P.','Mia L.','Sammo O.','Priya N.','Jakey W.','Chloe T.','Bazza F.','Zara M.','Lucas D.','Noah B.','Ava S.','Ethan C.','Ruby G.','Liam K.','Sophie M.','Macca J.','Ivy R.','Oscar P.','Grace L.','Leo T.','Hana W.'];
-    var SAVE_KEY = 'wfm_au_tycoon_save_v1';
+    var SAVE_KEY = 'wfm_au_tycoon_save_v2';
 
     var ACHIEVEMENTS = [
       { id: 'first_blood',      name: 'First Blood',             hint: 'Catch your first dodgy agent in the audit.' },
-      { id: 'tio_resolved',     name: 'TIO Complaint Resolved',  hint: 'Reply to the TIO email with the ideal option.' },
+      { id: 'afca_resolved',    name: 'AFCA Complaint Resolved', hint: 'Reply to the AFCA email with the ideal option.' },
       { id: 'smoko_crackdown',  name: 'Smoko Crackdown',         hint: 'Reset a smoko overrun the right way.' },
       { id: 'eba_honoured',     name: 'EBA Roster Honoured',     hint: 'Walk Trev from CPSU through the constraints openly.' },
       { id: 'crm_saved',        name: 'CRM Outage Handled',      hint: 'Switch to paper backup the moment Salesforce drops.' },
@@ -375,11 +426,15 @@
       { id: 'knockoff_legend',  name: 'Knock-off Legend',        hint: 'Handle 50 emails across the financial year.' },
       { id: 'no_blunders',      name: 'Clean Week, No Blunders', hint: 'Get through a week without picking a hidden-trap option.' },
       { id: 'forecast_whisperer', name: 'Forecast Whisperer',    hint: 'Land a weekly forecast within 2% of actuals.' },
-      { id: 'streak_10',        name: '10 in a Row',              hint: 'Hit SL target 10 weeks in a row.' }
+      { id: 'streak_10',        name: '10 in a Row',              hint: 'Hit SL target 10 weeks in a row.' },
+      { id: 'cat_commander',    name: 'CAT Commander',            hint: 'Hit your committed SL in a week a CAT event struck.' },
+      { id: 'storm_chaser',     name: 'Storm Season Survivor',    hint: 'Come through 3 CAT events in one FY.' },
+      { id: 'people_person',    name: 'People Person',            hint: 'Approve 10 leave requests across the FY.' },
+      { id: 'floor_general',    name: 'Floor General',            hint: 'Make 25 live floor calls across the FY.' }
     ];
 
     var ACH_EMAIL_TRIGGERS = [
-      { subjStart: 'TIO\'s filed',         optStart: 'Full incident review',     achId: 'tio_resolved' },
+      { subjStart: 'AFCA\'s opened',       optStart: 'Full incident review',     achId: 'afca_resolved' },
       { subjStart: 'Crows are smashing',   optStart: 'TL-led adherence reset',   achId: 'smoko_crackdown' },
       { subjStart: 'Roster changes',       optStart: 'Sit down with Trev',       achId: 'eba_honoured' },
       { subjStart: 'Salesforce CRM down',  optStart: 'Paper-backup process',     achId: 'crm_saved' },
@@ -397,7 +452,7 @@
     function money(x) { return (x < 0 ? '-$' : '$') + Math.abs(Math.round(x)).toLocaleString(); }
     function rand(a, b) { return a + Math.random() * (b - a); }
     function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-    function pickCohortNames(n) { var pool = shuffle(AGENT_NAMES), out = []; for (var i = 0; i < n && i < pool.length; i++) out.push(pool[i]); return out; }
+    function pickCohortNames(n) { var out = [], batch = {}; for (var i = 0; i < n; i++) { var nm = freshName(batch); out.push(nm); batch[nm] = 1; } return out; }
     function sum(arr) { return arr.reduce(function (a, b) { return a + b; }, 0); }
     function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
     function NDAYS() { return CFG.DOW.length; }
@@ -414,6 +469,62 @@
     function weekLabel(week) { var a = dateFor(week, 0), b = dateFor(week, NDAYS() - 1); return fmtDate(a) + ' – ' + fmtDate(b) + ' ' + b.getFullYear(); }
 
     /* =======================================================================
+       ROSTER — persistent agents. Your floor is real people who exist all
+       year: hidden traits (skill / discipline / resilience), visible-ish
+       morale, an AL balance, and a grudge ledger that remembers how you
+       treated them. Hires join by name; quitters are people you knew.
+       ======================================================================= */
+    var EXTRA_NAMES = ['Bluey D.','Shazza K.','Davo R.','Mei C.','Kane B.','Tahlia S.','Riley O.','Aroha T.','Hassan A.','Priya M.','Jacko T.','Nessa V.','Cooper S.','Indi M.','Marko P.','Tegan F.','Beau W.','Sana Y.','Lachie G.','Holly N.','Vinh T.','Keira D.','Angus M.','Talia B.','Reza H.','Maddy C.','Jye P.','Elif K.','Brodie L.','Anika S.','Toby F.','Rani G.','Cal H.','Sienna J.','Dipa P.','Fletch R.'];
+    function allNamePool() { return AGENT_NAMES.concat(EXTRA_NAMES); }
+    function usedNames() {
+      var used = {};
+      if (S && S.roster) for (var i = 0; i < S.roster.length; i++) used[S.roster[i].name] = 1;
+      if (S && S.pipeline) for (var p = 0; p < S.pipeline.length; p++) { var nm = S.pipeline[p].names || []; for (var j = 0; j < nm.length; j++) used[nm[j]] = 1; }
+      return used;
+    }
+    function freshName(extraUsed) {
+      var used = usedNames(); if (extraUsed) for (var k in extraUsed) used[k] = 1;
+      var pool = shuffle(allNamePool());
+      for (var i = 0; i < pool.length; i++) if (!used[pool[i]]) return pool[i];
+      var tries = 0;
+      while (tries++ < 120) { var cand = pick(pool).split(' ')[0] + ' ' + String.fromCharCode(65 + Math.floor(Math.random() * 26)) + '.'; if (!used[cand]) return cand; }
+      return 'Agent ' + Math.floor(Math.random() * 999);
+    }
+    function makeAgent(id, name, team) {
+      return { id: id, name: name, team: team, skill: rand(0.90, 1.10), disc: rand(0.30, 0.95), resil: rand(0.30, 0.95), morale: rand(55, 80), al: Math.round(rand(8, 20)), grudge: 0, sickies: 0, offences: 0, green: 0 };
+    }
+    function buildRoster(n) {
+      var roster = [], pool = shuffle(allNamePool());
+      for (var i = 0; i < n; i++) roster.push(makeAgent(i + 1, i < pool.length ? pool[i] : ('Agent ' + (i + 1)), TEAMS[i % 3]));
+      return roster;
+    }
+    function agentById(id) { if (!S || !S.roster) return null; for (var i = 0; i < S.roster.length; i++) if (S.roster[i].id === id) return S.roster[i]; return null; }
+    function syncHC() { S.hc = S.roster ? S.roster.length : 0; }
+    function addAgentToRoster(name) {
+      var maxId = 0; for (var i = 0; i < S.roster.length; i++) if (S.roster[i].id > maxId) maxId = S.roster[i].id;
+      var a = makeAgent(maxId + 1, name || freshName(), TEAMS[Math.floor(Math.random() * TEAMS.length)]);
+      a.green = 2; a.morale = rand(65, 82);
+      S.roster.push(a); syncHC(); return a;
+    }
+    function removeAgent(id) { for (var i = 0; i < S.roster.length; i++) if (S.roster[i].id === id) { var a = S.roster.splice(i, 1)[0]; syncHC(); return a; } return null; }
+    function pickQuitter() {
+      var worst = null, worstV = Infinity;
+      for (var i = 0; i < S.roster.length; i++) { var a = S.roster[i], v = a.morale - a.grudge * 9 + rand(-12, 12); if (v < worstV) { worstV = v; worst = a; } }
+      return worst;
+    }
+    function backfillRosterState() {
+      if (!S.roster || !S.roster.length) S.roster = buildRoster(S.hc || CFG.START_HC);
+      for (var bi = 0; bi < S.roster.length; bi++) { var ba = S.roster[bi]; if (ba.grudge == null) ba.grudge = 0; if (ba.offences == null) ba.offences = 0; if (ba.green == null) ba.green = 0; if (ba.al == null) ba.al = 12; if (ba.sickies == null) ba.sickies = 0; if (ba.morale == null) ba.morale = 65; if (ba.disc == null) ba.disc = rand(0.30, 0.95); if (ba.resil == null) ba.resil = rand(0.30, 0.95); if (ba.skill == null) ba.skill = rand(0.90, 1.10); }
+      syncHC();
+      if (!S.leaveBook) S.leaveBook = {};
+      if (!S.deferred) S.deferred = [];
+      if (!S.shiftMix || typeof S.shiftMix.early !== 'number') S.shiftMix = { early: 0.40, mid: 0.35, late: 0.25 };
+      if (typeof S.surgePlan !== 'boolean') S.surgePlan = false;
+      if (S.liveSnap === undefined) S.liveSnap = null;
+      if (!S.catLog) S.catLog = [];
+    }
+
+    /* =======================================================================
        ERLANG + INTRADAY
        ======================================================================= */
     function erlangB(N, A) { var B = 1; for (var k = 1; k <= N; k++) B = (A * B) / (k + A * B); return B; }
@@ -422,30 +533,54 @@
     function occupancy(N, A) { return N <= 0 ? 1 : clamp(A / N, 0, 1); }
     function requiredOnPhones(A, aht, T, target) { var N = Math.max(1, Math.floor(A) + 1); while (serviceLevel(N, A, aht, T) < target) { N++; if (N > 3000) break; } return N; }
 
-    // intraday breakdown for a day: distributes calls across hours; staffing flat.
-    function intervalsFor(dayCalls, phones, aht) {
+    // Shift patterns: 8-hour shifts inside the 10-hour window. Your weekly
+    // Early/Mid/Late mix shapes per-interval coverage — flat staffing is gone.
+    var SHIFTS = [
+      { key: 'early', label: 'Early', time: '08:00–16:00', from: 0, to: 7 },
+      { key: 'mid',   label: 'Mid',   time: '09:00–17:00', from: 1, to: 8 },
+      { key: 'late',  label: 'Late',  time: '10:00–18:00', from: 2, to: 9 }
+    ];
+    var SHIFT_NORM = 0.8; // each shift covers 8 of 10 intervals — keeps agent-hours flat-equivalent
+    function normMix(mix) {
+      var m = mix || (S && S.shiftMix) || { early: 0.40, mid: 0.35, late: 0.25 };
+      var t = (m.early || 0) + (m.mid || 0) + (m.late || 0);
+      if (t <= 0) return { early: 0.34, mid: 0.33, late: 0.33 };
+      return { early: (m.early || 0) / t, mid: (m.mid || 0) / t, late: (m.late || 0) / t };
+    }
+    function shiftCoverage(iv, mix) {
+      var cov = 0;
+      for (var s = 0; s < SHIFTS.length; s++) { var sh = SHIFTS[s]; if (iv >= sh.from && iv <= sh.to) cov += (mix[sh.key] || 0); }
+      return cov / SHIFT_NORM;
+    }
+    // intraday breakdown for a day: distributes calls across hours; staffing
+    // follows the shift mix (pass mix=null for flat staffing, e.g. handover).
+    function intervalsForMix(dayCalls, phones, aht, mix) {
       var n = CFG.INTRADAY.length, iSec = CFG.OPEN_SECONDS / n, arr = [], wsum = sum(CFG.INTRADAY);
       for (var h = 0; h < n; h++) {
         var iCalls = dayCalls * (CFG.INTRADAY[h] / wsum);
         var iA = iCalls * aht / iSec;
-        var sl = serviceLevel(phones, iA, aht, CFG.SLA_T);
-        var aband = iA >= phones ? iCalls * clamp((iA - phones) / Math.max(iA, 1), 0, 0.6) : iCalls * (1 - sl) * 0.06;
-        arr.push({ h: h, calls: iCalls, A: iA, phones: phones, sl: sl, aband: aband });
+        var ph = mix ? phones * shiftCoverage(h, mix) : phones;
+        var sl = serviceLevel(ph, iA, aht, CFG.SLA_T);
+        var aband = iA >= ph ? iCalls * clamp((iA - ph) / Math.max(iA, 1), 0, 0.6) : iCalls * (1 - sl) * 0.06;
+        arr.push({ h: h, calls: iCalls, A: iA, phones: ph, sl: sl, aband: aband });
       }
       return arr;
     }
+    function intervalsFor(dayCalls, phones, aht) { return intervalsForMix(dayCalls, phones, aht, null); }
     // day SL = call-weighted average of interval SLs (so call-flow view agrees with headline)
-    function dayServiceLevel(dayCalls, phones, aht) {
+    function dayServiceLevelMix(dayCalls, phones, aht, mix) {
       if (dayCalls <= 0) return 1;
-      var iv = intervalsFor(dayCalls, phones, aht), ans = 0;
+      var iv = intervalsForMix(dayCalls, phones, aht, mix), ans = 0;
       for (var k = 0; k < iv.length; k++) ans += iv[k].sl * iv[k].calls;
       return ans / dayCalls;
     }
-    function dayAbandoned(dayCalls, phones, aht) {
-      var iv = intervalsFor(dayCalls, phones, aht), ab = 0;
+    function dayServiceLevel(dayCalls, phones, aht) { return dayServiceLevelMix(dayCalls, phones, aht, null); }
+    function dayAbandonedMix(dayCalls, phones, aht, mix) {
+      var iv = intervalsForMix(dayCalls, phones, aht, mix), ab = 0;
       for (var k = 0; k < iv.length; k++) ab += iv[k].aband;
       return ab;
     }
+    function dayAbandoned(dayCalls, phones, aht) { return dayAbandonedMix(dayCalls, phones, aht, null); }
 
     /* =======================================================================
        GAME STATE
@@ -470,8 +605,12 @@
         clientCo: pick(CLIENTS),
         peekRevealed: false, peekActuals: null,
         skillSplit: { voice: 0.80, chat: 0.15, email: 0.05 },
-        muted: false
+        muted: false,
+        roster: [], leaveBook: {}, deferred: [],
+        shiftMix: { early: 0.40, mid: 0.35, late: 0.25 },
+        surgePlan: false, liveSnap: null, catLog: []
       };
+      S.roster = buildRoster(CFG.START_HC); syncHC();
       for (var i = 4; i >= 1; i--) {
         var tot = Math.round(CFG.BASE_CALLS * weekdaySum() * rand(0.97, 1.03));
         S.callHistory.push({ label: 'Pre-FY −' + i, total: tot, forecast: null, days: dowSplit(tot, false) });
@@ -569,6 +708,23 @@
     function freshMods() { return { volMult: 1, ahtMult: 1, absenceAdd: 0, notes: [] }; }
     function rollEvents() {
       S.mods = freshMods(); S.campaign = null;
+      S.liveCat = rollCat();
+      // deferred paybacks (grudge sickies from knocked-back leave) land now
+      if (S.deferred && S.deferred.length) {
+        var still = [];
+        for (var df = 0; df < S.deferred.length; df++) {
+          var D = S.deferred[df];
+          if (D.week <= S.week) {
+            if (D.type === 'grudgeSickie') {
+              S.mods.absenceAdd += 0.02;
+              var ga = agentById(D.agentId);
+              S.mods.notes.push('🤧 ' + (D.name || 'An agent') + '\'s chucked a "mystery" sickie this week' + (ga && ga.grudge >= 2 ? ' — funny, right after that knocked-back leave' : '') + '. The TLs reckon it\'s payback.');
+              if (ga) ga.grudge = Math.max(0, ga.grudge - 1);
+            }
+          } else still.push(D);
+        }
+        S.deferred = still;
+      }
       if (weekHasHoliday(S.week)) { S.mods.absenceAdd += CFG.HOLIDAY_ABSENCE; S.mods.notes.push('🗓️ Public holiday this week — expect higher leave and penalty-rate days.'); }
       if ([11, 12, 13].indexOf(S.week) >= 0 && Math.random() < 0.6) {
         S.mods.absenceAdd += rand(0.08, 0.13);
@@ -586,14 +742,14 @@
       var ev = pick(bag);
       if (ev === 'flu') { S.mods.absenceAdd += rand(0.05, 0.09); S.mods.notes.push('🤒 Flu going around — sick leave is up sharply this week.'); }
       else if (ev === 'outage') { S.mods.ahtMult *= rand(1.10, 1.20); S.mods.notes.push('💥 Phone system glitches — handle times are running long this week.'); }
-      else if (ev === 'star') { S.hc = Math.max(0, S.hc - 1); S.engagement = clamp(S.engagement - 4, 0, 100); S.mods.notes.push('🏃 A senior agent resigned unexpectedly. Headcount −1, the team is rattled.'); }
+      else if (ev === 'star') { var sa = null, sBest = -1; if (S.roster) for (var sx = 0; sx < S.roster.length; sx++) { var sc = (2 - S.roster[sx].skill) + S.roster[sx].disc; if (sc > sBest) { sBest = sc; sa = S.roster[sx]; } } if (sa) removeAgent(sa.id); else S.hc = Math.max(0, S.hc - 1); S.engagement = clamp(S.engagement - 4, 0, 100); S.mods.notes.push('🏃 ' + (sa ? sa.name + ' (' + sa.team + ') — one of your best —' : 'A senior agent') + ' resigned unexpectedly. Headcount −1, the team is rattled.'); }
       else if (ev === 'viral') { S.trust.client = clamp(S.trust.client - 5, 0, 100); S.mods.notes.push('📣 A complaint went viral on socials. The client is watching closely (Client trust −5).'); }
       else if (ev === 'campaign') { S.campaign = { claim: 1.10, real: rand(1.24, 1.34) }; S.mods.notes.push('📈 Marketing has launched a campaign — factor it into your forecast.'); }
       else if (ev === 'kudos') { S.trust.client = clamp(S.trust.client + 4, 0, 100); S.engagement = clamp(S.engagement + 3, 0, 100); S.mods.notes.push('🌟 The client sent kudos for last month. (Client trust +4, team lifted.)'); }
       else if (ev === 'recruit') { S.pipeline.push({ size: 3, weeksLeft: CFG.TRAIN_WEEKS, names: pickCohortNames(3) }); S.mods.notes.push('🎁 A recruitment open-day overdelivered — 3 free recruits added to the training pipeline.'); }
       else if (ev === 'payroll') { S.budget -= 8000; S.trust.fin = clamp(S.trust.fin - 2, 0, 100); S.mods.notes.push('🧾 A payroll error cost $8,000 to fix (Finance trust −2).'); }
       else if (ev === 'tipping') { S.engagement = clamp(S.engagement + 3, 0, 100); S.mods.notes.push('🎰 Punters Club: the floor\'s running a footy tipping comp — banter\'s up, engagement +3.'); }
-      else if (ev === 'bushfire') { S.mods.volMult *= rand(1.05, 1.12); S.mods.absenceAdd += 0.02; S.mods.notes.push('🚒 Regional bushfires near the NBN towers — calls up 5–12%, plus a couple of staff dealing with it at home.'); }
+      else if (ev === 'bushfire') { S.mods.volMult *= rand(1.05, 1.12); S.mods.absenceAdd += 0.02; S.mods.notes.push('🚒 Regional bushfires upstate — claim enquiries up 5–12%, plus a couple of staff dealing with it at home.'); }
       else if (ev === 'heatwave') { S.mods.absenceAdd += rand(0.03, 0.06); S.mods.ahtMult *= rand(1.03, 1.07); S.mods.notes.push('🥵 42°C heatwave — aircon\'s flat-out, agents are sluggish (AHT +3–7%, sickies up).'); }
       else if (ev === 'quokka') { S.engagement = clamp(S.engagement + 2, 0, 100); S.trust.client = clamp(S.trust.client + 1, 0, 100); S.mods.notes.push('🦘 A quokka wandered into the carpark and the whole floor stopped for selfies. Engagement +2, Client trust +1.'); }
     }
@@ -724,7 +880,7 @@
         var watchMeters = [
           { k: 'fin', n: 'Greg in Finance', v: S.trust.fin, hints: ['"Mate, the books are tight. Show me net positive by Friday."', '"OT\'s blowing the budget. I need a plan, not excuses."', '"If we miss bonus this month, you\'re explaining it to the board."', '"You\'ve got 3 weeks to bring OT below 8% or I\'m freezing hires."', '"Every dollar I sign off on this team I justify to the CFO. Make it count."'] },
           { k: 'ops', n: 'Big Kev (Ops)', v: S.trust.ops, hints: ['"SL\'s the only number that matters this quarter."', '"I want clean variance answers on Mondays — no fluff."', '"Don\'t pin a miss on the team — own the WFM call."', '"I\'m sick of surprises in the Monday report. Get ahead of them."', '"Bring me a solution, not a sob story."'] },
-          { k: 'client', n: 'The client', v: S.trust.client, hints: ['"We\'re watching SL daily. Don\'t miss a beat."', '"Your TIO complaint volume is on our risk register now."', '"One more bad week and we\'re reviewing the contract."', '"Our exec board wants a face-to-face. Don\'t fudge the numbers."', '"We\'re benchmarking you against the offshore site. Right now you\'re losing."'] },
+          { k: 'client', n: 'The client', v: S.trust.client, hints: ['"We\'re watching SL daily. Don\'t miss a beat."', '"Your AFCA case volume is on our risk register now."', '"One more bad week and we\'re reviewing the contract."', '"Our exec board wants a face-to-face. Don\'t fudge the numbers."', '"We\'re benchmarking you against the offshore site. Right now you\'re losing."'] },
           { k: 'team', n: 'Macca (TLs)', v: S.trust.team, hints: ['"The floor\'s asking when you\'ll bring back the Friday wrap."', '"Coaching backlog is at 3 weeks. We need a steer."', '"Don\'t roster surprises on Friday afternoons — TLs are wearing it."', '"The team\'s morale is on a knife edge. One more roster slap and we\'ll lose half of \'em."', '"We need genuine recognition, not another all-staff email."'] }
         ];
         watchMeters.sort(function (a, b) { return a.v - b.v; });
@@ -740,6 +896,7 @@
       c.push(askRow('engage', 1, '🎉 Engagement initiative (recognition / incentives)', money(8000) + ' · lifts team, cuts sick &amp; churn', false, ''));
       c.push(askRow('coach', 1, '🕵️ Coaching crackdown on AUX/wrap abuse', money(5000) + ' · cuts dodgy behaviour, +shrinkage this wk', false, ''));
       c.push(askRow('train', 1, '🎓 Skills training block', money(4000) + ' · lowers AHT &amp; churn, +shrinkage this wk', false, ''));
+      if (!S.surgePlan) c.push(askRow('surge', 1, '🌀 Stand up a CAT surge plan (overflow partner + casual pool)', money(12000) + ' · permanent: unlocks the overflow option when disasters hit', false, ''));
       c.push('<div id="cap-note" class="small" style="margin-top:4px"></div></div>');
 
       if (S.pipeline.length > 0) {
@@ -833,6 +990,7 @@
         else if (k === 'engage') { S.weekInits.engagement = true; S.budget -= 8000; S.trust.team = clamp(S.trust.team + 2, 0, 100); }
         else if (k === 'coach') { S.weekInits.coaching = true; S.budget -= 5000; S.dodgy = clamp(S.dodgy - 0.06, 0, 1); }
         else if (k === 'train') { S.weekInits.training = true; S.budget -= 4000; S.ahtSkill = clamp(S.ahtSkill - 0.02, 0.85, 1); }
+        else if (k === 'surge') { S.surgePlan = true; S.budget -= 12000; S.trust.client = clamp(S.trust.client + 2, 0, 100); }
       }
       var cEl = document.querySelector('input[name="commit"]:checked');
       S.committed = parseFloat(cEl.dataset.v); S.ambition = cEl.value;
@@ -932,6 +1090,7 @@
       var out = [];
       if (S.campaign) out.push('📈 A marketing campaign is live. The business <i>claims</i> it adds ~' + pct(S.campaign.claim - 1) + ', but campaigns on this account have historically run hotter.');
       if (weekHasHoliday(S.week)) { var names = []; for (var d = 0; d < NDAYS(); d++) { var hn = holidayOn(dateFor(S.week, d)); if (hn) names.push(DOW[d] + ' (' + hn + ')'); } out.push('🗓️ Public holiday this week — ' + names.join(', ') + ' runs at ~' + pct(CFG.HOLIDAY_VOL) + ' of a normal day.'); }
+      if (S.liveCat && S.liveCat.telegraphed) out.push('🌩️ BoM\'s issued a watch: ' + S.liveCat.blurb + ' possible <b>' + DOW[S.liveCat.day] + '</b>. If it lands, the claims line goes vertical — pad the back of the week if you believe them.');
       if (CFG.SEASON[S.week] >= 1.2) out.push('🎄 Peak trading period — seasonal demand is well above the yearly baseline right now.');
       else if (S.week > 0 && CFG.SEASON[S.week] < CFG.SEASON[S.week - 1] - 0.05) out.push('📉 Seasonal demand is easing off from recent weeks.');
       return out;
@@ -1016,8 +1175,31 @@
         c.push('<label class="small" style="display:flex;align-items:center;gap:6px">' + C.icon + ' <b>' + C.label + '</b> <input type="number" data-skill="' + C.key + '" value="' + pct100 + '" min="0" max="100" style="width:64px;padding:3px 6px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px">% <span class="muted">→ ' + vol.toLocaleString() + ' ' + C.label.toLowerCase() + 's/wk</span></label>');
       }
       c.push('<span class="spacer"></span><button class="btn" id="skill-reset" style="padding:3px 10px;font-size:11px" title="Reset to default 80/15/5">↻</button><span class="small ' + (splitTotal === 100 ? 'good' : 'bad') + '" style="margin-left:8px">Σ ' + splitTotal + '%</span></div></div>');
-      var runTip = (used > capW) ? 'Disabled — over weekly capacity. Cut the roster, hire more, or drop a day.' : overDay ? 'Disabled — one day\'s roster exceeds your headcount.' : 'Simulate the week with your plan. Reality (sickies, AHT bloat, AUX leakage) will differ from the projection.';
-      c.push('<div class="row"><span class="bad small" id="run-warn">' + warn + '</span><span class="spacer"></span><button class="btn big-btn" id="run"' + (used > capW || overDay ? ' disabled' : '') + ' title="' + runTip + '">Run the week ▶</button></div>');
+      // ---- shift mix: Early / Mid / Late 8-hour shifts in the 10-hour window ----
+      var mx = S.shiftMix || { early: 0.40, mid: 0.35, late: 0.25 };
+      var mixTotal = Math.round(((mx.early || 0) + (mx.mid || 0) + (mx.late || 0)) * 100);
+      var nm = normMix(mx), covSvg = '<svg viewBox="0 0 220 44" style="vertical-align:middle;width:220px;height:44px">';
+      var iW2 = CFG.INTRADAY, iMax2 = Math.max.apply(null, iW2);
+      for (var ch2 = 0; ch2 < iW2.length; ch2++) { var hh2 = 26 * iW2[ch2] / iMax2, bx2 = ch2 * 22 + 4; covSvg += '<rect x="' + bx2 + '" y="' + (30 - hh2).toFixed(1) + '" width="18" height="' + hh2.toFixed(1) + '" rx="2" fill="#4f8cff" opacity=".45"><title>' + CFG.OPEN_HOURS[ch2] + ' arrivals</title></rect>'; }
+      var covPts = [];
+      for (var cp = 0; cp < 10; cp++) { var cv = shiftCoverage(cp, nm); covPts.push((cp * 22 + 13) + ',' + (30 - clamp(cv, 0, 1.3) / 1.3 * 26).toFixed(1)); }
+      covSvg += '<polyline points="' + covPts.join(' ') + '" fill="none" stroke="#fbbf24" stroke-width="2"><title>Your coverage curve</title></polyline>';
+      covSvg += '<text x="4" y="42" font-size="9" fill="rgba(255,255,255,.55)">08</text><text x="216" y="42" text-anchor="end" font-size="9" fill="rgba(255,255,255,.55)">18</text></svg>';
+      c.push('<div class="panel" title="8-hour shifts inside the 08:00–18:00 window. Early covers the open but dies at 4pm; Late owns the close but misses the morning slam. Blue bars = arrival shape, gold line = your coverage. The live week staffs every interval from this mix."><h4>⏰ Shift mix <span class="small muted">(shapes intraday coverage — keep Σ at 100%)</span></h4><div class="row" style="gap:14px;flex-wrap:wrap">');
+      for (var sm = 0; sm < SHIFTS.length; sm++) {
+        var SH = SHIFTS[sm], spct = Math.round((mx[SH.key] || 0) * 100);
+        c.push('<label class="small" style="display:flex;align-items:center;gap:6px"><b>' + SH.label + '</b> <span class="muted">' + SH.time + '</span> <input type="number" data-shift="' + SH.key + '" value="' + spct + '" min="0" max="100" style="width:64px;padding:3px 6px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px">%</label>');
+      }
+      c.push('<span class="small ' + (mixTotal === 100 ? 'good' : 'bad') + '">Σ ' + mixTotal + '%</span></div>');
+      c.push('<div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap">' + covSvg +
+        '<span class="spacer"></span>' +
+        '<button class="btn" data-mixpre="50,30,20" style="padding:3px 10px;font-size:11px" title="Heavy on the open — owns the morning slam, thin at the close.">Front-load</button>' +
+        '<button class="btn" data-mixpre="34,33,33" style="padding:3px 10px;font-size:11px" title="Even thirds across the window.">Balanced</button>' +
+        '<button class="btn" data-mixpre="20,30,50" style="padding:3px 10px;font-size:11px" title="Heavy on the close — for arvo-skewed days.">Back-load</button>' +
+        '<button class="btn" id="mix-solve" style="padding:3px 10px;font-size:11px" title="Grid-search the Early/Mid/Late split that maximises projected SL for THIS forecast and roster. Takes a tick.">🧮 Solve the mix</button></div></div>');
+      var runTip = (used > capW) ? 'Disabled — over weekly capacity. Cut the roster, hire more, or drop a day.' : overDay ? 'Disabled — one day\'s roster exceeds your headcount.' : 'Run the week LIVE on the floor — intervals tick, sickies land, queues spike, and the mid-week calls are yours. Reality will differ from the projection.';
+      c.push('<div class="row"><span class="bad small" id="run-warn">' + warn + '</span><span class="spacer"></span><button class="btn big-btn" id="run"' + (used > capW || overDay ? ' disabled' : '') + ' title="' + runTip + '">Take the floor — LIVE ▶</button></div>');
+      c.push('<div class="row" style="justify-content:flex-end;margin-top:2px"><a href="#" id="sim-skip" class="small muted" title="Resolve the week instantly with the same maths — no live floor, no mid-week calls. For when you just want the numbers.">…or sim it quietly (skip the floor)</a></div>');
       $('screen').innerHTML = c.join('');
       var pkBtn = $('peek'); if (pkBtn) pkBtn.addEventListener('click', takePeek);
       var pkApply = $('peek-apply'); if (pkApply) pkApply.addEventListener('click', applyPeek);
@@ -1027,10 +1209,34 @@
         if (!isNaN(v) && v >= 0 && v <= 100) { S.skillSplit[k] = v / 100; save(); drawPlanning(); }
       });
       var skillReset = $('skill-reset'); if (skillReset) skillReset.addEventListener('click', function () { S.skillSplit = { voice: 0.80, chat: 0.15, email: 0.05 }; save(); drawPlanning(); });
+      var shiftIn = $('screen').querySelectorAll('input[data-shift]');
+      for (var shi = 0; shi < shiftIn.length; shi++) shiftIn[shi].addEventListener('change', function (e) {
+        var k = e.currentTarget.dataset.shift, v = parseInt(e.currentTarget.value, 10);
+        if (!isNaN(v) && v >= 0 && v <= 100) { if (!S.shiftMix) S.shiftMix = { early: 0.40, mid: 0.35, late: 0.25 }; S.shiftMix[k] = v / 100; save(); drawPlanning(); }
+      });
+      var mixPres = $('screen').querySelectorAll('button[data-mixpre]');
+      for (var mp = 0; mp < mixPres.length; mp++) mixPres[mp].addEventListener('click', function (e) {
+        var parts = e.currentTarget.dataset.mixpre.split(',');
+        S.shiftMix = { early: parseInt(parts[0], 10) / 100, mid: parseInt(parts[1], 10) / 100, late: parseInt(parts[2], 10) / 100 };
+        save(); drawPlanning();
+      });
+      var solveBtn = $('mix-solve');
+      if (solveBtn) solveBtn.addEventListener('click', function () {
+        // contract requires open-to-close coverage: every shift keeps ≥10%
+        var best = null, bestSL = -1;
+        for (var se = 10; se <= 80; se += 5) for (var sm2 = 10; sm2 <= 90 - se; sm2 += 5) {
+          var sl3 = 100 - se - sm2; if (sl3 < 10) continue;
+          var mixT = { early: se / 100, mid: sm2 / 100, late: sl3 / 100 };
+          var got = projSLForMix(mixT);
+          if (got > bestSL) { bestSL = got; best = mixT; }
+        }
+        if (best) { S.shiftMix = best; save(); drawPlanning(); setStatus('🧮 Mix solved (every shift ≥10% — the client requires open-to-close cover): Early ' + Math.round(best.early * 100) + ' / Mid ' + Math.round(best.mid * 100) + ' / Late ' + Math.round(best.late * 100) + ' → projected ' + pct1(bestSL) + '.'); }
+      });
       var inputs = $('screen').querySelectorAll('.num-in'); for (var ii = 0; ii < inputs.length; ii++) inputs[ii].addEventListener('input', onRosterInput);
       $('auto').addEventListener('click', function () { plan.rost = defaultRoster(plan.needs); plan.ot = 0; drawPlanning(); });
       $('ot').addEventListener('input', function (e) { plan.ot = parseInt(e.target.value, 10) || 0; refreshProjection(); });
-      $('run').addEventListener('click', runWeek);
+      $('run').addEventListener('click', enterLiveWeek);
+      var simLink = $('sim-skip'); if (simLink) simLink.addEventListener('click', function (e) { e.preventDefault(); simWeekInstant(); });
       refreshProjection();
       setStatus('Distribute your workforce across Mon–Fri, then run it.');
     }
@@ -1047,12 +1253,22 @@
       while (left > 0) { var idx = -1, worst = -1; for (var d = 0; d < NDAYS(); d++) { var gap = needs[d].roster - (rost[d] + ot[d]); if (gap > worst) { worst = gap; idx = d; } } if (idx < 0 || worst <= 0) break; ot[idx] += 1; left -= 1; }
       return ot;
     }
-    function laborCost(baseDays, otDays) { var holSurcharge = 0; for (var d = 0; d < NDAYS(); d++) if (holidayOn(dateFor(S.week, d))) holSurcharge += plan.rost[d] * CFG.DAY_COST * (CFG.HOLIDAY_PAY - 1); return baseDays * CFG.DAY_COST + otDays * CFG.DAY_COST * CFG.OT_MULT + holSurcharge; }
+    function laborCostFor(rost, baseDays, otDays) { var holSurcharge = 0; for (var d = 0; d < NDAYS(); d++) if (holidayOn(dateFor(S.week, d))) holSurcharge += rost[d] * CFG.DAY_COST * (CFG.HOLIDAY_PAY - 1); return baseDays * CFG.DAY_COST + otDays * CFG.DAY_COST * CFG.OT_MULT + holSurcharge; }
+    function laborCost(baseDays, otDays) { return laborCostFor(plan.rost, baseDays, otDays); }
+    function projSLForMix(mix) {
+      var otDays = allocateOT(plan.rost, plan.needs, plan.ot), calls = 0, answered = 0;
+      for (var d = 0; d < NDAYS(); d++) {
+        var n = plan.needs[d], phones = (plan.rost[d] + otDays[d]) * (1 - plan.expAbs) * (1 - plan.shrink) * (1 - S.dodgy * CFG.DODGY_AVAIL_MAX), aht = CFG.AHT * S.ahtSkill * (1 + S.dodgy * CFG.DODGY_AHT_MAX);
+        var sl = dayServiceLevelMix(n.calls, phones, aht, mix);
+        calls += n.calls; answered += sl * n.calls;
+      }
+      return calls > 0 ? answered / calls : 1;
+    }
     function projectWeek() {
-      var otDays = allocateOT(plan.rost, plan.needs, plan.ot), calls = 0, answered = 0, occSum = 0, occN = 0;
+      var otDays = allocateOT(plan.rost, plan.needs, plan.ot), calls = 0, answered = 0, occSum = 0, occN = 0, mix = normMix();
       for (var d = 0; d < NDAYS(); d++) {
         var n = plan.needs[d], phones = (plan.rost[d] + otDays[d]) * (1 - plan.expAbs) * (1 - plan.shrink) * (1 - S.dodgy * CFG.DODGY_AVAIL_MAX), aht = CFG.AHT * S.ahtSkill * (1 + S.dodgy * CFG.DODGY_AHT_MAX), A = n.calls * aht / CFG.OPEN_SECONDS;
-        var sl = dayServiceLevel(n.calls, phones, aht);
+        var sl = dayServiceLevelMix(n.calls, phones, aht, mix);
         calls += n.calls; answered += sl * n.calls; if (n.calls > 50) { occSum += occupancy(phones, A); occN++; }
       }
       var baseDays = sum(plan.rost), otTotal = sum(otDays);
@@ -1063,7 +1279,7 @@
       if ($('ot-lab')) $('ot-lab').textContent = plan.ot + ' / ' + otCap + ' agent-days (+' + money(plan.ot * CFG.DAY_COST * CFG.OT_MULT) + ')';
       var p = projectWeek(), slaCls = p.sla >= S.committed ? 'good' : (p.sla >= S.committed - 0.04 ? 'warn' : 'bad'), trainee = trainees() * CFG.TRAINEE_WK_COST, net = CFG.WEEK_REVENUE - p.cost - trainee;
       var used = sum(plan.rost), capW = S.hc * NDAYS(), overDay = plan.rost.some(function (x) { return x > S.hc; });
-      if ($('run')) { $('run').disabled = (used > capW || overDay); $('run').title = (used > capW) ? 'Disabled — over weekly capacity. Cut the roster, hire more, or drop a day.' : overDay ? 'Disabled — one day\'s roster exceeds your headcount.' : 'Simulate the week with your plan. Reality (sickies, AHT bloat, AUX leakage) will differ from the projection.'; }
+      if ($('run')) { $('run').disabled = (used > capW || overDay); $('run').title = (used > capW) ? 'Disabled — over weekly capacity. Cut the roster, hire more, or drop a day.' : overDay ? 'Disabled — one day\'s roster exceeds your headcount.' : 'Run the week LIVE on the floor — intervals tick, sickies land, queues spike, and the mid-week calls are yours. Reality will differ from the projection.'; }
       if ($('run-warn')) $('run-warn').textContent = (used > capW) ? 'Over weekly capacity — hire, use OT, or cut a day.' : (overDay ? 'A day exceeds headcount.' : '');
       $('proj').innerHTML = '<h3>📈 Projected (on your forecast — reality will differ)</h3><div class="kpi-strip">' +
         '<div class="kpi"><div class="k">Proj. service level</div><div class="v ' + slaCls + '">' + pct1(p.sla) + '</div><div class="small muted">commit ' + pct(S.committed) + '</div></div>' +
@@ -1100,8 +1316,471 @@
       }
       if (changed) { save(); drawPlanning(); }
     }
-    function runWeek() {
+    /* =======================================================================
+       THE FLOOR — the week runs LIVE. Mon–Fri tick through hourly intervals:
+       sickies land at 7:45, queues blow out mid-morning, leave requests
+       interrupt your arvo, and when a CAT event hits the claims line you make
+       the call with everyone watching. Effects hidden until you commit.
+       ======================================================================= */
+    var L = null, liveTimer = null;
+
+    var CAT_TYPES = [
+      { key: 'hail',     name: 'Hailstorm',      icon: '🧊', months: [10, 11, 0, 1, 2],          mult: [1.7, 2.4], tail: 1.35, blurb: 'a supercell dropping golf-ball hail across the suburbs' },
+      { key: 'flood',    name: 'Flash flooding', icon: '🌊', months: [1, 2, 3],                  mult: [1.6, 2.2], tail: 1.40, blurb: 'flash flooding through low-lying streets' },
+      { key: 'bushfire', name: 'Bushfire front', icon: '🔥', months: [11, 0, 1],                 mult: [1.5, 2.0], tail: 1.45, blurb: 'a fire front moving through the hills' },
+      { key: 'ecl',      name: 'East-coast low', icon: '🌀', months: [4, 5, 6, 7],               mult: [1.5, 2.1], tail: 1.30, blurb: 'an east-coast low battering the seaboard' },
+      { key: 'storm',    name: 'Severe storms',  icon: '⛈️', months: [8, 9, 10, 11, 0, 1, 2, 3], mult: [1.4, 1.9], tail: 1.25, blurb: 'a line of severe storms rolling through' }
+    ];
+    function rollCat() {
+      if (Math.random() > 0.11) return null;
+      var m = monthOfWeek(S.week);
+      var bag = CAT_TYPES.filter(function (c) { return c.months.indexOf(m) >= 0; });
+      if (!bag.length) bag = [CAT_TYPES[4]];
+      var def = pick(bag);
+      return { key: def.key, name: def.name, icon: def.icon, blurb: def.blurb,
+               day: 1 + Math.floor(Math.random() * 4), hitIv: 2 + Math.floor(Math.random() * 5),
+               mult: rand(def.mult[0], def.mult[1]), tailMult: def.tail,
+               telegraphed: Math.random() < 0.6, struck: false, response: null };
+    }
+    function catVolMult(d, iv) {
+      var c = L && L.cat; if (!c) return 1;
+      if (c.overflow && c.struck) {
+        if (d === c.day && iv >= c.hitIv) return 1 + (c.mult - 1) * 0.72;
+        if (d === c.day + 1) return 1 + (c.tailMult - 1) * 0.72;
+        if (d === c.day + 2) return 1 + (c.tailMult - 1) * 0.36;
+        return 1;
+      }
+      if (d === c.day && iv >= c.hitIv) return c.mult;
+      if (d === c.day + 1) return c.tailMult;
+      if (d === c.day + 2) return 1 + (c.tailMult - 1) * 0.5;
+      return 1;
+    }
+    function catSummary() {
+      var c = L && L.cat; if (!c || !c.struck) return null;
+      return c.icon + ' ' + c.name + ' (' + DOW[c.day] + ')' + (c.response ? ' — ' + c.response : ' — no response mounted');
+    }
+
+    function liveMix() { return normMix(); }
+    function liveSSN() {
+      var ssRaw = S.skillSplit || { voice: 1, chat: 0, email: 0 };
+      var ssSum = (ssRaw.voice || 0) + (ssRaw.chat || 0) + (ssRaw.email || 0);
+      return ssSum > 0 ? { voice: (ssRaw.voice || 0) / ssSum, chat: (ssRaw.chat || 0) / ssSum, email: (ssRaw.email || 0) / ssSum } : { voice: 1, chat: 0, email: 0 };
+    }
+    function freshByChannel() { return { voice: { calls: 0, ans: 0, occSum: 0, occN: 0 }, chat: { calls: 0, ans: 0, occSum: 0, occN: 0 }, email: { calls: 0, ans: 0, occSum: 0, occN: 0 } }; }
+
+    function enterLiveWeek() {
       if (!S.mods) S.mods = freshMods();
+      var otDays = allocateOT(plan.rost, plan.needs, plan.ot);
+      var dayCalls = [];
+      for (var d = 0; d < NDAYS(); d++) dayCalls.push((S.peekRevealed && S.peekActuals && d < 2) ? S.peekActuals[d] : Math.round(trueDaily(d) * (S.mods.volMult || 1)));
+      L = {
+        day: 0, iv: 0, speed: 1, paused: false, card: null, ended: false,
+        rost: plan.rost.slice(), otDays: otDays, shrink: plan.shrink, expAbs: plan.expAbs,
+        mix: liveMix(), ssN: liveSSN(),
+        dayCalls: dayCalls, dodgyAtRun: S.dodgy,
+        calls: 0, answered: 0, abandoned: 0, occSum: 0, occN: 0, absSum: 0, absN: 0,
+        byChannel: freshByChannel(), dayRes: [],
+        otEDays: 0, vtoDays: 0, decisionsLog: [], wireLines: [],
+        cat: S.liveCat ? JSON.parse(JSON.stringify(S.liveCat)) : null,
+        today: null
+      };
+      S.phase = 'live'; S.liveSnap = liveSnapshot(); save(); renderHUD(); renderInboxFab();
+      beginDay(true);
+      startLiveClock();
+    }
+    function liveSnapshot() {
+      if (!L) return null;
+      return JSON.parse(JSON.stringify({ day: L.day, speed: L.speed, rost: L.rost, otDays: L.otDays, shrink: L.shrink, expAbs: L.expAbs, mix: L.mix, ssN: L.ssN, dayCalls: L.dayCalls, dodgyAtRun: L.dodgyAtRun, calls: L.calls, answered: L.answered, abandoned: L.abandoned, occSum: L.occSum, occN: L.occN, absSum: L.absSum, absN: L.absN, byChannel: L.byChannel, dayRes: L.dayRes, otEDays: L.otEDays, vtoDays: L.vtoDays, decisionsLog: L.decisionsLog, cat: L.cat }));
+    }
+    function resumeLiveWeek() {
+      var sn = S.liveSnap;
+      if (!sn) { enterPlanning(); return; }
+      L = JSON.parse(JSON.stringify(sn));
+      L.iv = 0; L.paused = true; L.card = null; L.ended = false; L.wireLines = [];
+      if (!L.decisionsLog) L.decisionsLog = [];
+      if (L.day >= NDAYS()) { finishLiveWeek(); return; }
+      beginDay(true);
+      wire('⏸ Resumed mid-week — the day restarts from the morning. Press ▶ or Space when ready.', 'warn');
+      startLiveClock(); updateLiveBoard();
+    }
+
+    function beginDay(redraw) {
+      var d = L.day;
+      var hol = holidayOn(dateFor(S.week, d));
+      var realAbs = clamp(L.expAbs + ((S.mods && S.mods.absenceAdd) || 0), 0, 0.6);
+      var absTarget = clamp(realAbs * rand(0.8, 1.2), 0, 0.7);
+      var ids = (S.roster || []).map(function (a) { return a.id; });
+      var offset = ids.length ? ((S.week * 5 + d) * 7) % ids.length : 0;
+      var workN = Math.min(L.rost[d], ids.length), workingIds = [];
+      for (var i = 0; i < workN; i++) workingIds.push(ids[(offset + i) % ids.length]);
+      // approved leave comes off the top — the leave book is real capacity
+      var leaveToday = ((S.leaveBook || {})[S.week] || []).filter(function (lv2) { return lv2.day === d; });
+      var onLeave = [];
+      for (var lv = 0; lv < leaveToday.length; lv++) {
+        var ix = workingIds.indexOf(leaveToday[lv].agentId);
+        if (ix >= 0) { workingIds.splice(ix, 1); onLeave.push(leaveToday[lv].name); }
+      }
+      workN = workingIds.length;
+      // personal sickie draw — weighted by low resilience, low morale, grudges, Mondays
+      var sickWant = Math.round(absTarget * workN), sick = [];
+      if (sickWant > 0 && workN > 0) {
+        var cand = workingIds.map(function (id) { var a = agentById(id); return { id: id, w: a ? Math.pow(1.1 - a.resil, 1.5) + (a.morale < 45 ? 0.3 : 0) + a.grudge * 0.06 + (d === 0 ? 0.08 : 0) : 0.2 }; });
+        for (var s2 = 0; s2 < sickWant && cand.length; s2++) {
+          var tot = 0, c2; for (c2 = 0; c2 < cand.length; c2++) tot += cand[c2].w;
+          var roll = Math.random() * tot, acc = 0, idx = 0;
+          for (c2 = 0; c2 < cand.length; c2++) { acc += cand[c2].w; if (roll < acc) { idx = c2; break; } }
+          var chosenA = cand.splice(idx, 1)[0];
+          sick.push(chosenA.id);
+          var ag = agentById(chosenA.id); if (ag) ag.sickies++;
+        }
+      }
+      var absToday = workN > 0 ? sick.length / workN : 0;
+      var bodies = Math.max(0, workN - sick.length) + L.otDays[d];
+      var phonesEff = bodies * (1 - L.shrink) * (1 - L.dodgyAtRun * CFG.DODGY_AVAIL_MAX);
+      var baseAht = CFG.AHT * S.ahtSkill * (1 + L.dodgyAtRun * CFG.DODGY_AHT_MAX) * ((S.mods && S.mods.ahtMult) || 1);
+      L.today = {
+        d: d, hol: hol, dCalls: L.dayCalls[d], absToday: absToday, workingIds: workingIds, sick: sick,
+        phonesEff: phonesEff, baseAht: baseAht,
+        ivRes: [], chAgg: freshByChannel(), callsSoFar: 0, ansSoFar: 0, abandSoFar: 0, occW: 0, occN: 0,
+        otBoost: 0, breakBoostIvs: 0, vtoCut: 0, auxFlash: {}, cardsToday: 0,
+        spikeActed: false, vtoOffered: false, leaveAsked: false
+      };
+      L.iv = 0;
+      if (redraw !== false) drawLiveBoard();
+      var sickNames = sick.slice(0, 3).map(function (id) { var a = agentById(id); return a ? a.name : '?'; });
+      wire('— <b>' + DOW[d] + ' ' + fmtDate(dateFor(S.week, d)) + '</b>' + (hol ? ' 🗓️ ' + hol : '') + ' — ' + workN + ' rostered' + (L.otDays[d] ? ' +' + L.otDays[d] + ' OT' : '') + (onLeave.length ? ' · ' + onLeave.join(', ') + ' on approved leave' : '') + (sick.length ? ' · <span class="bad">' + sick.length + ' called in crook (' + sickNames.join(', ') + (sick.length > 3 ? '…' : '') + ')</span>' : ' · full house'), null);
+      if (L.cat && L.cat.telegraphed && d === L.cat.day - 1) wire('📡 BoM watch: ' + L.cat.blurb + ' is tracking our way. Tomorrow could get loud.', 'warn');
+      maybeMorningCards();
+      updateLiveBoard();
+    }
+
+    function liveStep() {
+      if (!L || L.ended || !L.today) return;
+      var t = L.today, d = t.d, iv = L.iv;
+      if (iv >= CFG.INTRADAY.length) { endDay(); return; }
+      var wsum = sum(CFG.INTRADAY);
+      var catMult = catVolMult(d, iv);
+      var ivCalls = t.dCalls * (CFG.INTRADAY[iv] / wsum) * catMult;
+      var boost = 1 + t.otBoost + (t.breakBoostIvs > 0 ? CFG.LIVE.BREAK_BOOST : 0) - t.vtoCut;
+      var phonesIv = Math.max(0, t.phonesEff * shiftCoverage(iv, L.mix) * boost);
+      if (t.breakBoostIvs > 0) t.breakBoostIvs--;
+      var iSec = CFG.OPEN_SECONDS / CFG.INTRADAY.length;
+      var ivAgg = { calls: 0, ans: 0, aband: 0, occW: 0, occN: 0 };
+      for (var ci = 0; ci < CHANNELS.length; ci++) {
+        var C = CHANNELS[ci], frac = L.ssN[C.key]; if (frac <= 0) continue;
+        var cCalls = ivCalls * frac * C.volMult;
+        if (cCalls < 0.5) continue;
+        var cPhones = phonesIv * frac, cAht = t.baseAht * C.ahtMult;
+        var cA = cCalls * cAht / iSec;
+        var cSl = serviceLevel(cPhones, cA, cAht, CFG.SLA_T);
+        var cOcc = occupancy(cPhones, cA);
+        var cAband = cA >= cPhones ? cCalls * clamp((cA - cPhones) / Math.max(cA, 1), 0, 0.6) : cCalls * (1 - cSl) * 0.06;
+        ivAgg.calls += cCalls; ivAgg.ans += cSl * cCalls; ivAgg.aband += cAband;
+        if (cCalls > 3) { ivAgg.occW += cOcc * cCalls; ivAgg.occN += cCalls; }
+        var bch = t.chAgg[C.key]; bch.calls += cCalls; bch.ans += cSl * cCalls;
+        if (cCalls > 3) { bch.occSum += cOcc * cCalls; bch.occN += cCalls; }
+      }
+      var ivSl = ivAgg.calls > 0 ? ivAgg.ans / ivAgg.calls : 1;
+      var ivOcc = ivAgg.occN > 0 ? ivAgg.occW / ivAgg.occN : 0;
+      t.ivRes.push({ h: iv, calls: ivAgg.calls, sl: ivSl, occ: ivOcc, aband: ivAgg.aband, phones: phonesIv, cat: catMult > 1.05 });
+      t.callsSoFar += ivAgg.calls; t.ansSoFar += ivAgg.ans; t.abandSoFar += ivAgg.aband;
+      t.occW += ivAgg.occW; t.occN += ivAgg.occN;
+      if (L.cat && d === L.cat.day && iv === L.cat.hitIv && !L.cat.struck) presentCatCard();
+      else if (ivSl < 0.4 && ivAgg.calls > 20) wire(CFG.OPEN_HOURS[iv] + ' — queue\'s ugly: ~' + Math.round(ivAgg.aband) + ' bailed, SL ' + Math.round(ivSl * 100) + '%', 'bad');
+      else if (ivSl < CFG.SLA_TARGET && ivAgg.calls > 20 && Math.random() < 0.4) wire(CFG.OPEN_HOURS[iv] + ' — running hot, SL ' + Math.round(ivSl * 100) + '%', 'warn');
+      else if (Math.random() < 0.10) wire(CFG.OPEN_HOURS[iv] + ' — ' + pick(WIRE_FLAVOUR), null);
+      maybeIntraCards(iv, ivSl, ivOcc);
+      L.iv++;
+      updateLiveBoard();
+      if (L.iv >= CFG.INTRADAY.length) endDay();
+    }
+
+    function endDay() {
+      var t = L.today, d = t.d;
+      var daySl = t.callsSoFar > 0 ? t.ansSoFar / t.callsSoFar : 1;
+      var dayOcc = t.occN > 0 ? t.occW / t.occN : 0;
+      var dayCh = {};
+      for (var k in t.chAgg) { var b = t.chAgg[k]; dayCh[k] = { calls: Math.round(b.calls), sl: b.calls > 0 ? b.ans / b.calls : 1, occ: b.occN > 0 ? b.occSum / b.occN : 0 }; }
+      var callsR = Math.round(t.callsSoFar);
+      L.dayRes.push({ d: d, hol: t.hol, calls: callsR, sl: daySl, occ: dayOcc, phones: t.phonesEff, aht: t.baseAht, byChannel: dayCh });
+      L.calls += callsR; L.answered += daySl * callsR; L.abandoned += t.abandSoFar;
+      if (callsR > 50) { L.occSum += dayOcc; L.occN++; }
+      L.absSum += t.absToday; L.absN++;
+      for (var k2 in t.chAgg) { var src = t.chAgg[k2], dst = L.byChannel[k2]; dst.calls += src.calls; dst.ans += src.ans; dst.occSum += src.occSum; dst.occN += src.occN; }
+      wire('🔔 <b>' + DOW[d] + ' done</b> — SL <b class="' + (daySl >= CFG.SLA_TARGET ? 'good' : 'bad') + '">' + pct1(daySl) + '</b> · ' + callsR.toLocaleString() + ' contacts · occ ' + pct(dayOcc), null);
+      L.day++; L.today = null;
+      if (L.day >= NDAYS()) { finishLiveWeek(); return; }
+      S.liveSnap = liveSnapshot(); save();
+      beginDay(true);
+    }
+
+    function finishLiveWeek() {
+      L.ended = true;
+      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+      var agg = {
+        dayRes: L.dayRes, calls: Math.round(L.calls), answered: L.answered, abandoned: L.abandoned,
+        occSum: L.occSum, occN: L.occN, absSum: L.absSum, absN: L.absN,
+        byChannel: L.byChannel, dodgyAtRun: L.dodgyAtRun, rost: L.rost, otDays: L.otDays,
+        extraCost: L.otEDays * CFG.DAY_COST * CFG.OT_MULT, extraSave: L.vtoDays * CFG.DAY_COST,
+        otEDays: L.otEDays, vtoDays: L.vtoDays, mix: L.mix,
+        live: { decisions: L.decisionsLog.slice(), cat: catSummary(), catStruck: !!(L.cat && L.cat.struck) }
+      };
+      S.liveSnap = null;
+      finishWeek(agg);
+      L = null;
+    }
+
+    /* ---- live clock ---- */
+    function startLiveClock() {
+      if (liveTimer) clearInterval(liveTimer);
+      if (!L) return;
+      L._last = Date.now(); L._acc = 0;
+      liveTimer = setInterval(livePump, 120);
+    }
+    function livePump() {
+      if (!L || S.phase !== 'live' || L.ended) { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } return; }
+      var now = Date.now(), dt = Math.min(500, now - (L._last || now)); L._last = now;
+      if (L.paused || L.card || document.hidden) return;
+      L._acc = (L._acc || 0) + dt * L.speed;
+      var guard = 0;
+      while (L && !L.card && !L.ended && L._acc >= CFG.LIVE.IV_MS && guard++ < 12) {
+        L._acc -= CFG.LIVE.IV_MS;
+        liveStep();
+        if (!L) return;
+      }
+    }
+    function livePauseToggle() { if (!L || L.ended) return; L.paused = !L.paused; updateLiveBoard(); }
+    function liveSetSpeed(v) { if (!L) return; L.speed = v; updateLiveBoard(); }
+
+    /* ---- live board ---- */
+    var WIRE_FLAVOUR = [
+      'floor\'s humming along', 'Macca\'s doing a floor walk', 'kitchen\'s out of milk again',
+      'someone\'s brought a birthday cake into the breakout room', 'TLs huddled over the adherence screen',
+      'quiet minute — collective exhale', 'a claims call just got a round of applause', 'Crows arguing about the footy tips',
+      'someone\'s desk plant has been named Greg', 'fresh pot of coffee — queue forms instantly'
+    ];
+    function wire(html, cls) {
+      if (!L) return;
+      L.wireLines.unshift({ h: html, c: cls || '' });
+      if (L.wireLines.length > 30) L.wireLines.pop();
+      var el = $('wire'); if (el) el.innerHTML = wireHTML();
+    }
+    function wireHTML() {
+      var c = [];
+      for (var i = 0; i < L.wireLines.length && i < 14; i++) c.push('<div class="li ' + (L.wireLines[i].c || '') + '">' + L.wireLines[i].h + '</div>');
+      return c.join('');
+    }
+    function advisorLiveTip() {
+      if (L && L.cat && L.cat.telegraphed) return 'BoM\'s tracking weather this week. If it lands, the claims line goes vertical — know what you\'ll do before it does.';
+      var tips = [
+        'This is the live floor. Red intervals mean your coverage curve missed the arrivals — that\'s shift mix, not luck.',
+        'Cards pause the clock, so breathe. 1× to soak it in, 4× when it\'s humming.',
+        'Abandons bleed client trust at week\'s end. A red morning you fix beats a red morning you watch.',
+        'Sickies cluster on Mondays and after rough weeks. The roster remembers how you treat people.'
+      ];
+      return tips[(S.week + (L ? L.day : 0)) % tips.length];
+    }
+    function drawLiveBoard() {
+      var t = L.today, c = [];
+      c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' + advisorLiveTip() + '</div></div>');
+      c.push('<div class="panel"><div class="live-strip"><span class="live-dot"></span><h3 style="margin:0">THE FLOOR — ' + DOW[t.d] + ' ' + fmtDate(dateFor(S.week, t.d)) + ' <span class="small muted">· Week ' + (S.week + 1) + '</span></h3><span class="spacer"></span><span class="live-clock" id="lv-clock">08:00</span></div>');
+      c.push('<div class="row" style="margin-top:6px"><button class="btn spd-btn" id="lv-pause" title="Pause/resume the floor (Space)">⏸ Pause</button><button class="btn spd-btn" data-spd="1" title="Real pace — roughly a second an hour.">1×</button><button class="btn spd-btn" data-spd="2" title="Double pace.">2×</button><button class="btn spd-btn" data-spd="4" title="Quadruple pace — quiet-week mode.">4×</button><span class="spacer"></span><span class="small muted" id="lv-bodies"></span></div>');
+      c.push('<div class="kpi-strip" style="margin-top:8px">' +
+        '<div class="kpi"><div class="k">Day SL</div><div class="v" id="lv-daysl">—</div><div class="small muted" id="lv-dayinfo"></div></div>' +
+        '<div class="kpi"><div class="k">Week SL</div><div class="v" id="lv-wksl">—</div><div class="small muted">target ' + pct(CFG.SLA_TARGET) + ' · committed ' + pct(S.committed) + '</div></div>' +
+        '<div class="kpi"><div class="k">Abandoned today</div><div class="v" id="lv-aband">0</div><div class="small muted">punters lost</div></div>' +
+        '<div class="kpi"><div class="k">Occupancy</div><div class="v" id="lv-occ">—</div><div class="small muted">cooking &gt; 88%</div></div></div>');
+      c.push('<div class="iv-grid" id="lv-ivgrid">' + ivSlotsHTML() + '</div></div>');
+      c.push('<div id="lv-card"></div>');
+      c.push('<div class="panel"><h4>📟 The wire</h4><div class="log wire" id="wire">' + wireHTML() + '</div></div>');
+      c.push('<div class="panel"><h4>👥 The floor <span class="small muted" id="lv-floorlab"></span></h4><div class="chip-grid" id="lv-chips">' + chipsHTML() + '</div></div>');
+      $('screen').innerHTML = c.join('');
+      $('lv-pause').addEventListener('click', livePauseToggle);
+      var spds = $('screen').querySelectorAll('button[data-spd]');
+      for (var sp = 0; sp < spds.length; sp++) spds[sp].addEventListener('click', function (e) { liveSetSpeed(parseInt(e.currentTarget.dataset.spd, 10)); });
+      if (L.card) renderCard();
+      updateLiveBoard();
+      setStatus('LIVE — ' + DOW[t.d] + '. The floor\'s yours. Space pauses; decision cards pause for you.');
+    }
+    function ivSlotsHTML() {
+      var t = L.today; if (!t) return '';
+      var parts = [], wsum = sum(CFG.INTRADAY), maxExp = t.dCalls * Math.max.apply(null, CFG.INTRADAY) / wsum;
+      for (var h = 0; h < CFG.INTRADAY.length; h++) {
+        var done = h < t.ivRes.length, cur = (h === t.ivRes.length) && !L.ended;
+        var cls = 'iv-slot', slTxt = '·', slCls = 'muted';
+        var barH = Math.max(3, 26 * (t.dCalls * CFG.INTRADAY[h] / wsum) / Math.max(1, maxExp));
+        var tip = CFG.OPEN_HOURS[h] + ' — coming up';
+        if (done) {
+          var r = t.ivRes[h];
+          barH = Math.max(3, Math.min(30, 26 * r.calls / Math.max(1, maxExp)));
+          cls += r.sl >= CFG.SLA_TARGET ? '' : (r.sl >= 0.6 ? ' slwarn' : ' slbad');
+          if (r.cat) cls += ' catzone';
+          slTxt = Math.round(r.sl * 100) + '%';
+          slCls = r.sl >= CFG.SLA_TARGET ? 'good' : (r.sl >= 0.6 ? 'warn' : 'bad');
+          tip = CFG.OPEN_HOURS[h] + ' — SL ' + slTxt + ' · ~' + Math.round(r.calls) + ' contacts · ' + Math.round(r.aband) + ' abandoned · ~' + Math.round(r.phones) + ' on phones' + (r.cat ? ' · CAT surge' : '');
+        } else { cls += ' pend'; }
+        if (cur) cls += ' cur';
+        parts.push('<div class="' + cls + '" title="' + tip + '"><div class="iv-bar-wrap"><div class="iv-bar" style="height:' + barH.toFixed(0) + 'px"></div></div><div class="iv-sl ' + slCls + '">' + slTxt + '</div><div class="iv-time">' + CFG.OPEN_HOURS[h].slice(0, 2) + '</div></div>');
+      }
+      return parts.join('');
+    }
+    function chipsHTML() {
+      var t = L.today; if (!t) return '';
+      var parts = [];
+      for (var i = 0; i < t.workingIds.length; i++) {
+        var a = agentById(t.workingIds[i]); if (!a) continue;
+        var sick = t.sick.indexOf(a.id) >= 0;
+        var cls = 'chipA ' + (sick ? 'sick' : (t.auxFlash[a.id] ? 'aux' : 'on'));
+        parts.push('<span class="' + cls + '" title="' + a.name + ' (' + a.team + ')' + (sick ? ' — called in sick today' : (t.auxFlash[a.id] ? ' — long AUX right now' : ' — on the phones')) + (a.green ? ' · 🌱 new grad' : '') + (a.sickies >= 3 ? ' · ' + a.sickies + ' sickies FYTD' : '') + '">' + a.name + (sick ? ' 🤒' : '') + '</span>');
+      }
+      for (var o = 0; o < L.otDays[t.d]; o++) parts.push('<span class="chipA ot" title="Overtime cover — pre-planned in the roster">OT</span>');
+      return parts.join('');
+    }
+    function updateLiveBoard() {
+      if (!L || !L.today) return;
+      var t = L.today, el;
+      el = $('lv-clock'); if (el) el.textContent = L.iv < CFG.OPEN_HOURS.length ? CFG.OPEN_HOURS[L.iv] : '17:00+';
+      el = $('lv-ivgrid'); if (el) el.innerHTML = ivSlotsHTML();
+      var daySl = t.callsSoFar > 0 ? t.ansSoFar / t.callsSoFar : null;
+      var wkCalls = L.calls + t.callsSoFar, wkAns = L.answered + t.ansSoFar;
+      var wkSl = wkCalls > 0 ? wkAns / wkCalls : null;
+      el = $('lv-daysl'); if (el) { el.textContent = daySl == null ? '—' : pct1(daySl); el.className = 'v ' + (daySl == null ? '' : daySl >= CFG.SLA_TARGET ? 'good' : daySl >= CFG.SLA_TARGET - 0.07 ? 'warn' : 'bad'); }
+      el = $('lv-dayinfo'); if (el) el.textContent = Math.round(t.callsSoFar).toLocaleString() + ' contacts so far';
+      el = $('lv-wksl'); if (el) { el.textContent = wkSl == null ? '—' : pct1(wkSl); el.className = 'v ' + (wkSl == null ? '' : wkSl >= CFG.SLA_TARGET ? 'good' : 'bad'); }
+      el = $('lv-aband'); if (el) { el.textContent = Math.round(t.abandSoFar); el.className = 'v ' + (t.abandSoFar > t.callsSoFar * 0.05 ? 'bad' : t.abandSoFar > t.callsSoFar * 0.02 ? 'warn' : 'good'); }
+      var occNow = t.occN > 0 ? t.occW / t.occN : null;
+      el = $('lv-occ'); if (el) { el.textContent = occNow == null ? '—' : pct(occNow); el.className = 'v ' + (occNow == null ? '' : occNow > 0.9 ? 'bad' : occNow > 0.85 ? 'warn' : 'good'); }
+      el = $('lv-bodies'); if (el) el.textContent = (t.workingIds.length - t.sick.length) + ' in' + (L.otDays[t.d] ? ' +' + L.otDays[t.d] + ' OT' : '') + (t.sick.length ? ' · ' + t.sick.length + ' sick' : '') + ' · mix E' + Math.round(L.mix.early * 100) + '/M' + Math.round(L.mix.mid * 100) + '/L' + Math.round(L.mix.late * 100);
+      el = $('lv-floorlab'); if (el) el.textContent = '— ' + (t.workingIds.length - t.sick.length) + ' on deck';
+      var pb = $('lv-pause'); if (pb) pb.innerHTML = L.paused ? '▶ Resume' : '⏸ Pause';
+      var spds = document.querySelectorAll('button[data-spd]');
+      for (var sp = 0; sp < spds.length; sp++) spds[sp].classList.toggle('pressed', parseInt(spds[sp].dataset.spd, 10) === L.speed);
+      if (Math.random() < 0.15 && t.workingIds.length) {
+        var low = null, lowD = 2;
+        for (var li = 0; li < t.workingIds.length; li++) { var ag = agentById(t.workingIds[li]); if (ag && t.sick.indexOf(ag.id) < 0 && ag.disc < lowD) { lowD = ag.disc; low = ag; } }
+        t.auxFlash = {};
+        if (low && lowD < 0.45 && Math.random() < 0.6) t.auxFlash[low.id] = 1;
+        var chips = $('lv-chips'); if (chips) chips.innerHTML = chipsHTML();
+      }
+    }
+
+    /* ---- decision cards (clock auto-pauses; effects hidden until commit) ---- */
+    function presentCard(card) {
+      if (!L || L.card) return false;
+      var t = L.today;
+      if (card.force !== true && t && t.cardsToday >= CFG.LIVE.CARDS_MAX_DAY) return false;
+      L.card = card; if (t && card.force !== true) t.cardsToday++;
+      renderCard(); playChime('email');
+      return true;
+    }
+    function renderCard() {
+      var slot = $('lv-card'); if (!slot) return;
+      if (!L.card) { slot.innerHTML = ''; return; }
+      var card = L.card, c = [];
+      c.push('<div class="dcard ' + (card.cls || '') + '"><h4>' + (card.icon || '⚡') + ' ' + card.title + ' <span class="small muted">— clock\'s paused</span></h4><div class="dbody">' + card.body + '</div>');
+      for (var i = 0; i < card.opts.length; i++) c.push('<button class="btn opt" data-copt="' + i + '" style="text-align:left;margin:3px 0;width:100%;display:block">' + (i + 1) + '. ' + card.opts[i].t + (card.opts[i].sub ? ' <span class="small muted">' + card.opts[i].sub + '</span>' : '') + '</button>');
+      c.push('<div class="small muted" style="margin-top:4px">Consequences land after you commit — like the Monday grilling. Keys 1–' + card.opts.length + ' work.</div></div>');
+      slot.innerHTML = c.join('');
+      var btns = slot.querySelectorAll('button[data-copt]');
+      for (var b2 = 0; b2 < btns.length; b2++) btns[b2].addEventListener('click', function (e) { resolveCard(parseInt(e.currentTarget.dataset.copt, 10)); });
+    }
+    function resolveCard(optIdx) {
+      if (!L || !L.card) return;
+      var card = L.card, opt = card.opts[optIdx]; if (!opt) return;
+      L.card = null;
+      var slot = $('lv-card'); if (slot) slot.innerHTML = '';
+      var outcome = null;
+      try { outcome = opt.fx ? opt.fx() : null; } catch (e) {}
+      wire('🗳️ <b>' + card.title + '</b> — ' + opt.t + (outcome ? ' <span class="muted">→ ' + outcome + '</span>' : ''), opt.bad ? 'bad' : null);
+      L.decisionsLog.push(DOW[L.today ? L.today.d : 0] + ' ' + CFG.OPEN_HOURS[Math.min(L.iv, 9)] + ' — ' + card.title + ': ' + opt.t + (outcome ? ' → ' + outcome : ''));
+      S.floorCalls = (S.floorCalls || 0) + 1;
+      if (S.floorCalls >= 25) unlock('floor_general');
+      save(); renderHUD(); updateLiveBoard();
+    }
+
+    function maybeMorningCards() {
+      var t = L.today; if (!t) return;
+      // repeat-offender sickie takes priority; flu cluster second
+      var repeat = null;
+      for (var i = 0; i < t.sick.length; i++) { var a = agentById(t.sick[i]); if (a && a.sickies >= 3 && (!repeat || a.sickies > repeat.sickies)) repeat = a; }
+      if (repeat) {
+        var rp = repeat;
+        presentCard({ icon: '🤒', title: rp.name + '\'s called in crook — again', body: 'That\'s sickie number <b>' + rp.sickies + '</b> this FY, and ' + (t.d === 0 ? 'it\'s a Monday. Of course it\'s a Monday.' : 'the ' + DOW[t.d] + ' pattern\'s getting hard to ignore.') + ' The ' + rp.team + ' are a body down from the bell.', opts: [
+          { t: 'Cover it with emergency OT.', sub: 'costs real money', fx: function () { t.otBoost += 0.05; L.otEDays += 1; return 'an off-duty agent picks up the shift — coverage holds, Finance will notice'; } },
+          { t: 'Run short and spread the load.', fx: function () { S.engagement = clamp(S.engagement - 1, 0, 100); return 'the floor wears it — occupancy creeps'; } },
+          { t: 'Note it for the audit and move on.', fx: function () { rp.offences++; S.trust.team = clamp(S.trust.team + 1, 0, 100); return 'the TLs appreciate the process — it\'ll surface in the weekly audit'; } },
+          { t: 'Ring them and lean on them to come in.', fx: function () { rp.grudge = Math.min(10, rp.grudge + 3); if (Math.random() < 0.4) { var ix = t.sick.indexOf(rp.id); if (ix >= 0) { t.sick.splice(ix, 1); t.absToday = t.workingIds.length > 0 ? t.sick.length / t.workingIds.length : 0; t.phonesEff = (Math.max(0, t.workingIds.length - t.sick.length) + L.otDays[t.d]) * (1 - L.shrink) * (1 - L.dodgyAtRun * CFG.DODGY_AVAIL_MAX); var chips = $('lv-chips'); if (chips) chips.innerHTML = chipsHTML(); } rp.morale = clamp(rp.morale - 6, 5, 98); return rp.name + ' drags themselves in, filthy about it. They won\'t forget this.'; } S.engagement = clamp(S.engagement - 2, 0, 100); return 'they hang up on you. The floor heard about it by smoko.'; }, bad: true }
+        ] });
+        return;
+      }
+      if (t.sick.length >= 3) {
+        var hasTrainees = trainees() > 0;
+        var opts = [
+          { t: 'Emergency OT ring-around.', sub: 'pricey, fast', fx: function () { t.otBoost += 0.08; L.otEDays += 2; return 'two bodies back on the phones by 9:30'; } },
+          { t: 'Run short — protect the budget.', fx: function () { return 'thin all day; hope the volume\'s kind'; } }
+        ];
+        if (hasTrainees) opts.splice(1, 0, { t: 'Pull the training class onto the phones.', sub: 'delays their graduation', fx: function () { t.otBoost += 0.06; for (var p = 0; p < S.pipeline.length; p++) S.pipeline[p].weeksLeft += 1; return 'greens on the easy queues — graduation slips a week'; } });
+        presentCard({ icon: '🤧', title: 'Flu\'s ripped through the roster', body: '<b>' + t.sick.length + ' agents</b> have called in by 8am. The ' + DOW[t.d] + ' queue won\'t care. What\'s the play?', opts: opts });
+      }
+    }
+    function maybeIntraCards(iv, ivSl, ivOcc) {
+      var t = L.today; if (!t || L.card) return;
+      // queue spike
+      if (!t.spikeActed && ivSl < CFG.LIVE.SPIKE_SL && t.ivRes[t.ivRes.length - 1].calls > 25) {
+        t.spikeActed = true;
+        presentCard({ icon: '🚨', title: 'Queue\'s blowing out', body: 'SL just printed <b class="bad">' + Math.round(ivSl * 100) + '%</b> for ' + CFG.OPEN_HOURS[iv] + ' and the board\'s going red. Callers are stacking up. Your move.', opts: [
+          { t: 'Emergency OT blast — ring the bench.', sub: 'costs real money', fx: function () { t.otBoost += CFG.LIVE.OT_BOOST; L.otEDays += CFG.LIVE.OT_COST_DAYS; return 'extra phones online within the hour'; } },
+          { t: 'Pull breaks for the next two hours.', fx: function () { t.breakBoostIvs = 2; S.engagement = clamp(S.engagement - 2, 0, 100); return 'coverage bump now; the floor\'s ropable about lunch'; } },
+          { t: 'All-hands message: clear the queue.', fx: function () { t.otBoost += 0.03; S.engagement = clamp(S.engagement - 1, 0, 100); return 'a nudge, not a fix — wrap times tighten a touch'; } },
+          { t: 'Ride it out — it\'ll wash through.', fx: function () { return 'you let the curve do its thing'; } }
+        ] });
+        return;
+      }
+      // VTO on a dead floor
+      if (!t.vtoOffered && iv === 3 && ivOcc > 0 && ivOcc < CFG.LIVE.VTO_OCC && t.callsSoFar > 100) {
+        t.vtoOffered = true;
+        presentCard({ icon: '🪃', title: 'Floor\'s over-covered', body: 'Occupancy\'s sitting at <b>' + pct(ivOcc) + '</b> — agents are idling between calls. Finance hates paying for quiet phones. Offer voluntary time off?', opts: [
+          { t: 'Offer VTO — two takers go home.', sub: 'saves $, thins the arvo', fx: function () { L.vtoDays += 2; t.vtoCut += CFG.LIVE.VTO_CUT; S.engagement = clamp(S.engagement + 2, 0, 100); return 'hands shoot up; payroll thanks you. Pray the arvo stays quiet.'; } },
+          { t: 'Keep everyone — buffer the afternoon.', fx: function () { return 'belt and braces; the cost stands'; } },
+          { t: 'Use the lull for side-by-side coaching.', fx: function () { t.vtoCut += 0.04; S.dodgy = clamp(S.dodgy - 0.01, 0, 1); return 'TLs grab the quiet hour — behaviour drifts back a touch'; } }
+        ] });
+        return;
+      }
+      // leave request lands mid-arvo
+      if (!t.leaveAsked && iv === 6 && Math.random() < CFG.LIVE.LEAVE_P) {
+        t.leaveAsked = true;
+        var pool = t.workingIds.filter(function (id) { var a = agentById(id); return a && t.sick.indexOf(id) < 0 && a.al > 0; });
+        if (!pool.length) return;
+        var la = agentById(pick(pool));
+        var wAhead = 1 + Math.floor(Math.random() * 3), lDay = Math.floor(Math.random() * 5), lWeek = S.week + wAhead;
+        var why = pick(['mate\'s wedding', 'kid\'s school concert', 'long-promised fishing trip', 'sister\'s flying in from Perth', 'medical thing they\'d rather not detail', 'Bali flights they already booked']);
+        presentCard({ icon: '🏖️', title: la.name + ' wants ' + DOW[lDay] + ' off, Week ' + (lWeek + 1), body: la.name + ' (' + la.team + ') has pinged you: <i>"' + why + '"</i> — they\'ve got ' + la.al + ' days of AL banked. Week ' + (lWeek + 1) + ' is ' + (CFG.SEASON[lWeek] >= 1.15 ? '<b class="bad">peak season</b>' : 'looking ordinary') + '.', opts: [
+          { t: 'Approve it — book it in.', fx: (function (laC, lWeekC, lDayC) { return function () { if (!S.leaveBook[lWeekC]) S.leaveBook[lWeekC] = []; S.leaveBook[lWeekC].push({ agentId: laC.id, name: laC.name, day: lDayC }); laC.al = Math.max(0, laC.al - 1); laC.morale = clamp(laC.morale + 4, 5, 98); laC.grudge = Math.max(0, laC.grudge - 0.5); S.leaveApprovals = (S.leaveApprovals || 0) + 1; if (S.leaveApprovals >= 10) unlock('people_person'); return 'booked — that day\'s capacity takes the hit, and they\'re stoked'; }; })(la, lWeek, lDay) },
+          { t: 'Knock it back — bad week for it.', fx: (function (laC) { return function () { laC.grudge = Math.min(10, laC.grudge + 2.5); laC.morale = clamp(laC.morale - 6, 5, 98); if (Math.random() < 0.5) S.deferred.push({ week: S.week + 1 + Math.floor(Math.random() * 2), type: 'grudgeSickie', agentId: laC.id, name: laC.name }); return 'they say "no worries" in a tone that means worries'; }; })(la), bad: true },
+          { t: 'Defer — "ask me at the huddle".', fx: (function (laC) { return function () { laC.grudge = Math.min(10, laC.grudge + 0.8); return 'kicked down the road; they\'ll ask again'; }; })(la) }
+        ] });
+      }
+    }
+    function presentCatCard() {
+      var t = L.today, c = L.cat;
+      c.struck = true;
+      S.catLog.push({ week: S.week, key: c.key });
+      if (S.catLog.length >= 3) unlock('storm_chaser');
+      var opts = [
+        { t: 'Full CAT response — OT blast, all-hands, longer day.', sub: 'expensive, decisive', fx: function () { t.otBoost += 0.18; L.otEDays += 6; c.response = 'full CAT response'; applyTrust({ client: 2, ops: 1 }); return 'the room snaps into CAT mode — every phone\'s manned'; } },
+        { t: 'Partial response — breaks pulled, some OT.', fx: function () { t.otBoost += 0.08; t.breakBoostIvs = 3; L.otEDays += 2; c.response = 'partial response'; return 'you patch what you can and triage the rest'; } },
+        { t: 'Ride it out — SL\'s gone anyway; protect the budget.', fx: function () { c.response = 'rode it out'; applyTrust({ client: -4 }); S.engagement = clamp(S.engagement - 2, 0, 100); return 'the queue becomes a number you stop looking at'; }, bad: true }
+      ];
+      if (S.surgePlan) opts.splice(1, 0, { t: 'Invoke the surge plan — overflow partner takes the spill.', sub: 'your CAT contract earns its keep', fx: function () { c.overflow = true; c.response = 'surge plan invoked'; S.budget -= 4000; applyTrust({ client: 3 }); return 'overflow queues light up — they take a third of the surge for $4k'; } });
+      presentCard({ force: true, cls: 'catcard', icon: c.icon, title: 'CAT EVENT: ' + c.name, body: '<b>' + c.blurb.charAt(0).toUpperCase() + c.blurb.slice(1) + '</b> — and every punter with a dinged roof is dialling at once. The CAT desk reckons <b>' + Math.round((c.mult - 1) * 100) + '% extra volume</b> from now, washing into ' + (c.day < 4 ? 'tomorrow' : 'next week') + '. ' + (S.surgePlan ? 'Your surge plan is on the shelf, signed and ready.' : 'No surge plan on file — you\'re doing this with what\'s on the floor.'), opts: opts });
+      wire('🚨 <b>CAT EVENT — ' + c.name.toUpperCase() + '</b>: claims line going vertical.', 'cat');
+    }
+
+    function simWeekInstant() {
+      // instant fallback ("sim it quietly") + debug path — same maths as the
+      // live floor, but no cards, no live calls, no floor time.
+      if (!S.mods) S.mods = freshMods();
+      var mix = liveMix();
       var otDays = allocateOT(plan.rost, plan.needs, plan.ot), dayRes = [], calls = 0, answered = 0, occSum = 0, occN = 0, abandoned = 0;
       var realAbs = clamp(plan.expAbs + (S.mods.absenceAdd || 0), 0, 0.6);
       var absSum = 0, absN = 0, dodgyAtRun = S.dodgy;
@@ -1122,9 +1801,9 @@
           var cCalls = Math.round(dCalls * frac * C.volMult);
           var cPhones = phones * frac;
           var cAht = baseAht * C.ahtMult;
-          var cSl = dayServiceLevel(cCalls, cPhones, cAht);
+          var cSl = dayServiceLevelMix(cCalls, cPhones, cAht, mix);
           var cOcc = occupancy(cPhones, cCalls * cAht / CFG.OPEN_SECONDS);
-          var cAband = dayAbandoned(cCalls, cPhones, cAht);
+          var cAband = dayAbandonedMix(cCalls, cPhones, cAht, mix);
           dayCh[C.key] = { calls: cCalls, sl: cSl, occ: cOcc };
           dayCallsAggr += cCalls; dayAnsAggr += cSl * cCalls; dayAbandAggr += cAband;
           if (cCalls > 30) { dayOccW += cOcc * cCalls; dayOccN += cCalls; }
@@ -1137,11 +1816,19 @@
         if (dayCallsAggr > 50) { occSum += occ; occN++; }
         dayRes.push({ d: d, hol: hol, calls: dayCallsAggr, sl: sl, occ: occ, phones: phones, aht: baseAht, byChannel: dayCh });
       }
+      finishWeek({ dayRes: dayRes, calls: calls, answered: answered, abandoned: abandoned, occSum: occSum, occN: occN, absSum: absSum, absN: absN, byChannel: byChannel, dodgyAtRun: dodgyAtRun, rost: plan.rost.slice(), otDays: otDays, extraCost: 0, extraSave: 0, otEDays: 0, vtoDays: 0, mix: mix, live: null });
+    }
+
+    function finishWeek(agg) {
+      // the week's wash-up — shared by the live floor and the instant sim
+      var dayRes = agg.dayRes, calls = agg.calls, answered = agg.answered, abandoned = agg.abandoned;
+      var occSum = agg.occSum, occN = agg.occN, absSum = agg.absSum, absN = agg.absN;
+      var byChannel = agg.byChannel, dodgyAtRun = agg.dodgyAtRun, otDays = agg.otDays;
       var byChannelSummary = {};
-      for (var ck in byChannel) { var bc = byChannel[ck]; byChannelSummary[ck] = { calls: bc.calls, sl: bc.calls > 0 ? bc.ans / bc.calls : 1, occ: bc.occN > 0 ? bc.occSum / bc.occN : 0 }; }
-      var sla = calls > 0 ? answered / calls : 1, occAvg = occN ? occSum / occN : 0, baseDays = sum(plan.rost), otTotal = sum(otDays);
-      var cost = laborCost(baseDays, otTotal), traineeCost = trainees() * CFG.TRAINEE_WK_COST, otFrac = baseDays > 0 ? otTotal / baseDays : 0;
-      var fcastDays = S.forecastDays.slice(), fcast = sum(fcastDays), fErr = calls > 0 ? Math.abs(fcast - calls) / calls : 0;
+      for (var ck in byChannel) { var bc = byChannel[ck]; byChannelSummary[ck] = { calls: Math.round(bc.calls), sl: bc.calls > 0 ? bc.ans / bc.calls : 1, occ: bc.occN > 0 ? bc.occSum / bc.occN : 0 }; }
+      var sla = calls > 0 ? answered / calls : 1, occAvg = occN ? occSum / occN : 0, baseDays = sum(agg.rost), otTotal = sum(otDays);
+      var cost = laborCostFor(agg.rost, baseDays, otTotal) + (agg.extraCost || 0) - (agg.extraSave || 0), traineeCost = trainees() * CFG.TRAINEE_WK_COST, otFrac = baseDays > 0 ? (otTotal + (agg.otEDays || 0)) / baseDays : 0;
+      var fcastDays = (S.forecastDays || [0, 0, 0, 0, 0]).slice(), fcast = sum(fcastDays), fErr = calls > 0 ? Math.abs(fcast - calls) / calls : 0;
 
       var penalty = 0, bonus = 0;
       if (sla < CFG.SLA_TARGET) penalty = (CFG.SLA_TARGET - sla) * CFG.PENALTY_SCALE; else bonus = Math.min(CFG.BONUS_CAP, (sla - CFG.SLA_TARGET) * CFG.BONUS_SCALE);
@@ -1152,18 +1839,20 @@
       eDelta -= otFrac * 18; if (S.weekInits.engagement) eDelta += 8; if (S.trust.team < 45) eDelta -= 2; eDelta += (65 - S.engagement) * 0.05;
       S.engagement = clamp(S.engagement + eDelta, 0, 100);
       var dodgyTarget = clamp(0.30 - S.engagement / 400 - S.trust.team / 500, 0.04, 0.45); S.dodgy = clamp(S.dodgy + (dodgyTarget - S.dodgy) * 0.35, 0, 1);
+      if (S.roster) for (var rm = 0; rm < S.roster.length; rm++) { var ra = S.roster[rm]; ra.morale = clamp(ra.morale + (S.engagement - ra.morale) * 0.12 + rand(-2.5, 2.5), 5, 98); if (ra.grudge > 0) ra.grudge = Math.max(0, ra.grudge - 0.5); if (ra.green > 0) ra.green--; }
 
       var burnout = 1 + Math.max(0, occAvg - 0.85) * 4 + Math.max(0, 60 - S.engagement) / 100 * 2 + otFrac * 1.5, expQuits = S.hc * 0.008 * burnout;
       if (S.engagement < 35) expQuits += 1;
       var quits = Math.floor(expQuits) + (Math.random() < (expQuits % 1) ? 1 : 0); quits = Math.min(quits, Math.max(0, S.hc - 1));
-      var quitNames = []; for (var q = 0; q < quits && q < 3; q++) quitNames.push(pick(AGENT_NAMES)); S.hc -= quits;
+      var quitNames = [];
+      for (var q = 0; q < quits; q++) { var qa = pickQuitter(); if (!qa) break; removeAgent(qa.id); if (quitNames.length < 3) quitNames.push(qa.name + (qa.grudge >= 4 ? ' (had a gutful)' : '')); }
 
       var graduated = 0; for (var p2 = 0; p2 < S.pipeline.length; p2++) S.pipeline[p2].weeksLeft -= 1;
-      S.pipeline = S.pipeline.filter(function (c) { if (c.weeksLeft <= 0) { graduated += c.size; return false; } return true; }); S.hc += graduated;
+      S.pipeline = S.pipeline.filter(function (c) { if (c.weeksLeft <= 0) { graduated += c.size; var gnm = c.names || []; for (var gn = 0; gn < c.size; gn++) addAgentToRoster(gnm[gn]); return false; } return true; });
       var coachingExpired = 0, coachingDodgyDrop = 0;
       if (S.coachingPlans && S.coachingPlans.length) {
         for (var cp = 0; cp < S.coachingPlans.length; cp++) S.coachingPlans[cp].weeksLeft -= 1;
-        S.coachingPlans = S.coachingPlans.filter(function (p) { if (p.weeksLeft <= 0) { coachingExpired++; coachingDodgyDrop += (p.severity === 'standard' ? 0.012 : 0.005); return false; } return true; });
+        S.coachingPlans = S.coachingPlans.filter(function (p) { if (p.weeksLeft <= 0) { coachingExpired++; coachingDodgyDrop += (p.severity === 'standard' ? 0.012 : 0.005); var ca = agentById(p.agentId); if (ca) { ca.disc = clamp(ca.disc + (p.severity === 'standard' ? 0.18 : 0.08), 0, 1); ca.morale = clamp(ca.morale + 2, 0, 100); } return false; } return true; });
         if (coachingDodgyDrop > 0) S.dodgy = clamp(S.dodgy - coachingDodgyDrop, 0, 1);
       }
 
@@ -1188,7 +1877,7 @@
       var avgAbsence = absN > 0 ? absSum / absN : 0;
       var ahtBloat = (S.ahtSkill * (1 + dodgyAtRun * CFG.DODGY_AHT_MAX) * (S.mods.ahtMult || 1)) - 1;
       var auxLeak = dodgyAtRun * CFG.DODGY_AVAIL_MAX;
-      S.lastResult = { dayRes: dayRes, sla: sla, occ: occAvg, calls: calls, abandoned: abandoned, cost: cost + traineeCost, pnl: pnl, penalty: penalty, bonus: bonus, engBefore: engBefore, engAfter: S.engagement, quits: quits, quitNames: quitNames, graduated: graduated, budgetBefore: budgetBefore, tBefore: tBefore, tAfter: { ops: S.trust.ops, fin: S.trust.fin, client: S.trust.client, team: S.trust.team }, hit: hit, otTotal: otTotal, forecast: fcast, forecastDays: fcastDays, fErr: fErr, avgAbsence: avgAbsence, ahtBloat: ahtBloat, auxLeak: auxLeak, baseDays: baseDays, coachingExpired: coachingExpired, byChannel: byChannelSummary };
+      S.lastResult = { dayRes: dayRes, sla: sla, occ: occAvg, calls: calls, abandoned: abandoned, cost: cost + traineeCost, pnl: pnl, penalty: penalty, bonus: bonus, engBefore: engBefore, engAfter: S.engagement, quits: quits, quitNames: quitNames, graduated: graduated, budgetBefore: budgetBefore, tBefore: tBefore, tAfter: { ops: S.trust.ops, fin: S.trust.fin, client: S.trust.client, team: S.trust.team }, hit: hit, otTotal: otTotal, forecast: fcast, forecastDays: fcastDays, fErr: fErr, avgAbsence: avgAbsence, ahtBloat: ahtBloat, auxLeak: auxLeak, baseDays: baseDays, coachingExpired: coachingExpired, byChannel: byChannelSummary, mix: agg.mix || null, live: agg.live || null, otEDays: agg.otEDays || 0, vtoDays: agg.vtoDays || 0 };
       S.forecastDays = null;
       save(); renderHUD(); drawResults(S.lastResult);
     }
@@ -1203,6 +1892,7 @@
       if (typeof res.fErr === 'number' && res.fErr <= 0.02) unlock('forecast_whisperer');
       var streakNow = 0; if (S.history) for (var hi = S.history.length - 1; hi >= 0; hi--) { if (S.history[hi].sla >= CFG.SLA_TARGET) streakNow++; else break; }
       if (streakNow >= 10) unlock('streak_10');
+      if (res.live && res.live.catStruck && res.hit) unlock('cat_commander');
       var c = [];
       c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> ' + advisorResultTip(res) + '</div></div>');
       if (res.byChannel) {
@@ -1247,6 +1937,12 @@
       }
       c.push('</tbody></table></div>');
 
+      if (res.live && res.live.decisions && res.live.decisions.length) {
+        c.push('<div class="panel" title="Every mid-week call you made on the live floor, with how it landed."><h4>🔴 Floor calls this week</h4><div class="log">');
+        for (var dl = 0; dl < res.live.decisions.length; dl++) c.push('<div class="li">' + res.live.decisions[dl] + '</div>');
+        if (res.otEDays > 0 || res.vtoDays > 0) c.push('<div class="li small muted">' + (res.otEDays ? 'Emergency OT cost ' + money(res.otEDays * CFG.DAY_COST * CFG.OT_MULT) + ' (in the labour line). ' : '') + (res.vtoDays ? 'VTO credited ' + money(res.vtoDays * CFG.DAY_COST) + '.' : '') + '</div>');
+        c.push('</div></div>');
+      }
       var dT = function (k) { var v = Math.round(res.tAfter[k] - res.tBefore[k]); return v === 0 ? '' : ' <span class="' + (v > 0 ? 'delta-up' : 'delta-dn') + '">(' + (v > 0 ? '+' : '') + v + ')</span>'; };
       c.push('<div class="panel"><h4>🧾 Ledger</h4><div class="log">' +
         '<div class="li">Contract revenue: <span class="delta-up">' + money(CFG.WEEK_REVENUE) + '</span></div>' +
@@ -1329,7 +2025,7 @@
       var res = S.lastResult, c = [];
       c.push('<div class="advisor"><div class="face">📎</div><div><b>Clippo:</b> G\'day. You\'ve inherited the WFM chair. Before you decide anything, here\'s how the centre ran <b>last week</b> under the previous analyst — study it, then take over for Week 1. This week\'s on them; your scorecard starts Monday.</div></div>');
       c.push('<div class="panel"><h3>📋 Handover — week of ' + weekLabel(-1) + '</h3>' +
-        '<p class="small">You are <b>Workforce Management</b> for this contact centre (open <b>Monday–Friday</b>). You don\'t run the floor — you <b>forecast</b>, <b>plan</b>, <b>negotiate</b> and <b>review the data</b>, then front up at the Monday meeting. Your job all year: hold the <b>service level near ' + pct(CFG.SLA_TARGET) + '</b>. Here\'s last week\'s result to ground you.</p>');
+        '<p class="small">You are <b>Workforce Management</b> for this <b>insurance claims centre</b> (open <b>Monday–Friday</b>), running the ' + (S.clientCo || 'client') + ' account. You <b>forecast</b>, <b>plan</b>, <b>negotiate</b> — and from this week on, you <b>run the floor live</b>: when the storms come and the claims line lights up, the calls are yours to make. Your job all year: hold the <b>service level near ' + pct(CFG.SLA_TARGET) + '</b>. Here\'s last week\'s result to ground you.</p>');
       var slaCls = res.sla >= CFG.SLA_TARGET ? 'good' : (res.sla >= CFG.SLA_TARGET - 0.05 ? 'warn' : 'bad');
       c.push('<div class="kpi-strip">' +
         '<div class="kpi"><div class="k">Service level</div><div class="v ' + slaCls + '">' + pct1(res.sla) + '</div><div class="small muted">target ' + pct(CFG.SLA_TARGET) + '</div></div>' +
@@ -1357,17 +2053,22 @@
     }
 
     function makeReview(dayRes, forceN) {
-      var pool = shuffle(AGENT_NAMES).slice(0, 24), teamAht = CFG.AHT * S.ahtSkill, agents = [];
-      for (var i = 0; i < 24; i++) {
+      // Derived from the persistent roster: the same people drift week to
+      // week, low-discipline agents reoffend, greens run hot on AHT.
+      if (!S.roster || !S.roster.length) { S.roster = buildRoster(S.hc || CFG.START_HC); syncHC(); }
+      var teamAht = CFG.AHT * S.ahtSkill, agents = [];
+      for (var i = 0; i < S.roster.length; i++) {
+        var p = S.roster[i];
+        var slack = (1 - p.disc) * (S.dodgy * 2 + 0.3);
         agents.push({
-          id: i, name: pool[i], team: TEAMS[Math.floor(i / 8)],
-          calls: Math.round(rand(420, 520)),
-          aht: Math.round(teamAht * rand(0.92, 1.08)),
-          aux: Math.round(rand(6, 12) * 10) / 10,
-          acw: Math.round(rand(5, 10) * 10) / 10,
-          hold: Math.round(rand(2, 6) * 10) / 10,
-          adh: Math.round(rand(92, 99) * 10) / 10,
-          issue: null
+          id: p.id, name: p.name, team: p.team,
+          calls: Math.round(rand(420, 520) * (p.green > 0 ? 0.75 : 1)),
+          aht: Math.round(teamAht * p.skill * (p.green > 0 ? 1.18 : 1) * rand(0.96, 1.04)),
+          aux: Math.round((rand(6, 11) + slack * 3) * 10) / 10,
+          acw: Math.round((rand(5, 9) + slack * 2) * 10) / 10,
+          hold: Math.round((rand(2, 5) + slack * 1.5) * 10) / 10,
+          adh: Math.round((99 - rand(0, 5) - slack * 4) * 10) / 10,
+          green: p.green > 0, issue: null
         });
       }
       // number of real issues: almost always >=1, scales mildly with dodgy index
@@ -1375,9 +2076,18 @@
       if (r < 0.07) nIssues = 0; else if (r < 0.45) nIssues = 1 + extra; else if (r < 0.80) nIssues = 2 + extra; else nIssues = 3 + extra;
       nIssues = Math.min(nIssues, 5);
       if (forceN != null) nIssues = forceN;
-      var idxs = shuffle(agents.map(function (_, i) { return i; })).slice(0, nIssues);
-      for (var j = 0; j < idxs.length; j++) {
-        var a = agents[idxs[j]], dim = pick(['aux', 'aht', 'hold', 'acw', 'adh']); a.issue = dim;
+      // issue selection weighted by indiscipline + past offences → repeat offenders emerge
+      var weights = S.roster.map(function (p2) { return Math.pow(1.15 - p2.disc, 2) + p2.offences * 0.35 + (p2.morale < 40 ? 0.25 : 0); });
+      var chosen = {};
+      for (var n = 0; n < nIssues; n++) {
+        var tot = 0, w; for (w = 0; w < weights.length; w++) if (!chosen[w]) tot += weights[w];
+        if (tot <= 0) break;
+        var roll = Math.random() * tot, acc = 0, pickIdx = -1;
+        for (w = 0; w < weights.length; w++) { if (chosen[w]) continue; acc += weights[w]; if (roll < acc) { pickIdx = w; break; } }
+        if (pickIdx < 0) break;
+        chosen[pickIdx] = true;
+        var a = agents[pickIdx], rp = S.roster[pickIdx], dim = pick(['aux', 'aht', 'hold', 'acw', 'adh']); a.issue = dim;
+        rp.offences++;
         if (dim === 'aux') { a.aux = Math.round(rand(16, 24) * 10) / 10; a.calls = Math.round(a.calls * 0.78); }
         else if (dim === 'aht') { a.aht = Math.round(teamAht * rand(1.22, 1.45)); a.calls = Math.round(a.calls * 0.82); }
         else if (dim === 'hold') { a.hold = Math.round(rand(11, 17) * 10) / 10; a.calls = Math.round(a.calls * 0.88); }
@@ -1426,7 +2136,7 @@
     }
 
     function renderCallFlow() {
-      var dr = S.lastResult.dayRes[S.reviewDay], iv = intervalsFor(dr.calls, dr.phones, dr.aht);
+      var dr = S.lastResult.dayRes[S.reviewDay], iv = intervalsForMix(dr.calls, dr.phones, dr.aht, S.lastResult.mix || null);
       var c = [];
       c.push('<h3>📞 Call flow — intraday detail</h3>');
       c.push('<div class="row" style="margin-bottom:6px">');
@@ -1472,7 +2182,7 @@
         return (a - b) * R.sortDir;
       });
       var c = [];
-      c.push('<h3>🕵️ Agent behaviour audit — 24 agents, 3 teams</h3>');
+      c.push('<h3>🕵️ Agent behaviour audit — ' + R.agents.length + ' agents, 3 teams</h3>');
       c.push('<p class="small">' + (R.submitted ? 'Audit submitted. ⚠️ marks the agents who were genuinely out of line.' : 'Compare each agent against the <i>team average</i> row. Click a column header to sort and surface outliers. Tick anyone gaming the system, then submit — <b>flagging someone who\'s fine costs morale</b>, so be sure.') + '</p>');
       c.push('<div class="scroll-x"><table class="grid audit"><thead><tr>');
       for (var ci = 0; ci < cols.length; ci++) { var act = R.sortKey === cols[ci].k ? (R.sortDir > 0 ? ' ▲' : ' ▼') : ''; c.push('<th class="sortable" data-sort="' + cols[ci].k + '" title="' + (cols[ci].tip || '') + '">' + cols[ci].label + act + '</th>'); }
@@ -1481,7 +2191,7 @@
       for (var ri = 0; ri < rows.length; ri++) {
         var a = rows[ri], rowCls = (R.submitted && a.issue) ? 'cul' : '';
         c.push('<tr class="' + rowCls + '">');
-        for (var cj = 0; cj < cols.length; cj++) c.push('<td' + (cols[cj].k === 'name' ? ' class="day"' : '') + '>' + cols[cj].fmt(a) + (cols[cj].k === 'name' && R.submitted && a.issue ? ' ⚠️' : '') + '</td>');
+        for (var cj = 0; cj < cols.length; cj++) c.push('<td' + (cols[cj].k === 'name' ? ' class="day"' : '') + '>' + cols[cj].fmt(a) + (cols[cj].k === 'name' && a.green ? ' <span title="New grad — first weeks on the floor. Runs hot on AHT while they find their feet; goes easy in the audit.">🌱</span>' : '') + (cols[cj].k === 'name' && R.submitted && a.issue ? ' ⚠️' : '') + '</td>');
         if (R.submitted) {
           var flagged = !!R.flagged[a.id], mark;
           var alreadyCoached = (S.coachingPlans || []).some(function (p) { return p.agentId === a.id; });
@@ -1527,9 +2237,11 @@
       for (var i = 0; i < cbx.length; i++) if (cbx[i].checked) R.flagged[parseInt(cbx[i].dataset.flag, 10)] = true;
       var correct = 0, fp = 0, missed = 0, totalIssues = 0;
       for (var j = 0; j < R.agents.length; j++) {
-        var a = R.agents[j], flagged = !!R.flagged[a.id];
+        var a = R.agents[j], flagged = !!R.flagged[a.id], pa = agentById(a.id);
         if (a.issue) totalIssues++;
-        if (flagged && a.issue) correct++; else if (flagged && !a.issue) fp++; else if (!flagged && a.issue) missed++;
+        if (flagged && a.issue) { correct++; if (pa) pa.disc = clamp(pa.disc + 0.05, 0, 1); }
+        else if (flagged && !a.issue) { fp++; if (pa) { pa.grudge = Math.min(10, pa.grudge + 2); pa.morale = clamp(pa.morale - 5, 0, 100); } }
+        else if (!flagged && a.issue) missed++;
       }
       if (correct > 0) { S.dodgy = clamp(S.dodgy - Math.min(0.10, correct * 0.025), 0, 1); S.trust.team = clamp(S.trust.team + Math.min(4, correct), 0, 100); unlock('first_blood'); }
       if (fp > 0) S.trust.team = clamp(S.trust.team - fp * 2, 0, 100);
@@ -1664,6 +2376,9 @@
       if (res.quits > 0) L.push(res.quits + ' agent' + (res.quits > 1 ? 's' : '') + ' walked. Suss out why before they take mates with \'em.');
       if (res.graduated > 0) L.push('Trainees on the floor — shout \'em a round if they survive next week.');
       if (res.coachingExpired > 0) L.push(res.coachingExpired + ' coaching plan' + (res.coachingExpired > 1 ? 's' : '') + ' wrapped — the floor should ride a touch cleaner from here.');
+      if (res.live && res.live.cat) L.push('🌪️ CAT week: ' + res.live.cat + '. The claims line will talk about it for a while.');
+      if (res.otEDays > 0) L.push('Emergency OT bill: ' + money(res.otEDays * CFG.DAY_COST * CFG.OT_MULT) + ' — worth it or wear it, Finance will ask.');
+      if (res.vtoDays > 0) L.push('VTO givebacks saved ' + money(res.vtoDays * CFG.DAY_COST) + ' on a quiet floor.');
       if (res.engAfter >= 80) L.push('🔥 Engagement\'s humming at ' + Math.round(res.engAfter) + ' — floor\'s genuinely happy to be there.');
       else if (res.engAfter < 40) L.push('💧 Engagement\'s at ' + Math.round(res.engAfter) + ' — that\'s a leading indicator of attrition. Have a yarn with the TLs.');
       if (res.tBefore && res.tAfter) {
@@ -1715,15 +2430,17 @@
         '<p style="margin-top:8px"><b>Each week:</b></p><ol style="margin-left:18px">' +
         '<li><b>Monday meeting</b> — answer the grilling (effects hidden \'til you pick; one option is a trap), spend <b>political capital</b> on asks (hire, engagement, coaching, training), then <b>commit</b> to a service-level number for the week.</li>' +
         '<li><b>Forecast</b> — read the weekly &amp; daily history plus signals (campaign / season / public holidays), then <b>set each day\'s expected calls yourself</b>.</li>' +
-        '<li><b>Plan</b> — spread your roster across Mon–Fri. The view shows you the shrinkage breakdown (AL, sickies, breaks, AUX, coaching, training) so you know where the headcount really goes.</li>' +
-        '<li><b>Run</b> — reality hits. The "On the floor this week" panel shows sickies, AUX leakage, AHT bloat and OT use; the "🍺 Knock-off" panel rounds the week with cheeky Aussie verdicts.</li>' +
-        '<li><b>Review</b> — drill into the <b>call flow</b> (hour-by-hour) to see where service broke, and audit <b>24 agents across the Wallabies / Magpies / Crows teams</b> to catch anyone gaming AUX/wrap/hold/AHT/adherence. Coach the right ones; false flags cost team morale.</li>' +
+        '<li><b>Plan</b> — spread your roster across Mon–Fri, then set the <b>⏰ shift mix</b> (Early/Mid/Late 8-hour shifts in the 10-hour window). The gold line is your coverage curve vs the blue arrival bars — cover the morning slam or bleed at 10am. "🧮 Solve the mix" grid-searches it for you. Shrinkage breakdown shows where the headcount really goes.</li>' +
+        '<li><b>Take the floor — LIVE</b> — the week plays out in front of you: Mon–Fri tick through hourly intervals, sickie call-ins land at 7:45, queues blow out mid-morning, leave requests interrupt your arvo, and CAT events send the claims line vertical. <b>Decision cards auto-pause the clock</b>; effects stay hidden until you commit (house rules). Speeds 1×/2×/4×, <kbd>Space</kbd> pauses, <kbd>1</kbd>–<kbd>4</kbd> answer cards. Or "sim it quietly" to skip the floor when you just want the numbers.</li>' +
+        '<li><b>Review</b> — drill into the <b>call flow</b> (hour-by-hour, shaped by your shift mix) to see where service broke, and audit <b>your whole roster across the Wallabies / Magpies / Crows</b> to catch anyone gaming AUX/wrap/hold/AHT/adherence. The same people exist all year — repeat offenders emerge. Coach the right ones; false flags leave real grudges.</li>' +
         '</ol>' +
-        '<p style="margin-top:8px"><b>📥 The inbox (real time):</b> 30 Aussie emails (Big Kev, Macca, Sharon, Trev from CPSU, NOC alert, TIO complaint, etc.) land throughout play. Each ticks down — open the floating ✉️ button and pick <b>1 of 4 replies</b> (effects hidden; one\'s usually a trap). <b>Ignore one and it expires, costing the sender\'s trust.</b> The clock pauses when you switch tabs.</p>' +
+        '<p style="margin-top:8px"><b>📥 The inbox (real time):</b> 30 Aussie emails (Big Kev, Macca, Sharon, Trev from CPSU, CAT desk alert, AFCA complaint, etc.) land throughout play. Each ticks down — open the floating ✉️ button and pick <b>1 of 4 replies</b> (effects hidden; one\'s usually a trap). <b>Ignore one and it expires, costing the sender\'s trust.</b> The clock pauses when you switch tabs.</p>' +
         '<p style="margin-top:8px"><b>📓 Coaching plans:</b> after submitting the audit, click <b>+ Coach</b> next to anyone you caught. Pick a 1-week quick chat or a 2-week plan. The drift on the floor drops as plans wrap — visible in the knock-off panel and HUD.</p>' +
         '<p style="margin-top:8px"><b>📞 Quarterly client review:</b> at Weeks 13, 26 and 39 the Monday grilling is replaced with a heavier client-side review. Pick carefully — Client trust shifts more than usual.</p>' +
+        '<p style="margin-top:8px"><b>🌀 CAT events &amp; the surge plan:</b> insurance reality — hail, floods, bushfires and east-coast lows spike the claims line without asking. The BoM telegraphs some of them in the forecast signals ("Thursday could get ugly") — pad the forecast if you believe them. Buy the <b>CAT surge plan</b> at a Monday meeting (one-off $12k) to unlock the overflow option mid-disaster.</p>' +
+        '<p style="margin-top:8px"><b>👥 Your people are permanent:</b> the same 40-odd agents exist all year, with hidden form, sickie patterns, leave balances and <b>grudges</b>. Approving leave writes a real entry in the leave book that thins that week\'s roster; denying it gets remembered — sometimes as a "mystery" sickie weeks later. Quitters are people you knew; hires join by name as 🌱 greens who run hot on AHT for a fortnight.</p>' +
         '<p style="margin-top:8px"><b>🦘 Aussie flavour:</b> default site is <b>VIC</b> (AFL Grand Final Friday + Melbourne Cup count as holidays). Open <b>About</b> to swap to NSW / QLD / SA / WA — each has its own state-specific public holidays. About also has <b>Export</b>/<b>Import</b> snapshot for sharing or undoing risky weeks.</p>' +
-        '<p style="margin-top:8px"><b>🏆 Achievements:</b> 10 of them — catch the first dodgy agent, handle a TIO complaint properly, hit a Cracker Week, survive EOFY, etc. Gallery at year-end with a 📈 trajectory sparkline + your best-ever YTD.</p>' +
+        '<p style="margin-top:8px"><b>🏆 Achievements:</b> 10 of them — catch the first dodgy agent, handle an AFCA complaint properly, hit a Cracker Week, survive EOFY, etc. Gallery at year-end with a 📈 trajectory sparkline + your best-ever YTD.</p>' +
         '<p style="margin-top:8px"><b>📊 At a glance:</b> the HUD has ▮ trend bars next to YTD service-level and each stakeholder meter showing the last 4 weeks (green ≥ healthy, yellow ≥ warning, red below). Soft chimes ping on inbox arrivals and achievement unlocks — mute toggle in About.</p>' +
         '<p style="margin-top:8px"><b>You lose if:</b> the budget collapses, the Client walks, or the floor empties through attrition.</p>' +
         '<p style="margin-top:8px"><b>⌨️ Shortcuts:</b> <kbd>1</kbd>–<kbd>4</kbd> pick a grilling option · <kbd>Enter</kbd> click the primary button (Lock / Run / Continue) · <kbd>i</kbd> toggle inbox · <kbd>a</kbd> achievements gallery · <kbd>m</kbd> mute sounds · <kbd>?</kbd> this help · <kbd>Esc</kbd> close.</p>' +
@@ -1743,8 +2460,8 @@
         '<p class="small muted" id="save-status">&nbsp;</p>') : '';
       dialog('About',
         '<p><b>WFM Tycoon — Service Level 80</b></p>' +
-        '<p>A workforce-management sim: daily forecasting, Erlang staffing, intraday call-flow analysis, a 24-agent behaviour audit, and the politics of the Monday meeting. Built for mondayjeffrey.com.</p>' +
-        '<p class="small muted">Erlang C engine, AU public-holiday calendar, Mon–Fri operation, FY26/27.</p>' +
+        '<p>A workforce-management sim set in an Aussie <b>insurance claims centre</b>: daily forecasting, Erlang staffing, shift-mix rostering, a live playable floor with CAT events, a persistent agent roster you audit weekly, and the politics of the Monday meeting. Built for mondayjeffrey.com.</p>' +
+        '<p class="small muted">Erlang C engine, AU public-holiday calendar, BoM-grade weather drama, Mon–Fri operation, FY26/27.</p>' +
         pickerHTML + saveHTML,
         [{ t: 'Close', f: closeDialog }]);
       if (S) {
@@ -1766,7 +2483,7 @@
           var o = decodeSave(ta.value);
           if (!o) { status.innerHTML = '<span class="bad">Snapshot looks invalid (wrong format or corrupt).</span>'; return; }
           dialog('Replace your save?', '<p>This will overwrite your current game with the imported snapshot.</p><p class="small muted">Week ' + (o.week + 1) + ' · ' + (o.hc || 0) + ' HC · ' + Math.round(o.budget).toLocaleString() + ' budget.</p>',
-            [{ t: 'Replace & resume', f: function () { S = o; if (!S.achievements) S.achievements = {}; if (S.weekBlunders == null) S.weekBlunders = 0; if (!S.site) S.site = 'VIC'; if (!S.coachingPlans) S.coachingPlans = []; if (!S.clientCo || CLIENTS.indexOf(S.clientCo) < 0) S.clientCo = pick(CLIENTS); if (S.peekRevealed == null) S.peekRevealed = false; if (S.peekActuals === undefined) S.peekActuals = null; if (!S.skillSplit || typeof S.skillSplit.voice !== 'number') S.skillSplit = { voice: 0.80, chat: 0.15, email: 0.05 }; if (typeof S.muted !== 'boolean') S.muted = false; save(); closeDialog(); resume(); setStatus('📥 Snapshot imported.'); } },
+            [{ t: 'Replace & resume', f: function () { S = o; if (!S.achievements) S.achievements = {}; if (S.weekBlunders == null) S.weekBlunders = 0; if (!S.site) S.site = 'VIC'; if (!S.coachingPlans) S.coachingPlans = []; if (!S.clientCo || CLIENTS.indexOf(S.clientCo) < 0) S.clientCo = pick(CLIENTS); if (S.peekRevealed == null) S.peekRevealed = false; if (S.peekActuals === undefined) S.peekActuals = null; if (!S.skillSplit || typeof S.skillSplit.voice !== 'number') S.skillSplit = { voice: 0.80, chat: 0.15, email: 0.05 }; if (typeof S.muted !== 'boolean') S.muted = false; backfillRosterState(); save(); closeDialog(); resume(); setStatus('📥 Snapshot imported.'); } },
              { t: 'Cancel', f: function () { closeDialog(); showAbout(); } }]);
         });
       }
@@ -1792,7 +2509,7 @@
        never disturbs in-progress selections.
        ======================================================================= */
     var EMAIL_BANK = [
-      { from: 'Client', fromName: 'Jase @ Optus (Client)', subj: 'Escalation: punter\'s gone troppo', body: 'Got a punter who waited 40 minutes and they\'ve come straight to me. Wants someone senior on the blower today. Can you sort it?',
+      { from: 'Client', fromName: 'Jase @ {CLIENT} (Client)', subj: 'Escalation: claimant\'s gone troppo', body: 'Got a claimant who waited 40 minutes on the claims line and they\'ve come straight to me. Storm damage, water in the lounge room, nobody\'s called back. Wants someone senior on the blower today. Can you sort it?',
         opts: [
           { t: 'Personally call them to apologise and explain the fix.', d: { client: 4 } },
           { t: 'Ask the Team Leader to call them back.', d: { client: 1, team: -1 } },
@@ -1822,7 +2539,7 @@
           { t: 'Allow it, but add overtime to cover.', d: { fin: -2, team: 1 } },
           { t: 'Allow it just this once.', d: { ops: -2 } },
           { t: 'Sure, whenever suits the team.', d: { ops: -4, team: 1 } } ] },
-      { from: 'Client', fromName: 'Tash @ Telstra (Account Mgmt)', subj: 'Bespoke weekly report — can you do it?', body: 'Account team wants a custom weekly breakdown of contact reasons. New format, not what we send today. Can you build it?',
+      { from: 'Client', fromName: 'Tash @ {CLIENT} (Account Mgmt)', subj: 'Bespoke weekly report — can you do it?', body: 'Account team wants a custom weekly breakdown of claim-call reasons — motor vs home vs storm, new lodgements vs follow-ups. New format, not what we send today. Can you build it?',
         opts: [
           { t: 'Build it properly and walk them through it.', d: { client: 3 } },
           { t: 'Send the closest existing report.', d: { client: 1 } },
@@ -1852,7 +2569,7 @@
           { t: 'Offer a small retention bonus.', d: { budget: -1500, team: 2 } },
           { t: 'Let the TL quietly handle it.', d: { team: 0 } },
           { t: 'Shrug — everyone\'s replaceable.', d: { team: -7, eng: -3 } } ] },
-      { from: 'Client', fromName: 'Maz @ CBA Service Ops', subj: 'Cracker week — well played', body: 'Last week\'s turnaround was spot on. Wanted to drop you a line. Even good news wants a reply, though.',
+      { from: 'Client', fromName: 'Maz @ {CLIENT} (Service Ops)', subj: 'Cracker week — well played', body: 'Last week\'s claims turnaround was spot on. Wanted to drop you a line. Even good news wants a reply, though.',
         opts: [
           { t: 'Thank them and share the credit with the team.', d: { client: 2, eng: 2 } },
           { t: 'Acknowledge it briefly.', d: { client: 1 } },
@@ -1894,24 +2611,24 @@
           { t: 'Quietly log it and watch next week.', d: { ops: 0 } },
           { t: 'Cut team OT until adherence recovers.', d: { fin: 1, team: -2, eng: -2 } },
           { t: 'Mass formal warnings to the whole team.', d: { team: -6, eng: -5 } } ] },
-      { from: 'NOC', fromName: 'NOC Alert (auto)', subj: 'NBN regional outage — Hunter region', body: 'Major NBN outage just dropped over the Hunter. Expect 2x volume on technical calls for the next 3 hours. Heads up.',
+      { from: 'NOC', fromName: 'CAT Desk (auto)', subj: 'Severe storm cell — Hunter region', body: 'BoM\'s upgraded the Hunter storm cell to severe — hail reported in Maitland. Expect 2x volume on storm claims for the next 3 hours. Heads up.',
         opts: [
           { t: 'Drop non-urgent training, pull trainers back to phones.', d: { ops: 3, team: -1 } },
           { t: 'Open the all-skill queue and accept the SL hit.', d: { ops: 1 } },
           { t: 'Offer OT to anyone who can log in from home.', d: { fin: -2, ops: 1 } },
-          { t: 'Wait it out — outage emails are usually overblown.', d: { ops: -6, client: -2 } } ] },
+          { t: 'Wait it out — CAT desk alerts are usually overblown.', d: { ops: -6, client: -2 } } ] },
       { from: 'Union', fromName: 'Trev (CPSU Delegate)', subj: 'Roster changes — formal query under the EBA', body: 'G\'day. CPSU\'s had three members raise that rosters are dropping inside the 14-day window. Want to walk through what\'s driving it before we lodge anything formal.',
         opts: [
           { t: 'Sit down with Trev and walk him through it openly.', d: { team: 3, ops: 1 } },
           { t: 'Acknowledge it and commit to a 7-day fix plan.', d: { team: 2 } },
           { t: 'Argue every roster\'s been compliant — he\'s wrong.', d: { team: -3 } },
           { t: 'Ignore him — union\'s not management.', d: { team: -7, eng: -3 } } ] },
-      { from: 'Client', fromName: 'Jase @ Optus (Client)', subj: 'TIO\'s filed on a 2-hour wait', body: 'Telecommunications Industry Ombudsman has lodged a formal complaint — punter waited two hours then dropped. We need a written response inside 5 business days.',
+      { from: 'Client', fromName: 'Jase @ {CLIENT} (Client)', subj: 'AFCA\'s opened a case on a 2-hour wait', body: 'The Australian Financial Complaints Authority has opened a case — claimant waited two hours on the claims line then dropped, says we\'re stonewalling the claim. We need a written response inside 5 business days.',
         opts: [
           { t: 'Full incident review with root cause and a written response.', d: { client: 3, ops: 1 } },
           { t: 'Acknowledge in 24h, send detail later in the week.', d: { client: 1 } },
           { t: 'Brush it off as a one-off.', d: { client: -3 } },
-          { t: 'Refuse to engage with the TIO.', d: { client: -7 } } ] },
+          { t: 'Refuse to engage with AFCA.', d: { client: -7 } } ] },
       { from: 'Finance', fromName: 'Janelle (FP&A)', subj: 'ATO query — EOFY staff cost recon', body: 'ATO\'s flagged a discrepancy in the staff-cost reconciliation from last EOFY. They want the lineage from rosters to GL by Friday week.',
         opts: [
           { t: 'Pull the full lineage with backup docs.', d: { fin: 3 } },
@@ -1992,6 +2709,7 @@
           { t: 'Tell facilities to move it to off-peak.', d: { ops: -1, team: 1 } } ] }
     ];
 
+    function clientSub(s) { return (s || '').replace(/\{CLIENT\}/g, (S && S.clientCo) || 'the client'); }
     function senderClass(from) { return { Client: 'client', Ops: 'ops', Finance: 'finance', HR: 'hr', 'Team Leader': 'tl', Union: 'tl', NOC: 'ops' }[from] || 'ops'; }
     function senderTrustKey(from) { return { Client: 'client', Ops: 'ops', Finance: 'fin', HR: 'team', 'Team Leader': 'team', Union: 'team', NOC: 'ops' }[from] || 'ops'; }
     function running() { return S && !S.handover && ['meeting', 'forecast', 'planning', 'results', 'review'].indexOf(S.phase) >= 0; }
@@ -2029,7 +2747,7 @@
       var r = Math.random() * totW, acc = 0, idx = choices[0];
       for (var ci2 = 0; ci2 < choices.length; ci2++) { acc += weights[ci2]; if (r < acc) { idx = choices[ci2]; break; } }
       var tpl = EMAIL_BANK[idx];
-      S.inbox.push({ id: S.inboxSeq++, tpl: idx, from: tpl.from, fromName: tpl.fromName, subj: tpl.subj, body: tpl.body, opts: tpl.opts, order: shuffle(tpl.opts.map(function (_, i) { return i; })), landed: S.gameSeconds, ttl: tpl.ttl || CFG.INBOX.TTL });
+      S.inbox.push({ id: S.inboxSeq++, tpl: idx, from: tpl.from, fromName: clientSub(tpl.fromName), subj: clientSub(tpl.subj), body: clientSub(tpl.body), opts: tpl.opts, order: shuffle(tpl.opts.map(function (_, i) { return i; })), landed: S.gameSeconds, ttl: tpl.ttl || CFG.INBOX.TTL });
       playChime('email');
       return true;
     }
@@ -2155,6 +2873,7 @@
       if (S.phase === 'handover' && S.lastResult) drawHandoverResults();
       else if (S.phase === 'forecast') enterForecast();
       else if (S.phase === 'planning') enterPlanning();
+      else if (S.phase === 'live') { if (S.liveSnap) resumeLiveWeek(); else enterPlanning(); }
       else if (S.phase === 'results' && S.lastResult) drawResults(S.lastResult);
       else if (S.phase === 'review' && S.reviewData) enterReview();
       else if (S.phase === 'over') { if (S.week >= CFG.WEEKS) yearEnd(); else enterMeeting(); }
@@ -2190,11 +2909,12 @@
       if (S.peekActuals === undefined) S.peekActuals = null;
       if (!S.skillSplit || typeof S.skillSplit.voice !== 'number') S.skillSplit = { voice: 0.80, chat: 0.15, email: 0.05 };
       if (typeof S.muted !== 'boolean') S.muted = false;
+      backfillRosterState();
       S.inboxOpen = false;
       resume();
     } else {
       renderHUDPlaceholder();
-      $('screen').innerHTML = '<div class="panel center"><h3>📞 WFM Tycoon — Service Level 80</h3><p>G\'day. You\'re the WFM analyst for an Aussie contact centre running one full FY (Jul 2026 – Jun 2027). Twelve months to hold the line on service level, keep Finance off your back, and dodge the suits.</p><p class="small muted">Forecast each day, staff with Erlang, fight sickies, dodgy AUX, attrition, and the budget. Drill into the call flow, audit the floor (Wallabies / Magpies / Crows) every week, front up to the Monday meeting, and clear the inbox before Macca starts asking awkward questions. Hold the service level at <b>' + pct(CFG.SLA_TARGET) + '</b> Mon–Fri.</p><p style="margin-top:14px"><button class="btn big-btn" id="start">Start the financial year ▶</button></p><p class="small"><a href="#" id="howto">How to play</a></p></div>';
+      $('screen').innerHTML = '<div class="panel center"><h3>📞 WFM Tycoon — Service Level 80</h3><p>G\'day. You\'re the WFM analyst for the <b>claims contact centre of a big Aussie insurer</b>, running one full FY (Jul 2026 – Jun 2027). Twelve months to hold the line on service level, keep Finance off your back, and dodge the suits — and when the hail hits Brisbane at 2pm, every punter with a dinged ute rings you at once.</p><p class="small muted">Forecast each day, staff with Erlang, set your shift mix, then <b>run the week live on the floor</b> — sickie call-ins, queue blowouts, leave requests and CAT events land in real time. Your roster is 40-odd real people who remember how you treat them. Audit the floor (Wallabies / Magpies / Crows) every week, front up to the Monday meeting, and clear the inbox before Macca starts asking awkward questions. Hold the service level at <b>' + pct(CFG.SLA_TARGET) + '</b> Mon–Fri.</p><p style="margin-top:14px"><button class="btn big-btn" id="start">Start the financial year ▶</button></p><p class="small"><a href="#" id="howto">How to play</a></p></div>';
       $('start').addEventListener('click', newGame);
       $('howto').addEventListener('click', function (e) { e.preventDefault(); showHelp(); });
       setStatusBoot();
@@ -2223,6 +2943,7 @@
       if ((e.key === 'a' || e.key === 'A') && S && S.achievements) { showAchievementsGallery(); e.preventDefault(); return; }
       if (e.key === '?' || e.key === '/') { showHelp(); e.preventDefault(); return; }
       if ((e.key === 'm' || e.key === 'M') && S) { S.muted = !S.muted; save(); setStatus($('status-left').textContent); if (!S.muted) playChime(); e.preventDefault(); return; }
+      if (e.key === ' ' && S && S.phase === 'live' && L && !L.card) { livePauseToggle(); e.preventDefault(); return; }
       if (e.key === 'Enter') {
         var primary = $('lock') || $('run') || $('toreview') || $('next') || $('start') || $('submit-find') || $('toplan') || $('toforecast') || $('restart');
         if (primary && !primary.disabled) { primary.click(); e.preventDefault(); }
@@ -2230,6 +2951,7 @@
       }
       var n = parseInt(e.key, 10);
       if (n >= 1 && n <= 4) {
+        if (S && S.phase === 'live' && L && L.card) { if (n <= L.card.opts.length) { resolveCard(n - 1); e.preventDefault(); } return; }
         var radios = document.querySelectorAll('input[name="grill"]');
         if (radios.length >= n) {
           radios[n - 1].checked = true;
@@ -2247,7 +2969,9 @@
       tick: inboxTick,
       unlock: unlock,
       ach: ACHIEVEMENTS,
-      hol: function (iso) { return HOLIDAYS_NAT[iso] || (HOLIDAYS_STATE[(S && S.site) || 'VIC'] && HOLIDAYS_STATE[(S && S.site) || 'VIC'][iso]) || null; }
+      hol: function (iso) { return HOLIDAYS_NAT[iso] || (HOLIDAYS_STATE[(S && S.site) || 'VIC'] && HOLIDAYS_STATE[(S && S.site) || 'VIC'][iso]) || null; },
+      live: function () { return L; },
+      finishnow: function () { var g = 0; while (S && S.phase === 'live' && L && !L.ended && g++ < 400) { if (L.card) resolveCard(0); else liveStep(); } return S ? S.phase : null; }
     };
   })();
   </script>
