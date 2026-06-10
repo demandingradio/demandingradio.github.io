@@ -422,6 +422,7 @@ function doSave(){
       found:cores.filter(c=>c.found).map(c=>c.idx),
       cleared:cores.filter(c=>c.cleared).map(c=>c.idx),
       names:cores.filter(c=>c.customName).map(c=>[c.idx,c.customName]),
+      biomes:Array.from(biomesFound),
       explored:Array.from(explored)
     }));
   }catch(e){}
@@ -442,6 +443,7 @@ function loadSave(){
     (s.cleared||[]).forEach(idx=>{ if(cores[idx]) cores[idx].cleared=true; });
     clearedCount=(s.cleared||[]).length;
     (s.names||[]).forEach(([idx,nm])=>{ if(cores[idx]) cores[idx].customName=nm; });
+    biomesFound=new Set(s.biomes||[]);
     explored=new Set(s.explored||[]);
     camX=boat.x; camY=boat.y;
     return true;
@@ -724,6 +726,15 @@ function drawPorts(){
 
 function drawCleared(){          // cleared isles fly your victory flag, visible from the sea
   const s=iscale();
+  // rare isles shimmer on the horizon — something worth a detour
+  for(const c of coresNear(boat.x,boat.y,900)){ if(c.port) continue;
+    const b=biomeOf(c); if(b.tier<2) continue;
+    const [sx,sy]=w2pix(c.x,c.y); if(sx<-20||sy<-20||sx>IW+20||sy>IH+20) continue;
+    const k=Math.max(1.4,3*s), gp=0.5+0.5*Math.sin(time*2.4+c.x*0.02);
+    pctx.globalAlpha=0.3+gp*0.55; pctx.fillStyle=b.mods.mark||'#ffffff';
+    pctx.beginPath(); pctx.moveTo(sx, sy-5.4*k-gp*1.5); pctx.lineTo(sx+1.4*k, sy-3.8*k-gp*1.5);
+    pctx.lineTo(sx, sy-2.2*k-gp*1.5); pctx.lineTo(sx-1.4*k, sy-3.8*k-gp*1.5); pctx.closePath(); pctx.fill();
+    pctx.globalAlpha=1; }
   for(const c of cores){ if(!c.cleared||c.port) continue;
     const [sx,sy]=w2pix(c.x,c.y);
     if(sx<-30||sy<-30||sx>IW+30||sy>IH+30) continue;
@@ -860,7 +871,7 @@ function drawHUD(){
   drawMinimap();
   drawIslandLabels();
   if(nearLand){ ctx.textAlign='center'; const nm=nearLand.customName||nearLand.name||'this isle';
-    const t='⚓  Press  E  to explore '+nm+(nearLand.cleared?'  ✓':''); ctx.font='700 15px system-ui';
+    const t='⚓  Press  E  to explore '+biomeOf(nearLand).icon+' '+nm+(nearLand.cleared?'  ✓':''); ctx.font='700 15px system-ui';
     const w=ctx.measureText(t).width+30; ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-96,w,34,11); ctx.fill();
     ctx.fillStyle='#ffe6a6'; ctx.fillText(t, CSSW/2, CSSH-74); ctx.textAlign='left'; }
   drawToasts();
@@ -876,6 +887,7 @@ function drawIslandLabels(){
     let label = c.port?('⚓ '+c.city) : (c.customName||c.label);
     if(!label) continue;
     if(c.cleared && !c.port) label='✓ '+label;
+    if(!c.port) label=biomeOf(c).icon+' '+label;
     ctx.fillStyle='rgba(8,17,31,.5)'; const w=ctx.measureText(label).width+12;
     roundRect(cssx-w/2,cssy-40,w,18,7); ctx.fill();
     ctx.fillStyle=c.port?'#ffe6a6':'#eef5ff'; ctx.fillText(label, cssx, cssy-27);
@@ -1055,7 +1067,7 @@ function drawFullMap(){
   ctx.fillText('✦ The Charted Reaches ✦', CSSW/2, my-20);
   ctx.fillStyle='#b9a880'; ctx.font='12px Georgia,serif';
   const isle=discoveredCount+' isle'+(discoveredCount===1?'':'s'), prt=portCount+' port'+(portCount===1?'':'s');
-  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   '+isle+' & '+prt+' charted'+(clearedCount?'   •   ⚑ '+clearedCount+' cleared':''), CSSW/2, my+size+27);
+  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   '+isle+' & '+prt+' charted'+(clearedCount?'   •   ⚑ '+clearedCount+' cleared':'')+'   •   📒 '+biomesFound.size+'/'+BIOMES.length+' biomes', CSSW/2, my+size+27);
   ctx.fillStyle='#8194b8'; ctx.fillText('M or Esc to close', CSSW/2, my+size+43);
 }
 
@@ -1070,11 +1082,12 @@ function roundRect(x,y,w,h,r){ ctx.beginPath();
 let mode='sea';                 // 'sea' | 'island'
 let nearLand=null;              // island the boat can explore (sea mode)
 let ISL=null, itime=0;
-const W_WALL=0, W_GROUND=1, W_PATH=2, W_GATE=3;
-const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, shootT:0, invul:0, dashT:0, dashCD:0, dashX:0, dashY:1};
+const W_WALL=0, W_GROUND=1, W_PATH=2, W_GATE=3, W_WATER=4, W_ICE=5;
+const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, shootT:0, invul:0, dashT:0, dashCD:0, dashX:0, dashY:1, velX:0, velY:0};
 let enemies=[], inodes=[], iproj=[], ifx=[], ifloat=[];
 let idrops=[];                  // physical loot on the ground (coins, gems, hearts…) — it magnets to you
 let ichests=[], iburied=null, iflag=null;   // hoard & cache chests, buried treasure, the claim-flag ceremony
+let ihaz=[];                    // environmental hazards (lava cracks on scorched isles)
 let iflies=[], ileaves=[];      // ambient life: fireflies after dark, drifting leaves
 let ivisit=null, ichartCv=null, ichartCtx=null;   // your survey of the island — fogs in as you walk
 let tripStats={kills:0,t:0,bonus:0,hoard:false,dug:false};
@@ -1097,7 +1110,53 @@ const ISL_PALS=[
   { grass:['#8c9a44','#82903d','#97a54c','#778536'], tuft:'#aabf55', flowers:['#ff8a5e','#ffd23f','#ffe9d0'],
     canopy:['#9a5e2a','#a86c30','#86511f'], hi:'#c88a3c', trunk:'#503018', under:'#2c2010', under2:'#362a16',
     path:['#9a7e52','#8e734a','#a6895c'], sand:['#e0cb96','#d6c08a','#ead6a4'], spk:'#c0a878' },          // ember isle (autumn)
+  { grass:['#7dbf6a','#71b35f','#8acb76','#66a856'], tuft:'#a0dd88', flowers:['#ff9fb2','#ffe9a6','#ffffff'],
+    canopy:['#3e8e4a','#358040','#499c54'], hi:'#66c272', trunk:'#8a6a3c', under:'#1c4234', under2:'#23503f',
+    path:['#e8cfa0','#dec494','#f0daae'], sand:['#f4e6c0','#ecdcb2','#faf0d2'], spk:'#d8c298' },          // palm atoll
+  { grass:['#6cb755','#60ab49','#79c462','#55a040'], tuft:'#94dd78', flowers:['#ff8aa6','#ffd23f','#b9a6ff'],
+    canopy:['#357a35','#2c6c2e','#3f8a3f'], hi:'#5cb45a', trunk:'#5c4327', under:'#1d3e1c', under2:'#244a23',
+    path:['#a89460','#9c8856','#b2a06c'], sand:['#e8d8a8','#dece9c','#f0e2b6'], spk:'#c6b284' },          // wildflower meadow
+  { grass:['#7e9070','#738566','#89997c','#68795c'], tuft:'#9ab288', flowers:['#d8e0d0','#ffe9a6','#c0ccb8'],
+    canopy:['#4e6242','#445839','#586c4c'], hi:'#6e8460', trunk:'#564a3a', under:'#242e20', under2:'#2c3828',
+    path:['#8e8a80','#827e74','#9a968c'], sand:['#cfc9ba','#c5bfae','#d9d3c6'], spk:'#a8a294' },          // boulder field
+  { grass:['#dfe9f2','#d3e0ec','#e9f2f8','#c8d8e6'], tuft:'#f6fcff', flowers:['#bfe2ff','#e8d8ff','#ffffff'],
+    canopy:['#3a5a6a','#2e4a58','#466a7a'], hi:'#dfeefa', trunk:'#4a5a66', under:'#202e3a', under2:'#283846',
+    path:['#b9c6d2','#aebcc8','#c4d0dc'], sand:['#d8e2ea','#cdd8e2','#e2ecf4'], spk:'#a8bccc' },          // frostbound
+  { grass:['#4c4440','#403a36','#585048','#36322e'], tuft:'#6b5c50', flowers:['#ff7a3c','#ffd23f','#ff4f4f'],
+    canopy:['#5e3a24','#4e2e1a','#6e462e'], hi:'#c86a38', trunk:'#3a2414', under:'#1a1410', under2:'#241c16',
+    path:['#5e5044','#52463c','#6a5c4e'], sand:['#7e6e5a','#746450','#8a7a66'], spk:'#9a8870' },          // scorched
+  { grass:['#2e5a62','#27505a','#37656e','#204852'], tuft:'#3fae9e', flowers:['#8de9ff','#c9a6ff','#ffffff'],
+    canopy:['#2a3a5e','#222f4e','#33476e'], hi:'#5a7ac8', trunk:'#3a3a52', under:'#131c2e', under2:'#1a2438',
+    path:['#5a6478','#50596c','#667086'], sand:['#9aa6b8','#8e9aac','#a8b4c4'], spk:'#bfe9ff' },          // crystal hollow
 ];
+/* ---- biomes: what kind of island is this? rolled from seed + distance (far = rarer) ---- */
+const BIOMES=[
+  {key:'tropic',  name:'Lush Tropic',       icon:'🌴', tier:0, pal:0, mods:{}},
+  {key:'savanna', name:'Dry Savanna',       icon:'🌾', tier:0, pal:1, mods:{boarW:0.65, goldMul:1.25}},
+  {key:'moor',    name:'Highland Moor',     icon:'⛰️', tier:0, pal:2, mods:{rockW:1.7, oreMul:1.25}},
+  {key:'ember',   name:'Ember Wood',        icon:'🍂', tier:0, pal:3, mods:{herbW:1.5, herbMul:1.3}},
+  {key:'atoll',   name:'Palm Atoll',        icon:'🏝️', tier:0, pal:4, mods:{ring:true, allSand:true, spawnMul:0.7, heartCh:0.1}},
+  {key:'meadow',  name:'Wildflower Meadow', icon:'🌸', tier:1, pal:5, mods:{flowerMul:3, herbW:1.7, herbMul:1.3, spawnMul:0.75, heartCh:0.12}},
+  {key:'boulder', name:'Boulder Field',     icon:'🪨', tier:1, pal:6, mods:{rockW:2.4, gemRockCh:0.5, boarHPMul:1.5, pebbleMul:2.4}},
+  {key:'frost',   name:'Frostbound Isle',   icon:'❄️', tier:2, pal:7, mods:{hazard:'ice', chargeMul:1.25, gemMul:1.35, boarTint:'#8fa6b8', mark:'#cfe9ff'}},
+  {key:'scorch',  name:'Scorched Isle',     icon:'🌋', tier:2, pal:8, mods:{hazard:'lava', boarW:0.35, goldMul:1.4, oreMul:1.25, snakeTint:['#6e3024','#85412c','#5e2a1e'], spitSpd:1.15, mark:'#ff9a3c'}},
+  {key:'crystal', name:'Crystal Hollow',    icon:'💠', tier:2, pal:9, mods:{cryRocks:true, rockW:1.8, gemMul:1.8, snakeTint:['#3e4a82','#4c5a9a','#36406e'], mark:'#8de9ff'}},
+];
+const TIER_NAME=['common','uncommon','rare'];
+let biomesFound=new Set();
+function biomeOf(c){ if(c.biomeObj) return c.biomeObj;
+  const r=mulberry32((((c.idx+29)*2246822519)>>>0) ^ 0xB10E5);
+  const t=Math.min(1, Math.hypot(c.x-WORLD/2, c.y-WORLD/2)/(WORLD*0.5));
+  const roll=r(), pick=list=>list[(r()*list.length)|0];
+  let tier;
+  if(t<0.18) tier=0;
+  else if(t<0.45) tier = roll<0.78?0 : roll<0.96?1 : 2;
+  else if(t<0.7)  tier = roll<0.55?0 : roll<0.83?1 : 2;
+  else            tier = roll<0.38?0 : roll<0.68?1 : 2;
+  const T=[['tropic','savanna','moor','ember','atoll'],['meadow','boulder'],['frost','scorch','crystal']][tier];
+  const key=pick(T);
+  c.biomeObj=BIOMES.find(b=>b.key===key);
+  return c.biomeObj; }
 let tripLoot=loot0(), cargo=loot0();
 let securedCount=0, islandCleared=false, renaming=null, icamX=0, icamY=0;
 function loot0(){ return {gold:0,gems:0,ore:0,bits:0,herb:0,relic:0}; }
@@ -1132,15 +1191,23 @@ function sfx(name,mul){ if(!actx||!audioOn||!masterG) return; try{
 /* ---- generation: a branching trail of clearings — main path to the HOARD, side paths to caches ---- */
 function genIsland(core){
   const rng=mulberry32((((core.idx+1)*2654435761)>>>0) ^ 0xB0A75);
-  const palI=(rng()*ISL_PALS.length)|0;          // this island's look, stable across visits
+  const biome=biomeOf(core), bmods=biome.mods;   // what kind of isle is this?
   const mainN=clamp(2+Math.round((core.r-46)/22),2,6);
   const TS=20, cr=Math.max(4,Math.round(5.5*ITUNE.clearSize)), space=cr*2+5;
   // lay out the main path, then hang bonus clearings off its middle
-  const lay=[{x:0,y:0,parent:-1,kind:'landing'}];
-  let px=0,py=0;
-  for(let i=1;i<mainN;i++){ const ang=-Math.PI/2+(rng()-0.5)*1.6;
-    px+=Math.round(Math.cos(ang)*space); py+=Math.round(Math.sin(ang)*space);
-    lay.push({x:px,y:py,parent:i-1,kind:i===mainN-1?'hoard':'fight'}); }
+  const lay=[];
+  if(bmods.ring && mainN>=3){                    // atoll: the trail circles a lagoon
+    const R=Math.max(space, Math.round(space/(2*Math.sin(Math.PI/mainN)))), a0=rng()*TAU;
+    for(let i=0;i<mainN;i++){ const ang=a0+i*(TAU/mainN);
+      lay.push({x:Math.round(Math.cos(ang)*R), y:Math.round(Math.sin(ang)*R),
+        parent:i-1, kind:i===0?'landing':(i===mainN-1?'hoard':'fight')}); }
+  } else {
+    lay.push({x:0,y:0,parent:-1,kind:'landing'});
+    let px=0,py=0;
+    for(let i=1;i<mainN;i++){ const ang=-Math.PI/2+(rng()-0.5)*1.6;
+      px+=Math.round(Math.cos(ang)*space); py+=Math.round(Math.sin(ang)*space);
+      lay.push({x:px,y:py,parent:i-1,kind:i===mainN-1?'hoard':'fight'}); }
+  }
   const nb = mainN>=5?2 : mainN>=3?1 : 0;
   for(let b=0,tries=0; b<nb && tries<24; tries++){
     const pi=1+(rng()*(mainN-2)|0), pp=lay[pi], ang=rng()*TAU;
@@ -1163,21 +1230,23 @@ function genIsland(core){
     const gx=Math.round(a[0]+dx/l*(cr+1)), gy=Math.round(a[1]+dy/l*(cr+1)), cells=[];
     for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){ const tx=gx+ox,ty=gy+oy; if(tx>=0&&ty>=0&&tx<W&&ty<H){ const v=tiles[ty*W+tx]; if(v===W_PATH||v===W_GROUND){ tiles[ty*W+tx]=W_GATE; cells.push([tx,ty]); } } }
     gates.push({from:p, cells, open:false}); }
-  const clearings=[]; enemies=[]; inodes=[]; ichests=[]; iburied=null;
+  const clearings=[]; enemies=[]; inodes=[]; ichests=[]; iburied=null; ihaz=[];
   for(let i=0;i<lay.length;i++){
     const kind=lay[i].kind;
     const cl={id:i, kind, x:(ctr[i][0]+0.5)*TS, y:(ctr[i][1]+0.5)*TS, r:cr*TS, secured:kind==='landing', enemyCount:0};
     clearings.push(cl);
     const nn = kind==='landing'?1+(rng()*2|0) : kind==='bonus'?3+(rng()*2|0) : 2+(rng()*2|0);
     for(let k=0;k<nn;k++){ const p=randIn(cl,rng,TS,tiles,W); if(!p) continue;
-      const r=rng(), type = r<0.45?'rock' : r<0.78?'herb' : 'ruin';
-      inodes.push({x:p.x,y:p.y, type, hp:type==='rock'?3:type==='ruin'?4:1, r:type==='rock'?10:9, dead:false, flash:0}); }
+      const wR=0.45*(bmods.rockW||1), wH=0.33*(bmods.herbW||1), wU=0.22;
+      const r=rng()*(wR+wH+wU), type = r<wR?'rock' : r<wR+wH?'herb' : 'ruin';
+      inodes.push({x:p.x,y:p.y, type, cry:!!(bmods.cryRocks&&type==='rock'), hp:type==='rock'?3:type==='ruin'?4:1, r:type==='rock'?10:9, dead:false, flash:0}); }
     if(kind!=='landing'){
-      const ec = kind==='fight' ? Math.max(2,Math.round((2+(rng()*2|0))*ITUNE.spawnCount))
+      const sM=bmods.spawnMul||1;
+      const ec = kind==='fight' ? Math.max(2,Math.round((2+(rng()*2|0))*ITUNE.spawnCount*sM))
                : kind==='bonus' ? Math.max(1,Math.round(ITUNE.spawnCount))
                : 1+(rng()*2|0);
       for(let k=0;k<ec;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
-        if(rng()<0.5) enemies.push({type:'boar', x:p.x,y:p.y, r:11, hp:ITUNE.boarHP, clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false});
+        if(rng()<(bmods.boarW===undefined?0.5:bmods.boarW)) enemies.push({type:'boar', x:p.x,y:p.y, r:11, hp:Math.round(ITUNE.boarHP*(bmods.boarHPMul||1)), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false});
         else enemies.push({type:'snake', x:p.x,y:p.y, r:9, hp:ITUNE.snakeHP, clear:i, st:'idle', tmr:rng()*1.8, vx:0,vy:0, flash:0, stun:0, aggro:false});
         cl.enemyCount++; }
       if(kind==='bonus'){                            // an elite guards every cache
@@ -1200,6 +1269,23 @@ function genIsland(core){
     const p=randIn(cl,rng,TS,tiles,W); if(p) iburied={x:p.x, y:p.y, clear:ci, digs:3, dug:false};
   }
   for(const g of gates) if(clearings[g.from].secured){ g.open=true; for(const[tx,ty]of g.cells) tiles[ty*W+tx]=W_PATH; }
+  if(bmods.ring && mainN>=3){                      // the lagoon at the atoll's heart
+    let cx2=0,cy2=0; for(let i2=0;i2<mainN;i2++){ cx2+=ctr[i2][0]; cy2+=ctr[i2][1]; } cx2=Math.round(cx2/mainN); cy2=Math.round(cy2/mainN);
+    const lr=Math.min(6, Math.max(2, Math.round(Math.hypot(ctr[0][0]-cx2,ctr[0][1]-cy2))-cr-2));
+    for(let dy3=-lr;dy3<=lr;dy3++)for(let dx3=-lr;dx3<=lr;dx3++){ if(dx3*dx3+dy3*dy3>lr*lr) continue;
+      const tx=cx2+dx3, ty=cy2+dy3; if(tx<0||ty<0||tx>=W||ty>=H) continue;
+      if(tiles[ty*W+tx]===W_WALL) tiles[ty*W+tx]=W_WATER; } }
+  if(bmods.hazard==='ice'){                        // slick patches you skid across
+    for(const cl of clearings){ const n2=2+(rng()*3|0);
+      for(let k2=0;k2<n2;k2++){ const p2=randIn(cl,rng,TS,tiles,W); if(!p2) continue;
+        const ir=1+(rng()*2|0), itx=(p2.x/TS)|0, ity=(p2.y/TS)|0;
+        for(let dy3=-ir;dy3<=ir;dy3++)for(let dx3=-ir;dx3<=ir;dx3++){ if(dx3*dx3+dy3*dy3>ir*ir) continue;
+          const tx=itx+dx3, ty=ity+dy3; if(tx<0||ty<0||tx>=W||ty>=H) continue;
+          if(tiles[ty*W+tx]===W_GROUND) tiles[ty*W+tx]=W_ICE; } } } }
+  if(bmods.hazard==='lava'){                       // pulsing cracks — they warn, then they burn
+    for(const cl of clearings){ if(cl.kind==='landing') continue; const n2=2+(rng()*2|0);
+      for(let k2=0;k2<n2;k2++){ const p2=randIn(cl,rng,TS,tiles,W); if(!p2) continue;
+        ihaz.push({x:p2.x, y:p2.y, st:'idle', t:1+rng()*3}); } } }
   securedCount=1; islandCleared=false;
   iproj=[]; ifx=[]; ifloat=[]; idrops=[]; iflies=[]; ileaves=[]; hurtFlash=0; iflag=null;
   tripStats={kills:0,t:0,bonus:0,hoard:false,dug:false};
@@ -1207,7 +1293,7 @@ function genIsland(core){
   ivisit=new Uint8Array(W*H);
   ichartCv=document.createElement('canvas'); ichartCv.width=W; ichartCv.height=H;
   ichartCtx=ichartCv.getContext('2d');
-  ISL={core, W,H,TS, tiles, clearings, gates, mainN, N:lay.length, pal:ISL_PALS[palI], landing:{x:clearings[0].x, y:clearings[0].y}};
+  ISL={core, W,H,TS, tiles, clearings, gates, mainN, N:lay.length, biome, pal:ISL_PALS[biome.pal], landing:{x:clearings[0].x, y:clearings[0].y}};
   player.x=ISL.landing.x; player.y=ISL.landing.y+cr*TS*0.35; player.fx=0; player.fy=-1;
   player.hp=player.maxhp; player.invul=0.6; player.slashCD=0; player.shootCD=0; player.slashT=0; player.shootT=0;
   player.dashT=0; player.dashCD=0; closeInv();
@@ -1217,17 +1303,20 @@ function paintChart(tx,ty){ if(!ichartCtx||!ISL) return; const t=ISL.tiles[ty*IS
   ichartCtx.fillRect(tx,ty,1,1); }
 function randIn(cl,rng,TS,tiles,W){ for(let t=0;t<22;t++){ const a=rng()*TAU, d=rng()*cl.r*0.78, x=cl.x+Math.cos(a)*d, y=cl.y+Math.sin(a)*d, tx=(x/TS)|0, ty=(y/TS)|0; if(tiles[ty*W+tx]===W_GROUND) return {x,y}; } return null; }
 function islTile(x,y){ if(!ISL) return W_WALL; const tx=(x/ISL.TS)|0, ty=(y/ISL.TS)|0; if(tx<0||ty<0||tx>=ISL.W||ty>=ISL.H) return W_WALL; return ISL.tiles[ty*ISL.W+tx]; }
-function islWalk(x,y){ const t=islTile(x,y); return t===W_GROUND||t===W_PATH; }
+function islWalk(x,y){ const t=islTile(x,y); return t===W_GROUND||t===W_PATH||t===W_ICE; }
 function islFree(x,y,r){ return islWalk(x-r,y)&&islWalk(x+r,y)&&islWalk(x,y-r)&&islWalk(x,y+r); }
 function moveSlide(o,dx,dy){ const r=o.r*0.7; if(islFree(o.x+dx,o.y,r)) o.x+=dx; if(islFree(o.x,o.y+dy,r)) o.y+=dy; }
 
 /* ---- enter / leave ---- */
 function enterIsland(core){ mode='island'; setPixScale(2); mapOpen=false; nearLand=null; genIsland(core); tripLoot=loot0(); icamX=player.x; icamY=player.y;
-  toast('⚓  Landfall', core.customName||core.name||'an uncharted isle'); sfx('land'); }
+  const b=ISL.biome;
+  toast('⚓  Landfall — '+b.icon+' '+b.name, core.customName||core.name||'an uncharted isle'); sfx('land');
+  if(!biomesFound.has(b.key)){ biomesFound.add(b.key); queueSave();
+    toast('📒  New biome: '+b.name+' ('+TIER_NAME[b.tier]+')', biomesFound.size+' / '+BIOMES.length+' discovered'); } }
 function leaveIsland(ko){
   const hadAny=Object.values(tripLoot).some(v=>v>0);
   const st=Object.assign({},tripStats,{ name:(ISL&&(ISL.core.customName||ISL.core.label||ISL.core.name))||'the isle',
-    main:securedCount, mainN:ISL?ISL.mainN:0, cleared:!!(ISL&&ISL.core.cleared&&islandCleared) });
+    biome:ISL?(ISL.biome.icon+' '+ISL.biome.name):'', main:securedCount, mainN:ISL?ISL.mainN:0, cleared:!!(ISL&&ISL.core.cleared&&islandCleared) });
   const banked={}, left={};
   if(ko){ toast('💀  Knocked out','you lost your haul'); }
   else {
@@ -1242,13 +1331,14 @@ function leaveIsland(ko){
   st.holdNow=cargoCount(); st.holdCap=Math.round(ITUNE.hold); st.left=left;
   tripLoot=loot0();
   closeInv();
-  mode='sea'; setPixScale(3); enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; idrops=[]; ichests=[]; iburied=null; iflag=null; iflies=[]; ileaves=[]; ISL=null; queueSave();
+  mode='sea'; setPixScale(3); enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; idrops=[]; ichests=[]; iburied=null; iflag=null; ihaz=[]; iflies=[]; ileaves=[]; ISL=null; queueSave();
   if(!ko && (hadAny||st.cleared)) showSummary(st,banked);
   else if(!ko) toast('Back aboard','');
 }
 /* the run-summary card, shown as you stow the haul */
 function showSummary(st,banked){
   const rows=[
+    ['Biome', st.biome||'—'],
     ['Clearings secured', st.main+' / '+st.mainN + (st.bonus?('  (+'+st.bonus+' side)'):'')],
     ['Monsters slain', ''+st.kills],
     ['Hoard cracked', st.hoard?'✓ yes':'—'],
@@ -1373,18 +1463,21 @@ function killEnemy(en){ const i=enemies.indexOf(en); if(i<0) return; enemies.spl
   tripStats.kills++;
   burst(en.x,en.y, en.type==='boar'?'#9a6b43':'#6fae5a');
   if(en.guard||en.elite) burst(en.x,en.y,'#ffd23f');
+  const bm=k2=>(ISL&&ISL.biome.mods[k2])||1, bAdd=k2=>(ISL&&ISL.biome.mods[k2])||0;
   spawnLoot('bits', en.guard?4:en.elite?2:1, en.x,en.y);
-  const g = (Math.random()<0.5?1+(Math.random()*2|0):0) + (en.guard?6:en.elite?2:0);
+  const g = Math.round(((Math.random()<0.5?1+(Math.random()*2|0):0) + (en.guard?6:en.elite?2:0))*bm('goldMul'));
   if(g) spawnLoot('gold',g,en.x,en.y);
-  if(Math.random() < (en.guard?0.9:en.elite?0.35:0.12)) spawnLoot('gems', en.guard?2:1, en.x,en.y);
-  if(Math.random() < (en.guard?1:0.22)) spawnLoot('heart',1,en.x,en.y);
+  if(Math.random() < (en.guard?0.9:en.elite?0.35:0.12)*bm('gemMul')) spawnLoot('gems', en.guard?2:1, en.x,en.y);
+  if(Math.random() < (en.guard?1:0.22+bAdd('heartCh'))) spawnLoot('heart',1,en.x,en.y);
   const cl=ISL.clearings[en.clear]; if(cl){ cl.enemyCount--; if(cl.enemyCount<=0) secureClearing(cl); }
 }
 function hitNode(nd){ nd.hp--; nd.flash=0.14; burst(nd.x,nd.y, nd.type==='rock'?'#aab2bc':nd.type==='ruin'?'#d8b87a':'#8fd06a');
   if(nd.hp<=0){ nd.dead=true; sfx('break'); burst(nd.x,nd.y,'#ffffff');
-    if(nd.type==='rock'){ spawnLoot('ore',1+(Math.random()*2|0),nd.x,nd.y); if(Math.random()<0.3) spawnLoot('gems',1,nd.x,nd.y); }
-    else if(nd.type==='ruin'){ spawnLoot('gold',2+(Math.random()*4|0),nd.x,nd.y); if(Math.random()<0.4) spawnLoot('relic',1,nd.x,nd.y); if(Math.random()<0.2) spawnLoot('gems',1,nd.x,nd.y); }
-    else { spawnLoot('herb',1+(Math.random()*2|0),nd.x,nd.y); if(Math.random()<0.15) spawnLoot('heart',1,nd.x,nd.y); }
+    const bm=k2=>(ISL&&ISL.biome.mods[k2])||1, bAdd=k2=>(ISL&&ISL.biome.mods[k2])||0;
+    if(nd.cry){ spawnLoot('gems',1+(Math.random()*2|0),nd.x,nd.y); spawnLoot('ore',1,nd.x,nd.y); }
+    else if(nd.type==='rock'){ spawnLoot('ore',Math.round((1+(Math.random()*2|0))*bm('oreMul')),nd.x,nd.y); if(Math.random()<(bAdd('gemRockCh')||0.3)) spawnLoot('gems',1,nd.x,nd.y); }
+    else if(nd.type==='ruin'){ spawnLoot('gold',Math.round((2+(Math.random()*4|0))*bm('goldMul')),nd.x,nd.y); if(Math.random()<0.4) spawnLoot('relic',1,nd.x,nd.y); if(Math.random()<0.2*bm('gemMul')) spawnLoot('gems',1,nd.x,nd.y); }
+    else { spawnLoot('herb',Math.round((1+(Math.random()*2|0))*bm('herbMul')),nd.x,nd.y); if(Math.random()<0.15+bAdd('heartCh')) spawnLoot('heart',1,nd.x,nd.y); }
   } else sfx('tink');
 }
 function burst(x,y,c){ for(let i=0;i<9;i++){ const a=Math.random()*TAU, s=24+Math.random()*70; ifx.push({k:'p', x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, t:0, life:0.4+Math.random()*0.3, c}); } }
@@ -1419,8 +1512,17 @@ function updateIsland(dt){
     if(Math.random()<0.7) ifx.push({k:'p', x:player.x-player.dashX*7, y:player.y-player.dashY*7, vx:(Math.random()-0.5)*26, vy:(Math.random()-0.5)*26, t:0, life:0.3, c:'#dfe9f8'});
     player.moving=true;
   } else {
-    if(mvx||mvy){ const l=Math.hypot(mvx,mvy); mvx/=l; mvy/=l; player.fx=mvx; player.fy=mvy; moveSlide(player, mvx*ITUNE.moveSpeed*dt, mvy*ITUNE.moveSpeed*dt); }
-    player.moving=!!(mvx||mvy);
+    if(mvx||mvy){ const l=Math.hypot(mvx,mvy); mvx/=l; mvy/=l; player.fx=mvx; player.fy=mvy; }
+    if(islTile(player.x,player.y)===W_ICE){        // slick: momentum carries you
+      player.velX+=(mvx*ITUNE.moveSpeed-player.velX)*Math.min(1,dt*2.4);
+      player.velY+=(mvy*ITUNE.moveSpeed-player.velY)*Math.min(1,dt*2.4);
+      moveSlide(player, player.velX*dt, player.velY*dt);
+      player.moving=Math.hypot(player.velX,player.velY)>12;
+    } else {
+      player.velX=mvx*ITUNE.moveSpeed; player.velY=mvy*ITUNE.moveSpeed;
+      if(mvx||mvy) moveSlide(player, mvx*ITUNE.moveSpeed*dt, mvy*ITUNE.moveSpeed*dt);
+      player.moving=!!(mvx||mvy);
+    }
   }
   // which clearing is the player inside? enemies only engage inside their own arena (no corridor sniping)
   let curCl=-1; for(const cl of ISL.clearings){ if((player.x-cl.x)**2+(player.y-cl.y)**2 < cl.r*cl.r){ curCl=cl.id; break; } }
@@ -1472,6 +1574,15 @@ function updateIsland(dt){
     }
     if(d.t>75) idrops.splice(i,1);
   }
+  // lava cracks: glow, warn, then flare — hurts everything standing on them
+  for(const h of ihaz){ h.t-=dt;
+    if(h.st==='idle'&&h.t<=0){ h.st='warn'; h.t=1.1; }
+    else if(h.st==='warn'&&h.t<=0){ h.st='flare'; h.t=0.45;
+      burst(h.x,h.y,'#ff9a3c'); burst(h.x,h.y,'#ffd23f'); sfx('dig',1.8);
+      if((player.x-h.x)**2+(player.y-h.y)**2<18*18) hurtPlayer((player.x-h.x)/18,(player.y-h.y)/18);
+      for(const en of enemies){ if((en.x-h.x)**2+(en.y-h.y)**2<18*18){ hurtEnemy(en,1,(en.x-h.x)/18,(en.y-h.y)/18); break; } } }
+    else if(h.st==='flare'&&h.t<=0){ h.st='idle'; h.t=2+Math.random()*2.5; } }
+  if(!ISL) return;                                 // a lava flare can knock you out
   // the claim ceremony — the flag rises over the cracked hoard
   if(iflag){ iflag.t+=dt;
     if(iflag.t>0.4 && Math.random()<0.35) ifx.push({k:'p', x:iflag.x+(Math.random()-0.5)*30, y:iflag.y-8-Math.random()*24, vx:(Math.random()-0.5)*50, vy:-30-Math.random()*50, t:0, life:0.7, c:Math.random()<0.5?'#ffd23f':'#ffffff'});
@@ -1490,7 +1601,8 @@ function updateIsland(dt){
       f.x+=Math.cos(f.a)*13*dt; f.y+=Math.sin(f.a)*13*dt;
       if(!night || (f.x-icamX)**2+(f.y-icamY)**2 > vw*vw) iflies.splice(i,1); } }
   for(let i=iproj.length-1;i>=0;i--){ const pr=iproj[i]; pr.x+=pr.vx*dt; pr.y+=pr.vy*dt; pr.life-=dt;
-    let gone = pr.life<=0 || !islWalk(pr.x,pr.y), L=Math.hypot(pr.vx,pr.vy)||1;
+    const ptile=islTile(pr.x,pr.y);
+    let gone = pr.life<=0 || ptile===W_WALL || ptile===W_GATE, L=Math.hypot(pr.vx,pr.vy)||1;   // arrows fly over lagoons & ice
     if(!gone){ if(pr.k==='arrow'){ for(const en of enemies){ if((en.x-pr.x)**2+(en.y-pr.y)**2 < (en.r+3)**2){ hurtEnemy(en,ITUNE.arrowDmg,pr.vx/L,pr.vy/L); gone=true; break; } } }
       else if(pr.k==='spit'){ if((player.x-pr.x)**2+(player.y-pr.y)**2 < (player.r+4)**2){ hurtPlayer(pr.vx/L,pr.vy/L); gone=true; } } }
     if(gone){ if(pr.k==='arrow') burst(pr.x,pr.y,'#e9e2c8'); iproj.splice(i,1); }
@@ -1502,7 +1614,7 @@ function updateIsland(dt){
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
 }
 function updateBoar(en,dx,dy,d,dt,active){ en.tmr-=dt;
-  const chg=ITUNE.boarCharge*(en.guard?1.12:en.elite?1.2:1);
+  const chg=ITUNE.boarCharge*(en.guard?1.12:en.elite?1.2:1)*((ISL&&ISL.biome.mods.chargeMul)||1);
   if(en.st==='charge'){ moveSlide(en, en.vx*dt, en.vy*dt);
     if(Math.random()<0.45) ifx.push({k:'p', x:en.x-en.vx*0.05, y:en.y-en.vy*0.05, vx:(Math.random()-0.5)*22, vy:(Math.random()-0.5)*22, t:0, life:0.32, c:'#c9b89a'});
     if(en.tmr<=0 || !islWalk(en.x+en.vx*0.04, en.y+en.vy*0.04)){
@@ -1518,16 +1630,17 @@ function updateSnake(en,dx,dy,d,dt,active){ en.tmr-=dt;
   if(d<260){ const nx=dx/d, ny=dy/d, want=120; let mv = d<want-15?-1 : d>want+15?1 : 0;
     moveSlide(en, (nx*mv*46 - ny*26)*dt, (ny*mv*46 + nx*26)*dt);
     if(en.tmr<=0 && d<230){ en.tmr=en.elite?2.1:1.8;
+      const ss=86*((ISL&&ISL.biome.mods.spitSpd)||1);
       if(en.elite){ const ba=Math.atan2(ny,nx);                         // elite vipers spit a fan of three
-        for(const off of [-0.32,0,0.32]) iproj.push({k:'spit', x:en.x+Math.cos(ba+off)*10, y:en.y+Math.sin(ba+off)*10, vx:Math.cos(ba+off)*86, vy:Math.sin(ba+off)*86, life:2.6}); }
-      else iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*86, vy:ny*86, life:2.6}); } }
+        for(const off of [-0.32,0,0.32]) iproj.push({k:'spit', x:en.x+Math.cos(ba+off)*10, y:en.y+Math.sin(ba+off)*10, vx:Math.cos(ba+off)*ss, vy:Math.sin(ba+off)*ss, life:2.6}); }
+      else iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*ss, vy:ny*ss, life:2.6}); } }
 }
 
 /* ---- island render ---- */
 function islScale(){ return IH/200; }
 function iw2p(x,y){ const s=islScale(); return [ (x-icamX)*s+IW/2, (y-icamY)*s+IH/2 ]; }
 function drawIslandWorld(){
-  const s=islScale(), pal=ISL.pal;
+  const s=islScale(), pal=ISL.pal, bmods=ISL.biome.mods;
   pctx.fillStyle=pal.under; pctx.fillRect(0,0,IW,IH);
   const halfW=(IW/2)/s, halfH=(IH/2)/s, TS=ISL.TS;
   const minTX=Math.max(0,((icamX-halfW)/TS|0)-1), maxTX=Math.min(ISL.W-1,((icamX+halfW)/TS|0)+1);
@@ -1549,7 +1662,27 @@ function drawIslandWorld(){
       pctx.fillRect(sx+ts*0.2,sy+ts*0.25,2,2); pctx.fillRect(sx+ts*0.7,sy+ts*0.6,2,2); pctx.fillRect(sx+ts*0.45,sy+ts*0.8,2,2);
       continue;
     }
-    const sand=(cwx-L0.x)*(cwx-L0.x)+(cwy-L0.y)*(cwy-L0.y) < beachR2;   // the landing clearing is a beach
+    if(t===W_WATER){                                   // lagoon
+      const c2=waterColor(0.22), band=Math.sin(cwy*0.18+itime*1.2+Math.sin(cwx*0.06)*1.2);
+      const br=10+(band*0.5+0.5)*16;
+      pctx.fillStyle='rgb('+((c2[0]+br)|0)+','+((c2[1]+br)|0)+','+((c2[2]+br)|0)+')'; pctx.fillRect(sx,sy,ts,ts);
+      if(h3>0.8){ pctx.fillStyle='rgba(255,255,255,.5)'; pctx.fillRect(sx+h1*ts*0.7, sy+h2*ts*0.7, 2.5, 1.6); }
+      const fo=0.3+0.25*Math.sin(itime*2.6+cwx*0.2+cwy*0.2);          // foam where the lagoon meets the shore
+      pctx.fillStyle='rgba(255,255,255,'+fo.toFixed(2)+')';
+      const NW=ISL.W;
+      if(ty>0&&ISL.tiles[(ty-1)*NW+tx]!==W_WATER) pctx.fillRect(sx,sy,ts,2.5);
+      if(ty<ISL.H-1&&ISL.tiles[(ty+1)*NW+tx]!==W_WATER) pctx.fillRect(sx,sy+ts-2.5,ts,2.5);
+      if(tx>0&&ISL.tiles[ty*NW+tx-1]!==W_WATER) pctx.fillRect(sx,sy,2.5,ts);
+      if(tx<NW-1&&ISL.tiles[ty*NW+tx+1]!==W_WATER) pctx.fillRect(sx+ts-2.5,sy,2.5,ts);
+      continue; }
+    if(t===W_ICE){                                     // slick ice
+      pctx.fillStyle=h1<0.5?'#cfe3f0':'#c2d8e8'; pctx.fillRect(sx,sy,ts,ts);
+      pctx.globalAlpha=0.5; pctx.fillStyle='#e9f4fb'; pctx.fillRect(sx+(h2*ts*0.4)|0, sy+(h3*ts*0.4)|0, (ts*0.5)|0, (ts*0.4)|0); pctx.globalAlpha=1;
+      pctx.strokeStyle='rgba(140,170,200,.5)'; pctx.lineWidth=1;
+      pctx.beginPath(); pctx.moveTo(sx+ts*0.2,sy+ts*0.3); pctx.lineTo(sx+ts*0.55,sy+ts*0.55); pctx.lineTo(sx+ts*0.45,sy+ts*0.85); pctx.stroke();
+      if(h3>0.85){ pctx.fillStyle='rgba(255,255,255,.9)'; pctx.fillRect(sx+h1*ts*0.6, sy+h2*ts*0.5, 2, 2); }
+      continue; }
+    const sand=bmods.allSand || (cwx-L0.x)*(cwx-L0.x)+(cwy-L0.y)*(cwy-L0.y) < beachR2;   // landing clearing is a beach (atolls: everywhere)
     if(sand){
       pctx.fillStyle=pal.sand[(h1*3)|0]; pctx.fillRect(sx,sy,ts,ts);
       pctx.globalAlpha=0.45; pctx.fillStyle=pal.sand[(h2*3)|0]; pctx.fillRect(sx+(h2*ts*0.5)|0, sy+(h3*ts*0.5)|0, (ts*0.5)|0, (ts*0.4)|0); pctx.globalAlpha=1;
@@ -1563,16 +1696,16 @@ function drawIslandWorld(){
     } else {                                           // grass, alive with texture
       pctx.fillStyle=pal.grass[(h1*4)|0]; pctx.fillRect(sx,sy,ts,ts);
       pctx.globalAlpha=0.5; pctx.fillStyle=pal.grass[(h2*4)|0]; pctx.fillRect(sx+(h2*ts*0.55)|0, sy+(h1*ts*0.5)|0, (ts*0.5)|0, (ts*0.45)|0); pctx.globalAlpha=1;
-      if(h3<0.34){                                     // swaying grass tufts
+      if(h3<0.30){                                     // swaying grass tufts
         const swy=Math.sin(itime*1.7+cwx*0.21)*1.4;
         pctx.fillStyle=pal.tuft;
         const bx_=sx+h1*ts*0.6+2, by_=sy+h2*ts*0.6+3, th=Math.max(3,ts*0.2);
         pctx.fillRect(bx_+swy,by_-th,1.6,th); pctx.fillRect(bx_+3+swy*0.7,by_-th*0.75,1.6,th*0.75); pctx.fillRect(bx_-3+swy*0.5,by_-th*0.6,1.6,th*0.6);
-      } else if(h3<0.40){                              // wildflowers
+      } else if(h3<0.30+0.06*(bmods.flowerMul||1)){    // wildflowers (meadows riot with them)
         const fx_=sx+h2*ts*0.7+1, fy_=sy+h1*ts*0.7+1;
         pctx.fillStyle=pal.flowers[(h2*3)|0]; pctx.fillRect(fx_,fy_,3,3);
         pctx.fillStyle='#fff'; pctx.fillRect(fx_+0.8,fy_+0.8,1.3,1.3);
-      } else if(h3>0.93){ pctx.fillStyle='#8d9a86'; pctx.fillRect(sx+h2*ts*0.7, sy+h1*ts*0.7, 2.5, 2); }
+      } else if(h3>1-0.07*(bmods.pebbleMul||1)){ pctx.fillStyle='#8d9a86'; pctx.fillRect(sx+h2*ts*0.7, sy+h1*ts*0.7, 2.5, 2); }
     }
     if(ty>0 && ISL.tiles[(ty-1)*ISL.W+tx]===W_WALL){   // forest casts shade onto the ground below it
       pctx.fillStyle='rgba(8,26,10,.25)'; pctx.fillRect(sx,sy,ts,Math.max(2,ts*0.3)); }
@@ -1590,6 +1723,14 @@ function drawIslandWorld(){
     if(h3>0.55){ pctx.fillStyle=pal.canopy[(h1*3)|0];
       pctx.beginPath(); pctx.arc(sx+ts*(0.15+h3*0.6), sy+ts*(0.6+h2*0.3), ts*(0.3+h1*0.18),0,TAU); pctx.fill(); }
   }
+  // lava cracks — they glow, they warn, they flare
+  for(const h of ihaz){ const [sx,sy]=iw2p(h.x,h.y);
+    const k = h.st==='flare'?1 : h.st==='warn'?(1-h.t/1.1)*0.7 : 0.12;
+    pctx.strokeStyle='#1c0e08'; pctx.lineWidth=Math.max(2,2.6*s);
+    pctx.beginPath(); pctx.moveTo(sx-9*s,sy+3*s); pctx.lineTo(sx-3*s,sy-2*s); pctx.lineTo(sx+2*s,sy+2*s); pctx.lineTo(sx+8*s,sy-3*s); pctx.stroke();
+    pctx.strokeStyle='rgba(255,'+(((120+k*120)|0))+',40,'+((0.25+k*0.75).toFixed(2))+')'; pctx.lineWidth=Math.max(1.2,1.4*s);
+    pctx.beginPath(); pctx.moveTo(sx-9*s,sy+3*s); pctx.lineTo(sx-3*s,sy-2*s); pctx.lineTo(sx+2*s,sy+2*s); pctx.lineTo(sx+8*s,sy-3*s); pctx.stroke();
+    if(h.st==='flare'){ pctx.fillStyle='rgba(255,180,60,.28)'; pctx.beginPath(); pctx.arc(sx,sy,18*s,0,TAU); pctx.fill(); } }
   // your beached boat at the landing — the exit, always visible
   { const [bx,by]=iw2p(ISL.landing.x,ISL.landing.y);
     const gp=0.5+0.5*Math.sin(itime*2.6);
@@ -1613,7 +1754,15 @@ function drawIslandWorld(){
       continue; }
     const X = sx + (nd.flash>0 ? (Math.random()-0.5)*2.6*s : 0), fl=nd.flash>0;
     pctx.fillStyle='rgba(0,20,10,.26)'; pctx.beginPath(); pctx.ellipse(X,sy+r*0.72,r*1.05,r*0.42,0,0,TAU); pctx.fill();
-    if(nd.type==='rock'){
+    if(nd.cry){                                        // crystal clusters — gem-bearing, glowing
+      pctx.fillStyle=fl?'#fff':'#3a5a92';
+      pctx.beginPath(); pctx.moveTo(X-r*0.7,sy+r*0.5); pctx.lineTo(X-r*0.45,sy-r*0.7); pctx.lineTo(X-r*0.1,sy+r*0.4); pctx.closePath(); pctx.fill();
+      pctx.fillStyle=fl?'#fff':'#5a82c8';
+      pctx.beginPath(); pctx.moveTo(X-r*0.15,sy+r*0.55); pctx.lineTo(X+r*0.15,sy-r*0.95); pctx.lineTo(X+r*0.5,sy+r*0.5); pctx.closePath(); pctx.fill();
+      pctx.fillStyle=fl?'#fff':'#8de9ff';
+      pctx.beginPath(); pctx.moveTo(X+r*0.3,sy+r*0.5); pctx.lineTo(X+r*0.62,sy-r*0.4); pctx.lineTo(X+r*0.85,sy+r*0.5); pctx.closePath(); pctx.fill();
+      if(!fl){ pctx.fillStyle='rgba(255,255,255,.85)'; pctx.fillRect(X+r*0.05,sy-r*0.6,1.8,1.8); }
+    } else if(nd.type==='rock'){
       pctx.fillStyle=fl?'#fff':'#9aa3ad'; pctx.beginPath();
       pctx.moveTo(X-r,sy+r*0.6); pctx.lineTo(X-r*0.72,sy-r*0.45); pctx.lineTo(X-r*0.1,sy-r*0.85); pctx.lineTo(X+r*0.78,sy-r*0.4); pctx.lineTo(X+r,sy+r*0.6); pctx.closePath(); pctx.fill();
       if(!fl){ pctx.fillStyle='#c2cad4'; pctx.fillRect(X-r*0.32,sy-r*0.62,r*0.46,r*0.4); }
@@ -1707,7 +1856,7 @@ function drawIslandWorld(){
         pctx.fillRect(sx+fcx*r*0.35+pxn*r*0.5-1.2-lp, sy+fcy*r*0.35+pyn*r*0.5-1, 2.6, r*0.42);
         pctx.fillRect(sx+fcx*r*0.35-pxn*r*0.5-1.2+lp, sy+fcy*r*0.35-pyn*r*0.5-1, 2.6, r*0.42); }
       pctx.fillStyle='#3a2412'; pctx.beginPath(); pctx.ellipse(sx,sy,r*1.1,r*0.9,fa,0,TAU); pctx.fill();   // outline
-      const idleCol = en.guard?'#5e3a24' : en.elite?'#8a4030' : '#7a4f30';
+      const idleCol = en.guard?'#5e3a24' : en.elite?'#8a4030' : (ISL.biome.mods.boarTint||'#7a4f30');
       pctx.fillStyle = fl?'#fff':(en.st==='windup'?'#c4683c':en.st==='charge'?'#a85f36':idleCol);
       pctx.beginPath(); pctx.ellipse(sx,sy,r,r*0.8,fa,0,TAU); pctx.fill();
       if(!fl){
@@ -1731,9 +1880,11 @@ function drawIslandWorld(){
       for(let i=3;i>=1;i--){ const off=i*r*0.62, wig=Math.sin(itime*7 - i*1.25 + en.x*0.1)*r*0.4;          // slithering body
         const cx_=sx-fcx*off+pxn*wig, cy_=sy-fcy*off+pyn*wig, rr=r*(0.72-i*0.13);
         pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.arc(cx_,cy_,rr*1.25,0,TAU); pctx.fill();
-        pctx.fillStyle=fl?'#fff':(en.elite?(i%2?'#4a3570':'#5a4385'):(i%2?'#2e5d4e':'#387058')); pctx.beginPath(); pctx.arc(cx_,cy_,rr,0,TAU); pctx.fill(); }
+        const sT=(!en.elite&&ISL.biome.mods.snakeTint)||null;
+        pctx.fillStyle=fl?'#fff':(en.elite?(i%2?'#4a3570':'#5a4385'):(sT?(i%2?sT[0]:sT[2]):(i%2?'#2e5d4e':'#387058'))); pctx.beginPath(); pctx.arc(cx_,cy_,rr,0,TAU); pctx.fill(); }
       pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.85,r*0.66,fa,0,TAU); pctx.fill();
-      pctx.fillStyle=fl?'#fff':(en.elite?'#634a92':'#356a59'); pctx.beginPath(); pctx.ellipse(sx,sy,r*0.72,r*0.54,fa,0,TAU); pctx.fill();   // head
+      const sT2=(!en.elite&&ISL.biome.mods.snakeTint)||null;
+      pctx.fillStyle=fl?'#fff':(en.elite?'#634a92':(sT2?sT2[1]:'#356a59')); pctx.beginPath(); pctx.ellipse(sx,sy,r*0.72,r*0.54,fa,0,TAU); pctx.fill();   // head
       if(!fl){ pctx.fillStyle='#ffd23f';
         pctx.fillRect(sx+fcx*r*0.3+pxn*r*0.3-1, sy+fcy*r*0.3+pyn*r*0.3-1, 2, 2);
         pctx.fillRect(sx+fcx*r*0.3-pxn*r*0.3-1, sy+fcy*r*0.3-pyn*r*0.3-1, 2, 2);
@@ -2049,7 +2200,7 @@ document.getElementById('renameInput').addEventListener('keydown',e=>{ e.stopPro
 function begin(fresh){
   if(fresh){ buildWorld((Math.random()*1e9)>>>0);
     boat.x=spawn.x; boat.y=spawn.y; boat.a=-Math.PI/2; boat.spd=0; boat.sail=0;
-    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; clearedCount=0; cargo=loot0();
+    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; clearedCount=0; cargo=loot0(); biomesFound=new Set();
   }
   mode='sea'; nearLand=null;
   buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune();
