@@ -53,6 +53,18 @@ canvas{position:absolute;inset:0;display:block;}
 #rename button{display:block;margin:16px auto 0;font:inherit;font-weight:700;font-size:15px;cursor:pointer;
   color:#08213d;background:linear-gradient(#ffe8a6,#f4c869);border:none;border-radius:10px;padding:10px 26px;box-shadow:0 6px 0 #b78a2e;}
 #rename button:active{transform:translateY(2px);box-shadow:0 4px 0 #b78a2e;}
+#summary{position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;
+  background:rgba(5,12,24,.62);}
+#summary .rbox{background:linear-gradient(#1a2c4d,#13233f);border:1px solid #34466e;border-radius:16px;
+  padding:24px 30px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.6);max-width:90vw;min-width:300px;}
+#summary .rtitle{font-size:19px;font-weight:800;color:#ffe6a6;letter-spacing:.05em;margin-bottom:4px;}
+#summary .ssub{color:#9fb6dd;font-size:12px;margin-bottom:12px;}
+#summary .srow{display:flex;justify-content:space-between;gap:30px;color:#dbe6ff;font-size:14px;padding:4px 0;border-bottom:1px dashed #2c3a5e;}
+#summary .srow b{color:#ffe9a6;}
+#summary .sloot{margin-top:12px;font-size:16px;color:#ffe9a6;letter-spacing:1px;line-height:1.7;}
+#summary button{display:block;margin:16px auto 0;font:inherit;font-weight:700;font-size:15px;cursor:pointer;
+  color:#08213d;background:linear-gradient(#ffe8a6,#f4c869);border:none;border-radius:10px;padding:10px 28px;box-shadow:0 6px 0 #b78a2e;}
+#summary button:active{transform:translateY(2px);box-shadow:0 4px 0 #b78a2e;}
 
 /* quiet way back to the desktop */
 #back{position:absolute;left:14px;top:11px;z-index:40;color:#cfe0ff;opacity:.62;
@@ -156,6 +168,16 @@ canvas{position:absolute;inset:0;display:block;}
     <p>Name your discovery, cartographer:</p>
     <input id="renameInput" maxlength="22" autocomplete="off" />
     <button id="renameBtn">Name it</button>
+  </div>
+</div>
+
+<div id="summary" class="hidden">
+  <div class="rbox">
+    <div class="rtitle" id="sumTitle">⛵ Hauled aboard</div>
+    <div class="ssub" id="sumSub"></div>
+    <div id="sumRows"></div>
+    <div class="sloot" id="sumLoot"></div>
+    <button id="sumBtn">Sail on ⛵</button>
   </div>
 </div>
 
@@ -405,13 +427,14 @@ const keys={};
 addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_','j','k'].includes(k)) e.preventDefault();
+  if(summaryOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideSummary(); return; }
   if(!started || renaming) return;
   if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; return; }
   if(k==='p'){ toggleMute(); return; }
   if(mode==='island'){                          // ---- on foot ----
     if(k==='j'||k===' ') doSlash();
     else if(k==='k') doShoot();
-    else if(k==='e'){ if(ISL && (player.x-ISL.landing.x)**2+(player.y-ISL.landing.y)**2 < (ISL.TS*1.7)**2) leaveIsland(false); }
+    else if(k==='e'){ doInteract(); }
     keys[k]=true; return;
   }
   if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
@@ -1007,8 +1030,13 @@ let nearLand=null;              // island the boat can explore (sea mode)
 let ISL=null, itime=0;
 const W_WALL=0, W_GROUND=1, W_PATH=2, W_GATE=3;
 const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, shootT:0, invul:0};
-let enemies=[], inodes=[], iproj=[], ifx=[], ifloat=[], ipick=[];   // ipick = heart pickups on the ground
+let enemies=[], inodes=[], iproj=[], ifx=[], ifloat=[];
+let idrops=[];                  // physical loot on the ground (coins, gems, hearts…) — it magnets to you
+let ichests=[], iburied=null, iflag=null;   // hoard & cache chests, buried treasure, the claim-flag ceremony
 let iflies=[], ileaves=[];      // ambient life: fireflies after dark, drifting leaves
+let ivisit=null, ichartCv=null, ichartCtx=null;   // your survey of the island — fogs in as you walk
+let tripStats={kills:0,t:0,bonus:0,hoard:false,dug:false};
+let pickCombo=0, pickT=0, haulPulse=0, summaryOpen=false;
 let hurtFlash=0;                // red screen-edge flash when the player takes a hit
 // each island rolls one of these looks (seeded per island, stable across visits)
 const ISL_PALS=[
@@ -1033,66 +1061,109 @@ const DEFAULT_ITUNE={ moveSpeed:86, slashRange:30, slashDmg:2, slashCD:0.33, arr
   boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, enemyDmg:1, spawnCount:1.0, clearSize:1.0 };
 let ITUNE=Object.assign({},DEFAULT_ITUNE);
 
-function sfx(name){ if(!actx||!audioOn||!masterG) return; try{
+function sfx(name,mul){ if(!actx||!audioOn||!masterG) return; try{
   const o=actx.createOscillator(), g=actx.createGain(); o.connect(g); g.connect(masterG); const t=actx.currentTime;
   let f=440,d=0.1,ty='square';
   if(name==='slash'){f=300;d=0.08;ty='sawtooth';} else if(name==='shoot'){f=720;d=0.07;ty='triangle';}
   else if(name==='hurt'){f=150;d=0.2;ty='square';} else if(name==='break'){f=210;d=0.12;ty='square';}
   else if(name==='secure'){f=620;d=0.3;ty='sine';} else if(name==='land'){f=320;d=0.22;ty='sine';}
   else if(name==='tink'){f=560;d=0.05;ty='square';} else if(name==='heart'){f=540;d=0.2;ty='sine';}
-  o.type=ty; o.frequency.setValueAtTime(f,t);
+  else if(name==='pick'){f=640;d=0.06;ty='triangle';} else if(name==='chest'){f=330;d=0.5;ty='triangle';}
+  else if(name==='dig'){f=130;d=0.1;ty='square';}
+  o.type=ty; o.frequency.setValueAtTime(f*(mul||1),t);
   if(name==='secure') o.frequency.exponentialRampToValueAtTime(f*2,t+0.25);
+  if(name==='chest') o.frequency.exponentialRampToValueAtTime(f*2.4,t+0.4);
   if(name==='heart') o.frequency.exponentialRampToValueAtTime(f*1.7,t+0.16);
   if(name==='shoot') o.frequency.exponentialRampToValueAtTime(f*0.5,t+d);
   g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.16,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
   o.start(t); o.stop(t+d+0.02);
 }catch(e){} }
 
-/* ---- generation: a chain of clearings carved out of a wall of forest ---- */
+/* ---- generation: a branching trail of clearings — main path to the HOARD, side paths to caches ---- */
 function genIsland(core){
   const rng=mulberry32((((core.idx+1)*2654435761)>>>0) ^ 0xB0A75);
   const palI=(rng()*ISL_PALS.length)|0;          // this island's look, stable across visits
-  const N=clamp(2+Math.round((core.r-46)/22),1,6);
+  const mainN=clamp(2+Math.round((core.r-46)/22),2,6);
   const TS=20, cr=Math.max(4,Math.round(5.5*ITUNE.clearSize)), space=cr*2+5;
-  const pts=[[0,0]]; let px=0,py=0;
-  for(let i=1;i<N;i++){ const ang=-Math.PI/2+(rng()-0.5)*1.6; px+=Math.round(Math.cos(ang)*space); py+=Math.round(Math.sin(ang)*space); pts.push([px,py]); }
+  // lay out the main path, then hang bonus clearings off its middle
+  const lay=[{x:0,y:0,parent:-1,kind:'landing'}];
+  let px=0,py=0;
+  for(let i=1;i<mainN;i++){ const ang=-Math.PI/2+(rng()-0.5)*1.6;
+    px+=Math.round(Math.cos(ang)*space); py+=Math.round(Math.sin(ang)*space);
+    lay.push({x:px,y:py,parent:i-1,kind:i===mainN-1?'hoard':'fight'}); }
+  const nb = mainN>=5?2 : mainN>=3?1 : 0;
+  for(let b=0,tries=0; b<nb && tries<24; tries++){
+    const pi=1+(rng()*(mainN-2)|0), pp=lay[pi], ang=rng()*TAU;
+    const bx=pp.x+Math.round(Math.cos(ang)*space), by=pp.y+Math.round(Math.sin(ang)*space);
+    if(lay.some(n=>Math.hypot(n.x-bx,n.y-by)<space*0.92)) continue;
+    lay.push({x:bx,y:by,parent:pi,kind:'bonus'}); b++;
+  }
   let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
-  for(const[x,y]of pts){minx=Math.min(minx,x);miny=Math.min(miny,y);maxx=Math.max(maxx,x);maxy=Math.max(maxy,y);}
+  for(const n of lay){minx=Math.min(minx,n.x);miny=Math.min(miny,n.y);maxx=Math.max(maxx,n.x);maxy=Math.max(maxy,n.y);}
   const mg=cr+4, W=(maxx-minx)+mg*2, H=(maxy-miny)+mg*2;
-  const ctr=pts.map(([x,y])=>[x-minx+mg, y-miny+mg]);
+  const ctr=lay.map(n=>[n.x-minx+mg, n.y-miny+mg]);
   const tiles=new Uint8Array(W*H);
   const set=(tx,ty,v)=>{ if(tx>=0&&ty>=0&&tx<W&&ty<H) tiles[ty*W+tx]=v; };
   const disk=(cx,cy,r,v)=>{ for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(dx*dx+dy*dy<=r*r) set(cx+dx,cy+dy,v); };
-  const line=(x0,y0,x1,y1,w,v)=>{ const st=Math.max(Math.abs(x1-x0),Math.abs(y1-y0))*2+1; for(let s=0;s<=st;s++){const t=s/st; disk(Math.round(x0+(x1-x0)*t),Math.round(y0+(y1-y0)*t),w,v);} };
-  for(let i=0;i<N;i++) disk(ctr[i][0],ctr[i][1],cr,W_GROUND);
-  for(let i=1;i<N;i++) line(ctr[i-1][0],ctr[i-1][1],ctr[i][0],ctr[i][1],1,W_PATH);
+  const line=(x0,y0,x1,y1,w,v)=>{ const st=Math.max(Math.abs(x1-x0),Math.abs(y1-y0))*2+1; for(let s2=0;s2<=st;s2++){const t=s2/st; disk(Math.round(x0+(x1-x0)*t),Math.round(y0+(y1-y0)*t),w,v);} };
+  for(let i=0;i<lay.length;i++) disk(ctr[i][0],ctr[i][1],cr,W_GROUND);
+  for(let i=1;i<lay.length;i++){ const p=lay[i].parent; line(ctr[p][0],ctr[p][1],ctr[i][0],ctr[i][1],1,W_PATH); }
   const gates=[];
-  for(let i=1;i<N;i++){ const a=ctr[i], b=ctr[i-1], dx=b[0]-a[0],dy=b[1]-a[1],l=Math.hypot(dx,dy)||1;
+  for(let i=1;i<lay.length;i++){ const a=ctr[i], p=lay[i].parent, b2=ctr[p], dx=b2[0]-a[0],dy=b2[1]-a[1],l=Math.hypot(dx,dy)||1;
     const gx=Math.round(a[0]+dx/l*(cr+1)), gy=Math.round(a[1]+dy/l*(cr+1)), cells=[];
     for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){ const tx=gx+ox,ty=gy+oy; if(tx>=0&&ty>=0&&tx<W&&ty<H){ const v=tiles[ty*W+tx]; if(v===W_PATH||v===W_GROUND){ tiles[ty*W+tx]=W_GATE; cells.push([tx,ty]); } } }
-    gates.push({from:i-1, cells, open:false}); }
-  const clearings=[]; enemies=[]; inodes=[];
-  for(let i=0;i<N;i++){
-    const cl={id:i, x:(ctr[i][0]+0.5)*TS, y:(ctr[i][1]+0.5)*TS, r:cr*TS, secured:i===0, enemyCount:0};
+    gates.push({from:p, cells, open:false}); }
+  const clearings=[]; enemies=[]; inodes=[]; ichests=[]; iburied=null;
+  for(let i=0;i<lay.length;i++){
+    const kind=lay[i].kind;
+    const cl={id:i, kind, x:(ctr[i][0]+0.5)*TS, y:(ctr[i][1]+0.5)*TS, r:cr*TS, secured:kind==='landing', enemyCount:0};
     clearings.push(cl);
-    const nn = i===0 ? 1+(rng()*2|0) : 2+(rng()*3|0);
+    const nn = kind==='landing'?1+(rng()*2|0) : kind==='bonus'?3+(rng()*2|0) : 2+(rng()*2|0);
     for(let k=0;k<nn;k++){ const p=randIn(cl,rng,TS,tiles,W); if(!p) continue;
       const r=rng(), type = r<0.45?'rock' : r<0.78?'herb' : 'ruin';
       inodes.push({x:p.x,y:p.y, type, hp:type==='rock'?3:type==='ruin'?4:1, r:type==='rock'?10:9, dead:false, flash:0}); }
-    if(i>0){ const ec=Math.max(2,Math.round((2+(rng()*2|0))*ITUNE.spawnCount));
+    if(kind!=='landing'){
+      const ec = kind==='fight' ? Math.max(2,Math.round((2+(rng()*2|0))*ITUNE.spawnCount))
+               : kind==='bonus' ? Math.max(1,Math.round(ITUNE.spawnCount))
+               : 1+(rng()*2|0);
       for(let k=0;k<ec;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
         if(rng()<0.5) enemies.push({type:'boar', x:p.x,y:p.y, r:11, hp:ITUNE.boarHP, clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false});
         else enemies.push({type:'snake', x:p.x,y:p.y, r:9, hp:ITUNE.snakeHP, clear:i, st:'idle', tmr:rng()*1.8, vx:0,vy:0, flash:0, stun:0, aggro:false});
         cl.enemyCount++; }
+      if(kind==='bonus'){                            // an elite guards every cache
+        const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x,y:cl.y-TS};
+        if(rng()<0.5) enemies.push({type:'boar', elite:true, x:p.x,y:p.y, r:14, hp:Math.round(ITUNE.boarHP*2.2), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false});
+        else enemies.push({type:'snake', elite:true, x:p.x,y:p.y, r:11.5, hp:Math.round(ITUNE.snakeHP*2.2), clear:i, st:'idle', tmr:rng(), vx:0,vy:0, flash:0, stun:0, aggro:false});
+        cl.enemyCount++;
+        ichests.push({x:cl.x, y:cl.y, big:false, clear:i, opened:false});
+      }
+      if(kind==='hoard'){                            // the GREAT BOAR guards the island's hoard
+        enemies.push({type:'boar', guard:true, x:cl.x, y:cl.y-TS*1.5, r:17, hp:Math.max(10,Math.round(ITUNE.boarHP*3)), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false, chain:0});
+        cl.enemyCount++;
+        ichests.push({x:cl.x, y:cl.y, big:true, clear:i, opened:false});
+      }
     }
   }
+  // maybe a buried treasure, marked ✕ on your survey once you've scouted its clearing
+  if(lay.length>2 && rng()<0.5){
+    const ci=1+(rng()*(lay.length-1)|0), cl=clearings[ci];
+    const p=randIn(cl,rng,TS,tiles,W); if(p) iburied={x:p.x, y:p.y, clear:ci, digs:3, dug:false};
+  }
   for(const g of gates) if(clearings[g.from].secured){ g.open=true; for(const[tx,ty]of g.cells) tiles[ty*W+tx]=W_PATH; }
-  securedCount=clearings.filter(c=>c.secured).length; islandCleared=securedCount>=N;
-  iproj=[]; ifx=[]; ifloat=[]; ipick=[]; iflies=[]; ileaves=[]; hurtFlash=0;
-  ISL={core, W,H,TS, tiles, clearings, gates, N, pal:ISL_PALS[palI], landing:{x:clearings[0].x, y:clearings[0].y}};
+  securedCount=1; islandCleared=false;
+  iproj=[]; ifx=[]; ifloat=[]; idrops=[]; iflies=[]; ileaves=[]; hurtFlash=0; iflag=null;
+  tripStats={kills:0,t:0,bonus:0,hoard:false,dug:false};
+  pickCombo=0; pickT=0; haulPulse=0;
+  ivisit=new Uint8Array(W*H);
+  ichartCv=document.createElement('canvas'); ichartCv.width=W; ichartCv.height=H;
+  ichartCtx=ichartCv.getContext('2d');
+  ISL={core, W,H,TS, tiles, clearings, gates, mainN, N:lay.length, pal:ISL_PALS[palI], landing:{x:clearings[0].x, y:clearings[0].y}};
   player.x=ISL.landing.x; player.y=ISL.landing.y+cr*TS*0.35; player.fx=0; player.fy=-1;
   player.hp=player.maxhp; player.invul=0.6; player.slashCD=0; player.shootCD=0; player.slashT=0; player.shootT=0;
 }
+function paintChart(tx,ty){ if(!ichartCtx||!ISL) return; const t=ISL.tiles[ty*ISL.W+tx];
+  ichartCtx.fillStyle = t===W_WALL?'#54713f' : t===W_PATH?'#b59b6b' : t===W_GATE?'#6b4f26' : '#a8c98a';
+  ichartCtx.fillRect(tx,ty,1,1); }
 function randIn(cl,rng,TS,tiles,W){ for(let t=0;t<22;t++){ const a=rng()*TAU, d=rng()*cl.r*0.78, x=cl.x+Math.cos(a)*d, y=cl.y+Math.sin(a)*d, tx=(x/TS)|0, ty=(y/TS)|0; if(tiles[ty*W+tx]===W_GROUND) return {x,y}; } return null; }
 function islTile(x,y){ if(!ISL) return W_WALL; const tx=(x/ISL.TS)|0, ty=(y/ISL.TS)|0; if(tx<0||ty<0||tx>=ISL.W||ty>=ISL.H) return W_WALL; return ISL.tiles[ty*ISL.W+tx]; }
 function islWalk(x,y){ const t=islTile(x,y); return t===W_GROUND||t===W_PATH; }
@@ -1103,11 +1174,72 @@ function moveSlide(o,dx,dy){ const r=o.r*0.7; if(islFree(o.x+dx,o.y,r)) o.x+=dx;
 function enterIsland(core){ mode='island'; setPixScale(2); mapOpen=false; nearLand=null; genIsland(core); tripLoot=loot0(); icamX=player.x; icamY=player.y;
   toast('⚓  Landfall', core.customName||core.name||'an uncharted isle'); sfx('land'); }
 function leaveIsland(ko){
-  if(ko){ toast('💀  Knocked out','you lost your haul'); tripLoot=loot0(); }
-  else { let any=false; for(const k in tripLoot){ if(tripLoot[k]>0){ cargo[k]+=tripLoot[k]; any=true; } }
-    if(islandCleared && ISL){ if(!ISL.core.cleared) clearedCount++; ISL.core.cleared=true; startRename(ISL.core); }
-    else toast(any?'Haul stowed aboard':'Back aboard', any?lootSummary(tripLoot):''); tripLoot=loot0(); }
-  mode='sea'; setPixScale(3); enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; ipick=[]; iflies=[]; ileaves=[]; ISL=null; queueSave();
+  const banked=Object.assign({},tripLoot), hadAny=Object.values(banked).some(v=>v>0);
+  const st=Object.assign({},tripStats,{ name:(ISL&&(ISL.core.customName||ISL.core.label||ISL.core.name))||'the isle',
+    main:securedCount, mainN:ISL?ISL.mainN:0, cleared:!!(ISL&&ISL.core.cleared&&islandCleared) });
+  if(ko){ toast('💀  Knocked out','you lost your haul'); }
+  else { for(const k in tripLoot) cargo[k]+=tripLoot[k]; }
+  tripLoot=loot0();
+  mode='sea'; setPixScale(3); enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; idrops=[]; ichests=[]; iburied=null; iflag=null; iflies=[]; ileaves=[]; ISL=null; queueSave();
+  if(!ko && (hadAny||st.cleared)) showSummary(st,banked);
+  else if(!ko) toast('Back aboard','');
+}
+/* the run-summary card, shown as you stow the haul */
+function showSummary(st,banked){
+  const rows=[
+    ['Clearings secured', st.main+' / '+st.mainN + (st.bonus?('  (+'+st.bonus+' side)'):'')],
+    ['Monsters slain', ''+st.kills],
+    ['Hoard cracked', st.hoard?'✓ yes':'—'],
+  ];
+  if(st.dug) rows.push(['Buried treasure','✓ dug up']);
+  rows.push(['Time ashore', Math.floor(st.t/60)+':'+String(Math.floor(st.t%60)).padStart(2,'0')]);
+  document.getElementById('sumTitle').textContent = st.cleared ? '⚑  '+st.name+' claimed' : '⛵  Hauled aboard';
+  document.getElementById('sumSub').textContent = st.cleared ? 'the isle is yours, cartographer' : st.name;
+  document.getElementById('sumRows').innerHTML = rows.map(r=>'<div class="srow"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');
+  const parts=[]; for(const k in banked) if(banked[k]>0) parts.push((LOOT_ICON[k]||k)+' '+banked[k]);
+  document.getElementById('sumLoot').innerHTML = parts.length? parts.join('&nbsp;&nbsp;') : 'empty-handed this time';
+  document.getElementById('summary').classList.remove('hidden'); summaryOpen=true;
+}
+function hideSummary(){ document.getElementById('summary').classList.add('hidden'); summaryOpen=false; }
+/* physical loot — burst out, bounce, then magnet to the player */
+function spawnLoot(k,n,x,y){ for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp=30+Math.random()*85;
+  idrops.push({k, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, z:6+Math.random()*9, vz:70+Math.random()*80, t:0, settled:false}); } }
+/* chests, digging, and the one E key that does the right thing */
+function openChest(ch){ ch.opened=true; sfx('chest'); burst(ch.x,ch.y,'#ffd23f'); burst(ch.x,ch.y,'#ffffff');
+  if(ch.big){ tripStats.hoard=true;
+    spawnLoot('gold',8+(Math.random()*6|0),ch.x,ch.y); spawnLoot('gems',2+(Math.random()*3|0),ch.x,ch.y);
+    spawnLoot('relic',1+(Math.random()<0.4?1:0),ch.x,ch.y); spawnLoot('ore',2,ch.x,ch.y); spawnLoot('heart',1,ch.x,ch.y);
+    iflag={x:ch.x, y:ch.y-12, t:0};               // the claim ceremony begins
+  } else { tripStats.bonus=tripStats.bonus;       // cache
+    spawnLoot('gold',4+(Math.random()*4|0),ch.x,ch.y); spawnLoot('gems',1+(Math.random()*2|0),ch.x,ch.y);
+    if(Math.random()<0.5) spawnLoot('relic',1,ch.x,ch.y);
+    toast('✨  Cache cracked open',''); }
+}
+function digTreasure(){ if(!iburied||iburied.dug) return;
+  iburied.digs--; sfx('dig'); burst(iburied.x,iburied.y,'#9a8557'); burst(iburied.x,iburied.y,'#7c6a44');
+  if(iburied.digs<=0){ iburied.dug=true; tripStats.dug=true; sfx('chest');
+    burst(iburied.x,iburied.y,'#ffd23f');
+    spawnLoot('gold',5+(Math.random()*4|0),iburied.x,iburied.y); spawnLoot('gems',1+(Math.random()*2|0),iburied.x,iburied.y);
+    if(Math.random()<0.6) spawnLoot('relic',1,iburied.x,iburied.y);
+    toast('⛏  Buried treasure!','X marked the spot'); }
+}
+function nearestInteract(){
+  if(!ISL) return null;
+  for(const ch of ichests){ if(ch.opened) continue;
+    if((player.x-ch.x)**2+(player.y-ch.y)**2 < (ISL.TS*1.4)**2){
+      if(ISL.clearings[ch.clear].secured) return {kind:'chest', obj:ch, label:ch.big?'🗝  Press  E  to crack open the HOARD':'✨  Press  E  to open the cache'};
+      return {kind:'locked', label:'⚔  Defeat the guardians to unlock it'};
+    } }
+  if(iburied && !iburied.dug && (player.x-iburied.x)**2+(player.y-iburied.y)**2 < (ISL.TS*1.1)**2)
+    return {kind:'dig', label:'⛏  Press  E  to dig  ('+iburied.digs+')'};
+  if((player.x-ISL.landing.x)**2+(player.y-ISL.landing.y)**2 < (ISL.TS*1.7)**2)
+    return {kind:'boat', label:'⚓  Press  E  to set sail (stow haul)'};
+  return null;
+}
+function doInteract(){ const it=nearestInteract(); if(!it) return;
+  if(it.kind==='chest') openChest(it.obj);
+  else if(it.kind==='dig') digTreasure();
+  else if(it.kind==='boat') leaveIsland(false);
 }
 function lootSummary(l){ const p=[]; for(const k in l) if(l[k]>0) p.push(l[k]+' '+k); return p.join(', '); }
 function startRename(core){ renaming=core; const ov=document.getElementById('rename'), inp=document.getElementById('renameInput');
@@ -1137,27 +1269,33 @@ function hurtEnemy(en,dmg,nx,ny){ en.hp-=dmg; en.flash=0.14; en.stun=0.2; en.agg
   ifloat.push({x:en.x, y:en.y-en.r-4, txt:'-'+dmg, t:0, life:0.5, c:'#ffffff'});
   if(en.hp<=0) killEnemy(en); }
 function killEnemy(en){ const i=enemies.indexOf(en); if(i<0) return; enemies.splice(i,1);
+  tripStats.kills++;
   burst(en.x,en.y, en.type==='boar'?'#9a6b43':'#6fae5a');
-  addLoot('bits',1,en.x,en.y); if(Math.random()<0.5) addLoot('gold',1+(Math.random()*2|0),en.x,en.y); if(Math.random()<0.12) addLoot('gems',1,en.x,en.y);
-  if(Math.random()<0.22) ipick.push({x:en.x,y:en.y,t:0});
+  if(en.guard||en.elite) burst(en.x,en.y,'#ffd23f');
+  spawnLoot('bits', en.guard?4:en.elite?2:1, en.x,en.y);
+  const g = (Math.random()<0.5?1+(Math.random()*2|0):0) + (en.guard?6:en.elite?2:0);
+  if(g) spawnLoot('gold',g,en.x,en.y);
+  if(Math.random() < (en.guard?0.9:en.elite?0.35:0.12)) spawnLoot('gems', en.guard?2:1, en.x,en.y);
+  if(Math.random() < (en.guard?1:0.22)) spawnLoot('heart',1,en.x,en.y);
   const cl=ISL.clearings[en.clear]; if(cl){ cl.enemyCount--; if(cl.enemyCount<=0) secureClearing(cl); }
 }
 function hitNode(nd){ nd.hp--; nd.flash=0.14; burst(nd.x,nd.y, nd.type==='rock'?'#aab2bc':nd.type==='ruin'?'#d8b87a':'#8fd06a');
   if(nd.hp<=0){ nd.dead=true; sfx('break'); burst(nd.x,nd.y,'#ffffff');
-    if(nd.type==='rock'){ addLoot('ore',1+(Math.random()*2|0),nd.x,nd.y); if(Math.random()<0.3) addLoot('gems',1,nd.x,nd.y); }
-    else if(nd.type==='ruin'){ addLoot('gold',2+(Math.random()*4|0),nd.x,nd.y); if(Math.random()<0.4) addLoot('relic',1,nd.x,nd.y); if(Math.random()<0.2) addLoot('gems',1,nd.x,nd.y); }
-    else { addLoot('herb',1+(Math.random()*2|0),nd.x,nd.y); if(Math.random()<0.15) ipick.push({x:nd.x,y:nd.y,t:0}); }
+    if(nd.type==='rock'){ spawnLoot('ore',1+(Math.random()*2|0),nd.x,nd.y); if(Math.random()<0.3) spawnLoot('gems',1,nd.x,nd.y); }
+    else if(nd.type==='ruin'){ spawnLoot('gold',2+(Math.random()*4|0),nd.x,nd.y); if(Math.random()<0.4) spawnLoot('relic',1,nd.x,nd.y); if(Math.random()<0.2) spawnLoot('gems',1,nd.x,nd.y); }
+    else { spawnLoot('herb',1+(Math.random()*2|0),nd.x,nd.y); if(Math.random()<0.15) spawnLoot('heart',1,nd.x,nd.y); }
   } else sfx('tink');
 }
-function addLoot(k,n,sx,sy){ tripLoot[k]+=n; const ax=(sx===undefined?player.x:sx), ay=(sy===undefined?player.y:sy);
-  ifloat.push({x:ax, y:ay-14, txt:'+'+n+' '+(LOOT_ICON[k]||k), t:0, life:0.95, c:'#ffe9a6'}); }
 function burst(x,y,c){ for(let i=0;i<9;i++){ const a=Math.random()*TAU, s=24+Math.random()*70; ifx.push({k:'p', x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, t:0, life:0.4+Math.random()*0.3, c}); } }
-function secureClearing(cl){ if(cl.secured) return; cl.secured=true; securedCount++; sfx('secure');
+function secureClearing(cl){ if(cl.secured) return; cl.secured=true;
+  if(cl.kind!=='bonus') securedCount++; else tripStats.bonus++;
+  sfx('secure');
   if(player.hp<player.maxhp){ const h=Math.min(2,player.maxhp-player.hp); player.hp+=h;   // securing a clearing patches you up
     ifloat.push({x:player.x, y:player.y-20, txt:'+'+h+' ♥ recovered', t:0, life:1.3, c:'#ff8d9c'}); }
   for(const g of ISL.gates) if(g.from===cl.id && !g.open){ g.open=true; for(const[tx,ty]of g.cells) ISL.tiles[ty*ISL.W+tx]=W_PATH; }
   ifloat.push({x:cl.x, y:cl.y, txt:'✓ Secured', t:0, life:1.6, c:'#7fe3a0', big:true});
-  if(securedCount>=ISL.N){ islandCleared=true; toast('✦  Island cleared!','return to your boat to name it'); }
+  const ch=ichests.find(c=>c.clear===cl.id && !c.opened);
+  if(ch) toast(ch.big?'🗝  The hoard lies unguarded':'✨  A cache is unguarded','walk up and press E');
 }
 function hurtPlayer(nx,ny){ if(player.invul>0) return; player.hp-=ITUNE.enemyDmg; player.invul=1.1; hurtFlash=0.45;
   moveSlide(player, nx*26, ny*26); sfx('hurt'); if(player.hp<=0) leaveIsland(true); }
@@ -1165,10 +1303,12 @@ function hurtPlayer(nx,ny){ if(player.invul>0) return; player.hp-=ITUNE.enemyDmg
 /* ---- island update ---- */
 function updateIsland(dt){
   itime+=dt; updateEnv(dt);        // the world's clock & weather keep running while ashore
+  tripStats.t+=dt;
   player.slashCD=Math.max(0,player.slashCD-dt); player.shootCD=Math.max(0,player.shootCD-dt);
   player.slashT=Math.max(0,player.slashT-dt); player.invul=Math.max(0,player.invul-dt);
   player.shootT=Math.max(0,player.shootT-dt);
-  hurtFlash=Math.max(0,hurtFlash-dt*1.7);
+  hurtFlash=Math.max(0,hurtFlash-dt*1.7); haulPulse=Math.max(0,haulPulse-dt);
+  pickT=Math.max(0,pickT-dt); if(pickT<=0) pickCombo=0;
   let mvx=0,mvy=0;
   if(keys['arrowleft']||keys['a']) mvx-=1; if(keys['arrowright']||keys['d']) mvx+=1;
   if(keys['arrowup']||keys['w']) mvy-=1; if(keys['arrowdown']||keys['s']) mvy+=1;
@@ -1184,9 +1324,39 @@ function updateIsland(dt){
     if(!ISL) return;                         // knocked out mid-loop — island state is gone, stop here
   }
   for(const nd of inodes) if(nd.flash>0) nd.flash-=dt;
-  for(let i=ipick.length-1;i>=0;i--){ const h=ipick[i]; h.t+=dt;
-    if(player.hp<player.maxhp && (player.x-h.x)**2+(player.y-h.y)**2 < (player.r+9)**2){
-      player.hp++; sfx('heart'); ifloat.push({x:h.x,y:h.y-12, txt:'+1 ♥', t:0, life:0.85, c:'#ff8d9c'}); ipick.splice(i,1); } }
+  // survey: your island chart fogs in around you as you walk
+  { const ptx=(player.x/ISL.TS)|0, pty=(player.y/ISL.TS)|0;
+    for(let dy2=-3;dy2<=3;dy2++)for(let dx2=-3;dx2<=3;dx2++){ const tx=ptx+dx2, ty=pty+dy2;
+      if(tx<0||ty<0||tx>=ISL.W||ty>=ISL.H) continue; const ix=ty*ISL.W+tx;
+      if(!ivisit[ix]){ ivisit[ix]=1; paintChart(tx,ty); } } }
+  // physical loot: tumble, settle, then magnet to you
+  for(let i=idrops.length-1;i>=0;i--){ const d=idrops[i]; d.t+=dt;
+    if(!d.settled){
+      const nx2=d.x+d.vx*dt, ny2=d.y+d.vy*dt;
+      if(islWalk(nx2,d.y)) d.x=nx2; else d.vx*=-0.4;
+      if(islWalk(d.x,ny2)) d.y=ny2; else d.vy*=-0.4;
+      d.vx*=Math.pow(0.12,dt); d.vy*=Math.pow(0.12,dt);
+      d.z+=d.vz*dt; d.vz-=340*dt;
+      if(d.z<=0){ d.z=0; d.vz=-d.vz*0.45; if(Math.abs(d.vz)<30){ d.vz=0; d.settled=true; } }
+    } else {
+      const ddx=player.x-d.x, ddy=player.y-d.y, q=ddx*ddx+ddy*ddy;
+      const want = d.k!=='heart' || player.hp<player.maxhp;
+      if(want && q<52*52){ const dd=Math.sqrt(q)||1, pull=(1-dd/52)*460;
+        d.x+=ddx/dd*pull*dt; d.y+=ddy/dd*pull*dt;
+        if(dd<11){
+          if(d.k==='heart'){ player.hp=Math.min(player.maxhp,player.hp+1); sfx('heart'); ifloat.push({x:d.x,y:d.y-10, txt:'+1 ♥', t:0, life:0.8, c:'#ff8d9c'}); }
+          else { tripLoot[d.k]=(tripLoot[d.k]||0)+1; pickCombo=Math.min(pickCombo+1,16); pickT=0.9; haulPulse=0.35; sfx('pick',Math.pow(1.05,pickCombo)); }
+          idrops.splice(i,1); continue;
+        } }
+    }
+    if(d.t>75) idrops.splice(i,1);
+  }
+  // the claim ceremony — the flag rises over the cracked hoard
+  if(iflag){ iflag.t+=dt;
+    if(iflag.t>0.4 && Math.random()<0.35) ifx.push({k:'p', x:iflag.x+(Math.random()-0.5)*30, y:iflag.y-8-Math.random()*24, vx:(Math.random()-0.5)*50, vy:-30-Math.random()*50, t:0, life:0.7, c:Math.random()<0.5?'#ffd23f':'#ffffff'});
+    if(iflag.t>=1.4 && !iflag.done){ iflag.done=true; islandCleared=true; sfx('secure');
+      if(!ISL.core.cleared){ clearedCount++; ISL.core.cleared=true; startRename(ISL.core); }
+      else toast('⚑  Hoard reclaimed',''); } }
   // ambient life: drifting leaves always, fireflies after dark
   { const vs=islScale(), vw=IW/vs, vh=IH/vs;
     if(ileaves.length<7 && Math.random()<0.05) ileaves.push({x:icamX+(Math.random()-0.5)*vw, y:icamY-vh*0.55, vx:6+Math.random()*9, vy:11+Math.random()*9, ph:Math.random()*TAU});
@@ -1211,18 +1381,25 @@ function updateIsland(dt){
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
 }
 function updateBoar(en,dx,dy,d,dt,active){ en.tmr-=dt;
+  const chg=ITUNE.boarCharge*(en.guard?1.12:en.elite?1.2:1);
   if(en.st==='charge'){ moveSlide(en, en.vx*dt, en.vy*dt);
     if(Math.random()<0.45) ifx.push({k:'p', x:en.x-en.vx*0.05, y:en.y-en.vy*0.05, vx:(Math.random()-0.5)*22, vy:(Math.random()-0.5)*22, t:0, life:0.32, c:'#c9b89a'});
-    if(en.tmr<=0 || !islWalk(en.x+en.vx*0.04, en.y+en.vy*0.04)){ en.st='recover'; en.tmr=0.7; en.vx=en.vy=0; } }
-  else if(en.st==='windup'){ if(en.tmr<=0){ en.st='charge'; en.tmr=0.7; en.vx=dx/d*ITUNE.boarCharge; en.vy=dy/d*ITUNE.boarCharge; } }
+    if(en.tmr<=0 || !islWalk(en.x+en.vx*0.04, en.y+en.vy*0.04)){
+      if(en.guard && en.chain>0){ en.chain--; en.st='windup'; en.tmr=0.38; }   // the Great Boar charges twice
+      else { en.st='recover'; en.tmr=0.7; }
+      en.vx=en.vy=0; } }
+  else if(en.st==='windup'){ if(en.tmr<=0){ en.st='charge'; en.tmr=0.7; en.vx=dx/d*chg; en.vy=dy/d*chg; } }
   else if(en.st==='recover'){ if(en.tmr<=0) en.st='idle'; }
-  else { if(active && (d<175 || en.aggro)){ en.st='windup'; en.tmr=0.62; } }
+  else { if(active && (d<(en.guard?230:175) || en.aggro)){ en.st='windup'; en.tmr=en.guard?0.72:0.62; if(en.guard) en.chain=1; } }
 }
 function updateSnake(en,dx,dy,d,dt,active){ en.tmr-=dt;
   if(!active) return;
   if(d<260){ const nx=dx/d, ny=dy/d, want=120; let mv = d<want-15?-1 : d>want+15?1 : 0;
     moveSlide(en, (nx*mv*46 - ny*26)*dt, (ny*mv*46 + nx*26)*dt);
-    if(en.tmr<=0 && d<230){ en.tmr=1.8; iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*86, vy:ny*86, life:2.6}); } }
+    if(en.tmr<=0 && d<230){ en.tmr=en.elite?2.1:1.8;
+      if(en.elite){ const ba=Math.atan2(ny,nx);                         // elite vipers spit a fan of three
+        for(const off of [-0.32,0,0.32]) iproj.push({k:'spit', x:en.x+Math.cos(ba+off)*10, y:en.y+Math.sin(ba+off)*10, vx:Math.cos(ba+off)*86, vy:Math.sin(ba+off)*86, life:2.6}); }
+      else iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*86, vy:ny*86, life:2.6}); } }
 }
 
 /* ---- island render ---- */
@@ -1345,12 +1522,51 @@ function drawIslandWorld(){
   }
   for(const cl of ISL.clearings){ if(!cl.secured||cl.id===0) continue; const [sx,sy]=iw2p(cl.x,cl.y);
     pctx.fillStyle='#caa'; pctx.fillRect(sx-1,sy-13*s,2,13*s); pctx.fillStyle='#7fe3a0'; pctx.fillRect(sx+1,sy-13*s,7*s,5*s); }
-  // heart pickups
-  for(const h of ipick){ const [sx,sy]=iw2p(h.x,h.y), b=Math.sin(itime*4+h.x)*2*s, Y=sy+b;
-    pctx.fillStyle='rgba(0,20,10,.22)'; pctx.beginPath(); pctx.ellipse(sx,sy+5*s,4*s,1.6*s,0,0,TAU); pctx.fill();
-    pctx.fillStyle='#ff5d6c'; pctx.beginPath(); pctx.arc(sx-2*s,Y-1.6*s,2.5*s,0,TAU); pctx.arc(sx+2*s,Y-1.6*s,2.5*s,0,TAU); pctx.fill();
-    pctx.beginPath(); pctx.moveTo(sx-4.3*s,Y-0.4*s); pctx.lineTo(sx,Y+4.6*s); pctx.lineTo(sx+4.3*s,Y-0.4*s); pctx.closePath(); pctx.fill();
-    pctx.fillStyle='#ffc2ca'; pctx.fillRect(sx-2.6*s,Y-2.6*s,1.7*s,1.7*s); }
+  // chests — side caches & the island HOARD
+  for(const ch of ichests){ const [sx,sy]=iw2p(ch.x,ch.y), k=(ch.big?12:8.5)*s;
+    const locked=!ISL.clearings[ch.clear].secured;
+    pctx.fillStyle='rgba(0,20,10,.3)'; pctx.beginPath(); pctx.ellipse(sx,sy+k*0.6,k*1.15,k*0.45,0,0,TAU); pctx.fill();
+    if(!ch.opened && !locked){ const gp=0.5+0.5*Math.sin(itime*3.2);
+      pctx.strokeStyle='rgba(255,210,63,'+(0.28+0.3*gp)+')'; pctx.lineWidth=Math.max(1.5,2*s);
+      pctx.beginPath(); pctx.arc(sx,sy,k*1.6+gp*2*s,0,TAU); pctx.stroke(); }
+    const wood = locked?'#6a513a':'#8a5c2e', wood2 = locked?'#7c6148':'#a8743c';
+    if(ch.opened){
+      pctx.fillStyle=wood2; pctx.fillRect(sx-k,sy-k*1.15,k*2,k*0.5);            // lid flung open behind
+      pctx.fillStyle=wood; pctx.fillRect(sx-k,sy-k*0.45,k*2,k*1.05);
+      pctx.fillStyle='#241608'; pctx.fillRect(sx-k*0.8,sy-k*0.32,k*1.6,k*0.6);
+    } else {
+      pctx.fillStyle=wood; pctx.fillRect(sx-k,sy-k*0.6,k*2,k*1.2);
+      pctx.fillStyle=wood2; pctx.fillRect(sx-k,sy-k*0.85,k*2,k*0.5);
+      pctx.fillStyle='#e7b416'; pctx.fillRect(sx-k*0.14,sy-k*0.85,k*0.28,k*1.45);
+      pctx.fillStyle=locked?'#4a3a24':'#ffd23f'; pctx.fillRect(sx-k*0.2,sy-k*0.15,k*0.4,k*0.4);
+    }
+  }
+  // buried treasure — a scratch in the earth, easiest spotted up close
+  if(iburied && !iburied.dug){ const [sx,sy]=iw2p(iburied.x,iburied.y);
+    const a=clamp(1-Math.hypot(player.x-iburied.x,player.y-iburied.y)/170,0,1)*0.8;
+    if(a>0.02){ pctx.strokeStyle='rgba(90,58,34,'+a+')'; pctx.lineWidth=Math.max(1.5,2*s);
+      pctx.beginPath(); pctx.moveTo(sx-5*s,sy-5*s); pctx.lineTo(sx+5*s,sy+5*s);
+      pctx.moveTo(sx+5*s,sy-5*s); pctx.lineTo(sx-5*s,sy+5*s); pctx.stroke(); } }
+  // the claim flag, rising over the cracked hoard
+  if(iflag){ const [fx2,fy2]=iw2p(iflag.x,iflag.y), rise=clamp(iflag.t/1.4,0,1), fh=26*s*rise;
+    pctx.fillStyle='#e8e2d2'; pctx.fillRect(fx2-1.2,fy2-fh,2.4,fh);
+    if(rise>0.25){ const wv=Math.sin(itime*5)*2*s;
+      pctx.fillStyle='#ffd23f'; pctx.beginPath(); pctx.moveTo(fx2+1,fy2-fh);
+      pctx.lineTo(fx2+14*s, fy2-fh+4*s+wv); pctx.lineTo(fx2+1, fy2-fh+9*s); pctx.closePath(); pctx.fill(); } }
+  // loot on the ground — run it over to scoop it up
+  for(const d of idrops){ const [sx,sy0]=iw2p(d.x,d.y); const Y=sy0-(d.z+(d.settled?Math.sin(itime*4+d.x)*1.2:0))*s*0.55;
+    pctx.fillStyle='rgba(0,20,10,.2)'; pctx.beginPath(); pctx.ellipse(sx,sy0+1.5*s,2.6*s,1.1*s,0,0,TAU); pctx.fill();
+    if(d.k==='gold'){ pctx.fillStyle='#ffd23f'; pctx.beginPath(); pctx.arc(sx,Y,2.5*s,0,TAU); pctx.fill();
+      pctx.strokeStyle='#b8860b'; pctx.lineWidth=1; pctx.stroke(); }
+    else if(d.k==='gems'){ pctx.fillStyle='#6fe3e0'; pctx.beginPath(); pctx.moveTo(sx,Y-3*s); pctx.lineTo(sx+2.6*s,Y); pctx.lineTo(sx,Y+3*s); pctx.lineTo(sx-2.6*s,Y); pctx.closePath(); pctx.fill();
+      pctx.strokeStyle='#2a9a98'; pctx.lineWidth=1; pctx.stroke(); }
+    else if(d.k==='ore'){ pctx.fillStyle='#9aa3ad'; pctx.fillRect(sx-2.4*s,Y-2*s,4.8*s,4*s); pctx.fillStyle='#c2cad4'; pctx.fillRect(sx-1.1*s,Y-1.1*s,1.7*s,1.5*s); }
+    else if(d.k==='bits'){ pctx.fillStyle='#e8e2d2'; pctx.fillRect(sx-2.8*s,Y-1*s,5.6*s,2*s); pctx.fillRect(sx-3.4*s,Y-1.7*s,1.6*s,3.4*s); pctx.fillRect(sx+1.8*s,Y-1.7*s,1.6*s,3.4*s); }
+    else if(d.k==='herb'){ pctx.fillStyle='#56b35e'; pctx.beginPath(); pctx.ellipse(sx,Y,1.6*s,2.8*s,0.7,0,TAU); pctx.fill(); }
+    else if(d.k==='relic'){ pctx.fillStyle='#caa56a'; pctx.fillRect(sx-2*s,Y-1.6*s,4*s,3.6*s); pctx.fillStyle='#8a5c2e'; pctx.fillRect(sx-1.2*s,Y-2.4*s,2.4*s,1*s); }
+    else if(d.k==='heart'){ pctx.fillStyle='#ff5d6c'; pctx.beginPath(); pctx.arc(sx-1.4*s,Y-1*s,1.8*s,0,TAU); pctx.arc(sx+1.4*s,Y-1*s,1.8*s,0,TAU); pctx.fill();
+      pctx.beginPath(); pctx.moveTo(sx-3*s,Y-0.2*s); pctx.lineTo(sx,Y+3.2*s); pctx.lineTo(sx+3*s,Y-0.2*s); pctx.closePath(); pctx.fill(); }
+  }
   for(const pr of iproj){ const [sx,sy]=iw2p(pr.x,pr.y);
     if(pr.k==='arrow'){ const a=Math.atan2(pr.vy,pr.vx); pctx.strokeStyle='#efe6c8'; pctx.lineWidth=Math.max(1,1.6*s); pctx.beginPath(); pctx.moveTo(sx,sy); pctx.lineTo(sx-Math.cos(a)*8*s, sy-Math.sin(a)*8*s); pctx.stroke(); }
     else { const pu=1+0.22*Math.sin(itime*19);                 // venom: dark ring + acid-bright core so it reads on grass
@@ -1370,7 +1586,8 @@ function drawIslandWorld(){
         pctx.fillRect(sx+fcx*r*0.35+pxn*r*0.5-1.2-lp, sy+fcy*r*0.35+pyn*r*0.5-1, 2.6, r*0.42);
         pctx.fillRect(sx+fcx*r*0.35-pxn*r*0.5-1.2+lp, sy+fcy*r*0.35-pyn*r*0.5-1, 2.6, r*0.42); }
       pctx.fillStyle='#3a2412'; pctx.beginPath(); pctx.ellipse(sx,sy,r*1.1,r*0.9,fa,0,TAU); pctx.fill();   // outline
-      pctx.fillStyle = fl?'#fff':(en.st==='windup'?'#c4683c':en.st==='charge'?'#a85f36':'#7a4f30');
+      const idleCol = en.guard?'#5e3a24' : en.elite?'#8a4030' : '#7a4f30';
+      pctx.fillStyle = fl?'#fff':(en.st==='windup'?'#c4683c':en.st==='charge'?'#a85f36':idleCol);
       pctx.beginPath(); pctx.ellipse(sx,sy,r,r*0.8,fa,0,TAU); pctx.fill();
       if(!fl){
         pctx.fillStyle='#5e3a20'; pctx.beginPath(); pctx.ellipse(sx-fcx*r*0.15,sy-fcy*r*0.15,r*0.55,r*0.3,fa,0,TAU); pctx.fill();   // bristly back
@@ -1387,14 +1604,15 @@ function drawIslandWorld(){
         pctx.fillStyle=(en.st==='windup'||en.st==='charge')?'#ff5d4a':'#2a1408';                           // eye (angry when attacking)
         pctx.fillRect(hx+pxn*r*0.26-1, hy+pyn*r*0.26-1, 2, 2);
       }
-      if(en.st==='windup'){ pctx.fillStyle='#ffd23f'; pctx.fillRect(sx0-1.5,sy-r-8*s,3,5*s); pctx.fillRect(sx0-1.5,sy-r-2*s,3,2); }   // "!"
+      if(en.st==='windup'){ pctx.fillStyle='#ffd23f'; pctx.fillRect(sx0-1.5,sy-r-8*s,3,5*s); pctx.fillRect(sx0-1.5,sy-r-2*s,3,2);
+        if(en.guard){ pctx.fillRect(sx0+4,sy-r-8*s,3,5*s); pctx.fillRect(sx0+4,sy-r-2*s,3,2); } }   // "!" — the Great Boar gets "!!"
     } else {
       for(let i=3;i>=1;i--){ const off=i*r*0.62, wig=Math.sin(itime*7 - i*1.25 + en.x*0.1)*r*0.4;          // slithering body
         const cx_=sx-fcx*off+pxn*wig, cy_=sy-fcy*off+pyn*wig, rr=r*(0.72-i*0.13);
         pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.arc(cx_,cy_,rr*1.25,0,TAU); pctx.fill();
-        pctx.fillStyle=fl?'#fff':(i%2?'#2e5d4e':'#387058'); pctx.beginPath(); pctx.arc(cx_,cy_,rr,0,TAU); pctx.fill(); }
+        pctx.fillStyle=fl?'#fff':(en.elite?(i%2?'#4a3570':'#5a4385'):(i%2?'#2e5d4e':'#387058')); pctx.beginPath(); pctx.arc(cx_,cy_,rr,0,TAU); pctx.fill(); }
       pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.85,r*0.66,fa,0,TAU); pctx.fill();
-      pctx.fillStyle=fl?'#fff':'#356a59'; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.72,r*0.54,fa,0,TAU); pctx.fill();   // head
+      pctx.fillStyle=fl?'#fff':(en.elite?'#634a92':'#356a59'); pctx.beginPath(); pctx.ellipse(sx,sy,r*0.72,r*0.54,fa,0,TAU); pctx.fill();   // head
       if(!fl){ pctx.fillStyle='#ffd23f';
         pctx.fillRect(sx+fcx*r*0.3+pxn*r*0.3-1, sy+fcy*r*0.3+pyn*r*0.3-1, 2, 2);
         pctx.fillRect(sx+fcx*r*0.3-pxn*r*0.3-1, sy+fcy*r*0.3-pyn*r*0.3-1, 2, 2);
@@ -1495,27 +1713,63 @@ function islandHUD(){
     ctx.fillStyle=on?'#ff5d6c':'#42263a'; ctx.fillText('♥', 18+i*21, 42); ctx.globalAlpha=1; }
   if(!ISL) return;
   let cur=null; for(const cl of ISL.clearings) if((player.x-cl.x)**2+(player.y-cl.y)**2 < cl.r*cl.r){ cur=cl; break; }
-  const pad=140, tw=Math.max(190, pad+ISL.N*24), bx=CSSW/2-tw/2;
+  const mains=ISL.clearings.filter(c=>c.kind!=='bonus'), bons=ISL.clearings.filter(c=>c.kind==='bonus');
+  const pad=148, tw=Math.max(190, pad+mains.length*24+(bons.length?bons.length*20+12:0)), bx=CSSW/2-tw/2;
   ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(bx,14,tw,36,10); ctx.fill();
-  ctx.fillStyle='#dfeaff'; ctx.font='700 14px system-ui'; ctx.fillText('Secured '+securedCount+' / '+ISL.N, bx+12, 37);
-  for(let i=0;i<ISL.N;i++){ const cl=ISL.clearings[i], cxp=bx+pad+i*24+10, cyp=32; let col,lab='';
-    if(i===0){ col='#7fa6dd'; lab='⚓'; } else if(cl.secured){ col='#3ddc84'; lab='✓'; }
+  ctx.fillStyle='#dfeaff'; ctx.font='700 14px system-ui'; ctx.fillText('Secured '+securedCount+' / '+ISL.mainN, bx+12, 37);
+  for(let i=0;i<mains.length;i++){ const cl=mains[i], cxp=bx+pad+i*24+10, cyp=32; let col,lab='';
+    if(cl.kind==='landing'){ col='#7fa6dd'; lab='⚓'; }
+    else if(cl.kind==='hoard'){ col=cl.secured?'#e7b416':(cur===cl?'#ffce54':'#6b5a2e'); lab=cl.secured?'★':(cur===cl?''+cl.enemyCount:'★'); }
+    else if(cl.secured){ col='#3ddc84'; lab='✓'; }
     else if(cur===cl){ col='#ffce54'; lab=''+cl.enemyCount; } else col='#52617e';
-    if(i<ISL.N-1){ ctx.strokeStyle=cl.secured?'#3ddc84':'#39455f'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cxp+9,cyp); ctx.lineTo(cxp+15,cyp); ctx.stroke(); }
+    if(i<mains.length-1){ ctx.strokeStyle=cl.secured?'#3ddc84':'#39455f'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cxp+9,cyp); ctx.lineTo(cxp+15,cyp); ctx.stroke(); }
     ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cxp,cyp,9,0,TAU); ctx.fill();
     if(lab){ ctx.fillStyle='#0c1830'; ctx.font='700 11px system-ui'; ctx.textAlign='center'; ctx.fillText(lab,cxp,cyp+4); ctx.textAlign='left'; } }
+  for(let b=0;b<bons.length;b++){ const cl=bons[b], cxp=bx+pad+mains.length*24+16+b*20, cyp=32;   // side caches as diamonds
+    ctx.save(); ctx.translate(cxp,cyp); ctx.rotate(Math.PI/4);
+    ctx.fillStyle = cl.secured?'#e7b416':(cur===cl?'#ffce54':'#56507e'); ctx.fillRect(-5.5,-5.5,11,11); ctx.restore();
+    if(!cl.secured && cur===cl){ ctx.fillStyle='#0c1830'; ctx.font='700 10px system-ui'; ctx.textAlign='center'; ctx.fillText(''+cl.enemyCount,cxp,cyp+3.5); ctx.textAlign='left'; } }
   if(cur && !cur.secured && cur.id>0){ ctx.fillStyle='#ffd27a'; ctx.font='700 13px system-ui'; ctx.textAlign='center'; ctx.fillText('Enemies remaining: '+cur.enemyCount, CSSW/2, 68); ctx.textAlign='left'; }
-  ctx.textAlign='right'; ctx.font='13px system-ui'; let parts=[]; for(const k in tripLoot) if(tripLoot[k]>0) parts.push((LOOT_ICON[k]||k)+' '+tripLoot[k]);
+  ctx.textAlign='right'; ctx.font=(haulPulse>0?'700 ':'')+'13px system-ui'; let parts=[]; for(const k in tripLoot) if(tripLoot[k]>0) parts.push((LOOT_ICON[k]||k)+' '+tripLoot[k]);
   const ht='Haul:  '+(parts.length?parts.join('   '):'—'), hw=ctx.measureText(ht).width+20;
-  ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(CSSW-14-hw,22,hw,26,8); ctx.fill(); ctx.fillStyle='#ffe9a6'; ctx.fillText(ht, CSSW-24, 40); ctx.textAlign='left';
+  ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(CSSW-14-hw,22,hw,26,8); ctx.fill();
+  ctx.fillStyle=haulPulse>0?'#ffffff':'#ffe9a6'; ctx.fillText(ht, CSSW-24, 40); ctx.textAlign='left';
   ctx.textAlign='center';
   for(const f of ifloat){ const sxp=((f.x-icamX)*islScale()+IW/2)*(CSSW/IW), syp=((f.y-icamY)*islScale()+IH/2)*(CSSH/IH); ctx.globalAlpha=clamp(1-f.t/f.life,0,1); ctx.fillStyle=f.c; ctx.font=(f.big?'700 22px':'700 14px')+' system-ui'; ctx.fillText(f.txt, sxp, syp); ctx.globalAlpha=1; }
-  const atBoat=(player.x-ISL.landing.x)**2+(player.y-ISL.landing.y)**2 < (ISL.TS*1.7)**2;
-  if(atBoat){ const t='⚓  Press  E  to set sail'+(islandCleared?' & name this isle':' (stow haul)'); ctx.font='700 14px system-ui'; const w=ctx.measureText(t).width+30;
-    ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-94,w,32,10); ctx.fill(); ctx.fillStyle='#ffe6a6'; ctx.fillText(t, CSSW/2, CSSH-73); }
-  ctx.font='12px system-ui'; const ch='WASD move   •   J slash   •   K shoot   •   reach ⚓ to leave', cw=ctx.measureText(ch).width+24;
+  const it=nearestInteract();
+  if(it){ ctx.font='700 14px system-ui'; const w=ctx.measureText(it.label).width+30;
+    ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-94,w,32,10); ctx.fill(); ctx.fillStyle='#ffe6a6'; ctx.fillText(it.label, CSSW/2, CSSH-73); }
+  ctx.font='12px system-ui'; const ch='WASD move   •   J slash   •   K shoot   •   E interact', cw=ctx.measureText(ch).width+24;
   ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(CSSW/2-cw/2,CSSH-44,cw,26,9); ctx.fill(); ctx.fillStyle='#cdd9f3'; ctx.fillText(ch, CSSW/2, CSSH-26);
-  ctx.textAlign='left'; drawToasts();
+  ctx.textAlign='left';
+  // your survey of the isle — fogs in as you walk it
+  { const size=Math.min(150,CSSW*0.18), pad2=14, mx=CSSW-size-pad2, my=CSSH-size-pad2;
+    ctx.fillStyle='#0c1830'; roundRect(mx-4,my-4,size+8,size+8,10); ctx.fill();
+    ctx.strokeStyle='#3a4c70'; ctx.lineWidth=2; ctx.stroke();
+    ctx.save(); ctx.beginPath(); roundRect(mx,my,size,size,8); ctx.clip();
+    ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size);
+    const sc2=size/Math.max(ISL.W,ISL.H), ox2=mx+(size-ISL.W*sc2)/2, oy2=my+(size-ISL.H*sc2)/2;
+    ctx.imageSmoothingEnabled=false;
+    if(ichartCv) ctx.drawImage(ichartCv,0,0,ISL.W,ISL.H, ox2,oy2, ISL.W*sc2, ISL.H*sc2);
+    ctx.imageSmoothingEnabled=true;
+    const disc=cl=>ivisit[((cl.y/ISL.TS)|0)*ISL.W+((cl.x/ISL.TS)|0)];
+    for(const ch2 of ichests){ if(!disc(ISL.clearings[ch2.clear])) continue;
+      const px2=ox2+ch2.x/ISL.TS*sc2, py2=oy2+ch2.y/ISL.TS*sc2;
+      ctx.fillStyle=ch2.opened?'#8a7a52':'#e7b416'; ctx.fillRect(px2-2.5,py2-2,5,4); }
+    if(iburied && !iburied.dug && disc(ISL.clearings[iburied.clear])){
+      const px2=ox2+iburied.x/ISL.TS*sc2, py2=oy2+iburied.y/ISL.TS*sc2;
+      ctx.strokeStyle='#b8482f'; ctx.lineWidth=1.6;
+      ctx.beginPath(); ctx.moveTo(px2-3,py2-3); ctx.lineTo(px2+3,py2+3); ctx.moveTo(px2+3,py2-3); ctx.lineTo(px2-3,py2+3); ctx.stroke(); }
+    { const px2=ox2+ISL.landing.x/ISL.TS*sc2, py2=oy2+ISL.landing.y/ISL.TS*sc2;
+      ctx.fillStyle='#7fa6dd'; ctx.beginPath(); ctx.arc(px2,py2,3,0,TAU); ctx.fill(); }
+    { const px2=ox2+player.x/ISL.TS*sc2, py2=oy2+player.y/ISL.TS*sc2;
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(px2,py2,2.4,0,TAU); ctx.fill();
+      ctx.strokeStyle='#1c2c4a'; ctx.lineWidth=1; ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle='rgba(8,17,31,.5)'; roundRect(mx,my-2,58,16,6); ctx.fill();
+    ctx.fillStyle='#cfe0ff'; ctx.font='10px system-ui'; ctx.textAlign='left'; ctx.fillText('SURVEY', mx+8, my+10);
+  }
+  drawToasts();
 }
 
 /* ============================ main loop ============================ */
@@ -1656,6 +1910,7 @@ function buildIslandTune(){ const host=document.getElementById('tuneIslandRows')
   });
 }
 document.getElementById('renameBtn').onclick=finishRename;
+document.getElementById('sumBtn').onclick=hideSummary;
 document.getElementById('renameInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') finishRename(); });
 
 function begin(fresh){
