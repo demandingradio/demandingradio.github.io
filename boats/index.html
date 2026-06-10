@@ -801,11 +801,15 @@ function drawHUD(){
   ctx.fillText('Sail '+Math.round(sp*100)+'%   •   Wind '+bearingName(Math.cos(wind.a),Math.sin(wind.a)), x+96, y+11);
 
   // top-left under back-link: discoveries
-  ctx.fillStyle='rgba(8,17,31,.4)'; roundRect(12,34,238,30,9); ctx.fill();
+  const holdN=cargoCount(), holdC=Math.round(ITUNE.hold);
+  ctx.fillStyle='rgba(8,17,31,.4)'; roundRect(12,34,238,50,9); ctx.fill();
   ctx.fillStyle='#dfeaff'; ctx.font='700 13px system-ui';
   ctx.fillText('✦ '+discoveredCount+' charted', 22, 54);
   ctx.fillStyle='#9fc6e6'; ctx.fillText('⚓ '+portCount, 132, 54);
   ctx.fillStyle='#ffd86b'; ctx.fillText('⚑ '+clearedCount, 186, 54);
+  ctx.font='12px system-ui';
+  ctx.fillStyle = holdN>=holdC ? '#ff9f8a' : '#cdd9f3';
+  ctx.fillText('🧺 Hold '+holdN+' / '+holdC+'      🪙 '+cargo.gold, 22, 74);
 
   drawCompass();
   // time of day + weather, tucked under the compass
@@ -1057,8 +1061,12 @@ let tripLoot=loot0(), cargo=loot0();
 let securedCount=0, islandCleared=false, renaming=null, icamX=0, icamY=0;
 function loot0(){ return {gold:0,gems:0,ore:0,bits:0,herb:0,relic:0}; }
 const LOOT_ICON={gold:'🪙',gems:'💎',ore:'⛏',bits:'🦴',herb:'🌿',relic:'🏺'};
+const LOOT_VAL={bits:1,herb:2,ore:3,gems:4,relic:5};          // gold is coin — weightless, never takes space
+function satchelCount(){ let n=0; for(const k in tripLoot) if(k!=='gold') n+=tripLoot[k]; return n; }
+function cargoCount(){ let n=0; for(const k in cargo) if(k!=='gold') n+=cargo[k]; return n; }
 const DEFAULT_ITUNE={ moveSpeed:86, slashRange:30, slashDmg:2, slashCD:0.33, arrowSpeed:215, arrowDmg:1,
-  boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, enemyDmg:1, spawnCount:1.0, clearSize:1.0 };
+  boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, enemyDmg:1, spawnCount:1.0, clearSize:1.0,
+  magnetR:95, satchel:18, hold:50 };
 let ITUNE=Object.assign({},DEFAULT_ITUNE);
 
 function sfx(name,mul){ if(!actx||!audioOn||!masterG) return; try{
@@ -1174,11 +1182,21 @@ function moveSlide(o,dx,dy){ const r=o.r*0.7; if(islFree(o.x+dx,o.y,r)) o.x+=dx;
 function enterIsland(core){ mode='island'; setPixScale(2); mapOpen=false; nearLand=null; genIsland(core); tripLoot=loot0(); icamX=player.x; icamY=player.y;
   toast('⚓  Landfall', core.customName||core.name||'an uncharted isle'); sfx('land'); }
 function leaveIsland(ko){
-  const banked=Object.assign({},tripLoot), hadAny=Object.values(banked).some(v=>v>0);
+  const hadAny=Object.values(tripLoot).some(v=>v>0);
   const st=Object.assign({},tripStats,{ name:(ISL&&(ISL.core.customName||ISL.core.label||ISL.core.name))||'the isle',
     main:securedCount, mainN:ISL?ISL.mainN:0, cleared:!!(ISL&&ISL.core.cleared&&islandCleared) });
+  const banked={}, left={};
   if(ko){ toast('💀  Knocked out','you lost your haul'); }
-  else { for(const k in tripLoot) cargo[k]+=tripLoot[k]; }
+  else {
+    const cap=Math.round(ITUNE.hold);
+    if(tripLoot.gold>0){ banked.gold=tripLoot.gold; cargo.gold+=tripLoot.gold; }   // coin needs no room
+    let space=Math.max(0, cap-cargoCount());
+    for(const k of ['relic','gems','ore','herb','bits']){            // most precious stowed first
+      const take=Math.min(tripLoot[k],space);
+      if(take>0){ cargo[k]+=take; banked[k]=take; space-=take; }
+      if(tripLoot[k]>take) left[k]=tripLoot[k]-take; }
+  }
+  st.holdNow=cargoCount(); st.holdCap=Math.round(ITUNE.hold); st.left=left;
   tripLoot=loot0();
   mode='sea'; setPixScale(3); enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; idrops=[]; ichests=[]; iburied=null; iflag=null; iflies=[]; ileaves=[]; ISL=null; queueSave();
   if(!ko && (hadAny||st.cleared)) showSummary(st,banked);
@@ -1193,11 +1211,15 @@ function showSummary(st,banked){
   ];
   if(st.dug) rows.push(['Buried treasure','✓ dug up']);
   rows.push(['Time ashore', Math.floor(st.t/60)+':'+String(Math.floor(st.t%60)).padStart(2,'0')]);
+  if(st.holdCap) rows.push(['Boat hold', st.holdNow+' / '+st.holdCap]);
   document.getElementById('sumTitle').textContent = st.cleared ? '⚑  '+st.name+' claimed' : '⛵  Hauled aboard';
   document.getElementById('sumSub').textContent = st.cleared ? 'the isle is yours, cartographer' : st.name;
   document.getElementById('sumRows').innerHTML = rows.map(r=>'<div class="srow"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('');
   const parts=[]; for(const k in banked) if(banked[k]>0) parts.push((LOOT_ICON[k]||k)+' '+banked[k]);
-  document.getElementById('sumLoot').innerHTML = parts.length? parts.join('&nbsp;&nbsp;') : 'empty-handed this time';
+  let html = parts.length? parts.join('&nbsp;&nbsp;') : 'empty-handed this time';
+  const lparts=[]; for(const k in (st.left||{})) lparts.push((LOOT_ICON[k]||k)+' '+st.left[k]);
+  if(lparts.length) html += '<div style="margin-top:7px;font-size:12px;color:#ff9f8a;">hold full — left on the beach: '+lparts.join('&nbsp; ')+'</div>';
+  document.getElementById('sumLoot').innerHTML = html;
   document.getElementById('summary').classList.remove('hidden'); summaryOpen=true;
 }
 function hideSummary(){ document.getElementById('summary').classList.add('hidden'); summaryOpen=false; }
@@ -1338,16 +1360,29 @@ function updateIsland(dt){
       d.vx*=Math.pow(0.12,dt); d.vy*=Math.pow(0.12,dt);
       d.z+=d.vz*dt; d.vz-=340*dt;
       if(d.z<=0){ d.z=0; d.vz=-d.vz*0.45; if(Math.abs(d.vz)<30){ d.vz=0; d.settled=true; } }
-    } else {
-      const ddx=player.x-d.x, ddy=player.y-d.y, q=ddx*ddx+ddy*ddy;
-      const want = d.k!=='heart' || player.hp<player.maxhp;
-      if(want && q<52*52){ const dd=Math.sqrt(q)||1, pull=(1-dd/52)*460;
+    }
+    if(d.settled || d.t>0.45){                 // magnet kicks in even mid-tumble
+      const cap=Math.round(ITUNE.satchel);
+      const lowerHeld=()=>{ let sw=null; for(const k2 in tripLoot){ if(k2==='gold'||tripLoot[k2]<=0) continue;
+          if(LOOT_VAL[k2]<LOOT_VAL[d.k] && (!sw || LOOT_VAL[k2]<LOOT_VAL[sw] || (LOOT_VAL[k2]===LOOT_VAL[sw] && tripLoot[k2]>tripLoot[sw]))) sw=k2; } return sw; };
+      const canTake = d.k==='heart' ? player.hp<player.maxhp
+                    : d.k==='gold' ? true
+                    : (satchelCount()<cap || !!lowerHeld());
+      const ddx=player.x-d.x, ddy=player.y-d.y, q=ddx*ddx+ddy*ddy, R=ITUNE.magnetR;
+      if(canTake && q<R*R){ const dd=Math.sqrt(q)||1, pull=(0.35+0.65*(1-dd/R))*560;
         d.x+=ddx/dd*pull*dt; d.y+=ddy/dd*pull*dt;
-        if(dd<11){
+        if(dd<13){
           if(d.k==='heart'){ player.hp=Math.min(player.maxhp,player.hp+1); sfx('heart'); ifloat.push({x:d.x,y:d.y-10, txt:'+1 ♥', t:0, life:0.8, c:'#ff8d9c'}); }
-          else { tripLoot[d.k]=(tripLoot[d.k]||0)+1; pickCombo=Math.min(pickCombo+1,16); pickT=0.9; haulPulse=0.35; sfx('pick',Math.pow(1.05,pickCombo)); }
+          else if(d.k==='gold' || satchelCount()<cap){ tripLoot[d.k]=(tripLoot[d.k]||0)+1; pickCombo=Math.min(pickCombo+1,16); pickT=0.9; haulPulse=0.35; sfx('pick',Math.pow(1.05,pickCombo)); }
+          else { const sw=lowerHeld();          // satchel full — trade out the least precious thing
+            tripLoot[sw]--; tripLoot[d.k]=(tripLoot[d.k]||0)+1; haulPulse=0.35; sfx('pick',1.25);
+            ifloat.push({x:player.x, y:player.y-16, txt:(LOOT_ICON[sw]||sw)+' ⇄ '+(LOOT_ICON[d.k]||d.k), t:0, life:0.9, c:'#ffe9a6'});
+            idrops.push({k:sw, x:player.x+(Math.random()-0.5)*10, y:player.y+(Math.random()-0.5)*10, vx:(Math.random()-0.5)*90, vy:(Math.random()-0.5)*90, z:5, vz:60, t:0, settled:false});
+          }
           idrops.splice(i,1); continue;
         } }
+      else if(!canTake && d.k!=='heart' && q<30*30 && (!d.fullT || itime-d.fullT>1.4)){ d.fullT=itime;
+        ifloat.push({x:player.x, y:player.y-16, txt:'Satchel full!', t:0, life:0.7, c:'#ff8d9c'}); sfx('tink',0.6); }
     }
     if(d.t>75) idrops.splice(i,1);
   }
@@ -1731,9 +1766,10 @@ function islandHUD(){
     if(!cl.secured && cur===cl){ ctx.fillStyle='#0c1830'; ctx.font='700 10px system-ui'; ctx.textAlign='center'; ctx.fillText(''+cl.enemyCount,cxp,cyp+3.5); ctx.textAlign='left'; } }
   if(cur && !cur.secured && cur.id>0){ ctx.fillStyle='#ffd27a'; ctx.font='700 13px system-ui'; ctx.textAlign='center'; ctx.fillText('Enemies remaining: '+cur.enemyCount, CSSW/2, 68); ctx.textAlign='left'; }
   ctx.textAlign='right'; ctx.font=(haulPulse>0?'700 ':'')+'13px system-ui'; let parts=[]; for(const k in tripLoot) if(tripLoot[k]>0) parts.push((LOOT_ICON[k]||k)+' '+tripLoot[k]);
-  const ht='Haul:  '+(parts.length?parts.join('   '):'—'), hw=ctx.measureText(ht).width+20;
-  ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(CSSW-14-hw,22,hw,26,8); ctx.fill();
-  ctx.fillStyle=haulPulse>0?'#ffffff':'#ffe9a6'; ctx.fillText(ht, CSSW-24, 40); ctx.textAlign='left';
+  const scap=Math.round(ITUNE.satchel), scnt=satchelCount(), sfull=scnt>=scap;
+  const ht='Satchel '+scnt+'/'+scap+(sfull?'  FULL':'')+'  ·  '+(parts.length?parts.join('   '):'—'), hw=ctx.measureText(ht).width+20;
+  ctx.fillStyle=sfull?'rgba(66,16,22,.62)':'rgba(8,17,31,.52)'; roundRect(CSSW-14-hw,22,hw,26,8); ctx.fill();
+  ctx.fillStyle=sfull?'#ff9f8a':(haulPulse>0?'#ffffff':'#ffe9a6'); ctx.fillText(ht, CSSW-24, 40); ctx.textAlign='left';
   ctx.textAlign='center';
   for(const f of ifloat){ const sxp=((f.x-icamX)*islScale()+IW/2)*(CSSW/IW), syp=((f.y-icamY)*islScale()+IH/2)*(CSSH/IH); ctx.globalAlpha=clamp(1-f.t/f.life,0,1); ctx.fillStyle=f.c; ctx.font=(f.big?'700 22px':'700 14px')+' system-ui'; ctx.fillText(f.txt, sxp, syp); ctx.globalAlpha=1; }
   const it=nearestInteract();
@@ -1901,6 +1937,9 @@ const ITUNE_DEF=[
   ['enemyDmg','Enemy damage',0,3,1],
   ['spawnCount','Enemy count ×',0.4,2.5,0.1],
   ['clearSize','Clearing size ×',0.6,1.8,0.1],
+  ['magnetR','Magnet reach',40,170,5],
+  ['satchel','Satchel size',8,40,1],
+  ['hold','Boat hold',20,120,5],
 ];
 function buildIslandTune(){ const host=document.getElementById('tuneIslandRows'); if(!host) return; host.innerHTML='';
   ITUNE_DEF.forEach(([k,label,min,max,step])=>{ const row=document.createElement('div'); row.className='row';
