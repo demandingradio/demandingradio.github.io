@@ -65,6 +65,22 @@ canvas{position:absolute;inset:0;display:block;}
 #summary button{display:block;margin:16px auto 0;font:inherit;font-weight:700;font-size:15px;cursor:pointer;
   color:#08213d;background:linear-gradient(#ffe8a6,#f4c869);border:none;border-radius:10px;padding:10px 28px;box-shadow:0 6px 0 #b78a2e;}
 #summary button:active{transform:translateY(2px);box-shadow:0 4px 0 #b78a2e;}
+#inv{position:absolute;inset:0;z-index:65;display:flex;align-items:center;justify-content:center;
+  background:rgba(5,12,24,.45);}
+#inv .ibox{background:linear-gradient(#1a2c4d,#13233f);border:1px solid #34466e;border-radius:14px;
+  padding:18px 24px;text-align:center;box-shadow:0 16px 50px rgba(0,0,0,.55);}
+#inv .ititle{font-size:17px;font-weight:800;color:#ffe6a6;letter-spacing:.04em;}
+#inv .isub{color:#9fb6dd;font-size:11.5px;margin:5px 0 13px;}
+#invGrid{display:flex;gap:10px;justify-content:center;}
+.itile{width:54px;height:54px;background:#0c1830;border:1px solid #2e4267;border-radius:10px;position:relative;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s, transform .08s;}
+.itile:hover{border-color:#7aa6dd;transform:translateY(-2px);}
+.itile.empty{opacity:.35;cursor:default;}
+.itile.empty:hover{border-color:#2e4267;transform:none;}
+.iemoji{font-size:24px;line-height:1;}
+.icnt{position:absolute;right:4px;bottom:2px;font-size:12px;font-weight:700;color:#ffe9a6;}
+#invGold{margin-top:13px;color:#ffd86b;font-size:13px;}
+#inv .ihint{color:#7e93ba;font-size:10.5px;margin-top:9px;}
 
 /* quiet way back to the desktop */
 #back{position:absolute;left:14px;top:11px;z-index:40;color:#cfe0ff;opacity:.62;
@@ -178,6 +194,16 @@ canvas{position:absolute;inset:0;display:block;}
     <div id="sumRows"></div>
     <div class="sloot" id="sumLoot"></div>
     <button id="sumBtn">Sail on ⛵</button>
+  </div>
+</div>
+
+<div id="inv" class="hidden">
+  <div class="ibox">
+    <div class="ititle">🎒 Satchel <span id="invCount"></span></div>
+    <p class="isub">click an item to drop one — make room for better loot</p>
+    <div id="invGrid"></div>
+    <div id="invGold"></div>
+    <p class="ihint">I or Esc to close — time stands still while you rummage</p>
   </div>
 </div>
 
@@ -428,13 +454,16 @@ addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_','j','k'].includes(k)) e.preventDefault();
   if(summaryOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideSummary(); return; }
+  if(invOpen){ if(k==='i'||k==='escape'||k==='e') closeInv(); return; }
   if(!started || renaming) return;
   if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; return; }
   if(k==='p'){ toggleMute(); return; }
   if(mode==='island'){                          // ---- on foot ----
-    if(k==='j'||k===' ') doSlash();
+    if(k==='j') doSlash();
+    else if(k===' ') doDash();
     else if(k==='k') doShoot();
     else if(k==='e'){ doInteract(); }
+    else if(k==='i'){ openInv(); return; }
     keys[k]=true; return;
   }
   if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
@@ -461,6 +490,15 @@ addEventListener('mousedown',e=>{ if(started&&mapOpen) fmDrag={x:e.clientX,y:e.c
 addEventListener('mousemove',e=>{ if(!fmDrag||!mapOpen) return; const sc=mapRect().size/fmSpan;
   fmCX-=(e.clientX-fmDrag.x)/sc; fmCY-=(e.clientY-fmDrag.y)/sc; fmDrag={x:e.clientX,y:e.clientY}; clampMap(); fmDirty=true; });
 addEventListener('mouseup',()=>{ fmDrag=null; });
+// mouse combat on the island: cursor aims, left swings, right shoots
+addEventListener('mousemove',e=>{ mouseX=e.clientX; mouseY=e.clientY; });
+addEventListener('mousedown',e=>{
+  if(!started || mode!=='island' || renaming || summaryOpen || invOpen) return;
+  if(e.target!==cv) return;
+  if(e.button===0){ aimAtMouse(); doSlash(); }
+  else if(e.button===2){ aimAtMouse(); doShoot(); }
+});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 /* ============================ audio (calm ambience) ============================ */
 let actx=null, masterG=null, windG=null, waveG=null;
@@ -1033,14 +1071,17 @@ let mode='sea';                 // 'sea' | 'island'
 let nearLand=null;              // island the boat can explore (sea mode)
 let ISL=null, itime=0;
 const W_WALL=0, W_GROUND=1, W_PATH=2, W_GATE=3;
-const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, shootT:0, invul:0};
+const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, slashCD:0, slashT:0, shootCD:0, shootT:0, invul:0, dashT:0, dashCD:0, dashX:0, dashY:1};
 let enemies=[], inodes=[], iproj=[], ifx=[], ifloat=[];
 let idrops=[];                  // physical loot on the ground (coins, gems, hearts…) — it magnets to you
 let ichests=[], iburied=null, iflag=null;   // hoard & cache chests, buried treasure, the claim-flag ceremony
 let iflies=[], ileaves=[];      // ambient life: fireflies after dark, drifting leaves
 let ivisit=null, ichartCv=null, ichartCtx=null;   // your survey of the island — fogs in as you walk
 let tripStats={kills:0,t:0,bonus:0,hoard:false,dug:false};
-let pickCombo=0, pickT=0, haulPulse=0, summaryOpen=false;
+let pickCombo=0, pickT=0, haulPulse=0, summaryOpen=false, invOpen=false;
+let mouseX=0, mouseY=0;        // cursor, for mouse-aimed sword & bow
+const LOOT_NAME={gold:'Gold — coin, takes no space', gems:'Gem — precious', ore:'Ore chunk',
+  bits:'Monster bits', herb:'Wild herb', relic:'Ancient relic — most precious'};
 let hurtFlash=0;                // red screen-edge flash when the player takes a hit
 // each island rolls one of these looks (seeded per island, stable across visits)
 const ISL_PALS=[
@@ -1066,7 +1107,7 @@ function satchelCount(){ let n=0; for(const k in tripLoot) if(k!=='gold') n+=tri
 function cargoCount(){ let n=0; for(const k in cargo) if(k!=='gold') n+=cargo[k]; return n; }
 const DEFAULT_ITUNE={ moveSpeed:86, slashRange:30, slashDmg:2, slashCD:0.33, arrowSpeed:215, arrowDmg:1,
   boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, enemyDmg:1, spawnCount:1.0, clearSize:1.0,
-  magnetR:95, satchel:18, hold:50 };
+  magnetR:95, satchel:18, hold:50, dashCool:0.9 };
 let ITUNE=Object.assign({},DEFAULT_ITUNE);
 
 function sfx(name,mul){ if(!actx||!audioOn||!masterG) return; try{
@@ -1077,10 +1118,11 @@ function sfx(name,mul){ if(!actx||!audioOn||!masterG) return; try{
   else if(name==='secure'){f=620;d=0.3;ty='sine';} else if(name==='land'){f=320;d=0.22;ty='sine';}
   else if(name==='tink'){f=560;d=0.05;ty='square';} else if(name==='heart'){f=540;d=0.2;ty='sine';}
   else if(name==='pick'){f=640;d=0.06;ty='triangle';} else if(name==='chest'){f=330;d=0.5;ty='triangle';}
-  else if(name==='dig'){f=130;d=0.1;ty='square';}
+  else if(name==='dig'){f=130;d=0.1;ty='square';} else if(name==='dash'){f=520;d=0.12;ty='triangle';}
   o.type=ty; o.frequency.setValueAtTime(f*(mul||1),t);
   if(name==='secure') o.frequency.exponentialRampToValueAtTime(f*2,t+0.25);
   if(name==='chest') o.frequency.exponentialRampToValueAtTime(f*2.4,t+0.4);
+  if(name==='dash') o.frequency.exponentialRampToValueAtTime(f*0.45,t+d);
   if(name==='heart') o.frequency.exponentialRampToValueAtTime(f*1.7,t+0.16);
   if(name==='shoot') o.frequency.exponentialRampToValueAtTime(f*0.5,t+d);
   g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.16,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
@@ -1168,6 +1210,7 @@ function genIsland(core){
   ISL={core, W,H,TS, tiles, clearings, gates, mainN, N:lay.length, pal:ISL_PALS[palI], landing:{x:clearings[0].x, y:clearings[0].y}};
   player.x=ISL.landing.x; player.y=ISL.landing.y+cr*TS*0.35; player.fx=0; player.fy=-1;
   player.hp=player.maxhp; player.invul=0.6; player.slashCD=0; player.shootCD=0; player.slashT=0; player.shootT=0;
+  player.dashT=0; player.dashCD=0; closeInv();
 }
 function paintChart(tx,ty){ if(!ichartCtx||!ISL) return; const t=ISL.tiles[ty*ISL.W+tx];
   ichartCtx.fillStyle = t===W_WALL?'#54713f' : t===W_PATH?'#b59b6b' : t===W_GATE?'#6b4f26' : '#a8c98a';
@@ -1198,6 +1241,7 @@ function leaveIsland(ko){
   }
   st.holdNow=cargoCount(); st.holdCap=Math.round(ITUNE.hold); st.left=left;
   tripLoot=loot0();
+  closeInv();
   mode='sea'; setPixScale(3); enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; idrops=[]; ichests=[]; iburied=null; iflag=null; iflies=[]; ileaves=[]; ISL=null; queueSave();
   if(!ko && (hadAny||st.cleared)) showSummary(st,banked);
   else if(!ko) toast('Back aboard','');
@@ -1263,6 +1307,41 @@ function doInteract(){ const it=nearestInteract(); if(!it) return;
   else if(it.kind==='dig') digTreasure();
   else if(it.kind==='boat') leaveIsland(false);
 }
+/* dash — a quick burst with a moment of grace */
+function doDash(){ if(player.dashCD>0||player.dashT>0||mode!=='island') return;
+  let dx=0,dy=0;
+  if(keys['arrowleft']||keys['a']) dx-=1; if(keys['arrowright']||keys['d']) dx+=1;
+  if(keys['arrowup']||keys['w']) dy-=1; if(keys['arrowdown']||keys['s']) dy+=1;
+  if(!dx&&!dy){ dx=player.fx; dy=player.fy; }
+  const l=Math.hypot(dx,dy)||1; player.dashX=dx/l; player.dashY=dy/l;
+  player.fx=player.dashX; player.fy=player.dashY;
+  player.dashT=0.16; player.dashCD=ITUNE.dashCool; player.invul=Math.max(player.invul,0.26);
+  sfx('dash'); burst(player.x-player.dashX*8, player.y-player.dashY*8, '#cdd9f3');
+}
+/* the satchel panel — rummage, trash, prioritise (time stands still) */
+function openInv(){ if(mode!=='island') return; invOpen=true; renderInv(); document.getElementById('inv').classList.remove('hidden'); }
+function closeInv(){ invOpen=false; document.getElementById('inv').classList.add('hidden'); }
+function renderInv(){
+  document.getElementById('invCount').textContent=satchelCount()+' / '+Math.round(ITUNE.satchel);
+  const g=document.getElementById('invGrid'); g.innerHTML='';
+  for(const k of ['relic','gems','ore','herb','bits']){
+    const n=tripLoot[k]||0, tile=document.createElement('div');
+    tile.className='itile'+(n?'':' empty');
+    tile.title=LOOT_NAME[k]+(n?' — click to drop one':'');
+    tile.innerHTML='<span class="iemoji">'+LOOT_ICON[k]+'</span><span class="icnt">'+n+'</span>';
+    if(n) tile.onclick=()=>{ if(tripLoot[k]<=0) return; tripLoot[k]--;
+      idrops.push({k, x:player.x+(Math.random()-0.5)*16, y:player.y+(Math.random()-0.5)*16,
+        vx:(Math.random()-0.5)*80, vy:(Math.random()-0.5)*80, z:5, vz:55, t:0, settled:false, np:itime+2.5});
+      sfx('tink',0.8); renderInv(); };
+    g.appendChild(tile);
+  }
+  document.getElementById('invGold').innerHTML='🪙 '+(tripLoot.gold||0)+' gold <span style="opacity:.6">— coin, takes no space</span>';
+}
+/* mouse aim: the cursor leads the sword & bow */
+function aimAtMouse(){ const s=islScale();
+  const wx=icamX+(mouseX/(CSSW/IW)-IW/2)/s, wy=icamY+(mouseY/(CSSH/IH)-IH/2)/s;
+  const dx=wx-player.x, dy=wy-player.y, l=Math.hypot(dx,dy);
+  if(l>2){ player.fx=dx/l; player.fy=dy/l; } }
 function lootSummary(l){ const p=[]; for(const k in l) if(l[k]>0) p.push(l[k]+' '+k); return p.join(', '); }
 function startRename(core){ renaming=core; const ov=document.getElementById('rename'), inp=document.getElementById('renameInput');
   inp.value=core.customName||core.name||''; ov.classList.remove('hidden'); setTimeout(()=>{inp.focus(); inp.select();},40); }
@@ -1331,11 +1410,18 @@ function updateIsland(dt){
   player.shootT=Math.max(0,player.shootT-dt);
   hurtFlash=Math.max(0,hurtFlash-dt*1.7); haulPulse=Math.max(0,haulPulse-dt);
   pickT=Math.max(0,pickT-dt); if(pickT<=0) pickCombo=0;
+  player.dashCD=Math.max(0,player.dashCD-dt);
   let mvx=0,mvy=0;
   if(keys['arrowleft']||keys['a']) mvx-=1; if(keys['arrowright']||keys['d']) mvx+=1;
   if(keys['arrowup']||keys['w']) mvy-=1; if(keys['arrowdown']||keys['s']) mvy+=1;
-  if(mvx||mvy){ const l=Math.hypot(mvx,mvy); mvx/=l; mvy/=l; player.fx=mvx; player.fy=mvy; moveSlide(player, mvx*ITUNE.moveSpeed*dt, mvy*ITUNE.moveSpeed*dt); }
-  player.moving=!!(mvx||mvy);
+  if(player.dashT>0){ player.dashT-=dt;                       // mid-dash: locked burst + afterimages
+    moveSlide(player, player.dashX*ITUNE.moveSpeed*3.8*dt, player.dashY*ITUNE.moveSpeed*3.8*dt);
+    if(Math.random()<0.7) ifx.push({k:'p', x:player.x-player.dashX*7, y:player.y-player.dashY*7, vx:(Math.random()-0.5)*26, vy:(Math.random()-0.5)*26, t:0, life:0.3, c:'#dfe9f8'});
+    player.moving=true;
+  } else {
+    if(mvx||mvy){ const l=Math.hypot(mvx,mvy); mvx/=l; mvy/=l; player.fx=mvx; player.fy=mvy; moveSlide(player, mvx*ITUNE.moveSpeed*dt, mvy*ITUNE.moveSpeed*dt); }
+    player.moving=!!(mvx||mvy);
+  }
   // which clearing is the player inside? enemies only engage inside their own arena (no corridor sniping)
   let curCl=-1; for(const cl of ISL.clearings){ if((player.x-cl.x)**2+(player.y-cl.y)**2 < cl.r*cl.r){ curCl=cl.id; break; } }
   for(const en of enemies){ en.flash=Math.max(0,en.flash-dt); en.stun=Math.max(0,en.stun-dt);
@@ -1361,7 +1447,7 @@ function updateIsland(dt){
       d.z+=d.vz*dt; d.vz-=340*dt;
       if(d.z<=0){ d.z=0; d.vz=-d.vz*0.45; if(Math.abs(d.vz)<30){ d.vz=0; d.settled=true; } }
     }
-    if(d.settled || d.t>0.45){                 // magnet kicks in even mid-tumble
+    if((d.settled || d.t>0.45) && !(d.np && itime<d.np)){      // magnet kicks in even mid-tumble (trashed items wait)
       const cap=Math.round(ITUNE.satchel);
       const lowerHeld=()=>{ let sw=null; for(const k2 in tripLoot){ if(k2==='gold'||tripLoot[k2]<=0) continue;
           if(LOOT_VAL[k2]<LOOT_VAL[d.k] && (!sw || LOOT_VAL[k2]<LOOT_VAL[sw] || (LOOT_VAL[k2]===LOOT_VAL[sw] && tripLoot[k2]>tripLoot[sw]))) sw=k2; } return sw; };
@@ -1746,6 +1832,12 @@ function islandHUD(){
   ctx.font='19px system-ui'; for(let i=0;i<player.maxhp;i++){ const on=i<player.hp;
     ctx.globalAlpha = on&&lowHp ? 0.55+0.45*Math.sin(itime*7) : 1;
     ctx.fillStyle=on?'#ff5d6c':'#42263a'; ctx.fillText('♥', 18+i*21, 42); ctx.globalAlpha=1; }
+  // dash readiness
+  ctx.font='700 11px system-ui';
+  if(player.dashCD<=0){ ctx.fillStyle='#7fd6ff'; ctx.fillText('⚡ DASH', 18, 62); }
+  else { ctx.fillStyle='#52617e'; ctx.fillText('⚡', 18, 62);
+    ctx.fillStyle='#16294a'; roundRect(34,54,56,8,4); ctx.fill();
+    ctx.fillStyle='#5fc2d6'; roundRect(34,54,56*clamp(1-player.dashCD/Math.max(0.1,ITUNE.dashCool),0,1),8,4); ctx.fill(); }
   if(!ISL) return;
   let cur=null; for(const cl of ISL.clearings) if((player.x-cl.x)**2+(player.y-cl.y)**2 < cl.r*cl.r){ cur=cl; break; }
   const mains=ISL.clearings.filter(c=>c.kind!=='bonus'), bons=ISL.clearings.filter(c=>c.kind==='bonus');
@@ -1775,7 +1867,7 @@ function islandHUD(){
   const it=nearestInteract();
   if(it){ ctx.font='700 14px system-ui'; const w=ctx.measureText(it.label).width+30;
     ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-94,w,32,10); ctx.fill(); ctx.fillStyle='#ffe6a6'; ctx.fillText(it.label, CSSW/2, CSSH-73); }
-  ctx.font='12px system-ui'; const ch='WASD move   •   J slash   •   K shoot   •   E interact', cw=ctx.measureText(ch).width+24;
+  ctx.font='12px system-ui'; const ch='WASD move  •  J / 🖱L slash  •  K / 🖱R shoot  •  Space dash  •  E interact  •  I satchel', cw=ctx.measureText(ch).width+24;
   ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(CSSW/2-cw/2,CSSH-44,cw,26,9); ctx.fill(); ctx.fillStyle='#cdd9f3'; ctx.fillText(ch, CSSW/2, CSSH-26);
   ctx.textAlign='left';
   // your survey of the isle — fogs in as you walk it
@@ -1840,7 +1932,7 @@ function frame(ts){
 function frameInner(ts){
   const dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
   if(started && mode==='island'){            // ---- island exploration mode ----
-    updateIsland(dt);
+    if(!invOpen) updateIsland(dt);           // time stands still while you rummage the satchel
     if(mode!=='island' || !ISL) return;      // knocked out / set sail mid-update — the sea resumes next frame
     drawIslandWorld();
     ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=false;
@@ -1940,6 +2032,7 @@ const ITUNE_DEF=[
   ['magnetR','Magnet reach',40,170,5],
   ['satchel','Satchel size',8,40,1],
   ['hold','Boat hold',20,120,5],
+  ['dashCool','Dash cooldown',0.3,2.5,0.1],
 ];
 function buildIslandTune(){ const host=document.getElementById('tuneIslandRows'); if(!host) return; host.innerHTML='';
   ITUNE_DEF.forEach(([k,label,min,max,step])=>{ const row=document.createElement('div'); row.className='row';
@@ -1950,6 +2043,7 @@ function buildIslandTune(){ const host=document.getElementById('tuneIslandRows')
 }
 document.getElementById('renameBtn').onclick=finishRename;
 document.getElementById('sumBtn').onclick=hideSummary;
+document.getElementById('inv').addEventListener('click',e=>{ if(e.target.id==='inv') closeInv(); });
 document.getElementById('renameInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') finishRename(); });
 
 function begin(fresh){
