@@ -2409,15 +2409,15 @@ const ISL_PALS=[
 ];
 /* ---- biomes: what kind of island is this? rolled from seed + distance (far = rarer) ---- */
 const BIOMES=[
-  {key:'tropic',  name:'Lush Tropic',       icon:'🌴', tier:0, pal:0, mods:{}},
-  {key:'savanna', name:'Dry Savanna',       icon:'🌾', tier:0, pal:1, mods:{boarW:0.65, goldMul:1.25}},
-  {key:'moor',    name:'Highland Moor',     icon:'⛰️', tier:0, pal:2, mods:{rockW:1.7, oreMul:1.25}},
+  {key:'tropic',  name:'Lush Tropic',       icon:'🌴', tier:0, pal:0, mods:{crabW:0.9}},
+  {key:'savanna', name:'Dry Savanna',       icon:'🌾', tier:0, pal:1, mods:{boarW:0.65, goldMul:1.25, dingoW:2.2}},
+  {key:'moor',    name:'Highland Moor',     icon:'⛰️', tier:0, pal:2, mods:{rockW:1.7, oreMul:1.25, dingoW:1.2}},
   {key:'ember',   name:'Ember Wood',        icon:'🍂', tier:0, pal:3, mods:{herbW:1.5, herbMul:1.3}},
-  {key:'atoll',   name:'Palm Atoll',        icon:'🏝️', tier:0, pal:4, mods:{ring:true, allSand:true, spawnMul:0.7, heartCh:0.1}},
+  {key:'atoll',   name:'Palm Atoll',        icon:'🏝️', tier:0, pal:4, mods:{ring:true, allSand:true, spawnMul:0.7, heartCh:0.1, crabW:2.4}},
   {key:'meadow',  name:'Wildflower Meadow', icon:'🌸', tier:1, pal:5, mods:{flowerMul:3, herbW:1.7, herbMul:1.3, spawnMul:0.75, heartCh:0.12}},
-  {key:'boulder', name:'Boulder Field',     icon:'🪨', tier:1, pal:6, mods:{rockW:2.4, gemRockCh:0.5, boarHPMul:1.5, pebbleMul:2.4}},
-  {key:'frost',   name:'Frostbound Isle',   icon:'❄️', tier:2, pal:7, mods:{hazard:'ice', chargeMul:1.25, gemMul:1.35, boarTint:'#8fa6b8', mark:'#cfe9ff'}},
-  {key:'scorch',  name:'Scorched Isle',     icon:'🌋', tier:2, pal:8, mods:{hazard:'lava', boarW:0.35, goldMul:1.4, oreMul:1.25, snakeTint:['#6e3024','#85412c','#5e2a1e'], spitSpd:1.15, mark:'#ff9a3c'}},
+  {key:'boulder', name:'Boulder Field',     icon:'🪨', tier:1, pal:6, mods:{rockW:2.4, gemRockCh:0.5, boarHPMul:1.5, pebbleMul:2.4, crabW:1.0}},
+  {key:'frost',   name:'Frostbound Isle',   icon:'❄️', tier:2, pal:7, mods:{hazard:'ice', chargeMul:1.25, gemMul:1.35, boarTint:'#8fa6b8', mark:'#cfe9ff', dingoW:1.8, dingoTint:['#dfe7ee','#aabccc','#f2f8fc']}},
+  {key:'scorch',  name:'Scorched Isle',     icon:'🌋', tier:2, pal:8, mods:{hazard:'lava', boarW:0.35, goldMul:1.4, oreMul:1.25, snakeTint:['#6e3024','#85412c','#5e2a1e'], spitSpd:1.15, mark:'#ff9a3c', crabW:1.5, crabTint:['#46323e','#5e4252','#2f2230']}},
   {key:'crystal', name:'Crystal Hollow',    icon:'💠', tier:2, pal:9, mods:{cryRocks:true, rockW:1.8, gemMul:1.8, snakeTint:['#3e4a82','#4c5a9a','#36406e'], mark:'#8de9ff'}},
 ];
 const TIER_NAME=['common','uncommon','rare'];
@@ -2443,7 +2443,7 @@ const LOOT_VAL={bits:1,herb:2,ore:3,gems:4,relic:5};          // gold is coin �
 function satchelCount(){ let n=0; for(const k in tripLoot) if(k!=='gold') n+=tripLoot[k]; return n; }
 function cargoCount(){ let n=0; for(const k in cargo) if(k!=='gold') n+=cargo[k]; return n; }
 const DEFAULT_ITUNE={ moveSpeed:86, slashRange:30, slashDmg:2, slashCD:0.33, arrowSpeed:215, arrowDmg:1,
-  boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, enemyDmg:1, spawnCount:1.0, clearSize:1.0,
+  boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, crabHP:3, dingoHP:2, enemyDmg:1, spawnCount:1.0, clearSize:1.0,
   magnetR:95, satchel:18, hold:50, dashCool:0.9 };
 let ITUNE=Object.assign({},DEFAULT_ITUNE);
 
@@ -2471,75 +2471,126 @@ function sfx(name,mul){ if(!actx||!audioOn||!masterG) return; try{
 }catch(e){} }
 
 /* ---- generation: a branching trail of clearings — main path to the HOARD, side paths to caches ---- */
+/* every clearing rolls its own size AND silhouette: round / oval / blob / peanut / scalloped */
+const CL_SHAPES=['round','oval','blob','peanut','scallop'];
+function mkShape(rng,kind){ const ph=rng()*TAU;
+  if(kind==='oval'){ const b=0.55+rng()*0.25; return {k:1, ph, p1:b, mx:1/Math.sqrt(b)}; }
+  if(kind==='peanut'){ const p=0.22+rng()*0.12; return {k:2, ph, p1:p, mx:0.98*(1+p)}; }
+  if(kind==='scallop'){ const p=0.09+rng()*0.07, m=5+((rng()*3)|0); return {k:3, ph, p1:p, p2:m, mx:1+p}; }
+  if(kind==='blob'){ const p1=0.13+rng()*0.09, p2=0.09+rng()*0.07; return {k:4, ph, p1, p2, ph2:rng()*TAU, mx:0.97*(1.05+p1+p2)}; }
+  const w=0.035+rng()*0.045; return {k:0, ph, p1:w, mx:1+w};                                  // near-round
+}
+function shapeF(sh,ang){ const t=ang-sh.ph; let f;
+  if(sh.k===1){ const c=Math.cos(t), si=Math.sin(t); f=Math.sqrt(sh.p1)/Math.sqrt(sh.p1*sh.p1*c*c+si*si); }
+  else if(sh.k===2) f=0.98*(1+sh.p1*Math.cos(2*t));
+  else if(sh.k===3) f=1+sh.p1*Math.cos(sh.p2*t);
+  else if(sh.k===4) f=0.97*(1+sh.p1*Math.cos(2*t)+sh.p2*Math.cos(3*(ang-sh.ph2))+0.05*Math.cos(5*t));
+  else f=1+sh.p1*Math.cos(3*t);
+  return Math.max(0.55,f);
+}
+function clRadAt(cl,ang){ return cl.r0*shapeF(cl.shape,ang); }            // world-px radius in a given direction
+function inClear(cl,x,y){ const dx=x-cl.x, dy=y-cl.y, q=dx*dx+dy*dy; if(q>cl.r*cl.r) return false;
+  const rr=clRadAt(cl,Math.atan2(dy,dx)); return q<rr*rr; }
 function genIsland(core){
   const rng=mulberry32((((core.idx+1)*2654435761)>>>0) ^ 0xB0A75);
   const biome=biomeOf(core), bmods=biome.mods;   // what kind of isle is this?
-  const mainN=clamp(2+Math.round((core.r-46)/22),2,6);
-  const TS=20, cr=Math.max(4,Math.round(5.5*ITUNE.clearSize)), space=cr*2+5;
-  // lay out the main path, then hang bonus clearings off its middle
-  const lay=[];
-  if(bmods.ring && mainN>=3){                    // atoll: the trail circles a lagoon
-    const R=Math.max(space, Math.round(space/(2*Math.sin(Math.PI/mainN)))), a0=rng()*TAU;
-    for(let i=0;i<mainN;i++){ const ang=a0+i*(TAU/mainN);
-      lay.push({x:Math.round(Math.cos(ang)*R), y:Math.round(Math.sin(ang)*R),
-        parent:i-1, kind:i===0?'landing':(i===mainN-1?'hoard':'fight')}); }
+  const TS=20;
+  // zone count: bigger isles hold more — averages ~10 across the ocean, hard range 3..20
+  const sizeT=clamp((core.r-44)/100,0,1);
+  const T=clamp(Math.round(3.5+sizeT*14+(rng()*6-3)),3,20);
+  const mainWant=clamp(Math.round(T*0.62),2,13);
+  // per-clearing size: avg +50% on the old base, each rolls 50%–150% of that
+  const baseCr=8.25*ITUNE.clearSize;
+  const mkCr=()=>Math.max(4,Math.round(baseCr*(0.5+rng())));
+  const mkSh=()=>mkShape(rng,CL_SHAPES[(rng()*CL_SHAPES.length)|0]);
+  // lay out the main path, then hang bonus clearings off it
+  const lay=[{x:0,y:0,parent:-1,kind:'landing',cr:Math.max(5,mkCr()),shape:mkShape(rng,'round')}];
+  const collide=(x,y,cr,sh,skipIdx)=>lay.some((n,j)=>j!==skipIdx && Math.hypot(n.x-x,n.y-y) < n.cr*n.shape.mx+cr*sh.mx+2);
+  const spacing=(acr,ash,ang,cr,sh)=>Math.max(acr*shapeF(ash,ang)+cr*shapeF(sh,ang+Math.PI), 0.85*(acr*ash.mx+cr*sh.mx))+3+rng()*3;
+  if(bmods.ring && mainWant>=3){                 // atoll: the trail circles a lagoon
+    for(let i=1;i<mainWant;i++) lay.push({parent:i-1, kind:i===mainWant-1?'hoard':'fight',
+      cr:i===mainWant-1?Math.max(9,mkCr()):mkCr(), shape:mkSh()});
+    const maxC=Math.max.apply(null,lay.map(n=>n.cr*n.shape.mx));
+    const space=maxC*2+6, R=Math.max(space, Math.round(space/(2*Math.sin(Math.PI/mainWant)))), a0=rng()*TAU;
+    lay.forEach((n,i)=>{ const ang=a0+i*(TAU/mainWant); n.x=Math.round(Math.cos(ang)*R); n.y=Math.round(Math.sin(ang)*R); });
   } else {
-    lay.push({x:0,y:0,parent:-1,kind:'landing'});
-    let px=0,py=0;
-    for(let i=1;i<mainN;i++){ const ang=-Math.PI/2+(rng()-0.5)*1.6;
-      px+=Math.round(Math.cos(ang)*space); py+=Math.round(Math.sin(ang)*space);
-      lay.push({x:px,y:py,parent:i-1,kind:i===mainN-1?'hoard':'fight'}); }
+    for(let i=1;i<mainWant;i++){
+      const cr = i===mainWant-1?Math.max(9,mkCr()):mkCr(), sh=mkSh(), prev=lay[lay.length-1];
+      let done=false;
+      for(let t2=0;t2<16 && !done;t2++){          // meander north-ish, retrying angles until it fits
+        const ang=-Math.PI/2+(rng()-0.5)*(1.8+t2*0.12);
+        const dist=spacing(prev.cr,prev.shape,ang,cr,sh);
+        const nx2=Math.round(prev.x+Math.cos(ang)*dist), ny2=Math.round(prev.y+Math.sin(ang)*dist);
+        if(collide(nx2,ny2,cr,sh,lay.length-1)) continue;
+        lay.push({x:nx2,y:ny2,parent:lay.length-1,kind:'fight',cr,shape:sh}); done=true;
+      }
+      if(!done) break;                            // cramped — the isle just runs out of room
+    }
+    const hn=lay[lay.length-1]; hn.kind='hoard';  // wherever the trail ends, the hoard waits
+    if(hn.cr<9 && !lay.some(n=>n!==hn && Math.hypot(n.x-hn.x,n.y-hn.y) < n.cr*n.shape.mx+9*hn.shape.mx+2)) hn.cr=9;
   }
-  const nb = mainN>=5?2 : mainN>=3?1 : 0;
-  for(let b=0,tries=0; b<nb && tries<24; tries++){
-    const pi=1+(rng()*(mainN-2)|0), pp=lay[pi], ang=rng()*TAU;
-    const bx=pp.x+Math.round(Math.cos(ang)*space), by=pp.y+Math.round(Math.sin(ang)*space);
-    if(lay.some(n=>Math.hypot(n.x-bx,n.y-by)<space*0.92)) continue;
-    lay.push({x:bx,y:by,parent:pi,kind:'bonus'}); b++;
+  const mainN=lay.filter(n=>n.kind!=='bonus').length;
+  const nb=Math.max(0, T-mainN);
+  for(let b=0,tries=0; b<nb && tries<70; tries++){
+    const pi=1+((rng()*(lay.length-1))|0), pp=lay[pi];   // hang off any node but the landing — even other caches
+    const cr=mkCr(), sh=mkSh(), ang=rng()*TAU;
+    const dist=spacing(pp.cr,pp.shape,ang,cr,sh);
+    const bx=Math.round(pp.x+Math.cos(ang)*dist), by=Math.round(pp.y+Math.sin(ang)*dist);
+    if(collide(bx,by,cr,sh,pi)) continue;
+    lay.push({x:bx,y:by,parent:pi,kind:'bonus',cr,shape:sh}); b++;
   }
-  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
-  for(const n of lay){minx=Math.min(minx,n.x);miny=Math.min(miny,n.y);maxx=Math.max(maxx,n.x);maxy=Math.max(maxy,n.y);}
-  const mg=cr+4, W=(maxx-minx)+mg*2, H=(maxy-miny)+mg*2;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9, mg=0;
+  for(const n of lay){minx=Math.min(minx,n.x);miny=Math.min(miny,n.y);maxx=Math.max(maxx,n.x);maxy=Math.max(maxy,n.y); mg=Math.max(mg,n.cr*n.shape.mx);}
+  mg=Math.ceil(mg)+4;
+  const W=(maxx-minx)+mg*2, H=(maxy-miny)+mg*2;
   const ctr=lay.map(n=>[n.x-minx+mg, n.y-miny+mg]);
   const tiles=new Uint8Array(W*H);
   const set=(tx,ty,v)=>{ if(tx>=0&&ty>=0&&tx<W&&ty<H) tiles[ty*W+tx]=v; };
   const disk=(cx,cy,r,v)=>{ for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(dx*dx+dy*dy<=r*r) set(cx+dx,cy+dy,v); };
   const line=(x0,y0,x1,y1,w,v)=>{ const st=Math.max(Math.abs(x1-x0),Math.abs(y1-y0))*2+1; for(let s2=0;s2<=st;s2++){const t=s2/st; disk(Math.round(x0+(x1-x0)*t),Math.round(y0+(y1-y0)*t),w,v);} };
-  for(let i=0;i<lay.length;i++) disk(ctr[i][0],ctr[i][1],cr,W_GROUND);
+  for(let i=0;i<lay.length;i++){ const n=lay[i], R=Math.ceil(n.cr*n.shape.mx);   // carve each clearing's silhouette
+    for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){ const q=dx*dx+dy*dy; if(q>R*R) continue;
+      const rr=n.cr*shapeF(n.shape,Math.atan2(dy,dx)); if(q<=rr*rr) set(ctr[i][0]+dx,ctr[i][1]+dy,W_GROUND); } }
   for(let i=1;i<lay.length;i++){ const p=lay[i].parent; line(ctr[p][0],ctr[p][1],ctr[i][0],ctr[i][1],1,W_PATH); }
   const gates=[];
-  for(let i=1;i<lay.length;i++){ const a=ctr[i], p=lay[i].parent, b2=ctr[p], dx=b2[0]-a[0],dy=b2[1]-a[1],l=Math.hypot(dx,dy)||1;
-    const gx=Math.round(a[0]+dx/l*(cr+1)), gy=Math.round(a[1]+dy/l*(cr+1)), cells=[];
+  for(let i=1;i<lay.length;i++){ const a=ctr[i], p=lay[i].parent, b2=ctr[p], dx=b2[0]-a[0],dy=b2[1]-a[1];
+    const ga=Math.atan2(dy,dx), gd=lay[i].cr*shapeF(lay[i].shape,ga)+1;
+    const gx=Math.round(a[0]+Math.cos(ga)*gd), gy=Math.round(a[1]+Math.sin(ga)*gd), cells=[];
     for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){ const tx=gx+ox,ty=gy+oy; if(tx>=0&&ty>=0&&tx<W&&ty<H){ const v=tiles[ty*W+tx]; if(v===W_PATH||v===W_GROUND){ tiles[ty*W+tx]=W_GATE; cells.push([tx,ty]); } } }
     gates.push({from:p, cells, open:false}); }
   const clearings=[]; enemies=[]; inodes=[]; ichests=[]; iburied=null; ihaz=[];
+  // the island's monsters: boar (charger) · snake (spitter) · crab (shelled flanker-bait) · dingo (circling pouncer)
+  const EBASE={boar:[11,()=>ITUNE.boarHP*(bmods.boarHPMul||1)], snake:[9,()=>ITUNE.snakeHP], crab:[10,()=>ITUNE.crabHP], dingo:[9.5,()=>ITUNE.dingoHP]};
+  const mkEn=(type,p,i,elite)=>{ const b3=EBASE[type];
+    enemies.push({type, elite:!!elite, x:p.x, y:p.y, r:b3[0]+(elite?2.5:0), hp:Math.max(1,Math.round(b3[1]()*(elite?2.2:1))),
+      clear:i, st:'idle', tmr:0.4+rng()*1.4, vx:0,vy:0, flash:0, stun:0, aggro:false, cw:rng()<0.5?1:-1, fa:rng()*TAU, sd:rng()*TAU}); };
+  const pickEn=()=>{ const wb=(bmods.boarW===undefined?0.5:bmods.boarW)*2, ws=2-wb,   // boar/snake keep their old biome ratio
+      wc=bmods.crabW===undefined?0.55:bmods.crabW, wd=bmods.dingoW===undefined?0.55:bmods.dingoW;
+    let r3=rng()*(wb+ws+wc+wd);
+    if(r3<wb) return 'boar'; r3-=wb; if(r3<ws) return 'snake'; r3-=ws; if(r3<wc) return 'crab'; return 'dingo'; };
   for(let i=0;i<lay.length;i++){
-    const kind=lay[i].kind;
-    const cl={id:i, kind, x:(ctr[i][0]+0.5)*TS, y:(ctr[i][1]+0.5)*TS, r:cr*TS, secured:kind==='landing', enemyCount:0};
+    const kind=lay[i].kind, big=lay[i].cr>=10?1:0;   // roomier clearings pack a little more in
+    const cl={id:i, kind, x:(ctr[i][0]+0.5)*TS, y:(ctr[i][1]+0.5)*TS, r0:lay[i].cr*TS, r:lay[i].cr*lay[i].shape.mx*TS, shape:lay[i].shape, secured:kind==='landing', enemyCount:0};
     clearings.push(cl);
-    const nn = kind==='landing'?1+(rng()*2|0) : kind==='bonus'?3+(rng()*2|0) : 2+(rng()*2|0);
+    const nn = (kind==='landing'?1+(rng()*2|0) : kind==='bonus'?3+(rng()*2|0) : 2+(rng()*2|0))+big;
     for(let k=0;k<nn;k++){ const p=randIn(cl,rng,TS,tiles,W); if(!p) continue;
       const wR=0.45*(bmods.rockW||1), wH=0.33*(bmods.herbW||1), wU=0.22;
       const r=rng()*(wR+wH+wU), type = r<wR?'rock' : r<wR+wH?'herb' : 'ruin';
       inodes.push({x:p.x,y:p.y, type, cry:!!(bmods.cryRocks&&type==='rock'), hp:type==='rock'?3:type==='ruin'?4:1, r:type==='rock'?10:9, dead:false, flash:0}); }
     if(kind!=='landing'){
       const sM=bmods.spawnMul||1;
-      const ec = kind==='fight' ? Math.max(2,Math.round((2+(rng()*2|0))*ITUNE.spawnCount*sM))
-               : kind==='bonus' ? Math.max(1,Math.round(ITUNE.spawnCount))
-               : 1+(rng()*2|0);
+      const ec = kind==='fight' ? Math.max(2,Math.round((2+big+(rng()*2|0))*ITUNE.spawnCount*sM))
+               : kind==='bonus' ? Math.max(1,Math.round(ITUNE.spawnCount)+big)
+               : 1+(rng()*2|0)+big;
       for(let k=0;k<ec;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
-        if(rng()<(bmods.boarW===undefined?0.5:bmods.boarW)) enemies.push({type:'boar', x:p.x,y:p.y, r:11, hp:Math.round(ITUNE.boarHP*(bmods.boarHPMul||1)), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false});
-        else enemies.push({type:'snake', x:p.x,y:p.y, r:9, hp:ITUNE.snakeHP, clear:i, st:'idle', tmr:rng()*1.8, vx:0,vy:0, flash:0, stun:0, aggro:false});
-        cl.enemyCount++; }
+        mkEn(pickEn(),p,i,false); cl.enemyCount++; }
       if(kind==='bonus'){                            // an elite guards every cache
         const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x,y:cl.y-TS};
-        if(rng()<0.5) enemies.push({type:'boar', elite:true, x:p.x,y:p.y, r:14, hp:Math.round(ITUNE.boarHP*2.2), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false});
-        else enemies.push({type:'snake', elite:true, x:p.x,y:p.y, r:11.5, hp:Math.round(ITUNE.snakeHP*2.2), clear:i, st:'idle', tmr:rng(), vx:0,vy:0, flash:0, stun:0, aggro:false});
-        cl.enemyCount++;
+        mkEn(pickEn(),p,i,true); cl.enemyCount++;
         ichests.push({x:cl.x, y:cl.y, big:false, clear:i, opened:false});
       }
       if(kind==='hoard'){                            // the GREAT BOAR guards the island's hoard
-        enemies.push({type:'boar', guard:true, x:cl.x, y:cl.y-TS*1.5, r:17, hp:Math.max(10,Math.round(ITUNE.boarHP*3)), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false, chain:0});
+        enemies.push({type:'boar', guard:true, x:cl.x, y:cl.y-TS*1.5, r:17, hp:Math.max(10,Math.round(ITUNE.boarHP*3)), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false, chain:0, cw:1, fa:0, sd:rng()*TAU});
         cl.enemyCount++;
         ichests.push({x:cl.x, y:cl.y, big:true, clear:i, opened:false});
       }
@@ -2553,7 +2604,7 @@ function genIsland(core){
   for(const g of gates) if(clearings[g.from].secured){ g.open=true; for(const[tx,ty]of g.cells) tiles[ty*W+tx]=W_PATH; }
   if(bmods.ring && mainN>=3){                      // the lagoon at the atoll's heart
     let cx2=0,cy2=0; for(let i2=0;i2<mainN;i2++){ cx2+=ctr[i2][0]; cy2+=ctr[i2][1]; } cx2=Math.round(cx2/mainN); cy2=Math.round(cy2/mainN);
-    const lr=Math.min(6, Math.max(2, Math.round(Math.hypot(ctr[0][0]-cx2,ctr[0][1]-cy2))-cr-2));
+    const lr=Math.min(14, Math.max(2, Math.round(Math.hypot(ctr[0][0]-cx2,ctr[0][1]-cy2)-lay[0].cr*lay[0].shape.mx)-2));
     for(let dy3=-lr;dy3<=lr;dy3++)for(let dx3=-lr;dx3<=lr;dx3++){ if(dx3*dx3+dy3*dy3>lr*lr) continue;
       const tx=cx2+dx3, ty=cy2+dy3; if(tx<0||ty<0||tx>=W||ty>=H) continue;
       if(tiles[ty*W+tx]===W_WALL) tiles[ty*W+tx]=W_WATER; } }
@@ -2576,14 +2627,14 @@ function genIsland(core){
   ichartCv=document.createElement('canvas'); ichartCv.width=W; ichartCv.height=H;
   ichartCtx=ichartCv.getContext('2d');
   ISL={core, W,H,TS, tiles, clearings, gates, mainN, N:lay.length, biome, pal:ISL_PALS[biome.pal], landing:{x:clearings[0].x, y:clearings[0].y}};
-  player.x=ISL.landing.x; player.y=ISL.landing.y+cr*TS*0.35; player.fx=0; player.fy=-1;
+  player.x=ISL.landing.x; player.y=ISL.landing.y+clearings[0].r0*0.35; player.fx=0; player.fy=-1;
   player.hp=player.maxhp; player.invul=0.6; player.slashCD=0; player.shootCD=0; player.slashT=0; player.shootT=0;
   player.dashT=0; player.dashCD=0; closeInv();
 }
 function paintChart(tx,ty){ if(!ichartCtx||!ISL) return; const t=ISL.tiles[ty*ISL.W+tx];
   ichartCtx.fillStyle = t===W_WALL?'#54713f' : t===W_PATH?'#b59b6b' : t===W_GATE?'#6b4f26' : '#a8c98a';
   ichartCtx.fillRect(tx,ty,1,1); }
-function randIn(cl,rng,TS,tiles,W){ for(let t=0;t<22;t++){ const a=rng()*TAU, d=rng()*cl.r*0.78, x=cl.x+Math.cos(a)*d, y=cl.y+Math.sin(a)*d, tx=(x/TS)|0, ty=(y/TS)|0; if(tiles[ty*W+tx]===W_GROUND) return {x,y}; } return null; }
+function randIn(cl,rng,TS,tiles,W){ for(let t=0;t<30;t++){ const a=rng()*TAU, d=rng()*clRadAt(cl,a)*0.8, x=cl.x+Math.cos(a)*d, y=cl.y+Math.sin(a)*d, tx=(x/TS)|0, ty=(y/TS)|0; if(tiles[ty*W+tx]===W_GROUND) return {x,y}; } return null; }
 function islTile(x,y){ if(!ISL) return W_WALL; const tx=(x/ISL.TS)|0, ty=(y/ISL.TS)|0; if(tx<0||ty<0||tx>=ISL.W||ty>=ISL.H) return W_WALL; return ISL.tiles[ty*ISL.W+tx]; }
 function islWalk(x,y){ const t=islTile(x,y); return t===W_GROUND||t===W_PATH||t===W_ICE; }
 function islFree(x,y,r){ return islWalk(x-r,y)&&islWalk(x+r,y)&&islWalk(x,y-r)&&islWalk(x,y+r); }
@@ -2742,14 +2793,20 @@ function doSlash(){ if(player.slashCD>0) return; player.slashCD=ITUNE.slashCD; p
 }
 function doShoot(){ if(player.shootCD>0) return; player.shootCD=0.28; player.shootT=0.2;
   iproj.push({k:'arrow', x:player.x+player.fx*10, y:player.y+player.fy*10, vx:player.fx*ITUNE.arrowSpeed, vy:player.fy*ITUNE.arrowSpeed, life:1.2}); sfx('shoot'); }
-function hurtEnemy(en,dmg,nx,ny){ en.hp-=dmg; en.flash=0.14; en.stun=0.2; en.aggro=true;   // hits interrupt + shove — landing blows keeps you safe
+function hurtEnemy(en,dmg,nx,ny){
+  if(en.type==='crab' && en.st!=='recover' && (nx*Math.cos(en.fa)+ny*Math.sin(en.fa))<-0.35){   // shell takes frontal hits — flank it or bait the lunge
+    en.aggro=true; sfx('tink',0.62); moveSlide(en,nx*6,ny*6);
+    ifloat.push({x:en.x, y:en.y-en.r-4, txt:'clink', t:0, life:0.45, c:'#cfd8e2'});
+    ifx.push({k:'p', x:en.x-nx*en.r*0.7, y:en.y-ny*en.r*0.7, vx:-nx*70, vy:-ny*70, t:0, life:0.25, c:'#ffe9a6'});
+    return; }
+  en.hp-=dmg; en.flash=0.14; en.stun=0.2; en.aggro=true;   // hits interrupt + shove — landing blows keeps you safe
   moveSlide(en, nx*20, ny*20);
   burst(en.x-nx*en.r*0.6, en.y-ny*en.r*0.6, '#ffffff');
   ifloat.push({x:en.x, y:en.y-en.r-4, txt:'-'+dmg, t:0, life:0.5, c:'#ffffff'});
   if(en.hp<=0) killEnemy(en); }
 function killEnemy(en){ const i=enemies.indexOf(en); if(i<0) return; enemies.splice(i,1);
   tripStats.kills++;
-  burst(en.x,en.y, en.type==='boar'?'#9a6b43':'#6fae5a');
+  burst(en.x,en.y, en.type==='boar'?'#9a6b43':en.type==='snake'?'#6fae5a':en.type==='crab'?'#d06a48':'#c8a06a');
   if(en.guard||en.elite) burst(en.x,en.y,'#ffd23f');
   const bm=k2=>(ISL&&ISL.biome.mods[k2])||1, bAdd=k2=>(ISL&&ISL.biome.mods[k2])||0;
   spawnLoot('bits', en.guard?4:en.elite?2:1, en.x,en.y);
@@ -2813,11 +2870,14 @@ function updateIsland(dt){
     }
   }
   // which clearing is the player inside? enemies only engage inside their own arena (no corridor sniping)
-  let curCl=-1; for(const cl of ISL.clearings){ if((player.x-cl.x)**2+(player.y-cl.y)**2 < cl.r*cl.r){ curCl=cl.id; break; } }
+  let curCl=-1; for(const cl of ISL.clearings){ if(inClear(cl,player.x,player.y)){ curCl=cl.id; break; } }
   for(const en of enemies){ en.flash=Math.max(0,en.flash-dt); en.stun=Math.max(0,en.stun-dt);
     const dx=player.x-en.x, dy=player.y-en.y, d=Math.hypot(dx,dy)||1;
     const active = en.aggro || en.clear===curCl;
-    if(en.stun<=0){ if(en.type==='boar') updateBoar(en,dx,dy,d,dt,active); else updateSnake(en,dx,dy,d,dt,active); }
+    if(en.stun<=0){ if(en.type==='boar') updateBoar(en,dx,dy,d,dt,active);
+      else if(en.type==='snake') updateSnake(en,dx,dy,d,dt,active);
+      else if(en.type==='crab') updateCrab(en,dx,dy,d,dt,active);
+      else updateDingo(en,dx,dy,d,dt,active); }
     if(d<en.r+player.r) hurtPlayer(-dx/d,-dy/d);
     if(!ISL) return;                         // knocked out mid-loop — island state is gone, stop here
   }
@@ -2922,6 +2982,231 @@ function updateSnake(en,dx,dy,d,dt,active){ en.tmr-=dt;
       if(en.elite){ const ba=Math.atan2(ny,nx);                         // elite vipers spit a fan of three
         for(const off of [-0.32,0,0.32]) iproj.push({k:'spit', x:en.x+Math.cos(ba+off)*10, y:en.y+Math.sin(ba+off)*10, vx:Math.cos(ba+off)*ss, vy:Math.sin(ba+off)*ss, life:2.6}); }
       else iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*ss, vy:ny*ss, life:2.6}); } }
+}
+/* the reef crab: shell blocks frontal hits — circle round it, or bait the pincer lunge and punish the recover */
+function updateCrab(en,dx,dy,d,dt,active){ en.tmr-=dt;
+  if(en.st!=='lunge'){ const ta=Math.atan2(dy,dx); let dd=ta-en.fa;       // slow to turn — flanking works
+    while(dd>Math.PI)dd-=TAU; while(dd<-Math.PI)dd+=TAU;
+    const tr=(en.st==='windup'?2.6:1.6)*dt; en.fa+=clamp(dd,-tr,tr); }
+  if(en.st==='lunge'){ moveSlide(en,en.vx*dt,en.vy*dt);
+    if(en.tmr<=0 || !islWalk(en.x+en.vx*0.03,en.y+en.vy*0.03)){ en.st='recover'; en.tmr=en.elite?0.75:1.05; en.vx=en.vy=0; } }
+  else if(en.st==='windup'){ if(en.tmr<=0){ en.st='lunge'; en.tmr=0.34; sfx('snap',1.5);
+    const sp=205*(en.elite?1.15:1); en.vx=Math.cos(en.fa)*sp; en.vy=Math.sin(en.fa)*sp; } }
+  else if(en.st==='recover'){ if(en.tmr<=0){ en.st='idle'; en.tmr=0.5; } }
+  else if(active){
+    if(d>46){ const sw=Math.sin(itime*1.6+en.sd), nx=Math.cos(en.fa), ny=Math.sin(en.fa);   // scuttling sidestep approach
+      moveSlide(en,(nx*30-ny*sw*36)*dt,(ny*30+nx*sw*36)*dt); }
+    else if(en.tmr<=0){ en.st='windup'; en.tmr=0.5; }
+  }
+}
+/* the dingo: circles just out of reach, then a telegraphed pounce — sidestep it and bite back */
+function updateDingo(en,dx,dy,d,dt,active){ en.tmr-=dt; en.mv=0;
+  const nx=dx/d, ny=dy/d;
+  if(en.st==='pounce'){ moveSlide(en,en.vx*dt,en.vy*dt); en.fa=Math.atan2(en.vy,en.vx); en.mv=1;
+    if(en.tmr<=0){ en.st='recover'; en.tmr=0.6; en.vx=en.vy=0; } }
+  else if(en.st==='crouch'){ en.fa=Math.atan2(dy,dx);
+    if(en.tmr<=0){ en.st='pounce'; en.tmr=0.4; sfx('dash',0.55);
+      const sp=265*(en.elite?1.18:1); en.vx=nx*sp; en.vy=ny*sp; } }
+  else if(en.st==='recover'){ if(en.tmr<=0){ en.st='idle'; en.tmr=0.8+Math.random(); } }
+  else if(active){
+    const rad = d>100?1 : d<74?-1 : 0;                                    // hold the ring, drift in and out
+    const mx2=nx*rad*82 - ny*en.cw*98, my2=ny*rad*82 + nx*en.cw*98;
+    moveSlide(en,mx2*dt,my2*dt); en.fa=Math.atan2(my2,mx2); en.mv=1;
+    if(Math.random()<0.005) en.cw*=-1;                                    // sometimes doubles back
+    if(en.tmr<=0 && d<150){ en.st='crouch'; en.tmr=0.45; }
+  }
+}
+
+/* ---- island enemy sprites — drawn in body space: +x is the way it faces, +y its right flank ---- */
+function bodyKit(sx,sy,fcx,fcy,pxn,pyn,r){
+  const PT=(dx,dy)=>[sx+(fcx*dx+pxn*dy)*r, sy+(fcy*dx+pyn*dy)*r];
+  const px=(dx,dy,w,h,col)=>{ const p=PT(dx,dy); pctx.fillStyle=col; pctx.fillRect(p[0]-w/2,p[1]-h/2,Math.max(1.4,w),Math.max(1.4,h)); };
+  const tri=(a,b,c,col)=>{ pctx.fillStyle=col; pctx.beginPath(); pctx.moveTo(a[0],a[1]); pctx.lineTo(b[0],b[1]); pctx.lineTo(c[0],c[1]); pctx.closePath(); pctx.fill(); };
+  const seg=(a,b,w,col)=>{ pctx.strokeStyle=col; pctx.lineWidth=w; pctx.beginPath(); pctx.moveTo(a[0],a[1]); pctx.lineTo(b[0],b[1]); pctx.stroke(); };
+  return {PT,px,tri,seg};
+}
+function drawBoar(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const K=bodyKit(sx,sy,fcx,fcy,pxn,pyn,r), bm=ISL.biome.mods;
+  const charging=en.st==='charge', windup=en.st==='windup';
+  if(!fl){ const lp=charging? Math.sin(itime*24)*0.3 : 0;                      // trotting legs + hooves
+    [[-0.45,0.52,1],[-0.45,-0.52,-1],[0.38,0.52,-1],[0.38,-0.52,1]].forEach(L=>{
+      K.px(L[0]+lp*L[2], L[1], Math.max(2,r*0.22), Math.max(2.4,r*0.4), '#4a2f1a');
+      K.px(L[0]+lp*L[2]+0.12, L[1]*1.1, Math.max(1.6,r*0.2), Math.max(1.4,r*0.16), '#241307'); });
+    K.px(-1.04,0.04,Math.max(1.6,r*0.16),Math.max(1.6,r*0.16),'#4a2f1a');      // curl of tail + tuft
+    K.px(-1.16,Math.sin(itime*3+en.sd)*0.12,Math.max(2,r*0.22),Math.max(2,r*0.22),'#2e1c0c');
+  }
+  pctx.fillStyle='#2a1708'; pctx.beginPath(); pctx.ellipse(sx,sy,r*1.12,r*0.92,fa,0,TAU); pctx.fill();   // outline
+  const idleCol = en.guard?'#5e3a24' : en.elite?'#8a4030' : (bm.boarTint||'#7a4f30');
+  pctx.fillStyle = fl?'#fff':(windup?'#c4683c':charging?'#a85f36':idleCol);
+  pctx.beginPath(); pctx.ellipse(sx,sy,r,r*0.8,fa,0,TAU); pctx.fill();
+  if(fl) return;
+  pctx.fillStyle='rgba(42,23,8,.38)';                                          // heavy haunch shading
+  pctx.beginPath(); pctx.ellipse(sx-fcx*r*0.45,sy-fcy*r*0.45,r*0.52,r*0.6,fa,0,TAU); pctx.fill();
+  pctx.fillStyle='rgba(255,236,200,.15)';                                      // pale ridge along the spine
+  pctx.beginPath(); pctx.ellipse(sx+fcx*r*0.1,sy+fcy*r*0.1,r*0.7,r*0.28,fa,0,TAU); pctx.fill();
+  for(let k=0;k<6;k++){ const wob=Math.sin(en.sd*3+k*2.1);                     // bristle mohawk
+    K.px(-0.72+k*0.24, wob*0.06, Math.max(1.6,r*0.15), Math.max(2,r*0.28+wob*r*0.06), en.guard?'#1c0f04':'#3a2110'); }
+  for(let k=0;k<5;k++){ const a2=en.sd+k*2.4, d2=0.25+0.45*((k*53%10)/10);     // hide speckles
+    K.px(Math.cos(a2)*d2-0.2, Math.sin(a2)*d2*0.55, Math.max(1.4,r*0.13), Math.max(1.4,r*0.13), 'rgba(42,23,8,.5)'); }
+  const hx=sx+fcx*r*0.82, hy=sy+fcy*r*0.82;                                    // wedge head
+  pctx.fillStyle='#2a1708'; pctx.beginPath(); pctx.arc(hx,hy,r*0.62,0,TAU); pctx.fill();
+  pctx.fillStyle=(windup||charging)?'#8a5232':'#6b432a'; pctx.beginPath(); pctx.arc(hx,hy,r*0.55,0,TAU); pctx.fill();
+  K.tri(K.PT(0.62,0.5),K.PT(0.95,0.72),K.PT(0.82,0.3),'#4a2f1a');              // cheek tufts
+  K.tri(K.PT(0.62,-0.5),K.PT(0.95,-0.72),K.PT(0.82,-0.3),'#4a2f1a');
+  K.tri(K.PT(0.5,0.48),K.PT(0.42,0.8),K.PT(0.72,0.62),'#33200e');              // ears, pink inside
+  K.tri(K.PT(0.5,-0.48),K.PT(0.42,-0.8),K.PT(0.72,-0.62),'#33200e');
+  K.px(0.54,0.6,Math.max(1.4,r*0.12),Math.max(1.4,r*0.12),'#b06a5a'); K.px(0.54,-0.6,Math.max(1.4,r*0.12),Math.max(1.4,r*0.12),'#b06a5a');
+  const nx_=hx+fcx*r*0.52, ny_=hy+fcy*r*0.52;                                  // snout, nostrils, warts
+  pctx.fillStyle='#3a2412'; pctx.beginPath(); pctx.ellipse(nx_,ny_,r*0.33,r*0.27,fa,0,TAU); pctx.fill();
+  pctx.fillStyle='#caa27e'; pctx.beginPath(); pctx.ellipse(nx_,ny_,r*0.27,r*0.21,fa,0,TAU); pctx.fill();
+  K.px(1.43,0.09,Math.max(1.4,r*0.12),Math.max(1.4,r*0.12),'#5a3a22'); K.px(1.43,-0.09,Math.max(1.4,r*0.12),Math.max(1.4,r*0.12),'#5a3a22');
+  K.px(1.05,0.3,Math.max(1.4,r*0.14),Math.max(1.4,r*0.14),'#54331c'); K.px(1.05,-0.3,Math.max(1.4,r*0.14),Math.max(1.4,r*0.14),'#54331c');
+  const tuskC = en.guard?'#ffd23f':'#f2ead8';                                  // curved tusks (gold on the Great Boar)
+  K.seg(K.PT(1.02,0.28),K.PT(1.28,0.5),Math.max(1.6,r*0.16),'#cfc4a8'); K.seg(K.PT(1.28,0.5),K.PT(1.5,0.4),Math.max(1.3,r*0.13),tuskC);
+  K.seg(K.PT(1.02,-0.28),K.PT(1.28,-0.5),Math.max(1.6,r*0.16),'#cfc4a8'); K.seg(K.PT(1.28,-0.5),K.PT(1.5,-0.4),Math.max(1.3,r*0.13),tuskC);
+  const eye=(windup||charging)?'#ff5d4a':'#2a1408';                            // eyes go red on the attack
+  K.px(0.72,0.3,Math.max(1.8,r*0.18),Math.max(1.8,r*0.18),eye); K.px(0.72,-0.3,Math.max(1.8,r*0.18),Math.max(1.8,r*0.18),eye);
+  K.px(0.68,0.26,1.4,1.4,'#ffe9c8'); K.px(0.68,-0.34,1.4,1.4,'#ffe9c8');
+  if(en.elite) K.seg(K.PT(-0.1,-0.45),K.PT(0.32,-0.16),Math.max(1.2,r*0.1),'#d8a088');   // an old scar
+  if(windup){ for(const sd2 of [0,0.5]){ const pf=(itime*6+sd2)%1;             // snorting steam
+    pctx.fillStyle='rgba(255,255,255,'+(0.45*(1-pf)).toFixed(3)+')';
+    pctx.beginPath(); pctx.arc(nx_+pxn*r*0.3*(sd2?1:-1), ny_+pyn*r*0.3*(sd2?1:-1), (1.5+pf*3.5)*s,0,TAU); pctx.fill(); } }
+  if(charging){ pctx.strokeStyle='rgba(255,255,255,.25)'; pctx.lineWidth=Math.max(1,1.4*s);   // speed lines
+    pctx.beginPath();
+    pctx.moveTo(sx-fcx*r*1.3+pxn*r*0.5, sy-fcy*r*1.3+pyn*r*0.5); pctx.lineTo(sx-fcx*r*2.1+pxn*r*0.5, sy-fcy*r*2.1+pyn*r*0.5);
+    pctx.moveTo(sx-fcx*r*1.3-pxn*r*0.5, sy-fcy*r*1.3-pyn*r*0.5); pctx.lineTo(sx-fcx*r*2.1-pxn*r*0.5, sy-fcy*r*2.1-pyn*r*0.5); pctx.stroke(); }
+}
+function drawSnake(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const bm=ISL.biome.mods, sT=(!en.elite&&bm.snakeTint)||null;
+  const c0=fl?'#fff':(en.elite?'#4a3570':(sT?sT[0]:'#2e5d4e'));
+  const c1=fl?'#fff':(en.elite?'#5a4385':(sT?sT[2]:'#387058'));
+  const headC=fl?'#fff':(en.elite?'#634a92':(sT?sT[1]:'#356a59'));
+  const mark=fl?'#fff':(en.elite?'#c9a6ff':(bm.mark||'#a8e0bc'));
+  const dpl=Math.hypot(player.x-en.x,player.y-en.y), agitated=en.aggro||dpl<240;
+  const segs=en.elite?6:5;
+  for(let i=segs;i>=1;i--){ const off=i*r*0.5, wig=Math.sin(itime*7 - i*1.15 + en.sd*3)*r*0.42;   // tapered, diamond-marked coils
+    const cx_=sx-fcx*off+pxn*wig, cy_=sy-fcy*off+pyn*wig, rr=r*(0.8-i*0.085);
+    if(i===segs){ const tx2=cx_-fcx*rr*1.7, ty2=cy_-fcy*rr*1.7;               // tail: point — or the elite's rattle
+      if(en.elite){ const sh2=(agitated&&en.tmr<0.6)? Math.sin(itime*30)*1.5*s:0;
+        pctx.fillStyle='#d8cfa8'; pctx.beginPath(); pctx.arc(tx2+pxn*sh2,ty2+pyn*sh2,Math.max(1.6,rr*0.55),0,TAU); pctx.fill();
+        pctx.fillStyle='#b8ab7e'; pctx.beginPath(); pctx.arc(tx2-fcx*rr*0.9+pxn*sh2,ty2-fcy*rr*0.9+pyn*sh2,Math.max(1.2,rr*0.4),0,TAU); pctx.fill(); }
+      else { pctx.strokeStyle=c0; pctx.lineWidth=Math.max(1.2,rr*0.6); pctx.beginPath(); pctx.moveTo(cx_,cy_); pctx.lineTo(tx2,ty2); pctx.stroke(); } }
+    pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.arc(cx_,cy_,rr*1.28,0,TAU); pctx.fill();
+    pctx.fillStyle=i%2?c0:c1; pctx.beginPath(); pctx.arc(cx_,cy_,rr,0,TAU); pctx.fill();
+    if(!fl && rr>r*0.32){ pctx.fillStyle=mark; pctx.beginPath();
+      pctx.moveTo(cx_,cy_-rr*0.62); pctx.lineTo(cx_+rr*0.5,cy_); pctx.lineTo(cx_,cy_+rr*0.62); pctx.lineTo(cx_-rr*0.5,cy_); pctx.closePath(); pctx.fill();
+      pctx.fillStyle=i%2?c1:c0; pctx.beginPath(); pctx.arc(cx_,cy_,rr*0.24,0,TAU); pctx.fill(); }
+  }
+  const hooding=!fl && agitated && en.tmr<0.5;                                 // the hood flares before a spit
+  if(hooding){ pctx.fillStyle=c0;
+    pctx.beginPath(); pctx.ellipse(sx+pxn*r*0.52,sy+pyn*r*0.52, r*0.54,r*0.3, fa+1.1,0,TAU); pctx.fill();
+    pctx.beginPath(); pctx.ellipse(sx-pxn*r*0.52,sy-pyn*r*0.52, r*0.54,r*0.3, fa-1.1,0,TAU); pctx.fill(); }
+  const hsc=hooding?1.12:1;                                                    // spade head, gland cheeks, brow
+  pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.95*hsc,r*0.72*hsc,fa,0,TAU); pctx.fill();
+  pctx.fillStyle=headC; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.8*hsc,r*0.6*hsc,fa,0,TAU); pctx.fill();
+  if(fl) return;
+  pctx.fillStyle=c1;
+  pctx.beginPath(); pctx.arc(sx-fcx*r*0.15+pxn*r*0.42, sy-fcy*r*0.15+pyn*r*0.42, r*0.26,0,TAU); pctx.fill();
+  pctx.beginPath(); pctx.arc(sx-fcx*r*0.15-pxn*r*0.42, sy-fcy*r*0.15-pyn*r*0.42, r*0.26,0,TAU); pctx.fill();
+  pctx.strokeStyle='rgba(16,36,30,.55)'; pctx.lineWidth=Math.max(1,r*0.1);
+  pctx.beginPath(); pctx.arc(sx,sy,r*0.55, fa-0.85, fa+0.85); pctx.stroke();
+  for(const side of [1,-1]){ const X=sx+fcx*r*0.3+pxn*r*0.32*side, Y=sy+fcy*r*0.3+pyn*r*0.32*side;   // slit eyes
+    pctx.fillStyle='#ffd23f'; pctx.fillRect(X-1.5,Y-1.5,3,3);
+    pctx.fillStyle='#10241e'; pctx.fillRect(X-0.5,Y-1.5,1,3); }
+  if(agitated && en.tmr<0.16){ const mx_=sx+fcx*r*0.78, my_=sy+fcy*r*0.78;     // jaws open, fangs out
+    pctx.fillStyle='#5e2436'; pctx.beginPath(); pctx.ellipse(mx_,my_,r*0.3,r*0.22,fa,0,TAU); pctx.fill();
+    pctx.fillStyle='#fff';
+    pctx.fillRect(mx_+pxn*r*0.16-0.8,my_+pyn*r*0.16-0.8,1.6,2.4);
+    pctx.fillRect(mx_-pxn*r*0.16-0.8,my_-pyn*r*0.16-0.8,1.6,2.4); }
+  else if(((itime*1.8+en.y*0.05)%1)<0.35){                                     // forked tongue flick
+    const t0x=sx+fcx*r*0.82, t0y=sy+fcy*r*0.82, t1x=t0x+fcx*r*0.4, t1y=t0y+fcy*r*0.4;
+    pctx.strokeStyle='#ff7d8c'; pctx.lineWidth=Math.max(1,r*0.08);
+    pctx.beginPath(); pctx.moveTo(t0x,t0y); pctx.lineTo(t1x,t1y);
+    pctx.lineTo(t1x+fcx*r*0.16+pxn*r*0.12, t1y+fcy*r*0.16+pyn*r*0.12);
+    pctx.moveTo(t1x,t1y); pctx.lineTo(t1x+fcx*r*0.16-pxn*r*0.12, t1y+fcy*r*0.16-pyn*r*0.12); pctx.stroke(); }
+}
+function drawCrab(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const bm=ISL.biome.mods, tint=bm.crabTint||['#c2563a','#e07a50','#7e3322'];
+  const windup=en.st==='windup', recov=en.st==='recover', lung=en.st==='lunge';
+  const wob=recov? Math.sin(itime*9)*0.1 : 0;
+  if(!fl){ pctx.strokeStyle='#5e2616'; pctx.lineWidth=Math.max(1.4,r*0.14); pctx.beginPath();   // six scuttling legs
+    for(let i2=0;i2<3;i2++) for(const side of [1,-1]){
+      const ph=Math.sin(itime*(lung?16:9)+en.sd+i2*1.9+(side>0?0:2.4))*0.18;
+      const bx2=-0.4+i2*0.36;
+      const bX=sx+(fcx*bx2+pxn*side*0.9)*r, bY=sy+(fcy*bx2+pyn*side*0.9)*r;
+      pctx.moveTo(bX,bY); pctx.lineTo(bX+(pxn*side*(0.5+ph)-fcx*0.2)*r, bY+(pyn*side*(0.5+ph)-fcy*0.2)*r); }
+    pctx.stroke(); }
+  pctx.fillStyle='#3a160c'; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.95,r*1.18,fa+wob,0,TAU); pctx.fill();   // wide shell
+  pctx.fillStyle=fl?'#fff':(recov?'#e8a06a':(windup?tint[1]:tint[0]));
+  pctx.beginPath(); pctx.ellipse(sx,sy,r*0.82,r*1.05,fa+wob,0,TAU); pctx.fill();
+  if(fl) return;
+  pctx.strokeStyle=en.elite?'#ffd23f':tint[1]; pctx.lineWidth=Math.max(1.2,r*0.12);   // the armored brow — its face is a wall
+  pctx.beginPath(); pctx.ellipse(sx,sy,r*0.7,r*0.92,fa+wob,-1.1,1.1); pctx.stroke();
+  pctx.fillStyle='rgba(58,22,12,.45)';
+  for(let k=0;k<4;k++){ const a2=en.sd+k*1.7;                                  // mottled shell spots
+    const X=sx+(fcx*Math.cos(a2)*0.4+pxn*Math.sin(a2)*0.62)*r, Y=sy+(fcy*Math.cos(a2)*0.4+pyn*Math.sin(a2)*0.62)*r;
+    pctx.fillRect(X-1.2,Y-1.2,Math.max(1.6,r*0.16),Math.max(1.6,r*0.16)); }
+  if(recov){ pctx.fillStyle='#f2c890'; pctx.beginPath(); pctx.ellipse(sx+fcx*r*0.3,sy+fcy*r*0.3,r*0.34,r*0.5,fa,0,TAU); pctx.fill(); }   // soft belly shows — strike now
+  const ca=windup?0.95:(recov?1.3:0.55), cd=r*(windup?1.15:1.0), cr2=r*(windup?0.5:0.42)*(en.elite?1.15:1);
+  for(const side of [1,-1]){ const a2=fa+ca*side;                              // the pincers
+    const X=sx+Math.cos(a2)*cd, Y=sy+Math.sin(a2)*cd;
+    pctx.fillStyle='#3a160c'; pctx.beginPath(); pctx.arc(X,Y,cr2*1.2,0,TAU); pctx.fill();
+    pctx.fillStyle=windup?tint[1]:tint[0]; pctx.beginPath(); pctx.arc(X,Y,cr2,0,TAU); pctx.fill();
+    pctx.fillStyle='#3a160c'; pctx.beginPath();                                // notch of the claw
+    pctx.moveTo(X+Math.cos(fa)*cr2*1.1, Y+Math.sin(fa)*cr2*1.1);
+    pctx.lineTo(X+Math.cos(fa+0.5*side)*cr2*0.4, Y+Math.sin(fa+0.5*side)*cr2*0.4);
+    pctx.lineTo(X+Math.cos(fa)*cr2*0.2, Y+Math.sin(fa)*cr2*0.2); pctx.closePath(); pctx.fill();
+    if(windup){ pctx.fillStyle='#fff'; pctx.fillRect(X-1,Y-1,2,2); } }
+  for(const side of [1,-1]){ const bX=sx+(fcx*0.55+pxn*side*0.3)*r, bY=sy+(fcy*0.55+pyn*side*0.3)*r;   // eye stalks
+    const tX=bX+fcx*r*0.3, tY=bY+fcy*r*0.3;
+    pctx.strokeStyle='#5e2616'; pctx.lineWidth=Math.max(1,r*0.1);
+    pctx.beginPath(); pctx.moveTo(bX,bY); pctx.lineTo(tX,tY); pctx.stroke();
+    pctx.fillStyle='#16080a'; pctx.fillRect(tX-1.3,tY-1.3,2.6,2.6);
+    pctx.fillStyle='#ffe9c8'; pctx.fillRect(tX-1.3,tY-1.3,1,1); }
+}
+function drawDingo(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const bm=ISL.biome.mods, tint=bm.dingoTint||(en.elite?['#8a5c30','#5e3c1c','#d8b88a']:['#c08a52','#8a5c30','#e8d4ae']);
+  const crouch=en.st==='crouch', pounce=en.st==='pounce', mov=pounce||!!en.mv;
+  const str=pounce?1.28:(crouch?0.86:1), wid=pounce?0.46:(crouch?0.68:0.58);
+  if(!fl && !crouch){ const ph=itime*(pounce?20:13)+en.sd; pctx.fillStyle=tint[1];   // galloping legs
+    [[0.6,0.3,0],[0.6,-0.3,Math.PI],[-0.6,0.3,Math.PI],[-0.6,-0.3,0]].forEach(L=>{
+      const ext=mov? Math.sin(ph+L[2])*0.22 : 0;
+      const X=sx+(fcx*(L[0]+ext)+pxn*L[1])*r, Y=sy+(fcy*(L[0]+ext)+pyn*L[1])*r;
+      pctx.fillRect(X-Math.max(1,r*0.1), Y-Math.max(1.2,r*0.17), Math.max(2,r*0.2), Math.max(2.4,r*0.34)); }); }
+  if(!fl){ const wag=crouch?0: Math.sin(itime*6+en.sd)*0.3;                    // white-tipped tail
+    const t0X=sx-fcx*r*1.0*str, t0Y=sy-fcy*r*1.0*str;
+    const t1X=t0X-(fcx*0.55-pxn*wag)*r, t1Y=t0Y-(fcy*0.55-pyn*wag)*r;
+    pctx.strokeStyle=tint[1]; pctx.lineWidth=Math.max(1.6,r*0.2);
+    pctx.beginPath(); pctx.moveTo(t0X,t0Y); pctx.lineTo(t1X,t1Y); pctx.stroke();
+    pctx.fillStyle=tint[2]; pctx.beginPath(); pctx.arc(t1X,t1Y,Math.max(1.5,r*0.16),0,TAU); pctx.fill(); }
+  pctx.fillStyle='#2a1c0c'; pctx.beginPath(); pctx.ellipse(sx,sy,r*1.3*str,r*(wid+0.1),fa,0,TAU); pctx.fill();   // lean body
+  pctx.fillStyle=fl?'#fff':tint[0]; pctx.beginPath(); pctx.ellipse(sx,sy,r*1.18*str,r*wid,fa,0,TAU); pctx.fill();
+  if(fl) return;
+  pctx.fillStyle='rgba(42,28,12,.5)';                                          // dorsal stripe
+  pctx.beginPath(); pctx.ellipse(sx,sy,r*0.9*str,r*0.16,fa,0,TAU); pctx.fill();
+  pctx.fillStyle='rgba(42,28,12,.28)';                                         // shoulder + haunch muscle
+  pctx.beginPath(); pctx.arc(sx-fcx*r*0.6*str,sy-fcy*r*0.6*str,r*0.32,0,TAU); pctx.fill();
+  pctx.beginPath(); pctx.arc(sx+fcx*r*0.45*str,sy+fcy*r*0.45*str,r*0.28,0,TAU); pctx.fill();
+  const hX=sx+fcx*r*1.08*str, hY=sy+fcy*r*1.08*str;                            // head, muzzle, nose
+  pctx.fillStyle='#2a1c0c'; pctx.beginPath(); pctx.arc(hX,hY,r*0.46,0,TAU); pctx.fill();
+  pctx.fillStyle=tint[0]; pctx.beginPath(); pctx.arc(hX,hY,r*0.4,0,TAU); pctx.fill();
+  pctx.fillStyle=tint[2]; pctx.beginPath(); pctx.ellipse(hX+fcx*r*0.3,hY+fcy*r*0.3,r*0.24,r*0.16,fa,0,TAU); pctx.fill();
+  pctx.fillStyle='#16080a'; pctx.fillRect(hX+fcx*r*0.5-1.2,hY+fcy*r*0.5-1.2,2.4,2.4);
+  for(const side of [1,-1]){ const eX=hX+(pxn*side*0.34-fcx*0.05)*r, eY=hY+(pyn*side*0.34-fcy*0.05)*r;   // pricked ears
+    pctx.fillStyle='#2a1c0c'; pctx.beginPath();
+    pctx.moveTo(eX-pxn*side*r*0.06,eY-pyn*side*r*0.06);
+    pctx.lineTo(eX+(pxn*side*0.24-fcx*0.16)*r, eY+(pyn*side*0.24-fcy*0.16)*r);
+    pctx.lineTo(eX+(pxn*side*0.1+fcx*0.2)*r, eY+(pyn*side*0.1+fcy*0.2)*r);
+    pctx.closePath(); pctx.fill();
+    pctx.fillStyle='#b06a5a'; pctx.fillRect(eX-0.8,eY-0.8,1.6,1.6); }
+  const eyeC=(crouch||pounce)?'#ff5d4a':'#ffb44a';                             // eyes flare on the hunt
+  pctx.fillStyle=eyeC;
+  pctx.fillRect(hX+(fcx*0.16+pxn*0.2)*r-1,hY+(fcy*0.16+pyn*0.2)*r-1,2,2);
+  pctx.fillRect(hX+(fcx*0.16-pxn*0.2)*r-1,hY+(fcy*0.16-pyn*0.2)*r-1,2,2);
+  if(pounce){ pctx.strokeStyle='rgba(255,255,255,.3)'; pctx.lineWidth=Math.max(1,1.3*s);   // leap streaks
+    pctx.beginPath();
+    pctx.moveTo(sx-fcx*r*1.5+pxn*r*0.4,sy-fcy*r*1.5+pyn*r*0.4); pctx.lineTo(sx-fcx*r*2.3+pxn*r*0.4,sy-fcy*r*2.3+pyn*r*0.4);
+    pctx.moveTo(sx-fcx*r*1.5-pxn*r*0.4,sy-fcy*r*1.5-pyn*r*0.4); pctx.lineTo(sx-fcx*r*2.3-pxn*r*0.4,sy-fcy*r*2.3-pyn*r*0.4); pctx.stroke(); }
 }
 
 /* ---- island render ---- */
@@ -3131,53 +3416,22 @@ function drawIslandWorld(){
       pctx.fillStyle='#27430f'; pctx.beginPath(); pctx.arc(sx,sy,Math.max(2.6,4.2*s)*pu,0,TAU); pctx.fill();
       pctx.fillStyle='#d8ff5a'; pctx.beginPath(); pctx.arc(sx,sy,Math.max(1.6,2.6*s)*pu,0,TAU); pctx.fill(); } }
   for(const en of enemies){ const [sx0,sy]=iw2p(en.x,en.y), r=en.r*s;
-    const fa = en.st==='charge' ? Math.atan2(en.vy,en.vx) : Math.atan2(player.y-en.y, player.x-en.x);
+    if(sx0<-60||sx0>IW+60||sy<-60||sy>IH+60) continue;             // big isles now — skip what's off-screen
+    let fa;
+    if(en.type==='boar') fa = en.st==='charge' ? Math.atan2(en.vy,en.vx) : Math.atan2(player.y-en.y, player.x-en.x);
+    else if(en.type==='snake') fa = Math.atan2(player.y-en.y, player.x-en.x);
+    else fa = en.fa||0;                                            // crabs & dingoes steer their own gaze
     const fcx=Math.cos(fa), fcy=Math.sin(fa), pxn=-fcy, pyn=fcx;
-    const sx = sx0 + (en.st==='windup'? Math.sin(itime*44)*1.6*s : 0);   // boar trembles before charging
+    const sx = sx0 + ((en.st==='windup'||en.st==='crouch')? Math.sin(itime*44)*1.6*s : 0);   // trembling = an attack is coming
     pctx.fillStyle='rgba(0,20,10,.28)'; pctx.beginPath(); pctx.ellipse(sx0,sy+r*0.62,r*1.05,r*0.5,0,0,TAU); pctx.fill();
     const fl=en.flash>0;
-    if(en.type==='boar'){
-      if(!fl){ const lp=(en.st==='charge')? Math.sin(itime*24)*r*0.3 : 0;   // trotting legs
-        pctx.fillStyle='#4a2f1a';
-        pctx.fillRect(sx-fcx*r*0.45+pxn*r*0.5-1.2+lp, sy-fcy*r*0.45+pyn*r*0.5-1, 2.6, r*0.42);
-        pctx.fillRect(sx-fcx*r*0.45-pxn*r*0.5-1.2-lp, sy-fcy*r*0.45-pyn*r*0.5-1, 2.6, r*0.42);
-        pctx.fillRect(sx+fcx*r*0.35+pxn*r*0.5-1.2-lp, sy+fcy*r*0.35+pyn*r*0.5-1, 2.6, r*0.42);
-        pctx.fillRect(sx+fcx*r*0.35-pxn*r*0.5-1.2+lp, sy+fcy*r*0.35-pyn*r*0.5-1, 2.6, r*0.42); }
-      pctx.fillStyle='#3a2412'; pctx.beginPath(); pctx.ellipse(sx,sy,r*1.1,r*0.9,fa,0,TAU); pctx.fill();   // outline
-      const idleCol = en.guard?'#5e3a24' : en.elite?'#8a4030' : (ISL.biome.mods.boarTint||'#7a4f30');
-      pctx.fillStyle = fl?'#fff':(en.st==='windup'?'#c4683c':en.st==='charge'?'#a85f36':idleCol);
-      pctx.beginPath(); pctx.ellipse(sx,sy,r,r*0.8,fa,0,TAU); pctx.fill();
-      if(!fl){
-        pctx.fillStyle='#5e3a20'; pctx.beginPath(); pctx.ellipse(sx-fcx*r*0.15,sy-fcy*r*0.15,r*0.55,r*0.3,fa,0,TAU); pctx.fill();   // bristly back
-        const hx=sx+fcx*r*0.8, hy=sy+fcy*r*0.8;
-        pctx.fillStyle='#6b432a'; pctx.beginPath(); pctx.arc(hx,hy,r*0.55,0,TAU); pctx.fill();             // head
-        pctx.fillStyle='#4a2f1a';
-        pctx.fillRect(hx+pxn*r*0.45-fcx*r*0.2-1.5, hy+pyn*r*0.45-fcy*r*0.2-1.5, 3, 3);                     // ears
-        pctx.fillRect(hx-pxn*r*0.45-fcx*r*0.2-1.5, hy-pyn*r*0.45-fcy*r*0.2-1.5, 3, 3);
-        const nx_=hx+fcx*r*0.5, ny_=hy+fcy*r*0.5;
-        pctx.fillStyle='#caa27e'; pctx.beginPath(); pctx.arc(nx_,ny_,r*0.26,0,TAU); pctx.fill();           // snout
-        pctx.fillStyle='#7a4f30'; pctx.fillRect(nx_-1,ny_-1,1.6,1.6);
-        pctx.fillStyle='#f2ead8';                                                                          // tusks
-        pctx.fillRect(nx_+pxn*r*0.32-1, ny_+pyn*r*0.32-1, 2.2, 2.6); pctx.fillRect(nx_-pxn*r*0.32-1, ny_-pyn*r*0.32-1, 2.2, 2.6);
-        pctx.fillStyle=(en.st==='windup'||en.st==='charge')?'#ff5d4a':'#2a1408';                           // eye (angry when attacking)
-        pctx.fillRect(hx+pxn*r*0.26-1, hy+pyn*r*0.26-1, 2, 2);
-      }
-      if(en.st==='windup'){ pctx.fillStyle='#ffd23f'; pctx.fillRect(sx0-1.5,sy-r-8*s,3,5*s); pctx.fillRect(sx0-1.5,sy-r-2*s,3,2);
-        if(en.guard){ pctx.fillRect(sx0+4,sy-r-8*s,3,5*s); pctx.fillRect(sx0+4,sy-r-2*s,3,2); } }   // "!" — the Great Boar gets "!!"
-    } else {
-      for(let i=3;i>=1;i--){ const off=i*r*0.62, wig=Math.sin(itime*7 - i*1.25 + en.x*0.1)*r*0.4;          // slithering body
-        const cx_=sx-fcx*off+pxn*wig, cy_=sy-fcy*off+pyn*wig, rr=r*(0.72-i*0.13);
-        pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.arc(cx_,cy_,rr*1.25,0,TAU); pctx.fill();
-        const sT=(!en.elite&&ISL.biome.mods.snakeTint)||null;
-        pctx.fillStyle=fl?'#fff':(en.elite?(i%2?'#4a3570':'#5a4385'):(sT?(i%2?sT[0]:sT[2]):(i%2?'#2e5d4e':'#387058'))); pctx.beginPath(); pctx.arc(cx_,cy_,rr,0,TAU); pctx.fill(); }
-      pctx.fillStyle='#10241e'; pctx.beginPath(); pctx.ellipse(sx,sy,r*0.85,r*0.66,fa,0,TAU); pctx.fill();
-      const sT2=(!en.elite&&ISL.biome.mods.snakeTint)||null;
-      pctx.fillStyle=fl?'#fff':(en.elite?'#634a92':(sT2?sT2[1]:'#356a59')); pctx.beginPath(); pctx.ellipse(sx,sy,r*0.72,r*0.54,fa,0,TAU); pctx.fill();   // head
-      if(!fl){ pctx.fillStyle='#ffd23f';
-        pctx.fillRect(sx+fcx*r*0.3+pxn*r*0.3-1, sy+fcy*r*0.3+pyn*r*0.3-1, 2, 2);
-        pctx.fillRect(sx+fcx*r*0.3-pxn*r*0.3-1, sy+fcy*r*0.3-pyn*r*0.3-1, 2, 2);
-        if(((itime*1.8+en.y*0.05)%1)<0.35){ pctx.fillStyle='#ff7d8c'; pctx.fillRect(sx+fcx*r*0.95-1, sy+fcy*r*0.95-1, 2.2, 2.2); } }   // tongue flick
-    }
+    if(en.type==='boar') drawBoar(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
+    else if(en.type==='snake') drawSnake(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
+    else if(en.type==='crab') drawCrab(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
+    else drawDingo(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
+    if(en.st==='windup'||en.st==='crouch'){ pctx.fillStyle='#ffd23f';          // "!" — and "!!" from the Great Boar
+      pctx.fillRect(sx0-1.5,sy-r-8*s,3,5*s); pctx.fillRect(sx0-1.5,sy-r-2*s,3,2);
+      if(en.guard){ pctx.fillRect(sx0+4,sy-r-8*s,3,5*s); pctx.fillRect(sx0+4,sy-r-2*s,3,2); } }
   }
   // slash — a filled wedge showing the hit zone; the sword itself (drawn on the player) does the sweeping
   for(const f of ifx){ if(f.k!=='slash') continue; const [sx,sy]=iw2p(f.x,f.y), prog=clamp(f.t/f.life,0,1);
@@ -3279,23 +3533,24 @@ function islandHUD(){
     ctx.fillStyle='#16294a'; roundRect(34,54,56,8,4); ctx.fill();
     ctx.fillStyle='#5fc2d6'; roundRect(34,54,56*clamp(1-player.dashCD/Math.max(0.1,ITUNE.dashCool),0,1),8,4); ctx.fill(); }
   if(!ISL) return;
-  let cur=null; for(const cl of ISL.clearings) if((player.x-cl.x)**2+(player.y-cl.y)**2 < cl.r*cl.r){ cur=cl; break; }
+  let cur=null; for(const cl of ISL.clearings) if(inClear(cl,player.x,player.y)){ cur=cl; break; }
   const mains=ISL.clearings.filter(c=>c.kind!=='bonus'), bons=ISL.clearings.filter(c=>c.kind==='bonus');
-  const pad=148, tw=Math.max(190, pad+mains.length*24+(bons.length?bons.length*20+12:0)), bx=CSSW/2-tw/2;
+  const dense=mains.length+bons.length>10, stepM=dense?17:24, dotR=dense?6.5:9, stepB=dense?14:20, dsz=dense?8.5:11;
+  const pad=148, tw=Math.max(190, pad+mains.length*stepM+(bons.length?bons.length*stepB+12:0)), bx=CSSW/2-tw/2;
   ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(bx,14,tw,36,10); ctx.fill();
   ctx.fillStyle='#dfeaff'; ctx.font='700 14px system-ui'; ctx.fillText('Secured '+securedCount+' / '+ISL.mainN, bx+12, 37);
-  for(let i=0;i<mains.length;i++){ const cl=mains[i], cxp=bx+pad+i*24+10, cyp=32; let col,lab='';
+  for(let i=0;i<mains.length;i++){ const cl=mains[i], cxp=bx+pad+i*stepM+10, cyp=32; let col,lab='';
     if(cl.kind==='landing'){ col='#7fa6dd'; lab='⚓'; }
     else if(cl.kind==='hoard'){ col=cl.secured?'#e7b416':(cur===cl?'#ffce54':'#6b5a2e'); lab=cl.secured?'★':(cur===cl?''+cl.enemyCount:'★'); }
     else if(cl.secured){ col='#3ddc84'; lab='✓'; }
     else if(cur===cl){ col='#ffce54'; lab=''+cl.enemyCount; } else col='#52617e';
-    if(i<mains.length-1){ ctx.strokeStyle=cl.secured?'#3ddc84':'#39455f'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cxp+9,cyp); ctx.lineTo(cxp+15,cyp); ctx.stroke(); }
-    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cxp,cyp,9,0,TAU); ctx.fill();
-    if(lab){ ctx.fillStyle='#0c1830'; ctx.font='700 11px system-ui'; ctx.textAlign='center'; ctx.fillText(lab,cxp,cyp+4); ctx.textAlign='left'; } }
-  for(let b=0;b<bons.length;b++){ const cl=bons[b], cxp=bx+pad+mains.length*24+16+b*20, cyp=32;   // side caches as diamonds
+    if(i<mains.length-1){ ctx.strokeStyle=cl.secured?'#3ddc84':'#39455f'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cxp+dotR,cyp); ctx.lineTo(cxp+stepM-dotR,cyp); ctx.stroke(); }
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cxp,cyp,dotR,0,TAU); ctx.fill();
+    if(lab){ ctx.fillStyle='#0c1830'; ctx.font='700 '+(dense?9:11)+'px system-ui'; ctx.textAlign='center'; ctx.fillText(lab,cxp,cyp+(dense?3:4)); ctx.textAlign='left'; } }
+  for(let b=0;b<bons.length;b++){ const cl=bons[b], cxp=bx+pad+mains.length*stepM+16+b*stepB, cyp=32;   // side caches as diamonds
     ctx.save(); ctx.translate(cxp,cyp); ctx.rotate(Math.PI/4);
-    ctx.fillStyle = cl.secured?'#e7b416':(cur===cl?'#ffce54':'#56507e'); ctx.fillRect(-5.5,-5.5,11,11); ctx.restore();
-    if(!cl.secured && cur===cl){ ctx.fillStyle='#0c1830'; ctx.font='700 10px system-ui'; ctx.textAlign='center'; ctx.fillText(''+cl.enemyCount,cxp,cyp+3.5); ctx.textAlign='left'; } }
+    ctx.fillStyle = cl.secured?'#e7b416':(cur===cl?'#ffce54':'#56507e'); ctx.fillRect(-dsz/2,-dsz/2,dsz,dsz); ctx.restore();
+    if(!cl.secured && cur===cl){ ctx.fillStyle='#0c1830'; ctx.font='700 '+(dense?9:10)+'px system-ui'; ctx.textAlign='center'; ctx.fillText(''+cl.enemyCount,cxp,cyp+3.5); ctx.textAlign='left'; } }
   if(cur && !cur.secured && cur.id>0){ ctx.fillStyle='#ffd27a'; ctx.font='700 13px system-ui'; ctx.textAlign='center'; ctx.fillText('Enemies remaining: '+cur.enemyCount, CSSW/2, 68); ctx.textAlign='left'; }
   ctx.textAlign='right'; ctx.font=(haulPulse>0?'700 ':'')+'13px system-ui'; let parts=[]; for(const k in tripLoot) if(tripLoot[k]>0) parts.push((LOOT_ICON[k]||k)+' '+tripLoot[k]);
   const scap=Math.round(ITUNE.satchel), scnt=satchelCount(), sfull=scnt>=scap;
@@ -3476,6 +3731,8 @@ const ITUNE_DEF=[
   ['boarHP','Boar HP',1,12,1],
   ['boarCharge','Boar charge',80,320,5],
   ['snakeHP','Snake HP',1,8,1],
+  ['crabHP','Crab HP',1,8,1],
+  ['dingoHP','Dingo HP',1,8,1],
   ['enemyDmg','Enemy damage',0,3,1],
   ['spawnCount','Enemy count ×',0.4,2.5,0.1],
   ['clearSize','Clearing size ×',0.6,1.8,0.1],
