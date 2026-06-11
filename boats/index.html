@@ -3017,8 +3017,14 @@ function updateDingo(en,dx,dy,d,dt,active){ en.tmr-=dt; en.mv=0;
   }
 }
 
-/* ---- island enemy sprites — drawn in body space: +x is the way it faces, +y its right flank ---- */
+/* ---- island enemy sprites — drawn in body space: +x is the way it faces, +y its right flank ----
+   each enemy renders to a tiny offscreen, then upscales with hard pixels — so monsters sit on the
+   same chunky grid as the terrain instead of floating over it like smooth stickers */
+const ESPR={cv:document.createElement('canvas')}; ESPR.cv.width=ESPR.cv.height=72; ESPR.ctx=ESPR.cv.getContext('2d');
+const EWPP=1.45;           // world units per enemy-sprite pixel (bigger = chunkier)
+let eit=0;                 // enemy anim clock quantized to 10fps — limbs snap between poses like sprite frames
 function bodyKit(sx,sy,fcx,fcy,pxn,pyn,r){
+  const pctx=ESPR.ctx;                                       // the kit paints to the sprite grid too
   const PT=(dx,dy)=>[sx+(fcx*dx+pxn*dy)*r, sy+(fcy*dx+pyn*dy)*r];
   const px=(dx,dy,w,h,col)=>{ const p=PT(dx,dy); pctx.fillStyle=col; pctx.fillRect(p[0]-w/2,p[1]-h/2,Math.max(1.4,w),Math.max(1.4,h)); };
   const tri=(a,b,c,col)=>{ pctx.fillStyle=col; pctx.beginPath(); pctx.moveTo(a[0],a[1]); pctx.lineTo(b[0],b[1]); pctx.lineTo(c[0],c[1]); pctx.closePath(); pctx.fill(); };
@@ -3026,14 +3032,15 @@ function bodyKit(sx,sy,fcx,fcy,pxn,pyn,r){
   return {PT,px,tri,seg};
 }
 function drawBoar(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const pctx=ESPR.ctx;                                                         // paint to the sprite grid
   const K=bodyKit(sx,sy,fcx,fcy,pxn,pyn,r), bm=ISL.biome.mods;
   const charging=en.st==='charge', windup=en.st==='windup';
-  if(!fl){ const lp=charging? Math.sin(itime*24)*0.3 : 0;                      // trotting legs + hooves
+  if(!fl){ const lp=charging? Math.sin(eit*24)*0.3 : 0;                        // trotting legs + hooves
     [[-0.45,0.52,1],[-0.45,-0.52,-1],[0.38,0.52,-1],[0.38,-0.52,1]].forEach(L=>{
       K.px(L[0]+lp*L[2], L[1], Math.max(2,r*0.22), Math.max(2.4,r*0.4), '#4a2f1a');
       K.px(L[0]+lp*L[2]+0.12, L[1]*1.1, Math.max(1.6,r*0.2), Math.max(1.4,r*0.16), '#241307'); });
     K.px(-1.04,0.04,Math.max(1.6,r*0.16),Math.max(1.6,r*0.16),'#4a2f1a');      // curl of tail + tuft
-    K.px(-1.16,Math.sin(itime*3+en.sd)*0.12,Math.max(2,r*0.22),Math.max(2,r*0.22),'#2e1c0c');
+    K.px(-1.16,Math.sin(eit*3+en.sd)*0.12,Math.max(2,r*0.22),Math.max(2,r*0.22),'#2e1c0c');
   }
   pctx.fillStyle='#2a1708'; pctx.beginPath(); pctx.ellipse(sx,sy,r*1.12,r*0.92,fa,0,TAU); pctx.fill();   // outline
   const idleCol = en.guard?'#5e3a24' : en.elite?'#8a4030' : (bm.boarTint||'#7a4f30');
@@ -3068,7 +3075,7 @@ function drawBoar(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
   K.px(0.72,0.3,Math.max(1.8,r*0.18),Math.max(1.8,r*0.18),eye); K.px(0.72,-0.3,Math.max(1.8,r*0.18),Math.max(1.8,r*0.18),eye);
   K.px(0.68,0.26,1.4,1.4,'#ffe9c8'); K.px(0.68,-0.34,1.4,1.4,'#ffe9c8');
   if(en.elite) K.seg(K.PT(-0.1,-0.45),K.PT(0.32,-0.16),Math.max(1.2,r*0.1),'#d8a088');   // an old scar
-  if(windup){ for(const sd2 of [0,0.5]){ const pf=(itime*6+sd2)%1;             // snorting steam
+  if(windup){ for(const sd2 of [0,0.5]){ const pf=(eit*6+sd2)%1;               // snorting steam
     pctx.fillStyle='rgba(255,255,255,'+(0.45*(1-pf)).toFixed(3)+')';
     pctx.beginPath(); pctx.arc(nx_+pxn*r*0.3*(sd2?1:-1), ny_+pyn*r*0.3*(sd2?1:-1), (1.5+pf*3.5)*s,0,TAU); pctx.fill(); } }
   if(charging){ pctx.strokeStyle='rgba(255,255,255,.25)'; pctx.lineWidth=Math.max(1,1.4*s);   // speed lines
@@ -3077,6 +3084,7 @@ function drawBoar(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
     pctx.moveTo(sx-fcx*r*1.3-pxn*r*0.5, sy-fcy*r*1.3-pyn*r*0.5); pctx.lineTo(sx-fcx*r*2.1-pxn*r*0.5, sy-fcy*r*2.1-pyn*r*0.5); pctx.stroke(); }
 }
 function drawSnake(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const pctx=ESPR.ctx;
   const bm=ISL.biome.mods, sT=(!en.elite&&bm.snakeTint)||null;
   const c0=fl?'#fff':(en.elite?'#4a3570':(sT?sT[0]:'#2e5d4e'));
   const c1=fl?'#fff':(en.elite?'#5a4385':(sT?sT[2]:'#387058'));
@@ -3084,10 +3092,10 @@ function drawSnake(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
   const mark=fl?'#fff':(en.elite?'#c9a6ff':(bm.mark||'#a8e0bc'));
   const dpl=Math.hypot(player.x-en.x,player.y-en.y), agitated=en.aggro||dpl<240;
   const segs=en.elite?6:5;
-  for(let i=segs;i>=1;i--){ const off=i*r*0.5, wig=Math.sin(itime*7 - i*1.15 + en.sd*3)*r*0.42;   // tapered, diamond-marked coils
+  for(let i=segs;i>=1;i--){ const off=i*r*0.5, wig=Math.sin(eit*7 - i*1.15 + en.sd*3)*r*0.42;   // tapered, diamond-marked coils
     const cx_=sx-fcx*off+pxn*wig, cy_=sy-fcy*off+pyn*wig, rr=r*(0.8-i*0.085);
     if(i===segs){ const tx2=cx_-fcx*rr*1.7, ty2=cy_-fcy*rr*1.7;               // tail: point — or the elite's rattle
-      if(en.elite){ const sh2=(agitated&&en.tmr<0.6)? Math.sin(itime*30)*1.5*s:0;
+      if(en.elite){ const sh2=(agitated&&en.tmr<0.6)? Math.sin(eit*30)*1.5*s:0;
         pctx.fillStyle='#d8cfa8'; pctx.beginPath(); pctx.arc(tx2+pxn*sh2,ty2+pyn*sh2,Math.max(1.6,rr*0.55),0,TAU); pctx.fill();
         pctx.fillStyle='#b8ab7e'; pctx.beginPath(); pctx.arc(tx2-fcx*rr*0.9+pxn*sh2,ty2-fcy*rr*0.9+pyn*sh2,Math.max(1.2,rr*0.4),0,TAU); pctx.fill(); }
       else { pctx.strokeStyle=c0; pctx.lineWidth=Math.max(1.2,rr*0.6); pctx.beginPath(); pctx.moveTo(cx_,cy_); pctx.lineTo(tx2,ty2); pctx.stroke(); } }
@@ -3118,7 +3126,7 @@ function drawSnake(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
     pctx.fillStyle='#fff';
     pctx.fillRect(mx_+pxn*r*0.16-0.8,my_+pyn*r*0.16-0.8,1.6,2.4);
     pctx.fillRect(mx_-pxn*r*0.16-0.8,my_-pyn*r*0.16-0.8,1.6,2.4); }
-  else if(((itime*1.8+en.y*0.05)%1)<0.35){                                     // forked tongue flick
+  else if(((eit*1.8+en.y*0.05)%1)<0.35){                                       // forked tongue flick
     const t0x=sx+fcx*r*0.82, t0y=sy+fcy*r*0.82, t1x=t0x+fcx*r*0.4, t1y=t0y+fcy*r*0.4;
     pctx.strokeStyle='#ff7d8c'; pctx.lineWidth=Math.max(1,r*0.08);
     pctx.beginPath(); pctx.moveTo(t0x,t0y); pctx.lineTo(t1x,t1y);
@@ -3126,12 +3134,13 @@ function drawSnake(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
     pctx.moveTo(t1x,t1y); pctx.lineTo(t1x+fcx*r*0.16-pxn*r*0.12, t1y+fcy*r*0.16-pyn*r*0.12); pctx.stroke(); }
 }
 function drawCrab(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const pctx=ESPR.ctx;
   const bm=ISL.biome.mods, tint=bm.crabTint||['#c2563a','#e07a50','#7e3322'];
   const windup=en.st==='windup', recov=en.st==='recover', lung=en.st==='lunge';
-  const wob=recov? Math.sin(itime*9)*0.1 : 0;
+  const wob=recov? Math.sin(eit*9)*0.1 : 0;
   if(!fl){ pctx.strokeStyle='#5e2616'; pctx.lineWidth=Math.max(1.4,r*0.14); pctx.beginPath();   // six scuttling legs
     for(let i2=0;i2<3;i2++) for(const side of [1,-1]){
-      const ph=Math.sin(itime*(lung?16:9)+en.sd+i2*1.9+(side>0?0:2.4))*0.18;
+      const ph=Math.sin(eit*(lung?16:9)+en.sd+i2*1.9+(side>0?0:2.4))*0.18;
       const bx2=-0.4+i2*0.36;
       const bX=sx+(fcx*bx2+pxn*side*0.9)*r, bY=sy+(fcy*bx2+pyn*side*0.9)*r;
       pctx.moveTo(bX,bY); pctx.lineTo(bX+(pxn*side*(0.5+ph)-fcx*0.2)*r, bY+(pyn*side*(0.5+ph)-fcy*0.2)*r); }
@@ -3165,15 +3174,16 @@ function drawCrab(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
     pctx.fillStyle='#ffe9c8'; pctx.fillRect(tX-1.3,tY-1.3,1,1); }
 }
 function drawDingo(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s){
+  const pctx=ESPR.ctx;
   const bm=ISL.biome.mods, tint=bm.dingoTint||(en.elite?['#8a5c30','#5e3c1c','#d8b88a']:['#c08a52','#8a5c30','#e8d4ae']);
   const crouch=en.st==='crouch', pounce=en.st==='pounce', mov=pounce||!!en.mv;
   const str=pounce?1.28:(crouch?0.86:1), wid=pounce?0.46:(crouch?0.68:0.58);
-  if(!fl && !crouch){ const ph=itime*(pounce?20:13)+en.sd; pctx.fillStyle=tint[1];   // galloping legs
+  if(!fl && !crouch){ const ph=eit*(pounce?20:13)+en.sd; pctx.fillStyle=tint[1];   // galloping legs
     [[0.6,0.3,0],[0.6,-0.3,Math.PI],[-0.6,0.3,Math.PI],[-0.6,-0.3,0]].forEach(L=>{
       const ext=mov? Math.sin(ph+L[2])*0.22 : 0;
       const X=sx+(fcx*(L[0]+ext)+pxn*L[1])*r, Y=sy+(fcy*(L[0]+ext)+pyn*L[1])*r;
       pctx.fillRect(X-Math.max(1,r*0.1), Y-Math.max(1.2,r*0.17), Math.max(2,r*0.2), Math.max(2.4,r*0.34)); }); }
-  if(!fl){ const wag=crouch?0: Math.sin(itime*6+en.sd)*0.3;                    // white-tipped tail
+  if(!fl){ const wag=crouch?0: Math.sin(eit*6+en.sd)*0.3;                      // white-tipped tail
     const t0X=sx-fcx*r*1.0*str, t0Y=sy-fcy*r*1.0*str;
     const t1X=t0X-(fcx*0.55-pxn*wag)*r, t1Y=t0Y-(fcy*0.55-pyn*wag)*r;
     pctx.strokeStyle=tint[1]; pctx.lineWidth=Math.max(1.6,r*0.2);
@@ -3425,10 +3435,20 @@ function drawIslandWorld(){
     const sx = sx0 + ((en.st==='windup'||en.st==='crouch')? Math.sin(itime*44)*1.6*s : 0);   // trembling = an attack is coming
     pctx.fillStyle='rgba(0,20,10,.28)'; pctx.beginPath(); pctx.ellipse(sx0,sy+r*0.62,r*1.05,r*0.5,0,0,TAU); pctx.fill();
     const fl=en.flash>0;
-    if(en.type==='boar') drawBoar(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
-    else if(en.type==='snake') drawSnake(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
-    else if(en.type==='crab') drawCrab(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
-    else drawDingo(en,sx,sy,r,fa,fcx,fcy,pxn,pyn,fl,s);
+    eit=Math.floor(itime*10)/10;                                   // sprite-frame clock
+    ESPR.ctx.clearRect(0,0,72,72);
+    const rs=en.r/EWPP, ss=1/EWPP;                                 // paint at sprite resolution...
+    if(en.type==='boar') drawBoar(en,36,36,rs,fa,fcx,fcy,pxn,pyn,fl,ss);
+    else if(en.type==='snake') drawSnake(en,36,36,rs,fa,fcx,fcy,pxn,pyn,fl,ss);
+    else if(en.type==='crab') drawCrab(en,36,36,rs,fa,fcx,fcy,pxn,pyn,fl,ss);
+    else drawDingo(en,36,36,rs,fa,fcx,fcy,pxn,pyn,fl,ss);
+    { const id=ESPR.ctx.getImageData(0,0,72,72), da=id.data;       // snap soft edges to hard pixels
+      for(let p2=3;p2<da.length;p2+=4){ const a2=da[p2]; if(a2>0) da[p2]=a2<110?0:255; }
+      ESPR.ctx.putImageData(id,0,0); }
+    const ups=EWPP*s;                                              // ...then blow it up, pixels hard
+    pctx.imageSmoothingEnabled=false;
+    pctx.drawImage(ESPR.cv, Math.round(sx-36*ups), Math.round(sy-36*ups), Math.round(72*ups), Math.round(72*ups));
+    pctx.imageSmoothingEnabled=true;
     if(en.st==='windup'||en.st==='crouch'){ pctx.fillStyle='#ffd23f';          // "!" — and "!!" from the Great Boar
       pctx.fillRect(sx0-1.5,sy-r-8*s,3,5*s); pctx.fillRect(sx0-1.5,sy-r-2*s,3,2);
       if(en.guard){ pctx.fillRect(sx0+4,sy-r-8*s,3,5*s); pctx.fillRect(sx0+4,sy-r-2*s,3,2); } }
