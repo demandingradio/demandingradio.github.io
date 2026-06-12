@@ -662,24 +662,37 @@ addEventListener('keydown',e=>{
   if(k==='c'){ cookFish(); return; }                          // galley: a hot meal = bonus hearts ashore
   if(k==='j'){ openJournal(); return; }                       // the contracts journal
   if(k==='g' && nearLand && nearLand.port){ sellFish(); return; }   // the dockside fish merchant
-  if(k==='e' && nearLand){ if(nearLand.port) enterPort(nearLand); else enterIsland(nearLand); return; }   // dock / landfall
+  if(k==='e'){
+    if(nearLand){ if(nearLand.port) enterPort(nearLand); else enterIsland(nearLand); return; }   // dock / landfall
+    let p=null,pd=1e18;                                  // open water — but maybe in a harbour's reach
+    for(const c of coresNear(boat.x,boat.y,1800)){ if(!c.port) continue;
+      const d=(boat.x-c.x)**2+(boat.y-c.y)**2; if(d<pd){ pd=d; p=c; } }
+    if(p && Math.sqrt(pd)<=portReach(p)){ tryDockAt(p); }
+    return;
+  }
   if(k==='='||k==='+'){ TUNE.zoom=clamp(TUNE.zoom+0.12,0.6,1.9); syncTune(); }
   else if(k==='-'||k==='_'){ TUNE.zoom=clamp(TUNE.zoom-0.12,0.6,1.9); syncTune(); }
   keys[k]=true;
 });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; fmDrag=null; });
-// full-map zoom (scroll) + pan (drag) with the mouse
+// full-map zoom (scroll) + pan (drag) with the mouse — a clean tap on a port docks you
 addEventListener('wheel',e=>{ if(!started||!mapOpen) return; e.preventDefault();
   const r=mapRect(); zoomMap(e.deltaY>0?1.16:0.86, screenToMapWorld(e.clientX,e.clientY,r)); },{passive:false});
-addEventListener('mousedown',e=>{ if(started&&mapOpen) fmDrag={x:e.clientX,y:e.clientY}; });
+addEventListener('mousedown',e=>{ if(started&&mapOpen) fmDrag={x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false}; });
 addEventListener('mousemove',e=>{ if(!fmDrag||!mapOpen) return; const sc=mapRect().size/fmSpan;
-  fmCX-=(e.clientX-fmDrag.x)/sc; fmCY-=(e.clientY-fmDrag.y)/sc; fmDrag={x:e.clientX,y:e.clientY}; clampMap(); fmDirty=true; });
-addEventListener('mouseup',()=>{ fmDrag=null; });
-// at sea: a left click lets the harpoon fly (only when a whale is about)
+  if(Math.abs(e.clientX-fmDrag.sx)+Math.abs(e.clientY-fmDrag.sy)>5) fmDrag.moved=true;
+  fmCX-=(e.clientX-fmDrag.x)/sc; fmCY-=(e.clientY-fmDrag.y)/sc;
+  fmDrag.x=e.clientX; fmDrag.y=e.clientY; clampMap(); fmDirty=true; });
+addEventListener('mouseup',e=>{
+  if(fmDrag && !fmDrag.moved && started && mapOpen && e.button===0) clickFullMapPort(e.clientX,e.clientY);
+  fmDrag=null; });
+// at sea: a click docks at a port (on the chart or the town itself) — otherwise the harpoon flies
 addEventListener('mousedown',e=>{
-  if(!started || mode!=='sea' || mapOpen || renaming || summaryOpen || invOpen || flogOpen) return;
+  if(!started || mode!=='sea' || mapOpen || renaming || summaryOpen || invOpen || flogOpen || koOpen) return;
   if(e.target!==cv || e.button!==0) return;
+  if(clickMinimapPort(e.clientX,e.clientY)) return;
+  if(clickWorldPort(e.clientX,e.clientY)) return;
   tryThrowIron();
 });
 // mouse combat on the island: cursor aims, left swings, right shoots
@@ -822,10 +835,12 @@ function update(dt){
 
   reveal(); checkDiscoveries();
 
-  // landfall detection: is the boat at an island's coast?
+  // landfall detection: is the boat at an island's coast (or in a port's bay)?
   nearLand=null; { let bd=1e18;
-    for(const c of coresNear(boat.x,boat.y,420)){ const reach=(c.r*1.9+50)**2, d=(boat.x-c.x)**2+(boat.y-c.y)**2;
-      if(d<reach && d<bd){ bd=d; nearLand=c; } } }
+    for(const c of coresNear(boat.x,boat.y,700)){
+      const R=c.port ? c.r*2.2+260 : c.r*1.9+50;            // harbours reach further out than wild coasts
+      const d=(boat.x-c.x)**2+(boat.y-c.y)**2;
+      if(d<R*R && d<bd){ bd=d; nearLand=c; } } }
 
   // wake particles
   if(boat.spd>14){
@@ -2328,7 +2343,7 @@ function drawHUD(){
   drawMinimap();
   drawIslandLabels();
   if(nearLand){ ctx.textAlign='center'; let t;
-    if(nearLand.port) t='⚓  Press  E  to dock at '+nearLand.city+'  ('+PORT_SIZE_NAME[portSizeOf(nearLand)]+')';
+    if(nearLand.port) t='⚓  Dock at '+nearLand.city+' — press E or click the town  ('+PORT_SIZE_NAME[portSizeOf(nearLand)]+')';
     else if(nearLand.cleared) t='⚑  '+(nearLand.customName||nearLand.name)+' — claimed, your flag flies here';
     else { const nm=nearLand.customName||nearLand.name||'this isle';
       t='⚓  Press  E  to explore '+biomeOf(nearLand).icon+' '+nm; }
@@ -2411,12 +2426,15 @@ function drawMinimap(){
   ctx.strokeStyle='rgba(90,70,40,.12)'; ctx.lineWidth=1;
   for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(mx+size*i/5,my); ctx.lineTo(mx+size*i/5,my+size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(mx,my+size*i/5); ctx.lineTo(mx+size,my+size*i/5); ctx.stroke(); }
-  // discovered port markers within range
-  for(const c of coresNear(boat.x,boat.y,span*0.75)){ if(!c.port) continue; if(!c.found && !dev.revealAll) continue;
-    const px=mx+(c.x-boat.x)/span*size+size/2, py=my+(c.y-boat.y)/span*size+size/2;
-    if(px<mx||px>mx+size||py<my||py>my+size) continue;
-    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,2.6+portSizeOf(c)*0.7,0,TAU); ctx.fill();
-    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke();
+  // discovered port markers — ports just over the horizon clamp to the chart's edge, still clickable
+  for(const c of coresNear(boat.x,boat.y,4200)){ if(!c.port) continue; if(!c.found && !dev.revealAll) continue;
+    let px=mx+(c.x-boat.x)/span*size+size/2, py=my+(c.y-boat.y)/span*size+size/2;
+    const off = px<mx+5||px>mx+size-5||py<my+5||py>my+size-5;
+    if(off){ if(Math.hypot(c.x-boat.x,c.y-boat.y)>4000) continue;
+      px=clamp(px,mx+7,mx+size-7); py=clamp(py,my+7,my+size-7); }
+    ctx.globalAlpha=off?0.7:1;
+    ctx.fillStyle=c.found?'#b8482f':'#9a7a55'; ctx.beginPath(); ctx.arc(px,py,off?2.6:2.6+portSizeOf(c)*0.7,0,TAU); ctx.fill();
+    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.stroke(); ctx.globalAlpha=1;
   }
   // cleared isles fly a little golden flag on the chart
   for(const c of coresNear(boat.x,boat.y,span*0.75)){ if(!c.cleared) continue;
@@ -2551,7 +2569,7 @@ function drawFullMap(){
   ctx.fillText('✦ The Charted Reaches ✦', CSSW/2, my-20);
   ctx.fillStyle='#b9a880'; ctx.font='12px Georgia,serif';
   const isle=discoveredCount+' isle'+(discoveredCount===1?'':'s'), prt=portCount+' port'+(portCount===1?'':'s');
-  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   '+isle+' & '+prt+' charted'+(clearedCount?'   •   ⚑ '+clearedCount+' cleared':'')+'   •   📒 '+biomesFound.size+'/'+BIOMES.length+' biomes', CSSW/2, my+size+27);
+  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   click a ⚓ port to dock   •   '+isle+' & '+prt+' charted'+(clearedCount?'   •   ⚑ '+clearedCount+' cleared':'')+'   •   📒 '+biomesFound.size+'/'+BIOMES.length+' biomes', CSSW/2, my+size+27);
   ctx.fillStyle='#8194b8'; ctx.fillText('M or Esc to close', CSSW/2, my+size+43);
 }
 
@@ -3992,6 +4010,45 @@ function eSlashDmg(){ return ITUNE.slashDmg+uLvl('sword'); }
 function eArrowDmg(){ return ITUNE.arrowDmg+uLvl('bow'); }
 function eMoveSpeed(){ return ITUNE.moveSpeed+9*uLvl('boots'); }
 function eMaxHp(){ return 5+uLvl('hearts'); }
+
+/* ---- docking: click the town on any chart (or the town itself) and she's moored ---- */
+function portReach(c){ return c.r*2 + 1500; }            // a harbour's waters reach well past her headlands
+function tryDockAt(c){
+  if(mode!=='sea'||!started||!c||!c.port) return;
+  const d=Math.hypot(boat.x-c.x,boat.y-c.y);
+  if(d<=portReach(c)){ boat.sail=0; boat.spd=0; enterPort(c); }
+  else toast('⚓  '+c.city+' — '+bearTo(c.x,c.y)+' · '+fmtDist(d), 'sail into her waters to dock');
+}
+function clickMinimapPort(cx,cy){                         // the corner chart
+  const size=Math.min(196, CSSW*0.24), pad=14, mx=CSSW-size-pad, my=CSSH-size-pad;
+  if(cx<mx-4||cx>mx+size+4||cy<my-4||cy>my+size+4) return false;
+  const span=1500; let best=null,bd=1e18;
+  for(const c of coresNear(boat.x,boat.y,4200)){ if(!c.port||!c.found) continue;
+    if(Math.hypot(c.x-boat.x,c.y-boat.y)>4000) continue;
+    const px=clamp(mx+(c.x-boat.x)/span*size+size/2, mx+7, mx+size-7);
+    const py=clamp(my+(c.y-boat.y)/span*size+size/2, my+7, my+size-7);
+    const d=(cx-px)**2+(cy-py)**2; if(d<bd){ bd=d; best=c; } }
+  if(best && bd<13*13) tryDockAt(best);
+  return true;                                            // clicks on the chart never throw the iron
+}
+function clickWorldPort(cx,cy){                           // the town itself, when she's on screen
+  const s=iscale(); const wx=camX+(cx/(CSSW/IW)-IW/2)/s, wy=camY+(cy/(CSSH/IH)-IH/2)/s;
+  let best=null,bd=1e18;
+  for(const c of coresNear(wx,wy,300)){ if(!c.port) continue;
+    const d=(wx-c.x)**2+(wy-c.y)**2; if(d<bd){ bd=d; best=c; } }
+  if(best && bd<110*110){ tryDockAt(best); return true; }
+  return false;
+}
+function clickFullMapPort(cx,cy){                         // the big chart (M)
+  const r=mapRect();
+  if(cx<r.mx||cx>r.mx+r.size||cy<r.my||cy>r.my+r.size) return;
+  const sc=r.size/fmSpan, ox=fmCX-fmSpan/2, oy=fmCY-fmSpan/2;
+  let best=null,bd=1e18;
+  for(const c of cores){ if(!c.port) continue; if(!c.found && !dev.revealAll) continue;
+    const px=r.mx+(c.x-ox)*sc, py=r.my+(c.y-oy)*sc;
+    const d=(cx-px)**2+(cy-py)**2; if(d<bd){ bd=d; best=c; } }
+  if(best && bd<16*16) tryDockAt(best);
+}
 
 /* ---- which port is this? hamlets near home, grand harbours out in the far reaches ---- */
 function portSizeOf(c){
