@@ -184,11 +184,50 @@ canvas{position:absolute;inset:0;display:block;}
   border-radius:9px;padding:4px 9px;color:#e7eefb;line-height:1;transition:opacity .2s;}
 #mute:hover{opacity:1;}
 
-/* feel-tuning panel */
-#tune{position:absolute;right:14px;top:52px;z-index:45;width:268px;display:none;
-  background:rgba(10,18,34,.93);border:1px solid #2c3a5e;border-radius:12px;
-  padding:13px 14px 11px;box-shadow:0 12px 40px rgba(0,0,0,.6);backdrop-filter:blur(7px);
-  font-size:12px;max-height:calc(100vh - 66px);overflow-y:auto;}
+/* the ship's menu (Esc / ☰) — crew, tuning, voyage */
+#menuBtn{position:absolute;right:56px;top:11px;z-index:40;cursor:pointer;
+  font-size:18px;opacity:.7;background:rgba(8,17,31,.5);border:1px solid #2b3a5c;
+  border-radius:9px;padding:4px 10px;color:#e7eefb;line-height:1;transition:opacity .2s;}
+#menuBtn:hover{opacity:1;}
+#menu{position:absolute;inset:0;z-index:68;display:flex;align-items:center;justify-content:center;
+  background:rgba(5,12,24,.58);}
+.mbox{background:linear-gradient(#1a2c4d,#13233f);border:1px solid #34466e;border-radius:14px;
+  box-shadow:0 16px 50px rgba(0,0,0,.6);width:min(600px,94vw);display:flex;flex-direction:column;}
+.mtabs{display:flex;align-items:center;gap:6px;padding:12px 14px 0;}
+.mtab{font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:#9fb6dd;flex:1;
+  background:#14223c;border:1px solid #2a3a5c;border-bottom:none;border-radius:10px 10px 0 0;padding:9px 4px;}
+.mtab.on{background:#22375e;color:#ffe6a6;border-color:#3a5080;}
+.mx{cursor:pointer;color:#8aa0c8;font-size:16px;padding:4px 10px;}
+.mx:hover{color:#fff;}
+.mbody{border-top:1px solid #3a5080;padding:14px 18px 16px;max-height:70vh;overflow-y:auto;}
+.mtabpane{display:none;}
+.mtabpane.on{display:block;}
+/* crew cards */
+.crewbar{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  background:#14223c;border:1px solid #2a3a5c;border-radius:10px;padding:9px 12px;margin-bottom:11px;
+  font-size:12.5px;color:#cdd9f3;flex-wrap:wrap;}
+.crewbar b{color:#ffd86b;}
+.ccard{display:flex;gap:12px;align-items:flex-start;background:#15243f;border:1px solid #2a3a5c;
+  border-radius:11px;padding:10px 12px;margin:8px 0;}
+.ccard.struck{opacity:.62;}
+.pface{position:static;inset:auto;width:56px;height:56px;border-radius:9px;border:1px solid #3a5080;background:#0c1830;flex:none;image-rendering:pixelated;}
+.cinfo{flex:1;min-width:0;}
+.cname{font-weight:800;color:#eaf2ff;font-size:14px;}
+.crole{color:#7fd6c8;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+.crep{color:#5a6f96;font-size:11px;letter-spacing:1.6px;margin:3px 0 2px;}
+.crep b{color:#ffd86b;}
+.cperk{color:#9fb6dd;font-size:11.5px;line-height:1.45;}
+.cwage{color:#8aa0c8;font-size:11px;white-space:nowrap;}
+.bench{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+.bench .sbtn{font-size:11px;padding:4px 9px;}
+/* voyage tab */
+.vrow{display:flex;justify-content:space-between;color:#dbe6ff;font-size:13px;padding:5px 2px;border-bottom:1px dashed #243352;}
+.vrow b{color:#ffe9a6;}
+.vbtns{display:flex;gap:8px;margin-top:13px;}
+.vbtns .sbtn{flex:1;padding:8px 4px;}
+
+/* feel-tuning panel — lives inside the menu's Tuning tab now */
+#tune{display:block;font-size:12px;}
 #tune h3{margin:0 0 3px;font-size:13px;letter-spacing:.5px;color:#bcd2ff;}
 #tune .sub{color:#8aa0c8;font-size:11px;margin:0 0 10px;line-height:1.4;}
 #tune .row{margin:7px 0;}
@@ -236,10 +275,22 @@ canvas{position:absolute;inset:0;display:block;}
 <canvas id="c"></canvas>
 <a id="back" href="../index.html" aria-label="Back to the desktop">&larr; desktop</a>
 <div id="mute" title="Sound on/off (P)">🔊</div>
+<div id="menuBtn" title="Menu (Esc)">☰</div>
 
+<div id="menu" class="hidden">
+  <div class="mbox">
+    <div class="mtabs">
+      <button class="mtab" data-tab="crew">⚓ Crew</button>
+      <button class="mtab" data-tab="tuning">⚙ Tuning</button>
+      <button class="mtab" data-tab="voyage">🧭 Voyage</button>
+      <span class="mx" id="menuClose" title="Close (Esc)">✕</span>
+    </div>
+    <div class="mbody">
+      <div class="mtabpane" id="tabCrew"></div>
+      <div class="mtabpane" id="tabTuning">
 <div id="tune">
   <h3>⚙ Feel tuning</h3>
-  <p class="sub">Slide until the sailing feels right, then tell me the numbers. (T to hide)</p>
+  <p class="sub">Slide until it feels right, then tell me the numbers.</p>
   <div id="tuneRows"></div>
   <div class="btns">
     <button id="tuneReset">Reset</button>
@@ -254,6 +305,7 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="ptrow"><span>Fish</span><span class="ptbtns" id="ptFish"></span></div>
   <div class="ptrow"><span>Whale</span><span class="ptbtns" id="ptWhale"></span></div>
   <div class="ptrow"><span>Port</span><span class="ptbtns" id="ptPort"></span></div>
+  <div class="ptrow"><span>Crew</span><span class="ptbtns" id="ptCrew"></span></div>
   <p class="hint">Force the time of day or weather to test them. “Auto” hands control back to the natural cycle. Fish/Whale buttons drop one of that kind beside the boat. (Not saved.)</p>
   <div class="pt-sep"></div>
   <h4>⚔ Island combat</h4>
@@ -268,6 +320,11 @@ canvas{position:absolute;inset:0;display:block;}
   <h4>⚓ Ports &amp; economy</h4>
   <div id="tunePortRows"></div>
 </div>
+      </div>
+      <div class="mtabpane" id="tabVoyage"></div>
+    </div>
+  </div>
+</div>
 
 <div id="title">
   <h1>BOATS</h1>
@@ -277,7 +334,7 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="keys">
     <kbd>W</kbd>/<kbd>↑</kbd> raise sail &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> furl &nbsp; <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> steer<br>
     <kbd>Space</kbd> drop sail &nbsp; <kbd>M</kbd> map &nbsp; <kbd>F</kbd> cast the net &nbsp; <kbd>🖱</kbd> harpoon a spout &nbsp; <kbd>E</kbd> dock &amp; explore<br>
-    <kbd>J</kbd> contracts &nbsp; <kbd>C</kbd> cook &nbsp; <kbd>L</kbd> log &nbsp; <kbd>T</kbd> tune
+    <kbd>J</kbd> contracts &nbsp; <kbd>C</kbd> cook &nbsp; <kbd>L</kbd> log &nbsp; <kbd>Esc</kbd> menu &amp; crew
   </div>
 </div>
 
@@ -530,7 +587,7 @@ let fmCanvas=null, fmCtx=null, fmCX=0, fmCY=0, fmSpan=1, fmDirty=true, fmDrag=nu
 
 function reveal(){
   const cgx=Math.floor(boat.x/EXP), cgy=Math.floor(boat.y/EXP);
-  const R=8;
+  const R=Math.round(8 + crewRep('carto')*0.9);   // a good Cartographer sees further from the masthead
   for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
     if(dx*dx+dy*dy>R*R) continue;
     const gx=cgx+dx, gy=cgy+dy; if(gx<0||gy<0||gx>=EGW||gy>=EGW) continue;
@@ -564,6 +621,7 @@ function doSave(){
       well:well, flog:flog, fed:fed, spoils:spoils, whiteTaken:whiteTaken,
       disc:discoveredCount, ports:portCount,
       hull:Math.round(hull), upg:UPG, act:missions, mdone:missionsDone, doneIds:doneIds.slice(-80), marks:marks,
+      crew:crew, provisions:provisions, buoys:buoys, cu:crewUnpaid?1:0, chg:crewHungry?1:0, sda:Math.round(seaDayAcc),
       tleads:cores.filter(c=>c.forceBuried).map(c=>c.idx),
       pv:cores.filter(c=>c.visitedPort).map(c=>c.idx),
       found:cores.filter(c=>c.found).map(c=>c.idx),
@@ -598,6 +656,9 @@ function loadSave(){
     well=s.well||{}; flog=s.flog||{}; fed=s.fed||0; potions=s.potions||0;
     spoils=s.spoils||{}; whiteTaken=!!s.whiteTaken;
     UPG=s.upg||{}; missions=s.act||[]; missionsDone=s.mdone||0; doneIds=s.doneIds||[]; marks=s.marks||[];
+    if(s.crew && s.crew.length) crew=s.crew; else genCrew();         // older saves sign a crew on the spot
+    provisions = s.provisions===undefined ? 20 : s.provisions;
+    buoys=s.buoys||[]; crewUnpaid=!!s.cu; crewHungry=!!s.chg; seaDayAcc=s.sda||0;
     hull = (s.hull===undefined) ? hullMaxNow() : clamp(s.hull,0,hullMaxNow());
     (s.tleads||[]).forEach(idx=>{ if(cores[idx]) cores[idx].forceBuried=true; });
     (s.pv||[]).forEach(idx=>{ if(cores[idx]) cores[idx].visitedPort=true; });
@@ -614,14 +675,16 @@ addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_','j','k'].includes(k)) e.preventDefault();
   if(summaryOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideSummary(); return; }
   if(invOpen){ if(k==='i'||k==='escape'||k==='e') closeInv(); return; }
+  if(menuOpen){ if(k==='escape') closeMenu(); else if(k==='t') switchMenuTab('tuning'); return; }
   if(flogOpen){ if(k==='l'||k==='escape'||k==='e') closeFlog(); return; }
   if(koOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideKO(); return; }
   if(imapOpen){ if(k==='m'||k==='escape'||k==='e'){ imapOpen=false; } return; }
   if(shopOpen){ if(k==='escape'||k==='e') closeShop(); return; }
   if(journalOpen){ if(k==='j'||k==='escape'||k==='e') closeJournal(); return; }
   if(!started || renaming) return;
-  if(k==='t'){ const t=document.getElementById('tune'); t.style.display = t.style.display==='block'?'none':'block'; return; }
+  if(k==='t'){ openMenu('tuning'); return; }
   if(k==='p'){ toggleMute(); return; }
+  if(k==='escape'){ if(!mapOpen && !imapOpen) openMenu(); return; }   // the ship's menu, from anywhere
   if(mode==='island'){                          // ---- on foot ----
     if(k==='j') doSlash();
     else if(k===' ') doDash();
@@ -769,7 +832,7 @@ function updateEnv(dt){            // day/night + weather — shared by sea AND 
 }
 function update(dt){
   updateEnv(dt);
-  if(paused||mapOpen||flogOpen||koOpen) return;
+  if(paused||mapOpen||flogOpen||koOpen||menuOpen) return;
   // wind meanders gently (calm) — gustier & stronger in a storm
   wind.a = 0.6 + 0.55*Math.sin(time*0.035*TUNE.windDrift) + 0.3*Math.sin(time*0.013*TUNE.windDrift+1.7)
            + env.storm*0.7*Math.sin(time*0.6);
@@ -791,7 +854,7 @@ function update(dt){
   // wind efficiency: heading vs where wind blows TO (downwind = fast)
   const align=Math.cos(boat.a-wind.a);
   const eff = (1-TUNE.windSpread) + TUNE.windSpread*((align+1)/2)*1.6;   // forgiving: always >0
-  const target = boat.sail*TUNE.baseSpeed*uSpeedMul()*eff*wind.str*(limpT>0?0.5:1)*lowHullMul(); // swamped/holed = slower
+  const target = boat.sail*TUNE.baseSpeed*uSpeedMul()*eff*wind.str*(limpT>0?0.5:1)*lowHullMul()*(crewStruck()?0.94:1); // swamped/holed/grumbling = slower
   const rate = (target>boat.spd? TUNE.accel : TUNE.glide);
   boat.spd += (target-boat.spd)*(1-Math.exp(-rate*dt));
   // a battered hull weeps — splashing leaks below 35%, and the sea punishes hard sailing in a real blow
@@ -865,6 +928,7 @@ function update(dt){
   updateFishing(dt);
   updateWhaling(dt);
   updateMissions(dt);
+  updateCrew(dt);                 // wages & rations fall due with the sea-day
 
   // toasts
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
@@ -1007,6 +1071,13 @@ function drawBoat(){
   pctx.quadraticCurveTo(L*0.05,-L*0.22,-L*0.38,-L*0.12);
   pctx.lineTo(-L*0.38,L*0.12);
   pctx.quadraticCurveTo(L*0.05,L*0.22,L*0.46,0); pctx.fill();
+  // the crew about the deck — four small souls who keep her moving
+  if(crew.length>1){ const sway=Math.sin(time*1.7)*0.04;
+    const spots=[[-0.30,0.10],[-0.13,-0.12],[0.04,0.11],[0.22,-0.07]];
+    for(let ci=1;ci<crew.length;ci++){ const sp=spots[ci-1]||spots[0], RC=ROLE_DEF[crew[ci].role];
+      const fx2=L*(sp[0]+sway*(ci%2?1:-1)), fy2=L*sp[1];
+      pctx.fillStyle='#2c2418'; pctx.fillRect(fx2-0.8*s, fy2-0.7*s, 1.6*s, 1.5*s);
+      pctx.fillStyle=RC.col; pctx.fillRect(fx2-0.8*s, fy2-1.9*s, 1.6*s, 1.3*s); } }
   // sail — billows to the lee side relative to wind
   const rel=Math.sin(wind.a-boat.a); const billow=clamp(rel,-1,1);
   pctx.fillStyle='#f4efe0';
@@ -1631,7 +1702,7 @@ function updateWhale(w,dt){
       splashAt(w.x,w.y,true); splashAt(w.x+Math.cos(w.a)*w.sp.len*0.2,w.y+Math.sin(w.a)*w.sp.len*0.2,true);
       for(let i=0;i<3;i++) seafx.push({k:'spl', x:w.x+(Math.random()-0.5)*w.sp.len*0.8, y:w.y+(Math.random()-0.5)*w.sp.len*0.8, t:-i*0.1, life:0.6, big:true});
       blowSfx(0.8);
-      if(hunt&&hunt.w===w&&bd<48){ hull-=30; seaMsg('💥 her breach slams the hull!','#ff9f8a'); } } }
+      if(hunt&&hunt.w===w&&bd<48){ hull-=30*masterDmgMul(); seaMsg('💥 her breach slams the hull!','#ff9f8a'); } } }
   else if(w.sp.breachy && (w.st==='roam'||w.st==='hooked')){
     w.breachT-=dt*(w.st==='hooked'?2:1)*(w.sp.breachy);
     if(w.breachT<=0){ w.breachT=16+Math.random()*22; w.breachK=0.001; } }
@@ -1669,7 +1740,7 @@ function updateWhale(w,dt){
       } else {
         w.x+=w.ramVX*170*dt; w.y+=w.ramVY*170*dt; w.curSpd=170; w.swimPh+=dt*7;
         if(Math.random()<0.4) splashAt(w.x+Math.cos(w.a)*w.sp.len*0.3, w.y+Math.sin(w.a)*w.sp.len*0.3,false);
-        if(bd<26){ hull-=45; const kx=w.ramVX, ky=w.ramVY;
+        if(bd<26){ hull-=45*masterDmgMul(); const kx=w.ramVX, ky=w.ramVY;
           if(isWater(boat.x+kx*32,boat.y)) boat.x+=kx*32; if(isWater(boat.x,boat.y+ky*32)) boat.y+=ky*32;
           splashAt(boat.x,boat.y,true); sfx('hurt'); seaMsg('💥 RAMMED!','#ff5d4a');
           w.ramSt=0; w.ramT=12+Math.random()*5; w.t=0; }
@@ -1825,8 +1896,8 @@ function updateHunt(dt){
     const align=Math.cos(boat.a-Math.atan2(ly,lx));           // bow to the pull = safe
     const sf=clamp(w.curSpd/85,0.3,1.5);
     hunt.strain += dt*WTUNE.strainRate*w.sp.strainMul*( 12*(0.9-align)*sf + (w.thrash>0?24:0) + (snag?55:0) );
-    if(snag){ hull-=12*dt; if(Math.random()<0.2) splashAt(boat.x,boat.y,false); }
-    if(w.thrash>0 && hunt.strain>78) hull-=14*dt;
+    if(snag){ hull-=12*dt*masterDmgMul(); if(Math.random()<0.2) splashAt(boat.x,boat.y,false); }
+    if(w.thrash>0 && hunt.strain>78) hull-=14*dt*masterDmgMul();
     boat.spd=w.curSpd*0.97;                                   // towed — the ride
   } else { hunt.strain-=20*dt; hunt.snag=false; }
   if(w.st==='diveline') hunt.strain += dt*26*WTUNE.strainRate;   // the deep pulls hard — give line!
@@ -2310,7 +2381,7 @@ function drawHUD(){
   ctx.fillStyle=missions.length?'#e8c06a':'#52617e'; ctx.fillText('📜 '+missions.length, 188, 54);
   ctx.font='12px system-ui';
   ctx.fillStyle = holdN>=holdC ? '#ff9f8a' : '#cdd9f3';
-  ctx.fillText('🧺 Hold '+holdN+' / '+holdC+'      🪙 '+cargo.gold, 22, 74);
+  ctx.fillText('🧺 Hold '+holdN+' / '+holdC+'    🪙 '+cargo.gold+'    🍖 '+provisions, 22, 74);
   const wn=wellN(), wc=eWell(), spn=spoilN();
   ctx.fillStyle = wn>=wc ? '#ff9f8a' : '#9fd8e8';
   ctx.fillText('🐟 Well '+wn+' / '+wc+(spn>0?'   🛢 '+spn:'')+(fed>0?'   🍲 +'+fed+' ♥':''), 22, 94);
@@ -2322,7 +2393,9 @@ function drawHUD(){
     if(low) ctx.globalAlpha=0.6+0.4*Math.sin(time*6);
     roundRect(40,106,Math.max(2,150*hf),8,4); ctx.fill(); ctx.globalAlpha=1;
     ctx.fillStyle=low?'#ff9f8a':'#8aa0c8'; ctx.font='10px system-ui';
-    ctx.fillText(low?(hull<=0?'HOLED — find a shipwright':'leaking — repair at port'):Math.round(hull)+' / '+hm, 196, 114); }
+    ctx.fillText(low?(hull<=0?'HOLED — find a shipwright':'leaking — repair at port'):Math.round(hull)+' / '+hm, 196, 114);
+    if(crewStruck()){ ctx.fillStyle='#ff9f8a'; ctx.font='700 10px system-ui';
+      ctx.fillText('⚠ crew '+(crewUnpaid?'unpaid':'')+(crewUnpaid&&crewHungry?' & ':'')+(crewHungry?'hungry':'')+' — Esc to settle', 22, 124); } }
   // nearest charted objective, under the weather pill
   { let best=null,bd=1e18;
     for(const mk of allMarks()){ const d=(mk.x-boat.x)**2+(mk.y-boat.y)**2; if(d<bd){ bd=d; best=mk; } }
@@ -2443,6 +2516,14 @@ function drawMinimap(){
     ctx.strokeStyle='#7a5a1c'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(px,py+3); ctx.lineTo(px,py-5); ctx.stroke();
     ctx.fillStyle='#e7b416'; ctx.beginPath(); ctx.moveTo(px,py-5); ctx.lineTo(px+5.5,py-3.2); ctx.lineTo(px,py-1.4); ctx.closePath(); ctx.fill();
   }
+  // the Craftsman's buoys within the glass
+  for(const b of buoys){
+    const px=mx+(b.x-boat.x)/span*size+size/2, py=my+(b.y-boat.y)/span*size+size/2;
+    if(px<mx+5||px>mx+size-5||py<my+5||py>my+size-5) continue;
+    ctx.save(); ctx.translate(px,py); ctx.rotate(Math.PI/4);
+    ctx.fillStyle='#2a9a98'; ctx.fillRect(-2.6,-2.6,5.2,5.2); ctx.restore();
+    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.strokeRect(px-1.2,py-1.2,2.4,2.4);
+  }
   // contract & rumor marks within the glass
   for(const mk of allMarks()){
     const px=mx+(mk.x-boat.x)/span*size+size/2, py=my+(mk.y-boat.y)/span*size+size/2;
@@ -2551,6 +2632,14 @@ function drawFullMap(){
     ctx.fillText(MK_GLYPH[mk.kind]||'◎', px, py+4);
     ctx.font='italic 9.5px Georgia,serif'; ctx.textAlign='left';
     ctx.fillText(mk.label||'', px+9, py-5);
+  }
+  // the Craftsman's buoys
+  for(const b of buoys){
+    if(b.x<ox||b.x>ox+fmSpan||b.y<oy||b.y>oy+fmSpan) continue;
+    const px=w2px(b.x), py=w2py(b.y);
+    ctx.fillStyle='#2a9a98'; ctx.save(); ctx.translate(px,py); ctx.rotate(Math.PI/4); ctx.fillRect(-3.4,-3.4,6.8,6.8); ctx.restore();
+    ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.strokeRect(px-1.4,py-1.4,2.8,2.8);
+    ctx.fillStyle='#1c6a68'; ctx.font='italic 9.5px Georgia,serif'; ctx.textAlign='left'; ctx.fillText('buoy '+b.n, px+8, py+3);
   }
   // boat
   ctx.save(); ctx.translate(w2px(boat.x),w2py(boat.y)); ctx.rotate(boat.a+Math.PI/2);
@@ -3958,7 +4047,7 @@ function drawIslandMap(){
  *  hull that now carries its scars and sells tiered upgrades,
  *  the board posts contracts, the tavern trades in rumors.
  * ============================================================ */
-const DEFAULT_ETUNE={ sellMul:1, payMul:1, repairCost:0.5, stormDmg:1, groundDmg:1 };
+const DEFAULT_ETUNE={ sellMul:1, payMul:1, repairCost:0.5, stormDmg:1, groundDmg:1, wageMul:1, rationCost:1 };
 let ETUNE=Object.assign({},DEFAULT_ETUNE);
 let UPG={};                       // owned upgrade levels, by track key
 let hull=100, groundCD=0, stormHitCD=0;       // the persistent hull (limpT lives with the whaling code)
@@ -3994,7 +4083,7 @@ function uTurnMul(){ return 1+0.12*uLvl('keel'); }
 function hullMaxNow(){ return Math.round(WTUNE.hullMax*(1+0.35*uLvl('plating'))); }
 function uWeatherMul(){ return 1-0.18*uLvl('plating'); }
 function lowHullMul(){ const f=hull/Math.max(1,hullMaxNow()); return f>=0.3?1:lerp(0.5,1,f/0.3); }
-function hullHit(dmg,msg){ const was=hull; hull=clamp(hull-dmg*uWeatherMul(),0,hullMaxNow());
+function hullHit(dmg,msg){ const was=hull; hull=clamp(hull-dmg*uWeatherMul()*masterDmgMul(),0,hullMaxNow());
   if(msg) seaMsg(msg+'  (hull −'+Math.round(was-hull)+')','#ff9f8a'); sfx('thunk',0.7);
   if(hull<=0 && was>0) toast('🛟  The hull is HOLED','half speed — crawl to a shipwright'); queueSave(); }
 function eNetLen(){ return FTUNE.netLen+130*uLvl('net'); }
@@ -4150,7 +4239,7 @@ function leavePort(){
 /* ---- walking the town ---- */
 function updatePort(dt){
   itime+=dt; updateEnv(dt);
-  if(!shopOpen && !journalOpen && !mapOpen){
+  if(!shopOpen && !journalOpen && !mapOpen && !menuOpen){
     let mvx=0,mvy=0;
     if(keys['arrowleft']||keys['a']) mvx-=1; if(keys['arrowright']||keys['d']) mvx+=1;
     if(keys['arrowup']||keys['w']) mvy-=1; if(keys['arrowdown']||keys['s']) mvy+=1;
@@ -4282,6 +4371,9 @@ function drawPortWorld(){
     pctx.fillStyle='#6e4a2c'; pctx.beginPath(); pctx.ellipse(dx2,dy2+bob,6*s,2.2*s,0.1*(i%2?1:-1),0,TAU); pctx.fill(); }
   // drawables sorted by baseline so folk pass in front of and behind things properly
   const draws=[];
+  for(let ci=1;ci<crew.length;ci++){ const m=crew[ci];
+    const cxw=(PRT.jx+(ci%2?-0.9:1.9))*TS+(ci*7%11), cyw=(PRT.H-5.7+(ci%3)*0.5)*TS;
+    draws.push({by:cyw, fn:()=>drawCrewAshore(m,cxw,cyw,s,ci)}); }
   for(const b of PRT.blds) draws.push({by:(b.y0+b.h)*TS-2, fn:()=>drawBuilding(b,s,night,dusk)});
   for(const p of PRT.props) draws.push({by:p.y, fn:()=>drawProp(p,s,night)});
   for(const n of PRT.npcs) draws.push({by:n.y, fn:()=>drawVillager(n,s)});
@@ -4470,6 +4562,10 @@ function renderShop(){
 }
 function marketHTML(){
   let h='', any=false;
+  const pc=Math.max(1,Math.round(ETUNE.rationCost));
+  h+='<div class="shead">Ship’s stores</div><div class="srow2"><span class="ic">🍖</span><span class="nm">Provisions ×'+provisions+'<small>a ration a head each day at sea · '+pc+'g each</small></span>'+
+     '<button class="sbtn" data-act="prov:5" '+(cargo.gold<pc*5?'disabled':'')+'>+5 · '+(pc*5)+'g</button>'+
+     '<button class="sbtn" data-act="prov:20" '+(cargo.gold<pc*20?'disabled':'')+'>+20 · '+(pc*20)+'g</button></div>';
   const sellRow=(icon,name,n,unit,act)=>'<div class="srow2"><span class="ic">'+icon+'</span><span class="nm">'+name+' ×'+n+'<small>'+unit+'g each</small></span><span class="pr">'+(n*unit)+'g</span><button class="sbtn" data-act="'+act+'">Sell</button></div>';
   const fr=[...FISH].sort((a,b)=>b.val-a.val).filter(f=>well[f.key]>0);
   if(fr.length||spoilN()>0){ h+='<div class="shead">The catch</div>';
@@ -4478,9 +4574,9 @@ function marketHTML(){
   const goods=['relic','gems','ore','herb','bits'].filter(k=>cargo[k]>0);
   if(goods.length){ h+='<div class="shead">Expedition goods</div>';
     for(const k of goods){ h+=sellRow(LOOT_ICON[k],LOOT_NAME[k].split(' — ')[0],cargo[k],price(LOOT_SELL[k]),'good:'+k); any=true; } }
-  if(!any) return '<div style="color:#8aa0c8;text-align:center;padding:18px 0;font-style:italic;">nothing to sell — the sea is generous, go take some of it</div>';
-  const tot=marketTotal();
-  h+='<div style="text-align:center;margin-top:12px;"><button class="sbtn" data-act="all" style="padding:7px 22px;">Sell the lot — '+tot+'g</button></div>';
+  if(!any) h+='<div style="color:#8aa0c8;text-align:center;padding:14px 0;font-style:italic;">nothing to sell — the sea is generous, go take some of it</div>';
+  else { const tot=marketTotal();
+    h+='<div style="text-align:center;margin-top:12px;"><button class="sbtn" data-act="all" style="padding:7px 22px;">Sell the lot — '+tot+'g</button></div>'; }
   return h;
 }
 function price(v){ return Math.max(1,Math.round(v*ETUNE.sellMul)); }
@@ -4490,6 +4586,14 @@ function marketTotal(){ let t=0;
   for(const k of ['relic','gems','ore','herb','bits']) t+=(cargo[k]||0)*price(LOOT_SELL[k]);
   return t; }
 function marketSell(act){
+  if(act.indexOf('prov:')===0){                              // laying in stores
+    const n=parseInt(act.split(':')[1]), pc=Math.max(1,Math.round(ETUNE.rationCost)), cost=pc*n;
+    if(cargo.gold<cost) return;
+    cargo.gold-=cost; provisions=Math.min(99,provisions+n); sfx('pick',1.1);
+    if(crewHungry && provisions>=crew.length){ provisions-=crew.length; crewHungry=false;
+      toast('🍖  The crew eats at last','they turn to with a will'); }
+    queueSave(); renderShop(); return;
+  }
   let got=0;
   if(act==='all'){ got=marketTotal(); well={}; spoils={}; for(const k of ['relic','gems','ore','herb','bits']) cargo[k]=0; }
   else { const parts=act.split(':'), kind=parts[0], key=parts[1];
@@ -4805,6 +4909,8 @@ const ETUNE_DEF=[
   ['repairCost','Repair g / point',0,2,0.05],
   ['stormDmg','Storm damage ×',0,3,0.1],
   ['groundDmg','Grounding dmg ×',0,3,0.1],
+  ['wageMul','Crew wages ×',0,3,0.1],
+  ['rationCost','Ration cost ×',0,3,0.1],
 ];
 function buildPortTune(){ const host=document.getElementById('tunePortRows'); if(!host) return; host.innerHTML='';
   ETUNE_DEF.forEach(([k,label,min,max,step])=>{ const row=document.createElement('div'); row.className='row';
@@ -4824,6 +4930,224 @@ function teleportToPort(){
       boat.x=x; boat.y=y; boat.spd=0; camX=x; camY=y;
       toast('⚓  (debug) hove to off '+best.city, PORT_SIZE_NAME[portSizeOf(best)]); return; } }
 }
+
+/* ============================================================ *
+ *  THE CREW & THE SHIP'S MENU — five souls aboard. Wages and
+ *  rations fall due each day at sea; go broke or hungry and the
+ *  crew downs tools (gently) until you settle. Esc / ☰ opens
+ *  the menu: CREW · TUNING · VOYAGE.
+ * ============================================================ */
+let crew=[], provisions=20, seaDayAcc=0, crewUnpaid=false, crewHungry=false, buoys=[];
+let menuOpen=false, menuTab='crew';
+const CREW_FIRST=['Edda','Pip','Sawyer','Quill','Bram','Maren','Tobin','Isla','Fen','Rook','Greta','Cole','Nan','Silas','Wren','Otto','June','Bonny','Ezra','Tilly'];
+const CREW_LAST=['Brine','Moss','Tack','Farrow','Kettle','Sorrel','Gale','Hollow','Pike','Cooper','Reef','Marrow','Salt','Dray','Finch'];
+const ROLE_DEF={
+  captain:{title:'The Captain', icon:'🧭', col:'#ff8d9c', perk:r=>'rep grows with isles cleared & seas charted — no perks, just standing'},
+  master:{title:'The Master',  icon:'🛡️', col:'#5fc2d6', perk:r=>'−'+(r*4)+'% hull damage from storm, stone & whale'},
+  carto:{title:'The Cartographer', icon:'🗺️', col:'#ffd86b', perk:r=>'+'+Math.round(r*11)+'% fog-of-war cleared as you sail'},
+  craft:{title:'The Craftsman', icon:'🔨', col:'#c98a4a', perk:r=>'works the bench below — higher rep, more trades'},
+  crewman:{title:'The Crewman', icon:'🪢', col:'#9aa6b8', perk:r=>'works the ship — the abler the hand, the smaller the wage'},
+};
+function genCrew(){
+  const rng=mulberry32((SEED>>>0) ^ 0xC4E3D);
+  const used=new Set();
+  const pick=()=>{ for(let t=0;t<30;t++){ const n=CREW_FIRST[(rng()*CREW_FIRST.length)|0]+' '+CREW_LAST[(rng()*CREW_LAST.length)|0];
+    if(!used.has(n)){ used.add(n); return n; } } return 'Salt '+((rng()*99)|0); };
+  crew=[
+    {role:'captain', name:"Cap'n (you)", rep:1},
+    {role:'master',  name:pick(), rep:1+(rng()*3|0)},
+    {role:'carto',   name:pick(), rep:1+(rng()*3|0)},
+    {role:'craft',   name:pick(), rep:1+(rng()*3|0)},
+    {role:'crewman', name:pick(), rep:1+(rng()*3|0)},
+  ];
+}
+function captainRep(){ return clamp(1 + Math.floor(clearedCount/2) + Math.floor(explored.size/80000), 1, 10); }
+function crewStruck(){ return crewUnpaid||crewHungry; }
+function crewRep(role){                       // a struck crew works to rule — perks stop
+  const m=crew.find(c=>c.role===role); if(!m) return 0;
+  const r=m.role==='captain'?captainRep():m.rep;
+  return crewStruck()&&role!=='captain' ? 0 : r;
+}
+function crewmanWage(rep){ return [3,3,3,2.5,2.5,2,2,1.5,1.5,1][clamp(rep,1,10)-1]; }
+function crewWage(m){ if(m.role==='captain') return 0;
+  return (m.role==='crewman'?crewmanWage(m.rep):3)*ETUNE.wageMul; }
+function crewWageTotal(){ let t=0; for(const m of crew) t+=crewWage(m); return Math.round(t*10)/10; }
+function masterDmgMul(){ return 1-0.04*crewRep('master'); }
+/* the day's reckoning — wages in coin, a ration a head (the well feeds you when the barrel's dry) */
+function settleCrewDay(){
+  const w=Math.round(crewWageTotal());
+  let paidStr, fedStr;
+  if(cargo.gold>=w){ cargo.gold-=w; crewUnpaid=false; paidStr='−'+w+'g wages'; }
+  else { crewUnpaid=true; paidStr='⚠ wages unpaid'; }
+  let need=crew.length, fromP=Math.min(provisions,need);
+  provisions-=fromP; need-=fromP;
+  let ate=0;
+  while(need>0){                              // the cheapest fish goes in the pot
+    let pick=null;
+    for(const f of [...FISH].sort((a,b)=>a.val-b.val)){ if((well[f.key]||0)>0){ pick=f; break; } }
+    if(!pick) break;
+    well[pick.key]--; if(well[pick.key]<=0) delete well[pick.key];
+    ate++; need--;
+  }
+  crewHungry = need>0;
+  fedStr = crewHungry ? '⚠ '+need+' went hungry' : fromP+' rations'+(ate?' + '+ate+' fish':'');
+  if(crewUnpaid||crewHungry){ toast('🍖  The crew grumbles', paidStr+' · '+fedStr+' — they down tools till you settle'); sfx('snap',0.5); }
+  else toast('🍖  Crew settled', paidStr+' · '+fedStr);
+  if(menuOpen&&menuTab==='crew') renderCrewTab();
+  queueSave();
+}
+function updateCrew(dt){
+  seaDayAcc+=dt;
+  if(seaDayAcc>=210){ seaDayAcc-=210; settleCrewDay(); }
+}
+function settleNow(){                          // square up from the menu
+  const w=Math.round(crewWageTotal());
+  if(crewUnpaid && cargo.gold>=w){ cargo.gold-=w; crewUnpaid=false; toast('🪙  Wages paid','the crew turns to with a will'); sfx('chest'); }
+  if(crewHungry && provisions>=crew.length){ provisions-=crew.length; crewHungry=false; toast('🍖  A hot meal all round',''); sfx('heart'); }
+  queueSave(); renderCrewTab();
+}
+/* ---- the Craftsman's bench — what he can do depends on the hands that taught him ---- */
+function benchList(){
+  const r=crewRep('craft'), out=[];
+  if(r>=1) out.push({k:'patch', icon:'🛠', label:'Patch the hull', cost:'2 ⛏', fx:'+'+(8+r)+' hull',
+    can: cargo.ore>=2 && hull<hullMaxNow() && mode!=='island',
+    why: cargo.ore<2?'needs 2 ore aboard':hull>=hullMaxNow()?'she\'s sound':'not from shore'});
+  if(r>=3) out.push({k:'brew', icon:'🧪', label:'Brew a draught', cost:(r>=6?'1':'2')+' 🌿', fx:'+1 potion',
+    can: cargo.herb>=(r>=6?1:2) && potions<POT_CAP,
+    why: potions>=POT_CAP?'strap is full':'needs '+(r>=6?1:2)+' herb aboard'});
+  if(r>=5) out.push({k:'mend', icon:'🪡', label:'Mend the net', cost:(r>=8?'1':'3')+' 🦴', fx:'fish again now',
+    can: netCD>0 && cargo.bits>=(r>=8?1:3),
+    why: netCD<=0?'the net is whole':'needs '+(r>=8?1:3)+' bits aboard'});
+  if(r>=7) out.push({k:'buoy', icon:'📍', label:'Drop a buoy', cost:'1 ⛏', fx:'marks this spot ('+buoys.length+'/'+(r-5)+')',
+    can: mode==='sea' && cargo.ore>=1 && buoys.length<r-5,
+    why: mode!=='sea'?'only at sea':buoys.length>=r-5?'all buoys out':'needs 1 ore aboard'});
+  return out;
+}
+function benchDo(k){
+  const r=crewRep('craft'); if(r<=0) return;
+  if(k==='patch' && cargo.ore>=2 && hull<hullMaxNow()){ cargo.ore-=2; hull=Math.min(hullMaxNow(),hull+8+r);
+    toast('🛠  The Craftsman patches her up','+'+(8+r)+' hull'); sfx('thunk'); }
+  else if(k==='brew'){ const c=r>=6?1:2; if(cargo.herb>=c&&potions<POT_CAP){ cargo.herb-=c; potions++;
+    toast('🧪  A draught off the bench','potions '+potions+' / '+POT_CAP); sfx('heart'); } }
+  else if(k==='mend'){ const c=r>=8?1:3; if(netCD>0&&cargo.bits>=c){ cargo.bits-=c; netCD=0;
+    toast('🪡  The net is whole again',''); sfx('secure'); } }
+  else if(k==='buoy'){ if(mode==='sea'&&cargo.ore>=1&&buoys.length<r-5){ cargo.ore-=1;
+    buoys.push({x:Math.round(boat.x), y:Math.round(boat.y), n:buoys.length+1});
+    toast('📍  Buoy '+buoys.length+' over the side','marked on your charts'); sfx('cast'); } }
+  queueSave(); renderCrewTab();
+}
+function dropBuoy(i){ buoys.splice(i,1); buoys.forEach((b,j)=>b.n=j+1); queueSave(); renderCrewTab(); }
+/* the crew ashore — they mind the boat while you walk the town */
+function drawCrewAshore(m,xw,yw,s,i){
+  const [sx,sy0]=iw2p(xw,yw);
+  if(sx<-30||sx>IW+30||sy0<-30||sy0>IH+30) return;
+  const r=4.6*s, bob=Math.sin(itime*1.6+i*1.9)*0.6*s, sy=sy0-bob, RC=ROLE_DEF[m.role];
+  pctx.fillStyle='rgba(0,20,10,.26)'; pctx.beginPath(); pctx.ellipse(sx,sy0+r*0.6,r*0.85,r*0.4,0,0,TAU); pctx.fill();
+  pctx.fillStyle='#241c12'; pctx.beginPath(); pctx.arc(sx,sy,r*0.95,0,TAU); pctx.fill();
+  pctx.fillStyle=RC.col; pctx.beginPath(); pctx.arc(sx,sy,r*0.76,0,TAU); pctx.fill();
+  pctx.fillStyle='#e8c39a'; pctx.beginPath(); pctx.arc(sx,sy-r*0.12,r*0.4,0,TAU); pctx.fill();
+  pctx.fillStyle='#3a2c1a'; pctx.beginPath(); pctx.arc(sx,sy-r*0.3,r*0.34,0,TAU); pctx.fill();
+}
+/* ---- procedural pixel portraits — a face for every name ---- */
+function drawPortrait(cv2,m){
+  const g=cv2.getContext('2d'); g.imageSmoothingEnabled=false;
+  let h=2166136261; for(let i=0;i<m.name.length;i++){ h^=m.name.charCodeAt(i); h=Math.imul(h,16777619); }
+  const rng=mulberry32(h>>>0), R=ROLE_DEF[m.role];
+  g.fillStyle='#0e1d33'; g.fillRect(0,0,28,28);
+  g.fillStyle=R.col; g.globalAlpha=0.18; g.fillRect(0,0,28,28); g.globalAlpha=1;
+  const skin=['#e8c39a','#d8a878','#c08c5a','#a87248'][(rng()*4)|0];
+  const hair=['#3a2c1a','#6e4a28','#9a7a3c','#c0c0c8','#8a3c2a','#222'][(rng()*6)|0];
+  g.fillStyle='#1a2c4a'; g.fillRect(5,20,18,8);                                  // coat
+  g.fillStyle=R.col; g.fillRect(5,20,18,2);                                      // collar in role colours
+  g.fillStyle=skin; g.fillRect(9,7,10,12);                                       // the face
+  g.fillRect(11,19,6,2);                                                         // chin/neck
+  if(rng()<0.45){ g.fillStyle=hair; g.fillRect(9,15,10,4); g.fillRect(11,19,6,2); }   // beard
+  g.fillStyle='#fff'; g.fillRect(11,12,2,2); g.fillRect(16,12,2,2);              // eyes
+  g.fillStyle='#1c2940'; g.fillRect(12,12,1,2); g.fillRect(17,12,1,2);
+  g.fillStyle=hair; g.fillRect(10,11,3,1); g.fillRect(16,11,3,1);                // brows
+  if(rng()<0.6){ g.fillStyle='#9a6a4a'; g.fillRect(13,16,3,1); }                 // mouth
+  g.fillStyle=hair; g.fillRect(9,6,10,3);                                        // hairline
+  if(m.role==='captain'){ g.fillStyle='#1c2434'; g.fillRect(7,4,14,4); g.fillRect(5,7,18,2);
+    g.fillStyle='#ffd86b'; g.fillRect(7,7,14,1); }                               // the tricorn
+  else if(m.role==='master'){ g.fillStyle='#2a7a8a'; g.fillRect(8,4,12,4); g.fillRect(18,7,4,3); }  // bandana
+  else if(m.role==='carto'){ g.fillStyle='#54483c'; g.fillRect(7,4,14,3); g.fillRect(5,6,18,2);     // slouch hat
+    g.strokeStyle='#c8ccd4'; g.lineWidth=1; g.strokeRect(10.5,11.5,3,3); g.strokeRect(15.5,11.5,3,3); }  // spectacles
+  else if(m.role==='craft'){ g.fillStyle='#6e4a28'; g.fillRect(8,4,12,3); g.fillRect(8,6,16,2); }   // flat cap
+  else { g.fillStyle='#8a4a3a'; g.fillRect(8,4,12,4); }                          // knit cap
+}
+/* ---- the menu itself ---- */
+function openMenu(tab){
+  if(!started||renaming||summaryOpen||koOpen||shopOpen) return;
+  menuOpen=true; mapOpen=false; imapOpen=false; closeJournal(); closeFlog(); if(typeof closeInv==='function') closeInv();
+  switchMenuTab(tab||menuTab);
+  document.getElementById('menu').classList.remove('hidden'); sfx('tink',0.8);
+}
+function closeMenu(){ menuOpen=false; document.getElementById('menu').classList.add('hidden'); }
+function switchMenuTab(tab){
+  menuTab=tab;
+  document.querySelectorAll('.mtab').forEach(b=>b.classList.toggle('on', b.dataset.tab===tab));
+  document.querySelectorAll('.mtabpane').forEach(p=>p.classList.toggle('on', p.id==='tab'+tab[0].toUpperCase()+tab.slice(1)));
+  if(tab==='crew') renderCrewTab();
+  if(tab==='voyage') renderVoyageTab();
+}
+function repDots(r){ let s2='<span class="crep">'; for(let i=1;i<=10;i++) s2+=(i<=r?'<b>●</b>':'●'); return s2+'  <b>'+r+'</b>/10</span>'; }
+function renderCrewTab(){
+  const host=document.getElementById('tabCrew'); if(!host) return;
+  const w=Math.round(crewWageTotal());
+  let h='<div class="crewbar"><span>🍖 Provisions <b>'+provisions+'</b></span><span>🪙 Wages <b>'+w+'g</b> / day at sea</span>'+
+    '<span>'+(crewStruck()?'<span style="color:#ff9f8a;font-weight:700;">⚠ '+(crewUnpaid?'UNPAID':'')+(crewUnpaid&&crewHungry?' & ':'')+(crewHungry?'HUNGRY':'')+' — perks stopped</span>':'<span style="color:#7fe3a0;">all hands content</span>')+'</span></div>';
+  if(crewStruck() && ((crewUnpaid&&cargo.gold>=w)||(crewHungry&&provisions>=crew.length)))
+    h+='<div style="text-align:center;margin:-3px 0 9px;"><button class="sbtn" id="settleBtn">Settle up now</button></div>';
+  for(const m of crew){
+    const R=ROLE_DEF[m.role], r=m.role==='captain'?captainRep():m.rep;
+    const struck=crewStruck()&&m.role!=='captain';
+    h+='<div class="ccard'+(struck?' struck':'')+'"><canvas class="pface" width="28" height="28" data-crew="'+m.role+'"></canvas>'+
+      '<div class="cinfo"><div class="cname">'+R.icon+' '+m.name+'</div><div class="crole">'+R.title+'</div>'+
+      repDots(r)+'<div class="cperk">'+R.perk(r)+(m.role==='captain'?'<br><span style="color:#7e93ba;font-size:10.5px;">⚑ '+clearedCount+' isles cleared · '+(explored.size/1000|0)+'k sea charted</span>':'')+'</div>';
+    if(m.role==='craft'){
+      if(struck) h+='<div class="cperk" style="color:#ff9f8a;margin-top:6px;">the bench sits idle — settle the crew first</div>';
+      else { const bl=benchList();
+        h+='<div class="bench">'+bl.map(b=>'<button class="sbtn" data-bench="'+b.k+'" '+(b.can?'':'disabled title="'+b.why+'"')+'>'+b.icon+' '+b.label+' · '+b.cost+' → '+b.fx+'</button>').join('')+'</div>';
+        if(crewRep('craft')<7) h+='<div class="cperk" style="color:#7e93ba;font-size:10.5px;margin-top:4px;">a finer craftsman could '+(crewRep('craft')<3?'brew, mend nets & set buoys':crewRep('craft')<5?'mend nets & set buoys':'set marker buoys')+'</div>';
+        if(buoys.length) h+='<div class="cperk" style="margin-top:5px;">buoys out: '+buoys.map((b,i)=>'📍'+b.n+' <span style="color:#7e93ba;">('+bearTo(b.x,b.y)+' '+fmtDist(Math.hypot(b.x-boat.x,b.y-boat.y))+')</span> <a href="#" data-buoy="'+i+'" style="color:#ff9f8a;text-decoration:none;">✕</a>').join('  ')+'</div>';
+      }
+    }
+    h+='</div><div class="cwage">'+(m.role==='captain'?'no wage':crewWage(m).toFixed(1).replace(/\.0$/,'')+'g / day')+'</div></div>';
+  }
+  h+='<div style="color:#7e93ba;font-size:10.5px;text-align:center;margin-top:9px;">rations at the port market · finer crew will one day drink at the tavern — explorers, nobles, scientists…</div>';
+  host.innerHTML=h;
+  host.querySelectorAll('canvas[data-crew]').forEach(cv2=>{ const m=crew.find(x=>x.role===cv2.dataset.crew); if(m) drawPortrait(cv2,m); });
+  host.querySelectorAll('[data-bench]').forEach(b=>{ b.onclick=()=>benchDo(b.dataset.bench); });
+  host.querySelectorAll('[data-buoy]').forEach(a=>{ a.onclick=e=>{ e.preventDefault(); dropBuoy(parseInt(a.dataset.buoy)); }; });
+  const sb=document.getElementById('settleBtn'); if(sb) sb.onclick=settleNow;
+}
+function renderVoyageTab(){
+  const host=document.getElementById('tabVoyage'); if(!host) return;
+  const wc=WHALES.filter(x=>flog[x.key]).length, fc=FISH.filter(f=>flog[f.key]).length;
+  const rows=[
+    ['Day at sea', ''+(1+Math.floor(time/210))],
+    ['Coin aboard', '🪙 '+cargo.gold],
+    ['Hull', Math.round(hull)+' / '+hullMaxNow()],
+    ['Provisions', provisions+' rations'],
+    ['Isles charted', discoveredCount+'  ·  ⚑ '+clearedCount+' cleared'],
+    ['Ports sighted', ''+portCount],
+    ['Biomes found', biomesFound.size+' / '+BIOMES.length],
+    ['Fish log', fc+' / '+FISH.length+'  ·  🐋 '+wc+' / '+WHALES.length],
+    ['Contracts fulfilled', ''+missionsDone],
+  ];
+  host.innerHTML=rows.map(r=>'<div class="vrow"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('')+
+    '<div class="vbtns"><button class="sbtn ghost" id="vMute">'+(audioOn?'🔊 Sound on':'🔇 Sound off')+'</button>'+
+    '<button class="sbtn ghost" id="vNew">⛵ New voyage</button></div>'+
+    '<div class="shint">a new voyage scuttles this one — world, chart, crew and coin</div>';
+  document.getElementById('vMute').onclick=()=>{ toggleMute(); renderVoyageTab(); };
+  const vn=document.getElementById('vNew');
+  vn.onclick=()=>{ if(vn.dataset.armed){ closeMenu(); begin(true); }
+    else { vn.dataset.armed='1'; vn.textContent='☠ Really scuttle her?'; vn.style.color='#ff9f8a'; } };
+}
+document.getElementById('menuBtn').onclick=()=>{ if(!started) return; menuOpen?closeMenu():openMenu(); };
+document.getElementById('menuClose').onclick=closeMenu;
+document.getElementById('menu').addEventListener('click',e=>{ if(e.target.id==='menu') closeMenu(); });
+document.querySelectorAll('.mtab').forEach(b=>{ b.onclick=()=>switchMenuTab(b.dataset.tab); });
 
 /* ============================ main loop ============================ */
 let last=0;
@@ -4857,7 +5181,7 @@ function frame(ts){
 function frameInner(ts){
   const dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
   if(started && mode==='island'){            // ---- island exploration mode ----
-    if(!invOpen && !imapOpen) updateIsland(dt);   // time stands still while you rummage or read the chart
+    if(!invOpen && !imapOpen && !menuOpen) updateIsland(dt);   // time stands still while you rummage, read or muster
     if(mode!=='island' || !ISL) return;      // knocked out / set sail mid-update — the sea resumes next frame
     drawIslandWorld();
     ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=false;
@@ -4957,6 +5281,15 @@ function buildPlaytest(){
     prt.forEach(([label,fn])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
       b.onclick=fn;
       prEl.appendChild(b); }); }
+  const crw=[['Rations +20',()=>{ provisions=Math.min(99,provisions+20); toast('🍖  (debug) +20 rations',''); }],
+             ['Skip day',()=>{ if(mode==='sea') settleCrewDay(); }],
+             ['Rep +1',()=>{ for(const m of crew) if(m.role!=='captain') m.rep=Math.min(10,m.rep+1);
+               toast('⭐  (debug) crew rep +1',''); queueSave(); if(menuOpen) renderCrewTab(); }],
+             ['Strike',()=>{ crewUnpaid=!crewUnpaid; toast('⚠  (debug) strike '+(crewUnpaid?'ON':'off'),''); }]], cwEl=document.getElementById('ptCrew');
+  if(cwEl){ cwEl.innerHTML='';
+    crw.forEach(([label,fn])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
+      b.onclick=fn;
+      cwEl.appendChild(b); }); }
   refreshPlaytest();
 }
 function refreshPlaytest(){
@@ -5012,10 +5345,12 @@ function begin(fresh){
     camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; clearedCount=0; cargo=loot0(); biomesFound=new Set();
     well={}; flog={}; fed=0; spoils={}; whiteTaken=false;
     UPG={}; missions=[]; marks=[]; doneIds=[]; missionsDone=0; hull=hullMaxNow();
+    genCrew(); provisions=20; buoys=[]; crewUnpaid=false; crewHungry=false; seaDayAcc=0;
   }
+  if(!crew.length) genCrew();
   mode='sea'; nearLand=null; schools=[]; net=null; netCD=0; seafloat=[]; seafx=[]; popQueue=[];
   whales=[]; hunt=null; irons=[]; seadrops=[]; ironCD=0; limpT=0; whaleSpawnT=6;
-  PRT=null; groundCD=0; stormHitCD=0; closeShop(); closeJournal(); hideKO(); imapOpen=false;
+  PRT=null; groundCD=0; stormHitCD=0; closeShop(); closeJournal(); hideKO(); closeMenu(); imapOpen=false;
   if(fresh) potions=0;
   buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune(); buildFishTune(); buildWhaleTune(); buildPortTune();
   document.getElementById('mute').textContent=audioOn?'🔊':'🔇';
