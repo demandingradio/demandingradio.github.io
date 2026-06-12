@@ -821,6 +821,7 @@ function updateEnv(dt){            // day/night + weather — shared by sea AND 
   env.sun=Math.sin(env.dayT*TAU - Math.PI/2);          // -1 = midnight .. +1 = noon
   env.L=clamp(env.sun*0.5+0.5,0,1);
   env.dayName = env.sun>0.35?'Day' : (env.sun>-0.12 ? (env.dayT<0.5?'Dawn':'Dusk') : 'Night');
+  if(started) checkCapLevel();
   const sN=fbm(time*0.011, 7.3, 3);                    // slow weather noise → occasional storms
   env.storm = dev.stormAuto ? smooth(clamp((sN-0.6)/0.16,0,1)) : dev.stormManual;   // ...or pin the weather
   env.flash=Math.max(0, env.flash - dt*3.2);
@@ -3127,7 +3128,7 @@ function startRename(core){ renaming=core; const ov=document.getElementById('ren
   inp.value=core.customName||core.name||''; ov.classList.remove('hidden'); setTimeout(()=>{inp.focus(); inp.select();},40); }
 function finishRename(){ if(!renaming) return; const v=document.getElementById('renameInput').value.trim().slice(0,22);
   if(v) renaming.customName=v; renaming.cleared=true;
-  toast('⚑  '+(renaming.customName||renaming.name)+' claimed', clearedCount+' isle'+(clearedCount===1?'':'s')+' cleared');
+  toast('⚑  '+(renaming.customName||renaming.name)+' claimed', clearedCount+' isle'+(clearedCount===1?'':'s')+' cleared  ·  ⭐ +60 renown');
   document.getElementById('rename').classList.add('hidden'); renaming=null; queueSave(); }
 
 /* ---- combat ---- */
@@ -4513,7 +4514,7 @@ function portHUD(){
   ctx.textAlign='center'; ctx.textBaseline='alphabetic';
   const core=PRT.core;
   // the town banner
-  const bt='⚓  '+core.city, st=PORT_SIZE_NAME[PRT.SZ]+'  ·  🪙 '+cargo.gold;
+  const bt='⚓  '+core.city, st=PORT_SIZE_NAME[PRT.SZ]+'  ·  Capt. '+capTitle()+'  ·  🪙 '+cargo.gold;
   ctx.font='700 17px Georgia,serif'; const bw=Math.max(ctx.measureText(bt).width, 150)+44;
   ctx.fillStyle='rgba(8,17,31,.6)'; roundRect(CSSW/2-bw/2,14,bw,52,12); ctx.fill();
   ctx.fillStyle='#ffe6a6'; ctx.fillText(bt, CSSW/2, 36);
@@ -4942,7 +4943,7 @@ let menuOpen=false, menuTab='crew';
 const CREW_FIRST=['Edda','Pip','Sawyer','Quill','Bram','Maren','Tobin','Isla','Fen','Rook','Greta','Cole','Nan','Silas','Wren','Otto','June','Bonny','Ezra','Tilly'];
 const CREW_LAST=['Brine','Moss','Tack','Farrow','Kettle','Sorrel','Gale','Hollow','Pike','Cooper','Reef','Marrow','Salt','Dray','Finch'];
 const ROLE_DEF={
-  captain:{title:'The Captain', icon:'🧭', col:'#ff8d9c', perk:r=>'rep grows with isles cleared & seas charted — no perks, just standing'},
+  captain:{title:'The Captain', icon:'🧭', col:'#ff8d9c', perk:r=>'renown grows with isles cleared & seas charted — finer hands will one day sign under a known name'},
   master:{title:'The Master',  icon:'🛡️', col:'#5fc2d6', perk:r=>'−'+(r*4)+'% hull damage from storm, stone & whale'},
   carto:{title:'The Cartographer', icon:'🗺️', col:'#ffd86b', perk:r=>'+'+Math.round(r*11)+'% fog-of-war cleared as you sail'},
   craft:{title:'The Craftsman', icon:'🔨', col:'#c98a4a', perk:r=>'works the bench below — higher rep, more trades'},
@@ -4961,7 +4962,26 @@ function genCrew(){
     {role:'crewman', name:pick(), rep:1+(rng()*3|0)},
   ];
 }
-function captainRep(){ return clamp(1 + Math.floor(clearedCount/2) + Math.floor(explored.size/80000), 1, 10); }
+/* the Captain's standing — renown earned by exactly two deeds: isles cleared, seas charted */
+const CAP_TITLES=['Unproven','Greenhorn','Coastwise','Saltworn','Far-Sailed','Well-Spoken-Of','Renowned','Storied','Legendary','the Stuff of Songs'];
+const CAP_LVLS=[0,40,100,180,290,430,600,820,1100,1450];     // cumulative renown to reach level i+1
+let lastCapLevel=1;
+function capXPisles(){ return clearedCount*60; }              // a cleared isle is worth a season of sailing
+function capXPfog(){ return Math.floor(explored.size/2500); } // ~a point per league of fresh water charted
+function capXP(){ return capXPisles()+capXPfog(); }
+function captainRep(){ const xp=capXP();
+  let l=1; for(let i=9;i>=0;i--){ if(xp>=CAP_LVLS[i]){ l=i+1; break; } } return l; }
+function capTitle(){ return CAP_TITLES[captainRep()-1]; }
+function capNext(){ const l=captainRep(); if(l>=10) return null;
+  return {have:capXP()-CAP_LVLS[l-1], need:CAP_LVLS[l]-CAP_LVLS[l-1], title:CAP_TITLES[l]}; }
+function checkCapLevel(){                                     // the moment your name grows
+  const l=captainRep();
+  if(l>lastCapLevel){
+    toast('🧭  Your name carries further','REP '+l+' — Capt. '+CAP_TITLES[l-1]); sfx('chest'); sfx('secure');
+    if(menuOpen&&menuTab==='crew') renderCrewTab();
+  }
+  lastCapLevel=Math.max(lastCapLevel,l);
+}
 function crewStruck(){ return crewUnpaid||crewHungry; }
 function crewRep(role){                       // a struck crew works to rule — perks stop
   const m=crew.find(c=>c.role===role); if(!m) return 0;
@@ -5102,8 +5122,16 @@ function renderCrewTab(){
     const R=ROLE_DEF[m.role], r=m.role==='captain'?captainRep():m.rep;
     const struck=crewStruck()&&m.role!=='captain';
     h+='<div class="ccard'+(struck?' struck':'')+'"><canvas class="pface" width="28" height="28" data-crew="'+m.role+'"></canvas>'+
-      '<div class="cinfo"><div class="cname">'+R.icon+' '+m.name+'</div><div class="crole">'+R.title+'</div>'+
-      repDots(r)+'<div class="cperk">'+R.perk(r)+(m.role==='captain'?'<br><span style="color:#7e93ba;font-size:10.5px;">⚑ '+clearedCount+' isles cleared · '+(explored.size/1000|0)+'k sea charted</span>':'')+'</div>';
+      '<div class="cinfo"><div class="cname">'+R.icon+' '+m.name+'</div><div class="crole">'+R.title+(m.role==='captain'?' — '+capTitle().toUpperCase():'')+'</div>'+
+      repDots(r)+'<div class="cperk">'+R.perk(r)+'</div>';
+    if(m.role==='captain'){
+      const nx=capNext();
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'+
+         (nx?'<span class="sbar" style="max-width:150px;"><i style="width:'+Math.round(100*nx.have/nx.need)+'%;background:#ff8d9c;"></i></span>'+
+             '<small style="color:#9fb6dd;font-size:10.5px;">'+nx.have+' / '+nx.need+' to '+nx.title+'</small>'
+           :'<small style="color:#ffd86b;font-size:10.5px;">★ your name is sung in every port</small>')+'</div>'+
+         '<div style="color:#7e93ba;font-size:10.5px;margin-top:3px;">⭐ '+capXP()+' renown — ⚑ '+clearedCount+' isles ('+capXPisles()+') · 🗺️ '+(explored.size/1000|0)+'k charted ('+capXPfog()+')</div>';
+    }
     if(m.role==='craft'){
       if(struck) h+='<div class="cperk" style="color:#ff9f8a;margin-top:6px;">the bench sits idle — settle the crew first</div>';
       else { const bl=benchList();
@@ -5125,6 +5153,7 @@ function renderVoyageTab(){
   const host=document.getElementById('tabVoyage'); if(!host) return;
   const wc=WHALES.filter(x=>flog[x.key]).length, fc=FISH.filter(f=>flog[f.key]).length;
   const rows=[
+    ['Standing', 'Capt. '+capTitle()+'  ·  REP '+captainRep()+'/10'],
     ['Day at sea', ''+(1+Math.floor(time/210))],
     ['Coin aboard', '🪙 '+cargo.gold],
     ['Hull', Math.round(hull)+' / '+hullMaxNow()],
@@ -5348,6 +5377,7 @@ function begin(fresh){
     genCrew(); provisions=20; buoys=[]; crewUnpaid=false; crewHungry=false; seaDayAcc=0;
   }
   if(!crew.length) genCrew();
+  lastCapLevel=captainRep();
   mode='sea'; nearLand=null; schools=[]; net=null; netCD=0; seafloat=[]; seafx=[]; popQueue=[];
   whales=[]; hunt=null; irons=[]; seadrops=[]; ironCD=0; limpT=0; whaleSpawnT=6;
   PRT=null; groundCD=0; stormHitCD=0; closeShop(); closeJournal(); hideKO(); closeMenu(); imapOpen=false;
