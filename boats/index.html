@@ -166,6 +166,23 @@ canvas{position:absolute;inset:0;display:block;}
   color:#2c0e14;background:linear-gradient(#ffb3a6,#e8786a);border:none;border-radius:10px;padding:10px 28px;box-shadow:0 6px 0 #8e3c2e;}
 #ko button:active{transform:translateY(2px);box-shadow:0 4px 0 #8e3c2e;}
 
+/* the island playtest — ten trials, no sailing */
+#ptest{position:absolute;inset:0;z-index:64;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 120% at 50% 40%, rgba(18,58,107,.6), rgba(7,16,29,.92));}
+.ptbox{background:linear-gradient(#1a2c4d,#13233f);border:1px solid #34466e;border-radius:16px;
+  padding:20px 22px 16px;box-shadow:0 18px 60px rgba(0,0,0,.6);width:min(720px,94vw);max-height:88vh;display:flex;flex-direction:column;}
+.pttitle{font-size:20px;font-weight:800;color:#ffe6a6;letter-spacing:.06em;text-align:center;}
+.ptsub{color:#9fb6dd;font-size:12px;text-align:center;margin:4px 0 12px;}
+.ptgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px;overflow-y:auto;padding:0 2px;}
+.ptcard{display:flex;align-items:center;gap:10px;background:#15243f;border:1px solid #2a3a5c;border-radius:11px;padding:8px 11px;}
+.ptlvl{font-size:19px;font-weight:800;color:#ffe6a6;width:44px;text-align:center;flex:none;}
+.ptlvl small{display:block;font-size:9px;color:#7e93ba;font-weight:600;letter-spacing:.08em;}
+.ptinfo{flex:1;min-width:0;}
+.ptbio{font-weight:700;color:#eaf2ff;font-size:13px;}
+.ptdesc{color:#8aa0c8;font-size:10.5px;line-height:1.4;}
+.ptbtns2{display:flex;flex-direction:column;gap:4px;flex:none;}
+.ptfoot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:#7e93ba;font-size:10.5px;}
+
 /* the claimed isle's leave button */
 #leaveBtn{position:absolute;left:16px;bottom:56px;z-index:42;font:inherit;font-weight:700;font-size:14px;
   cursor:pointer;color:#08213d;background:linear-gradient(#ffe8a6,#f4c869);border:none;border-radius:10px;
@@ -319,6 +336,9 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="pt-sep"></div>
   <h4>⚓ Ports &amp; economy</h4>
   <div id="tunePortRows"></div>
+  <div class="pt-sep"></div>
+  <h4>⚔ Island level scaling</h4>
+  <div id="tuneLvlRows"></div>
 </div>
       </div>
       <div class="mtabpane" id="tabVoyage"></div>
@@ -331,6 +351,7 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="tag">a cartographer's voyage</div>
   <button class="start" id="startBtn">⛵ Set sail</button>
   <button class="start secondary hidden" id="contBtn">Continue voyage</button>
+  <button class="start secondary" id="ptestBtn" style="font-size:13px;padding:8px 20px;">⚔ Island playtest — ten trials</button>
   <div class="keys">
     <kbd>W</kbd>/<kbd>↑</kbd> raise sail &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> furl &nbsp; <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> steer<br>
     <kbd>Space</kbd> drop sail &nbsp; <kbd>M</kbd> map &nbsp; <kbd>F</kbd> cast the net &nbsp; <kbd>🖱</kbd> harpoon a spout &nbsp; <kbd>E</kbd> dock &amp; explore<br>
@@ -391,6 +412,16 @@ canvas{position:absolute;inset:0;display:block;}
     <div class="ssub2" id="jSub"></div>
     <div class="sbody" id="jBody"></div>
     <div class="sfoot"><span class="gold" id="jGold"></span><button class="sbtn ghost" id="jClose">Close (J)</button></div>
+  </div>
+</div>
+
+<div id="ptest" class="hidden">
+  <div class="ptbox">
+    <div class="pttitle">⚔ Island Playtest — the Ten Trials</div>
+    <div class="ptsub">each door is one danger level · tune the fight here, then we wire it to the sea · Esc in-game → Tuning → Island level scaling</div>
+    <div class="ptgrid" id="ptGrid"></div>
+    <div class="ptfoot"><span>↻ re-rolls a fresh isle at that level · nothing here touches your real voyage</span>
+      <button class="sbtn ghost" id="ptBack">↩ Back to title</button></div>
   </div>
 </div>
 
@@ -615,9 +646,10 @@ function checkDiscoveries(){
 /* ============================ save / load ============================ */
 function queueSave(){ lastSave=-999; }   // force a save soon
 function doSave(){
+  if(ptMode) return;                       // playtest trials never touch the real voyage
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, tuneV:2, itune:ITUNE, ituneV:3, ftune:FTUNE, ftuneV:2, wtune:WTUNE, etune:ETUNE, audio:audioOn, cargo:cargo, potions:potions,
+      seed:SEED, boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, tuneV:2, itune:ITUNE, ituneV:3, ftune:FTUNE, ftuneV:2, wtune:WTUNE, etune:ETUNE, ltune:LTUNE, audio:audioOn, cargo:cargo, potions:potions,
       well:well, flog:flog, fed:fed, spoils:spoils, whiteTaken:whiteTaken,
       disc:discoveredCount, ports:portCount,
       hull:Math.round(hull), upg:UPG, act:missions, mdone:missionsDone, doneIds:doneIds.slice(-80), marks:marks,
@@ -654,6 +686,7 @@ function loadSave(){
     FTUNE = (s.ftune && s.ftuneV===2) ? Object.assign({},DEFAULT_FTUNE,s.ftune) : Object.assign({},DEFAULT_FTUNE);   // v2 = playtested fishing defaults
     WTUNE=Object.assign({},DEFAULT_WTUNE,s.wtune||{});
     ETUNE=Object.assign({},DEFAULT_ETUNE,s.etune||{});
+    LTUNE=Object.assign({},DEFAULT_LTUNE,s.ltune||{});
     well=s.well||{}; flog=s.flog||{}; fed=s.fed||0; potions=s.potions||0;
     spoils=s.spoils||{}; whiteTaken=!!s.whiteTaken;
     UPG=s.upg||{}; missions=s.act||[]; missionsDone=s.mdone||0; doneIds=s.doneIds||[]; marks=s.marks||[];
@@ -680,6 +713,7 @@ addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_','j','k'].includes(k)) e.preventDefault();
   if(summaryOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideSummary(); return; }
   if(invOpen){ if(k==='i'||k==='escape'||k==='e') closeInv(); return; }
+  if(ptestOpen){ if(k==='escape'){ closePtMenu(); document.getElementById('title').classList.remove('hidden'); } return; }
   if(menuOpen){ if(k==='escape') closeMenu(); else if(k==='t') switchMenuTab('tuning'); return; }
   if(flogOpen){ if(k==='l'||k==='escape'||k==='e') closeFlog(); return; }
   if(koOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideKO(); return; }
@@ -2901,7 +2935,7 @@ function genIsland(core){
   // the island's monsters: boar (charger) · snake (spitter) · crab (shelled flanker-bait) · dingo (circling pouncer)
   const EBASE={boar:[11,()=>ITUNE.boarHP*(bmods.boarHPMul||1)], snake:[9,()=>ITUNE.snakeHP], crab:[10,()=>ITUNE.crabHP], dingo:[9.5,()=>ITUNE.dingoHP]};
   const mkEn=(type,p,i,elite)=>{ const b3=EBASE[type];
-    enemies.push({type, elite:!!elite, x:p.x, y:p.y, r:b3[0]+(elite?2.5:0), hp:Math.max(1,Math.round(b3[1]()*(elite?2.2:1))),
+    enemies.push({type, elite:!!elite, x:p.x, y:p.y, r:b3[0]+(elite?2.5:0), hp:Math.max(1,Math.round(b3[1]()*(elite?2.2:1)*lvlHpMul())),
       clear:i, st:'idle', tmr:0.4+rng()*1.4, vx:0,vy:0, flash:0, stun:0, aggro:false, cw:rng()<0.5?1:-1, fa:rng()*TAU, sd:rng()*TAU}); };
   const pickEn=()=>{ const wb=(bmods.boarW===undefined?0.5:bmods.boarW)*2, ws=2-wb,   // boar/snake keep their old biome ratio
       wc=bmods.crabW===undefined?0.55:bmods.crabW, wd=bmods.dingoW===undefined?0.55:bmods.dingoW;
@@ -2918,18 +2952,18 @@ function genIsland(core){
       inodes.push({x:p.x,y:p.y, type, cry:!!(bmods.cryRocks&&type==='rock'), hp:type==='rock'?3:type==='ruin'?4:1, r:type==='rock'?10:9, dead:false, flash:0}); }
     if(kind!=='landing'){
       const sM=bmods.spawnMul||1;
-      const ec = kind==='fight' ? Math.max(2,Math.round((2+big+(rng()*2|0))*ITUNE.spawnCount*sM))
+      const ec = Math.round((kind==='fight' ? Math.max(2,Math.round((2+big+(rng()*2|0))*ITUNE.spawnCount*sM))
                : kind==='bonus' ? Math.max(1,Math.round(ITUNE.spawnCount)+big)
-               : 1+(rng()*2|0)+big;
+               : 1+(rng()*2|0)+big) * lvlCntMul());
       for(let k=0;k<ec;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
-        mkEn(pickEn(),p,i,false); cl.enemyCount++; }
+        mkEn(pickEn(),p,i, rng()<lvlEliteCh()); cl.enemyCount++; }      // high levels field elites in the open
       if(kind==='bonus'){                            // an elite guards every cache
         const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x,y:cl.y-TS};
         mkEn(pickEn(),p,i,true); cl.enemyCount++;
         ichests.push({x:cl.x, y:cl.y, big:false, clear:i, opened:false});
       }
       if(kind==='hoard'){                            // the GREAT BOAR guards the island's hoard
-        enemies.push({type:'boar', guard:true, x:cl.x, y:cl.y-TS*1.5, r:17, hp:Math.max(10,Math.round(ITUNE.boarHP*3)), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false, chain:0, cw:1, fa:0, sd:rng()*TAU});
+        enemies.push({type:'boar', guard:true, x:cl.x, y:cl.y-TS*1.5, r:17, hp:Math.max(10,Math.round(ITUNE.boarHP*3*lvlHpMul())), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false, chain:0, cw:1, fa:0, sd:rng()*TAU});
         cl.enemyCount++;
         ichests.push({x:cl.x, y:cl.y, big:true, clear:i, opened:false});
       }
@@ -2984,6 +3018,7 @@ function moveSlide(o,dx,dy){ const r=o.r*0.7; if(islFree(o.x+dx,o.y,r)) o.x+=dx;
 /* ---- enter / leave ---- */
 function enterIsland(core){
   if(core.cleared){ toast('⚑  '+(core.customName||core.name||'This isle')+' is claimed','your flag flies here — nothing left to take'); return; }
+  ISL_LVL=core.lvl||0;                          // danger level: 0 = the old unscaled world
   mode='island'; setPixScale(2); mapOpen=false; nearLand=null; net=null; closeFlog();
   if(hunt){ if(hunt.w){ hunt.w.st='flee'; hunt.w.t=0; } hunt=null; }   // going ashore cuts any line
   irons=[];
@@ -3014,8 +3049,9 @@ function leaveIsland(ko){
     for(let i2=marks.length-1;i2>=0;i2--) if(marks[i2].kind==='treasure'&&marks[i2].core===ISL.core.idx) marks.splice(i2,1); }
   tripLoot=loot0();
   closeInv();
-  mode='sea'; setPixScale(3); fed=0; player.maxhp=eMaxHp();   // the meal is eaten — back to base hearts
+  mode='sea'; setPixScale(3); fed=0; player.maxhp=eMaxHp(); ISL_LVL=0;   // the meal is eaten — back to base hearts
   document.getElementById('leaveBtn').classList.add('hidden'); imapOpen=false;
+  if(ptMode){ paused=true; openPtMenu(); }      // a trial ends back at the ten doors
   enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; idrops=[]; ichests=[]; iburied=null; iflag=null; ihaz=[]; iflies=[]; ileaves=[]; ISL=null; queueSave();
   if(!ko && (hadAny||st.cleared)) showSummary(st,banked);
   else if(!ko) toast('Back aboard','');
@@ -3067,11 +3103,11 @@ function spawnLoot(k,n,x,y){ for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp
 /* chests, digging, and the one E key that does the right thing */
 function openChest(ch){ ch.opened=true; sfx('chest'); burst(ch.x,ch.y,'#ffd23f'); burst(ch.x,ch.y,'#ffffff');
   if(ch.big){ tripStats.hoard=true;
-    spawnLoot('gold',8+(Math.random()*6|0),ch.x,ch.y); spawnLoot('gems',2+(Math.random()*3|0),ch.x,ch.y);
+    spawnLoot('gold',Math.round((8+(Math.random()*6|0))*lvlLootMul()),ch.x,ch.y); spawnLoot('gems',2+(Math.random()*3|0)+(ISL_LVL>0?(ISL_LVL/3|0):0),ch.x,ch.y);
     spawnLoot('relic',1+(Math.random()<0.4?1:0),ch.x,ch.y); spawnLoot('ore',2,ch.x,ch.y); spawnLoot('potion',1,ch.x,ch.y);
     iflag={x:ch.x, y:ch.y-12, t:0};               // the claim ceremony begins
   } else { tripStats.bonus=tripStats.bonus;       // cache
-    spawnLoot('gold',4+(Math.random()*4|0),ch.x,ch.y); spawnLoot('gems',1+(Math.random()*2|0),ch.x,ch.y);
+    spawnLoot('gold',Math.round((4+(Math.random()*4|0))*lvlLootMul()),ch.x,ch.y); spawnLoot('gems',1+(Math.random()*2|0),ch.x,ch.y);
     if(Math.random()<0.5) spawnLoot('relic',1,ch.x,ch.y);
     toast('✨  Cache cracked open',''); }
 }
@@ -3187,7 +3223,7 @@ function killEnemy(en){ const i=enemies.indexOf(en); if(i<0) return; enemies.spl
   if(en.guard||en.elite) burst(en.x,en.y,'#ffd23f');
   const bm=k2=>(ISL&&ISL.biome.mods[k2])||1, bAdd=k2=>(ISL&&ISL.biome.mods[k2])||0;
   spawnLoot('bits', en.guard?4:en.elite?2:1, en.x,en.y);
-  const g = Math.round(((Math.random()<0.5?1+(Math.random()*2|0):0) + (en.guard?6:en.elite?2:0))*bm('goldMul'));
+  const g = Math.round(((Math.random()<0.5?1+(Math.random()*2|0):0) + (en.guard?6:en.elite?2:0))*bm('goldMul')*lvlLootMul());
   if(g) spawnLoot('gold',g,en.x,en.y);
   if(Math.random() < (en.guard?0.9:en.elite?0.35:0.12)*bm('gemMul')) spawnLoot('gems', en.guard?2:1, en.x,en.y);
   if(Math.random() < (en.guard?1:0.22+bAdd('heartCh'))) spawnLoot('potion',1,en.x,en.y);
@@ -3198,7 +3234,7 @@ function hitNode(nd){ nd.hp--; nd.flash=0.14; burst(nd.x,nd.y, nd.type==='rock'?
     const bm=k2=>(ISL&&ISL.biome.mods[k2])||1, bAdd=k2=>(ISL&&ISL.biome.mods[k2])||0;
     if(nd.cry){ spawnLoot('gems',1+(Math.random()*2|0),nd.x,nd.y); spawnLoot('ore',1,nd.x,nd.y); }
     else if(nd.type==='rock'){ spawnLoot('ore',Math.round((1+(Math.random()*2|0))*bm('oreMul')),nd.x,nd.y); if(Math.random()<(bAdd('gemRockCh')||0.3)) spawnLoot('gems',1,nd.x,nd.y); }
-    else if(nd.type==='ruin'){ spawnLoot('gold',Math.round((2+(Math.random()*4|0))*bm('goldMul')),nd.x,nd.y); if(Math.random()<0.4) spawnLoot('relic',1,nd.x,nd.y); if(Math.random()<0.2*bm('gemMul')) spawnLoot('gems',1,nd.x,nd.y); }
+    else if(nd.type==='ruin'){ spawnLoot('gold',Math.round((2+(Math.random()*4|0))*bm('goldMul')*lvlLootMul()),nd.x,nd.y); if(Math.random()<0.4) spawnLoot('relic',1,nd.x,nd.y); if(Math.random()<0.2*bm('gemMul')) spawnLoot('gems',1,nd.x,nd.y); }
     else { spawnLoot('herb',Math.round((1+(Math.random()*2|0))*bm('herbMul')),nd.x,nd.y); if(Math.random()<0.15+bAdd('heartCh')) spawnLoot('potion',1,nd.x,nd.y); }
   } else sfx('tink');
 }
@@ -3213,7 +3249,7 @@ function secureClearing(cl){ if(cl.secured) return; cl.secured=true;
   const ch=ichests.find(c=>c.clear===cl.id && !c.opened);
   if(ch) toast(ch.big?'🗝  The hoard lies unguarded':'✨  A cache is unguarded','walk up and press E');
 }
-function hurtPlayer(nx,ny){ if(player.invul>0) return; player.hp-=ITUNE.enemyDmg; player.invul=1.1; hurtFlash=0.45;
+function hurtPlayer(nx,ny){ if(player.invul>0) return; player.hp-=ITUNE.enemyDmg+lvlDmgAdd(); player.invul=1.1; hurtFlash=0.45;
   moveSlide(player, nx*26, ny*26); sfx('hurt'); if(player.hp<=0) leaveIsland(true); }
 
 /* ---- island update ---- */
@@ -3339,7 +3375,7 @@ function updateIsland(dt){
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
 }
 function updateBoar(en,dx,dy,d,dt,active){ en.tmr-=dt;
-  const chg=ITUNE.boarCharge*(en.guard?1.12:en.elite?1.2:1)*((ISL&&ISL.biome.mods.chargeMul)||1);
+  const chg=ITUNE.boarCharge*(en.guard?1.12:en.elite?1.2:1)*((ISL&&ISL.biome.mods.chargeMul)||1)*lvlSpdMul();
   if(en.st==='charge'){ moveSlide(en, en.vx*dt, en.vy*dt);
     if(Math.random()<0.45) ifx.push({k:'p', x:en.x-en.vx*0.05, y:en.y-en.vy*0.05, vx:(Math.random()-0.5)*22, vy:(Math.random()-0.5)*22, t:0, life:0.32, c:'#c9b89a'});
     if(en.tmr<=0 || !islWalk(en.x+en.vx*0.04, en.y+en.vy*0.04)){
@@ -3355,7 +3391,7 @@ function updateSnake(en,dx,dy,d,dt,active){ en.tmr-=dt;
   if(d<260){ const nx=dx/d, ny=dy/d, want=120; let mv = d<want-15?-1 : d>want+15?1 : 0;
     moveSlide(en, (nx*mv*46 - ny*26)*dt, (ny*mv*46 + nx*26)*dt);
     if(en.tmr<=0 && d<230){ en.tmr=en.elite?2.1:1.8;
-      const ss=86*((ISL&&ISL.biome.mods.spitSpd)||1);
+      const ss=86*((ISL&&ISL.biome.mods.spitSpd)||1)*lvlSpdMul();
       if(en.elite){ const ba=Math.atan2(ny,nx);                         // elite vipers spit a fan of three
         for(const off of [-0.32,0,0.32]) iproj.push({k:'spit', x:en.x+Math.cos(ba+off)*10, y:en.y+Math.sin(ba+off)*10, vx:Math.cos(ba+off)*ss, vy:Math.sin(ba+off)*ss, life:2.6}); }
       else iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*ss, vy:ny*ss, life:2.6}); } }
@@ -3368,7 +3404,7 @@ function updateCrab(en,dx,dy,d,dt,active){ en.tmr-=dt;
   if(en.st==='lunge'){ moveSlide(en,en.vx*dt,en.vy*dt);
     if(en.tmr<=0 || !islWalk(en.x+en.vx*0.03,en.y+en.vy*0.03)){ en.st='recover'; en.tmr=en.elite?0.75:1.05; en.vx=en.vy=0; } }
   else if(en.st==='windup'){ if(en.tmr<=0){ en.st='lunge'; en.tmr=0.34; sfx('snap',1.5);
-    const sp=205*(en.elite?1.15:1); en.vx=Math.cos(en.fa)*sp; en.vy=Math.sin(en.fa)*sp; } }
+    const sp=205*(en.elite?1.15:1)*lvlSpdMul(); en.vx=Math.cos(en.fa)*sp; en.vy=Math.sin(en.fa)*sp; } }
   else if(en.st==='recover'){ if(en.tmr<=0){ en.st='idle'; en.tmr=0.5; } }
   else if(active){
     if(d>46){ const sw=Math.sin(itime*1.6+en.sd), nx=Math.cos(en.fa), ny=Math.sin(en.fa);   // scuttling sidestep approach
@@ -3383,11 +3419,11 @@ function updateDingo(en,dx,dy,d,dt,active){ en.tmr-=dt; en.mv=0;
     if(en.tmr<=0){ en.st='recover'; en.tmr=0.6; en.vx=en.vy=0; } }
   else if(en.st==='crouch'){ en.fa=Math.atan2(dy,dx);
     if(en.tmr<=0){ en.st='pounce'; en.tmr=0.4; sfx('dash',0.55);
-      const sp=265*(en.elite?1.18:1); en.vx=nx*sp; en.vy=ny*sp; } }
+      const sp=265*(en.elite?1.18:1)*lvlSpdMul(); en.vx=nx*sp; en.vy=ny*sp; } }
   else if(en.st==='recover'){ if(en.tmr<=0){ en.st='idle'; en.tmr=0.8+Math.random(); } }
   else if(active){
     const rad = d>100?1 : d<74?-1 : 0;                                    // hold the ring, drift in and out
-    const mx2=nx*rad*82 - ny*en.cw*98, my2=ny*rad*82 + nx*en.cw*98;
+    const sm2=lvlSpdMul(); const mx2=(nx*rad*82 - ny*en.cw*98)*sm2, my2=(ny*rad*82 + nx*en.cw*98)*sm2;
     moveSlide(en,mx2*dt,my2*dt); en.fa=Math.atan2(my2,mx2); en.mv=1;
     if(Math.random()<0.005) en.cw*=-1;                                    // sometimes doubles back
     if(en.tmr<=0 && d<150){ en.st='crouch'; en.tmr=0.45; }
@@ -3961,9 +3997,9 @@ function islandHUD(){
   let cur=null; for(const cl of ISL.clearings) if(inClear(cl,player.x,player.y)){ cur=cl; break; }
   const mains=ISL.clearings.filter(c=>c.kind!=='bonus'), bons=ISL.clearings.filter(c=>c.kind==='bonus');
   const dense=mains.length+bons.length>10, stepM=dense?17:24, dotR=dense?6.5:9, stepB=dense?14:20, dsz=dense?8.5:11;
-  const pad=148, tw=Math.max(190, pad+mains.length*stepM+(bons.length?bons.length*stepB+12:0)), bx=CSSW/2-tw/2;
+  const pad=ISL_LVL>0?196:148, tw=Math.max(190, pad+mains.length*stepM+(bons.length?bons.length*stepB+12:0)), bx=CSSW/2-tw/2;
   ctx.fillStyle='rgba(8,17,31,.52)'; roundRect(bx,14,tw,36,10); ctx.fill();
-  ctx.fillStyle='#dfeaff'; ctx.font='700 14px system-ui'; ctx.fillText('Secured '+securedCount+' / '+ISL.mainN, bx+12, 37);
+  ctx.fillStyle='#dfeaff'; ctx.font='700 14px system-ui'; ctx.fillText((ISL_LVL>0?'Lv '+ISL_LVL+' · ':'')+'Secured '+securedCount+' / '+ISL.mainN, bx+12, 37);
   for(let i=0;i<mains.length;i++){ const cl=mains[i], cxp=bx+pad+i*stepM+10, cyp=32; let col,lab='';
     if(cl.kind==='landing'){ col='#7fa6dd'; lab='⚓'; }
     else if(cl.kind==='hoard'){ col=cl.secured?'#e7b416':(cur===cl?'#ffce54':'#6b5a2e'); lab=cl.secured?'★':(cur===cl?''+cl.enemyCount:'★'); }
@@ -5442,6 +5478,91 @@ function signExplorer(id){
   sfx('secure'); queueSave(); renderShop();
 }
 
+/* ============================================================ *
+ *  ISLAND DANGER LEVELS (1-10) + THE PLAYTEST TRIALS
+ *  A level scales the fight: tougher, meaner, quicker, more of
+ *  them — and richer floors. Level 0 = the old unscaled world
+ *  (the sea keeps it until the feel is locked here).
+ * ============================================================ */
+let ISL_LVL=0, ptMode=false, ptestOpen=false, PT_SEEDS=[];
+for(let i=0;i<=10;i++) PT_SEEDS.push((Math.random()*1e9)|0);
+const DEFAULT_LTUNE={ hpPerLvl:0.22, cntPerLvl:0.09, spdPerLvl:0.03, elitePerLvl:0.035, dmgEvery:3, lootPerLvl:0.12 };
+let LTUNE=Object.assign({},DEFAULT_LTUNE);
+function lvlHpMul(){ return ISL_LVL>0 ? 1+(ISL_LVL-1)*LTUNE.hpPerLvl : 1; }
+function lvlCntMul(){ return ISL_LVL>0 ? 1+(ISL_LVL-1)*LTUNE.cntPerLvl : 1; }
+function lvlSpdMul(){ return ISL_LVL>0 ? 1+(ISL_LVL-1)*LTUNE.spdPerLvl : 1; }
+function lvlEliteCh(){ return ISL_LVL>0 ? (ISL_LVL-1)*LTUNE.elitePerLvl : 0; }
+function lvlDmgAdd(){ return ISL_LVL>0 ? Math.floor((ISL_LVL-1)/Math.max(1,Math.round(LTUNE.dmgEvery))) : 0; }
+function lvlLootMul(){ return ISL_LVL>0 ? 1+(ISL_LVL-1)*LTUNE.lootPerLvl : 1; }
+const LTUNE_DEF=[
+  ['hpPerLvl','Enemy HP / lvl',0,0.6,0.02],
+  ['cntPerLvl','Enemy count / lvl',0,0.3,0.01],
+  ['spdPerLvl','Enemy speed / lvl',0,0.1,0.005],
+  ['elitePerLvl','Elite chance / lvl',0,0.1,0.005],
+  ['dmgEvery','+1 dmg every N lvls',2,6,1],
+  ['lootPerLvl','Loot / lvl',0,0.4,0.02],
+];
+function buildLvlTune(){ const host=document.getElementById('tuneLvlRows'); if(!host) return; host.innerHTML='';
+  LTUNE_DEF.forEach(([k,label,min,max,step])=>{ const row=document.createElement('div'); row.className='row';
+    row.innerHTML='<label>'+label+' <b id="lv_'+k+'">'+LTUNE[k]+'</b></label><input type="range" id="ls_'+k+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+LTUNE[k]+'">';
+    host.appendChild(row);
+    row.querySelector('input').addEventListener('input',e=>{ LTUNE[k]=parseFloat(e.target.value); document.getElementById('lv_'+k).textContent=LTUNE[k]; queueSave(); });
+  });
+}
+/* a synthetic trial isle at a chosen level — bigger, rarer, nastier as the level climbs */
+function ptCore(L,seed){
+  const rng=mulberry32(seed>>>0);
+  const r=44+(L-1)*9+rng()*26;
+  const tiers = L<=3?[0] : L<=5?[0,1] : L<=6?[1] : L<=8?[1,2] : [2];
+  const cand=BIOMES.filter(b=>tiers.indexOf(b.tier)>=0);
+  const biome=cand[(rng()*cand.length)|0];
+  return {x:WORLD/2, y:WORLD/2, r, amp:1, idx:100000+L*977+(seed%50021), name:'Trial '+L,
+    found:true, port:false, lvl:L, biomeObj:biome};
+}
+function ptBoot(){
+  if(started) return;
+  if(!crew.length) genCrew();
+  buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune(); buildFishTune(); buildWhaleTune(); buildPortTune(); buildLvlTune();
+  document.getElementById('mute').textContent=audioOn?'\ud83d\udd0a':'\ud83d\udd07';
+  started=true; paused=true; last=performance.now();
+  initAudio();
+}
+function openPtMenu(){
+  ptestOpen=true; renderPtMenu();
+  document.getElementById('ptest').classList.remove('hidden');
+}
+function closePtMenu(){ ptestOpen=false; document.getElementById('ptest').classList.add('hidden'); }
+function renderPtMenu(){
+  const g=document.getElementById('ptGrid'); if(!g) return;
+  let h='';
+  for(let L=1;L<=10;L++){
+    const c=ptCore(L,PT_SEEDS[L]), b=c.biomeObj;
+    const zones=Math.round(3.5+clamp((c.r-44)/100,0,1)*14);
+    const hp=(1+(L-1)*LTUNE.hpPerLvl).toFixed(1), cnt=(1+(L-1)*LTUNE.cntPerLvl).toFixed(1);
+    const dmg=1+Math.floor((L-1)/Math.max(1,Math.round(LTUNE.dmgEvery))), el=Math.round((L-1)*LTUNE.elitePerLvl*100);
+    h+='<div class="ptcard"><div class="ptlvl">'+L+'<small>LEVEL</small></div>'+
+       '<div class="ptinfo"><div class="ptbio">'+b.icon+' '+b.name+'</div>'+
+       '<div class="ptdesc">~'+zones+' zones · HP ×'+hp+' · count ×'+cnt+' · '+dmg+' dmg · elites '+el+'%</div></div>'+
+       '<div class="ptbtns2"><button class="sbtn" data-land="'+L+'">Land</button>'+
+       '<button class="sbtn ghost" data-roll="'+L+'">↻</button></div></div>';
+  }
+  g.innerHTML=h;
+  g.querySelectorAll('[data-land]').forEach(btn=>{ btn.onclick=()=>startPlaytest(parseInt(btn.dataset.land)); });
+  g.querySelectorAll('[data-roll]').forEach(btn=>{ btn.onclick=()=>{ PT_SEEDS[parseInt(btn.dataset.roll)]=(Math.random()*1e9)|0; renderPtMenu(); }; });
+}
+function startPlaytest(L){
+  ptBoot();
+  ptMode=true;
+  potions=3; tripLoot=loot0(); cargo=loot0(); fed=0;
+  closePtMenu(); closeMenu();
+  document.getElementById('title').classList.add('hidden');
+  paused=false;
+  enterIsland(ptCore(L,PT_SEEDS[L]));
+  toast('⚔  PLAYTEST — Trial '+L, 'clear her or be carried off · ↻ on the menu rerolls her');
+}
+document.getElementById('ptestBtn').onclick=()=>{ ptBoot(); openPtMenu(); };
+document.getElementById('ptBack').onclick=()=>{ closePtMenu(); document.getElementById('title').classList.remove('hidden'); };
+
 /* ============================ main loop ============================ */
 let last=0;
 /* atmospheric overlays — day/night tint, storm gloom, rain, lightning (over the sea, under the HUD) */
@@ -5648,8 +5769,9 @@ function begin(fresh){
   mode='sea'; nearLand=null; schools=[]; net=null; netCD=0; seafloat=[]; seafx=[]; popQueue=[];
   whales=[]; hunt=null; irons=[]; seadrops=[]; ironCD=0; limpT=0; whaleSpawnT=6;
   PRT=null; groundCD=0; stormHitCD=0; closeShop(); closeJournal(); hideKO(); closeMenu(); imapOpen=false;
+  ptMode=false; ISL_LVL=0; closePtMenu();   // a real voyage is never the sandbox
   if(fresh) potions=0;
-  buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune(); buildFishTune(); buildWhaleTune(); buildPortTune();
+  buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune(); buildFishTune(); buildWhaleTune(); buildPortTune(); buildLvlTune();
   document.getElementById('mute').textContent=audioOn?'🔊':'🔇';
   document.getElementById('title').classList.add('hidden');
   started=true; paused=false; last=performance.now();
