@@ -820,6 +820,7 @@ addEventListener('keydown',e=>{
   if(shopOpen){ if(k==='escape'||k==='e') closeShop(); return; }
   if(journalOpen){ if(k==='j'||k==='escape'||k==='e') closeJournal(); return; }
   if(!started || renaming) return;
+  if(mode==='hex'){ hexKey(k); return; }
   if(k==='t'){ openMenu('tuning'); return; }
   if(k==='p'){ toggleMute(); return; }
   if(k==='escape'){ if(!mapOpen && !imapOpen) openMenu(); return; }   // the ship's menu, from anywhere
@@ -910,6 +911,9 @@ addEventListener('mousedown',e=>{
   if(e.button===0){ aimAtMouse(); doSlash(); }
   else if(e.button===2){ aimAtMouse(); doShoot(); }
 });
+addEventListener('mousemove',e=>{ if(started&&mode==='hex'&&HEX) hexHover(e.clientX,e.clientY); });
+addEventListener('mousedown',e=>{ if(!started||mode!=='hex'||!HEX||e.button!==0) return; if(e.target!==cv) return; hexClick(e.clientX,e.clientY); });
+addEventListener('wheel',e=>{ if(started&&mode==='hex'&&HEX){ e.preventDefault(); hexRotate(e.deltaY>0?1:-1); } },{passive:false});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 /* ============================ audio (calm ambience) ============================ */
@@ -4862,7 +4866,7 @@ function doPortInteract(){
   const a=nearestPortAct(); if(!a) return;
   if(a.kind==='boat') leavePort();
   else if(a.kind==='talk') portSay(a);
-  else if(a.kind==='museum'||a.kind==='home') enterInterior(a.kind);
+  else if(a.kind==='museum'||a.kind==='home'||a.kind==='tavern') enterInterior(a.kind);
   else openShop(a.kind);
 }
 
@@ -4871,7 +4875,10 @@ function doPortInteract(){
  *  Reuses the top-down walker; the port stays loaded behind you.
  * ============================================================ */
 const INT_TS=22;
+const MAELSTROM_NAME='Maelstrom';
+const MAN_NAMES=['One-Eyed Pell','Old Marrow','Gory Sten','Cutpurse Quill','Salt Maggie','Drowned Jack','Bessa Vane','Three-Finger Lom'];
 let intCard=null;                       // an open story/placard (pauses the room)
+let intChat=null;                       // a quick word from a patron
 function buildInterior(kind){
   if(kind==='museum'){
     const W=24, H=15, TS=INT_TS, tiles=new Uint8Array(W*H);
@@ -4881,6 +4888,19 @@ function buildInterior(kind){
     for(const ry of [4.3, 9.7]) for(let i=0;i<6;i++) disp.push({x:(3.2+i*3.3)*TS, y:ry*TS, item:null});
     disp.push({x:(W/2)*TS, y:7*TS, item:null, big:true});                  // the centrepiece
     INT={kind, W, H, TS, tiles, door, disp, furn:[], title:'THE MUSEUM', sub:'your discoveries, displayed'};
+  } else if(kind==='tavern'){
+    const W=20, H=13, TS=INT_TS, tiles=new Uint8Array(W*H);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++) if(x===0||y===0||x===W-1||y===H-1) tiles[y*W+x]=1;
+    const cxd=W>>1; tiles[(H-1)*W+cxd]=2; tiles[(H-1)*W+cxd-1]=2;
+    const door={x:cxd*TS, y:(H-1)*TS};
+    const furn=[ {k:'bottles',x:5.5*TS,y:1.35*TS}, {k:'bar',x:5.5*TS,y:2.4*TS}, {k:'fire',x:17.4*TS,y:2.7*TS},
+      {k:'kegs',x:2.7*TS,y:10*TS}, {k:'table',x:7*TS,y:7.6*TS}, {k:'hexboard',x:14*TS,y:8.4*TS} ];
+    const tidx=PRT?PRT.core.idx:0;
+    const people=[ {kind:'keep',x:5.5*TS,y:3.7*TS,coat:'#7a4a2c',hat:false},
+      {kind:'patron',x:7*TS,y:8.9*TS,coat:'#5a6a8a',hat:true},
+      {kind:'patron',x:16.4*TS,y:4.7*TS,coat:'#7a4a5a',hat:false},
+      {kind:'cards',x:14*TS,y:9.9*TS,coat:'#33304a',hat:true,name:MAN_NAMES[tidx%MAN_NAMES.length]} ];
+    INT={kind, W, H, TS, tiles, door, disp:[], furn, people, title:'THE TAVERN', sub:'warm fire, cheap talk, dear secrets'};
   } else {
     const W=15, H=11, TS=INT_TS, tiles=new Uint8Array(W*H);
     for(let y=0;y<H;y++)for(let x=0;x<W;x++) if(x===0||y===0||x===W-1||y===H-1) tiles[y*W+x]=1;
@@ -4909,6 +4929,8 @@ function intTile(x,y){ if(!INT) return 1; const tx=(x/INT.TS)|0, ty=(y/INT.TS)|0
 function intWalk(x,y){ return intTile(x,y)!==1; }
 function moveInt(o,dx,dy){ const r=o.r*0.7, ok=(x,y)=>intWalk(x-r,y)&&intWalk(x+r,y)&&intWalk(x,y-r)&&intWalk(x,y+r);
   if(ok(o.x+dx,o.y)) o.x+=dx; if(ok(o.x,o.y+dy)) o.y+=dy; }
+function nearestPerson(){ if(!INT||!INT.people) return null; let best=null, bd=36*36;
+  for(const p of INT.people){ const q=(player.x-p.x)**2+(player.y-p.y)**2; if(q<bd){ bd=q; best=p; } } return best; }
 function nearestDisplay(){ if(!INT) return null; let best=null, bd=30*30;
   for(const d of INT.disp){ const q=(player.x-d.x)**2+(player.y-d.y)**2; if(q<bd){ bd=q; best=d; } }
   for(const f of INT.furn){ if(f.k!=='map') continue; const q=(player.x-f.x)**2+(player.y-f.y)**2; if(q<bd){ bd=q; best={furn:f}; } }
@@ -4918,6 +4940,13 @@ function intInteract(){
   if(!INT) return;
   if(intCard){ intCard=null; return; }
   if((player.x-INT.door.x)**2+(player.y-(INT.door.y-INT.TS))**2 < (INT.TS*1.3)**2){ leaveInterior(); return; }
+  if(INT.kind==='tavern'){
+    const pp=nearestPerson(); if(!pp) return;
+    if(pp.kind==='keep') openShop('tavern');
+    else if(pp.kind==='cards') startMaelstrom(pp);
+    else { intChat={x:pp.x, y:pp.y-INT.TS*0.5, line:PORT_TALK[(Math.random()*PORT_TALK.length)|0], t:4.6}; sfx('tink',0.7); }
+    return;
+  }
   const d=nearestDisplay(); if(!d) return;
   if(d.furn){ intCard={title:'🗺  The travelling-map', body:'A great chart of every harbour you have made your own. One day you will set a course from here and be there by the next tide — but the Guild blesses no such travel yet. (Fast travel: coming soon.)'}; sfx('tink',0.9); return; }
   if(d.item){ intCard={title:d.item.name, body:d.item.story}; sfx('chest'); }
@@ -4934,6 +4963,7 @@ function updateInterior(dt){
   } else player.moving=false;
   for(let i=ifloat.length-1;i>=0;i--){ const f=ifloat[i]; f.t+=dt; f.y-=14*dt; if(f.t>f.life) ifloat.splice(i,1); }
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
+  if(intChat){ intChat.t-=dt; if(intChat.t<=0) intChat=null; }
   const ce=1-Math.exp(-8*dt); icamX+=(player.x-icamX)*ce; icamY+=(player.y-icamY)*ce;
 }
 function drawInterior(){
@@ -4952,6 +4982,7 @@ function drawInterior(){
   const draws=[];
   for(const d of INT.disp) draws.push({by:d.y, fn:()=>drawPlinth(d,s)});
   for(const f of INT.furn) draws.push({by:f.y, fn:()=>drawFurn(f,s)});
+  for(const pp of (INT.people||[])) draws.push({by:pp.y, fn:()=>drawPerson(pp,s)});
   draws.push({by:player.y, fn:()=>drawExplorerSprite(false)});
   draws.sort((a,b)=>a.by-b.by);
   for(const d of draws) d.fn();
@@ -4981,6 +5012,39 @@ function drawFurn(f,s){
     for(let i=0;i<3;i++){ pctx.fillStyle=['#7a4a5a','#4a6a52','#5a6a8a'][i]; pctx.fillRect(sx-u*0.48,sy-u*1.05+i*u*0.66,u*0.96,u*0.42); } }
   else if(f.k==='map'){ pctx.fillStyle='#5a3c22'; pctx.fillRect(sx-u*0.95,sy-u*0.85,u*1.9,u*1.5); pctx.fillStyle='#e3d5a8'; pctx.fillRect(sx-u*0.78,sy-u*0.68,u*1.56,u*1.15);
     pctx.strokeStyle='#7a8fb8'; pctx.lineWidth=1; pctx.beginPath(); pctx.arc(sx,sy-u*0.1,u*0.32,0,TAU); pctx.stroke(); pctx.fillStyle='#c0202a'; pctx.fillRect(sx-1,sy-u*0.18,2.4,2.4); }
+  else if(f.k==='bar'){ pctx.fillStyle='rgba(0,0,0,.3)'; pctx.fillRect(sx-u*3.2,sy+u*0.45,u*6.4,u*0.4);
+    pctx.fillStyle='#3a2615'; pctx.fillRect(sx-u*3.2,sy-u*0.55,u*6.4,u*1.15);
+    pctx.fillStyle='#5a3c22'; pctx.fillRect(sx-u*3.2,sy-u*0.55,u*6.4,u*0.32);
+    pctx.fillStyle='#caa05a'; pctx.fillRect(sx-u*3.2,sy-u*0.62,u*6.4,u*0.14); }
+  else if(f.k==='bottles'){ pctx.fillStyle='#241a10'; pctx.fillRect(sx-u*2.7,sy-u*0.55,u*5.4,u*1.0);
+    for(let i=0;i<9;i++){ pctx.fillStyle=['#6a8a5a','#8a5c34','#5a6a8a','#7a4a5a','#caa05a'][i%5]; pctx.fillRect(sx-u*2.45+i*u*0.57,sy-u*0.42,u*0.3,u*0.78); } }
+  else if(f.k==='kegs'){ pctx.fillStyle='rgba(0,0,0,.25)'; pctx.beginPath(); pctx.ellipse(sx,sy+u*0.55,u*1.15,u*0.42,0,0,TAU); pctx.fill();
+    for(const o of [[-u*0.55,0],[u*0.55,0],[0,-u*0.85]]){ pctx.fillStyle='#8a5c34'; pctx.beginPath(); pctx.ellipse(sx+o[0],sy+o[1],u*0.5,u*0.62,0,0,TAU); pctx.fill();
+      pctx.fillStyle='#a8744a'; pctx.beginPath(); pctx.ellipse(sx+o[0],sy+o[1],u*0.3,u*0.55,0,0,TAU); pctx.fill();
+      pctx.strokeStyle='#54371e'; pctx.lineWidth=1; pctx.beginPath(); pctx.moveTo(sx+o[0]-u*0.46,sy+o[1]); pctx.lineTo(sx+o[0]+u*0.46,sy+o[1]); pctx.stroke(); } }
+  else if(f.k==='table'){ pctx.fillStyle='rgba(0,0,0,.25)'; pctx.beginPath(); pctx.ellipse(sx,sy+u*0.5,u*1.0,u*0.4,0,0,TAU); pctx.fill();
+    pctx.fillStyle='#4a3320'; pctx.fillRect(sx-u*0.18,sy-u*0.2,u*0.36,u*1.0);
+    pctx.fillStyle='#6e4a28'; pctx.beginPath(); pctx.ellipse(sx,sy-u*0.32,u*1.05,u*0.6,0,0,TAU); pctx.fill();
+    pctx.fillStyle='#7a5230'; pctx.beginPath(); pctx.ellipse(sx,sy-u*0.42,u*1.05,u*0.52,0,0,TAU); pctx.fill();
+    pctx.fillStyle='#caa05a'; pctx.beginPath(); pctx.ellipse(sx-u*0.45,sy-u*0.46,u*0.16,u*0.11,0,0,TAU); pctx.fill(); }
+  else if(f.k==='hexboard'){ pctx.fillStyle='rgba(0,0,0,.25)'; pctx.beginPath(); pctx.ellipse(sx,sy+u*0.5,u*1.15,u*0.44,0,0,TAU); pctx.fill();
+    pctx.fillStyle='#4a3320'; pctx.fillRect(sx-u*0.18,sy-u*0.1,u*0.36,u*0.9);
+    pctx.fillStyle='#5a3c22'; pctx.beginPath(); pctx.ellipse(sx,sy-u*0.35,u*1.18,u*0.72,0,0,TAU); pctx.fill();
+    const hr=u*0.26, mh=(hx,hy,col)=>{ pctx.fillStyle=col; pctx.beginPath(); for(let v=0;v<6;v++){ const a=v*Math.PI/3, px=hx+Math.cos(a)*hr, py=hy+Math.sin(a)*hr*0.8; if(v===0) pctx.moveTo(px,py); else pctx.lineTo(px,py); } pctx.closePath(); pctx.fill(); };
+    mh(sx,sy-u*0.4,'#e2d2a4'); for(let r=0;r<6;r++){ const a=(30+60*r)*Math.PI/180; mh(sx+Math.cos(a)*hr*1.85, sy-u*0.4+Math.sin(a)*hr*1.5, r%2?'#caa05a':'#b9886a'); } }
+}
+function drawPerson(pp,s){
+  const [sx,sy]=iw2p(pp.x,pp.y), r=6.2*s, bob=Math.sin(itime*1.6+(pp.x))*0.6*s;
+  if(pp.kind==='cards'){ pctx.fillStyle='rgba(255,190,90,'+(0.10+0.05*Math.sin(itime*3)).toFixed(3)+')'; pctx.beginPath(); pctx.arc(sx,sy-r*0.2,r*2.0,0,TAU); pctx.fill(); }
+  pctx.fillStyle='rgba(0,0,0,.3)'; pctx.beginPath(); pctx.ellipse(sx,sy+r*0.55,r*0.85,r*0.4,0,0,TAU); pctx.fill();
+  pctx.fillStyle='#241c12'; pctx.beginPath(); pctx.arc(sx,sy-r*0.2-bob,r*0.98,0,TAU); pctx.fill();
+  pctx.fillStyle=pp.coat; pctx.beginPath(); pctx.arc(sx,sy-r*0.2-bob,r*0.84,0,TAU); pctx.fill();
+  if(pp.kind==='keep'){ pctx.fillStyle='#d8cdb2'; pctx.fillRect(sx-r*0.4,sy-r*0.05-bob,r*0.8,r*0.7); }
+  pctx.fillStyle='#e8c39a'; pctx.beginPath(); pctx.arc(sx,sy-r*0.55-bob,r*0.42,0,TAU); pctx.fill();
+  if(pp.kind==='cards'){ pctx.fillStyle='#1c1828'; pctx.beginPath(); pctx.moveTo(sx-r*0.72,sy-r*0.5-bob); pctx.lineTo(sx,sy-r*1.0-bob); pctx.lineTo(sx+r*0.72,sy-r*0.5-bob); pctx.closePath(); pctx.fill(); }
+  else if(pp.hat){ pctx.fillStyle='#3a3026'; pctx.beginPath(); pctx.ellipse(sx,sy-r*0.6-bob,r*0.56,r*0.3,0,0,TAU); pctx.fill();
+    pctx.fillStyle='#4a3e30'; pctx.beginPath(); pctx.arc(sx,sy-r*0.66-bob,r*0.34,0,TAU); pctx.fill(); }
+  else { pctx.fillStyle='#3a2a1a'; pctx.beginPath(); pctx.arc(sx,sy-r*0.66-bob,r*0.38,0,TAU); pctx.fill(); }
 }
 function interiorHUD(){
   ctx.textAlign='center'; ctx.textBaseline='alphabetic';
@@ -4992,10 +5056,27 @@ function interiorHUD(){
     ctx.font='700 13px system-ui'; const w=ctx.measureText(txt).width+18;
     ctx.fillStyle='rgba(8,17,31,.72)'; roundRect(sxp-w/2,syp-20,w,20,7); ctx.fill();
     ctx.fillStyle=col||'#ffe6a6'; ctx.fillText(txt,sxp,syp-6); };
-  if(!intCard){ const d=nearestDisplay();
-    if(d){ const ox=d.furn?d.furn.x:d.x, oy=d.furn?d.furn.y:d.y;
-      promptAt(ox,oy-24, d.furn?'E — read the map':'E — examine', '#cfe0ff'); }
+  if(!intCard){
+    if(INT.kind==='tavern'){ const pp=nearestPerson();
+      if(pp){ const lab=pp.kind==='keep'?'E — the barkeep':pp.kind==='cards'?('E — play '+MAELSTROM_NAME+'  (bet \u2265 1)'):'E — a word';
+        promptAt(pp.x, pp.y-30, lab, pp.kind==='cards'?'#ffd86b':'#cfe0ff'); } }
+    else { const d=nearestDisplay();
+      if(d){ const ox=d.furn?d.furn.x:d.x, oy=d.furn?d.furn.y:d.y;
+        promptAt(ox,oy-24, d.furn?'E — read the map':'E — examine', '#cfe0ff'); } }
     promptAt(INT.door.x, INT.door.y-INT.TS, 'E — step outside', '#b9e8a0'); }
+  if(intChat && intChat.t>0){
+    const [ix2,iy2]=iw2p(intChat.x, intChat.y); const sxp=ix2*(CSSW/IW), syp=iy2*(CSSH/IH);
+    const words=intChat.line.split(' '), lines2=[]; let ln2='';
+    for(const w2 of words){ if((ln2+' '+w2).trim().length>40){ lines2.push(ln2.trim()); ln2=w2; } else ln2+=' '+w2; }
+    if(ln2.trim()) lines2.push(ln2.trim());
+    ctx.font='600 12px Georgia,serif'; let bw2=0; for(const l of lines2) bw2=Math.max(bw2, ctx.measureText(l).width);
+    const bh2=lines2.length*16+14, bx2=clamp(sxp-(bw2+24)/2, 8, CSSW-bw2-32), by2=Math.max(72, syp-58-bh2);
+    ctx.globalAlpha=clamp(intChat.t/0.4,0,1); ctx.textAlign='left';
+    ctx.fillStyle='rgba(14,24,44,.93)'; roundRect(bx2,by2,bw2+24,bh2,9); ctx.fill();
+    ctx.strokeStyle='#3a5080'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle='#e8e2cc'; lines2.forEach((l,i3)=>ctx.fillText(l, bx2+12, by2+19+i3*16));
+    ctx.globalAlpha=1; ctx.textAlign='center';
+  }
   if(intCard){
     const cw=Math.min(CSSW*0.74,470); ctx.font='13px Georgia,serif';
     const words=intCard.body.split(' '), lines=[]; let ln='';
@@ -5010,6 +5091,226 @@ function interiorHUD(){
     ctx.fillStyle='#7e93ba'; ctx.font='11px system-ui'; ctx.fillText('E or Esc to close', cx, cy+chh/2-12);
   }
   ctx.textAlign='left'; drawToasts();
+}
+
+let HEX=null;
+/* ============================================================ *
+ *  MAELSTROM — the wharf game played in every tavern.
+ *  7-hex flower, 6-edged tokens, strict-greater clashes.
+ *  Placement order P1,P2,P2,P1,P2,P1,P2 (you are P1, the centre).
+ * ============================================================ */
+const HEX_COL={ 0:{fill:'rgba(30,26,42,0.66)', edge:'#3f3a55', txt:'#7a7290', glow:'#6a6488'},
+  1:{fill:'#6e4418', edge:'#e0ab57', txt:'#ffe6a6', glow:'#ffb83c'},
+  2:{fill:'#16475a', edge:'#56b6cc', txt:'#c4eeff', glow:'#3fd4ec'} };
+function hexComputeAdj(){
+  const C=[[0,0]]; for(let r=0;r<6;r++){ const a=(30+60*r)*Math.PI/180; C.push([Math.cos(a)*Math.sqrt(3), Math.sin(a)*Math.sqrt(3)]); }
+  const adj=[]; for(let i=0;i<7;i++) adj.push([]);
+  for(let i=0;i<7;i++) for(let j=0;j<7;j++){ if(i===j) continue;
+    const dx=C[j][0]-C[i][0], dy=C[j][1]-C[i][1], d=Math.hypot(dx,dy);
+    if(Math.abs(d-Math.sqrt(3))<0.2){ let ang=Math.atan2(dy,dx)*180/Math.PI; if(ang<0) ang+=360;
+      const e=((Math.round((ang-30)/60))%6+6)%6; adj[i].push({j,e}); } }
+  return adj;
+}
+function hexLayout(){ const cx=CSSW/2, cy=CSSH*0.45, R=Math.max(34,Math.min(CSSW,CSSH)*0.083), D=R*Math.sqrt(3);
+  const C=[[cx,cy]]; for(let r=0;r<6;r++){ const a=(30+60*r)*Math.PI/180; C.push([cx+Math.cos(a)*D, cy+Math.sin(a)*D]); }
+  return {cx,cy,R,C}; }
+function hexPathAt(hx,hy,R){ ctx.beginPath(); for(let v=0;v<6;v++){ const a=v*Math.PI/3, px=hx+Math.cos(a)*R, py=hy+Math.sin(a)*R; if(v===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); } ctx.closePath(); }
+function edgesOf(base,rot){ const t=[]; for(let k=0;k<6;k++) t.push(base[(k-rot+6)%6]); return t; }
+function tokenEdges(deal){ return edgesOf(deal.base,deal.rot); }
+function dealToken(){ const t=[]; for(let i=0;i<6;i++) t.push(1+Math.floor(Math.random()*9)); return t; }
+function startMaelstrom(pp){
+  if(cargo.gold<1){ intChat={x:pp.x,y:pp.y-INT.TS*0.5,line:'“No coin, no game. Come back with silver in your purse.”',t:4.2}; sfx('tink',0.6); return; }
+  HEX={ phase:'bet', stake:Math.min(5,cargo.gold), man:(pp&&pp.name)||'the stranger', adj:hexComputeAdj(),
+    cells:Array.from({length:7},()=>({owner:0,edges:null})), seq:[1,2,2,1,2,1,2], step:0, turn:1,
+    deal:null, hover:-1, clash:[0,0,0], flash:[], aiT:0, msg:'', result:null, payout:0, t:0, rects:[], mx:-1, my:-1 };
+  mode='hex'; sfx('tink',0.9);
+}
+function hexLeave(){ HEX=null; mode='interior'; }
+function hexBet(d){ HEX.stake=clamp(HEX.stake+d,1,Math.max(1,cargo.gold)); }
+function hexDeal(){ HEX.stake=clamp(HEX.stake,1,Math.max(1,cargo.gold)); HEX.phase='play'; hexBeginTurn(); }
+function hexAgain(){ HEX.cells=Array.from({length:7},()=>({owner:0,edges:null})); HEX.step=0; HEX.turn=1; HEX.deal=null;
+  HEX.clash=[0,0,0]; HEX.flash=[]; HEX.result=null; HEX.payout=0; HEX.hover=-1; HEX.stake=clamp(HEX.stake,1,Math.max(1,cargo.gold)); HEX.phase='bet'; }
+function hexRotate(dir){ if(HEX.phase==='play'&&HEX.turn===1&&HEX.deal){ HEX.deal.rot=(HEX.deal.rot+dir+6)%6; sfx('tink',0.5); } }
+function legalHex(h){ if(HEX.cells[h].owner!==0) return false; return HEX.step===0 ? h===0 : true; }
+function hexBeginTurn(){
+  if(HEX.step>=7){ hexFinish(); return; }
+  HEX.turn=HEX.seq[HEX.step]; HEX.deal={base:dealToken(), rot:0}; HEX.hover=-1;
+  if(HEX.turn===2){ HEX.aiT=0.75; HEX.msg=HEX.man+' studies the tiles…'; }
+  else HEX.msg=(HEX.step===0?'Place the centre — rotate (R / scroll), click it.':'Your move — rotate, then click an empty hex.');
+}
+function resolveCaptures(h,T,o){
+  for(const nb of HEX.adj[h]){ const cell=HEX.cells[nb.j];
+    if(cell.owner!==0 && cell.owner!==o){ if(T[nb.e] > cell.edges[(nb.e+3)%6]){ cell.owner=o; HEX.clash[o]++; HEX.flash.push({h:nb.j,o,t:0}); } } }
+}
+function hexPlace(h){
+  if(!legalHex(h) || !HEX.deal) return;
+  const T=tokenEdges(HEX.deal);
+  HEX.cells[h]={owner:HEX.turn, edges:T};
+  const before=HEX.clash[HEX.turn]; resolveCaptures(h,T,HEX.turn);
+  sfx(HEX.clash[HEX.turn]>before?'secure':'tink', 0.9);
+  HEX.deal=null; HEX.step++; hexBeginTurn();
+}
+function hexAIMove(){
+  const base=HEX.deal.base; let best=null, bestScore=-1e9;
+  for(let h=0;h<7;h++){ if(!legalHex(h)) continue;
+    for(let rot=0;rot<6;rot++){ const T=edgesOf(base,rot); let flips=0, defense=0;
+      for(const nb of HEX.adj[h]){ const cell=HEX.cells[nb.j];
+        if(cell.owner===0) defense+=T[nb.e];
+        else if(cell.owner!==2 && T[nb.e]>cell.edges[(nb.e+3)%6]) flips++; }
+      const score=flips*100 + defense + Math.random()*3;
+      if(score>bestScore){ bestScore=score; best={h,rot}; } } }
+  if(best){ HEX.deal.rot=best.rot; hexPlace(best.h); }
+  else { for(let h=0;h<7;h++) if(legalHex(h)){ hexPlace(h); break; } }
+}
+function hexFinish(){
+  const terr=[0,0,0]; for(const c of HEX.cells) if(c.owner) terr[c.owner]++;
+  HEX.finalP=terr[1]+HEX.clash[1]; HEX.finalM=terr[2]+HEX.clash[2];
+  let pay=0, res='draw';
+  if(HEX.finalP>HEX.finalM){ res='win'; pay=HEX.stake; } else if(HEX.finalM>HEX.finalP){ res='lose'; pay=-HEX.stake; }
+  cargo.gold=Math.max(0, cargo.gold+pay); HEX.payout=pay; HEX.result=res; HEX.phase='done';
+  sfx(res==='win'?'chest':res==='lose'?'tink':'secure', 1.0);
+  if(res==='win') toast('🃏  You take the pot','+'+pay+'g from '+HEX.man);
+  queueSave();
+}
+function updateHex(dt){
+  if(!HEX) return; HEX.t+=dt;
+  for(let i=HEX.flash.length-1;i>=0;i--){ HEX.flash[i].t+=dt; if(HEX.flash[i].t>0.7) HEX.flash.splice(i,1); }
+  if(HEX.phase==='play' && HEX.turn===2 && HEX.deal){ HEX.aiT-=dt; if(HEX.aiT<=0) hexAIMove(); }
+}
+function hexAt(mx,my){ const L=hexLayout(); let best=-1, bd=L.R*L.R*1.25;
+  for(let h=0;h<7;h++){ const dx=mx-L.C[h][0], dy=my-L.C[h][1], d=dx*dx+dy*dy; if(d<bd){ bd=d; best=h; } } return best; }
+function hexHover(mx,my){ if(!HEX) return; HEX.mx=mx; HEX.my=my; HEX.hover=(HEX.phase==='play'&&HEX.turn===1)?hexAt(mx,my):-1; }
+function hexClick(mx,my){ if(!HEX) return;
+  for(const r of HEX.rects){ if(mx>=r.x&&mx<=r.x+r.w&&my>=r.y&&my<=r.y+r.h){ hexBtn(r.id); return; } }
+  if(HEX.phase==='play' && HEX.turn===1 && HEX.deal){ const h=hexAt(mx,my); if(h>=0 && legalHex(h)) hexPlace(h); }
+}
+function hexBtn(id){
+  if(id==='bet:minus') hexBet(-1);
+  else if(id==='bet:plus') hexBet(1);
+  else if(id==='chip:all') HEX.stake=Math.max(1,cargo.gold);
+  else if(id.indexOf('chip:')===0) HEX.stake=clamp(parseInt(id.slice(5)),1,Math.max(1,cargo.gold));
+  else if(id==='deal') hexDeal();
+  else if(id==='leave') hexLeave();
+  else if(id==='again') hexAgain();
+  else if(id==='rot:cw') hexRotate(1);
+  else if(id==='rot:ccw') hexRotate(-1);
+  sfx('tink',0.6);
+}
+function hexKey(k){
+  if(!HEX) return;
+  if(HEX.phase==='bet'){ if(k==='arrowright'||k==='d'||k==='='||k==='+') hexBet(1);
+    else if(k==='arrowleft'||k==='a'||k==='-'||k==='_') hexBet(-1);
+    else if(k==='enter'||k==='e'||k===' ') hexDeal(); else if(k==='escape') hexLeave(); return; }
+  if(HEX.phase==='play'){ if(k==='r') hexRotate(1); else if(k==='q') hexRotate(-1); return; }
+  if(HEX.phase==='done'){ if(k==='enter'||k==='e'||k===' '){ if(cargo.gold>=1) hexAgain(); else hexLeave(); }
+    else if(k==='escape') hexLeave(); return; }
+}
+/* ---- the screen ---- */
+function hbtn(id,x,y,w,h,label,active,col,big){
+  HEX.rects.push({id,x,y,w,h});
+  const hot=HEX.mx>=x&&HEX.mx<=x+w&&HEX.my>=y&&HEX.my<=y+h;
+  ctx.fillStyle=active?'rgba(96,84,44,0.95)':(hot?'rgba(52,58,86,0.96)':'rgba(22,26,42,0.92)');
+  roundRect(x,y,w,h,8); ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle=col?(active||hot?col.glow:col.edge):(hot?'#8aa0c8':'#5a6478'); ctx.stroke();
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle=active?'#ffe6a6':'#dbe6ff';
+  ctx.font='700 '+(big?17:14)+'px system-ui'; ctx.fillText(label, x+w/2, y+h/2+1); ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+function drawToken(hx,hy,R,edges,owner){
+  const col=HEX_COL[owner];
+  hexPathAt(hx,hy,R*0.84); ctx.fillStyle=col.fill[0]==='r'?'#3a2c1e':col.fill; ctx.fill();
+  hexPathAt(hx,hy,R*0.84); ctx.lineWidth=2.5; ctx.strokeStyle=col.edge; ctx.stroke();
+  hexPathAt(hx,hy,R*0.62); ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='700 '+Math.round(R*0.30)+'px Georgia,serif';
+  for(let e=0;e<6;e++){ const a=(30+60*e)*Math.PI/180, nx=hx+Math.cos(a)*R*0.6, ny=hy+Math.sin(a)*R*0.6;
+    ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillText(edges[e], nx+1, ny+1.5); ctx.fillStyle=col.txt; ctx.fillText(edges[e], nx, ny+0.5); }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+function drawWhirl(cx,cy,R,t){
+  ctx.save(); ctx.translate(cx,cy);
+  for(let ring=0;ring<6;ring++){ const rad=R*(1.15+ring*0.55), seg=10+ring*3, rot=t*(0.34-ring*0.035)*(ring%2?1:-1);
+    ctx.strokeStyle='rgba('+(38+ring*8)+','+(72+ring*13)+','+(112+ring*9)+','+(0.20-ring*0.026).toFixed(3)+')';
+    ctx.lineWidth=Math.max(2,R*0.13-ring*1.2);
+    for(let i=0;i<seg;i++){ const a0=rot+i*TAU/seg; ctx.beginPath(); ctx.arc(0,0,rad,a0,a0+TAU/seg*0.6); ctx.stroke(); } }
+  const g=ctx.createRadialGradient(0,0,0,0,0,R*1.5); g.addColorStop(0,'rgba(4,6,14,0.92)'); g.addColorStop(1,'rgba(4,6,14,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,R*1.5,0,TAU); ctx.fill(); ctx.restore();
+}
+function drawScorePanel(x,y,name,col,terr,clash,active){
+  const w=184,h=56;
+  ctx.fillStyle=active?'rgba(44,44,70,0.95)':'rgba(16,18,30,0.82)'; roundRect(x,y,w,h,10); ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle=active?col.glow:col.edge; ctx.stroke();
+  ctx.textAlign='left'; ctx.fillStyle=col.txt; ctx.font='700 14px Georgia,serif'; ctx.fillText(name.length>16?name.slice(0,15)+'…':name, x+12, y+21);
+  ctx.fillStyle='#9fb6dd'; ctx.font='11px system-ui'; ctx.fillText('territory '+terr+'  ·  clashes '+clash, x+12, y+40);
+  ctx.textAlign='right'; ctx.fillStyle='#ffe6a6'; ctx.font='700 20px system-ui'; ctx.fillText(terr+clash, x+w-12, y+40); ctx.textAlign='left';
+}
+function drawHexBoard(L){
+  for(let h=0;h<7;h++){ const hx=L.C[h][0], hy=L.C[h][1], cell=HEX.cells[h];
+    hexPathAt(hx,hy,L.R*0.96); ctx.fillStyle=cell.owner?HEX_COL[cell.owner].fill:'rgba(28,24,40,0.62)'; ctx.fill();
+    ctx.lineWidth=3; ctx.strokeStyle=cell.owner?HEX_COL[cell.owner].edge:'#39344f'; ctx.stroke();
+    if(cell.owner) drawToken(hx,hy,L.R,cell.edges,cell.owner);
+    else if(h===0){ ctx.textAlign='center'; ctx.fillStyle='rgba(255,217,138,0.20)'; ctx.font='700 18px Georgia,serif'; ctx.fillText('★', hx, hy+6); ctx.textAlign='left'; } }
+  if(HEX.phase==='play' && HEX.turn===1 && HEX.deal && HEX.hover>=0 && legalHex(HEX.hover)){
+    const hx=L.C[HEX.hover][0], hy=L.C[HEX.hover][1];
+    ctx.globalAlpha=0.62; drawToken(hx,hy,L.R,tokenEdges(HEX.deal),1); ctx.globalAlpha=1;
+    hexPathAt(hx,hy,L.R*0.96); ctx.lineWidth=3.5; ctx.strokeStyle='#ffd98a'; ctx.stroke(); }
+  for(const f of HEX.flash){ const hx=L.C[f.h][0], hy=L.C[f.h][1], a=1-f.t/0.7;
+    ctx.globalAlpha=a*0.9; hexPathAt(hx,hy,L.R*(0.96+0.12*f.t)); ctx.lineWidth=4; ctx.strokeStyle=HEX_COL[f.o].glow; ctx.stroke(); ctx.globalAlpha=1; }
+}
+function drawHexHUD(L){
+  const terr=[0,0,0]; for(const c of HEX.cells) if(c.owner) terr[c.owner]++;
+  drawScorePanel(14,82,'You',HEX_COL[1],terr[1],HEX.clash[1], HEX.phase==='play'&&HEX.turn===1);
+  drawScorePanel(CSSW-198,82,HEX.man,HEX_COL[2],terr[2],HEX.clash[2], HEX.phase==='play'&&HEX.turn===2);
+  ctx.textAlign='center'; ctx.fillStyle='#ffd98a'; ctx.font='700 14px system-ui'; ctx.fillText('Pot  '+HEX.stake+'g', CSSW/2, 92);
+  ctx.fillStyle='#cdd9f3'; ctx.font='14px system-ui'; ctx.fillText(HEX.msg, CSSW/2, CSSH-148);
+  if(HEX.phase==='play' && HEX.turn===1 && HEX.deal){
+    const tx=CSSW/2, ty=CSSH-80, tr=40;
+    ctx.fillStyle='rgba(8,12,24,0.74)'; roundRect(tx-165,ty-tr-12,330,tr*2+22,12); ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle='#2c3650'; ctx.stroke();
+    drawToken(tx,ty,tr,tokenEdges(HEX.deal),1);
+    hbtn('rot:ccw', tx-150, ty-19, 40, 40, '↺', false, HEX_COL[1]);
+    hbtn('rot:cw', tx+110, ty-19, 40, 40, '↻', false, HEX_COL[1]);
+  }
+  ctx.textAlign='left';
+}
+function drawHexBet(){
+  const cx=CSSW/2, cy=CSSH*0.5;
+  ctx.fillStyle='rgba(10,14,26,0.9)'; roundRect(cx-210,cy-140,420,310,16); ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle='#3a5080'; ctx.stroke();
+  ctx.textAlign='center'; ctx.fillStyle='#e8e2cc'; ctx.font='italic 14px Georgia,serif';
+  ctx.fillText('“Coin on the table, Captain. Highest score takes the pot.”', cx, cy-104);
+  ctx.fillStyle='#8aa0c8'; ctx.font='12px system-ui'; ctx.fillText('your purse: '+cargo.gold+'g  ·  winner takes the stake', cx, cy-82);
+  ctx.fillStyle='#ffd98a'; ctx.font='700 42px Georgia,serif'; ctx.fillText(HEX.stake+'g', cx, cy-30);
+  hbtn('bet:minus', cx-150, cy-56, 46, 46, '−', false, HEX_COL[1]);
+  hbtn('bet:plus', cx+104, cy-56, 46, 46, '+', false, HEX_COL[1]);
+  const chips=[1,5,25]; chips.forEach((v,i)=>hbtn('chip:'+v, cx-156+i*78, cy+18, 70, 30, v+'g', HEX.stake===v, HEX_COL[2]));
+  hbtn('chip:all', cx+78, cy+18, 78, 30, 'All', HEX.stake===cargo.gold, HEX_COL[2]);
+  hbtn('deal', cx-100, cy+66, 200, 46, 'Deal me in', false, HEX_COL[1], true);
+  hbtn('leave', cx-72, cy+124, 144, 32, 'Leave the table', false, null);
+}
+function drawHexResult(){
+  const cx=CSSW/2, cy=CSSH*0.5;
+  ctx.fillStyle='rgba(6,8,18,0.7)'; ctx.fillRect(0,0,CSSW,CSSH);
+  ctx.fillStyle='rgba(12,16,30,0.96)'; roundRect(cx-210,cy-118,420,236,16); ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle=HEX.result==='win'?HEX_COL[1].glow:HEX.result==='lose'?'#c0504a':'#7a8fb8'; ctx.stroke();
+  ctx.textAlign='center';
+  const title=HEX.result==='win'?'You take the pot!':HEX.result==='lose'?'The maelstrom takes you.':'A dead heat.';
+  ctx.fillStyle=HEX.result==='win'?'#ffe6a6':HEX.result==='lose'?'#ffb0a8':'#cdd9f3'; ctx.font='700 24px Georgia,serif'; ctx.fillText(title, cx, cy-62);
+  ctx.fillStyle='#cdd9f3'; ctx.font='15px system-ui'; ctx.fillText('You  '+HEX.finalP+'   –   '+HEX.finalM+'  '+HEX.man, cx, cy-30);
+  const pay=HEX.payout; ctx.font='700 20px system-ui'; ctx.fillStyle=pay>0?'#9ad86a':pay<0?'#ff7a6a':'#cdd9f3';
+  ctx.fillText(pay>0?('+'+pay+'g'):(pay<0?(pay+'g'):'stake returned'), cx, cy+2);
+  ctx.fillStyle='#9fb6dd'; ctx.font='12px system-ui'; ctx.fillText('purse: '+cargo.gold+'g', cx, cy+26);
+  if(cargo.gold>=1){ hbtn('again', cx-152, cy+46, 152, 42, 'Play again', false, HEX_COL[1], true); hbtn('leave', cx+6, cy+46, 146, 42, 'Leave', false, null, true); }
+  else hbtn('leave', cx-90, cy+46, 180, 42, 'Leave the table', false, null, true);
+  ctx.textAlign='left';
+}
+function drawHexScreen(){
+  HEX.rects=[];
+  ctx.fillStyle='#0b0a12'; ctx.fillRect(0,0,CSSW,CSSH);
+  const L=hexLayout(); drawWhirl(L.cx,L.cy,L.R,HEX.t);
+  ctx.textAlign='center'; ctx.fillStyle='#ffd98a'; ctx.font='700 26px Georgia,serif'; ctx.fillText('MAELSTROM', CSSW/2, 44);
+  ctx.fillStyle='#8aa0c8'; ctx.font='12px system-ui'; ctx.fillText('the wharf game of clash & chance', CSSW/2, 63);
+  ctx.textAlign='left';
+  if(HEX.phase==='bet'){ drawHexBet(); }
+  else { drawHexBoard(L); drawHexHUD(L); if(HEX.phase==='done') drawHexResult(); }
 }
 
 /* ---- rendering the town ---- */
@@ -6811,6 +7112,13 @@ function frame(ts){
 }
 function frameInner(ts){
   const dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
+  if(started && mode==='hex'){               // ---- the Maelstrom table ----
+    updateHex(dt);
+    if(mode!=='hex' || !HEX) return;
+    ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=true;
+    drawHexScreen();
+    return;
+  }
   if(started && mode==='interior'){          // ---- inside a building (museum / home) ----
     if(!menuOpen) updateInterior(dt);
     if(mode!=='interior' || !INT) return;    // stepped outside mid-update
