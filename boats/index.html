@@ -698,8 +698,8 @@ const boat={x:0,y:0,a:-Math.PI/2, spd:0, sail:0};   // a=heading (math angle, +x
 let camX=0,camY=0;
 let wind={a:0, str:1};
 let time=0, paused=true, started=false;
-let env={L:1, sun:1, dayT:0.3, dayName:'Day', storm:0, flash:0, stormOn:false};
-let dev={timeAuto:true, timeOfDay:0.5, stormAuto:true, stormManual:0, revealAll:false};   // playtest overrides (session-only)
+let env={L:1, sun:1, dayT:0.3, dayName:'Day', storm:0, flash:0, stormOn:false, fog:0, calm:0, drizzle:0, tempest:0, fogOn:false, calmOn:false};
+let dev={timeAuto:true, timeOfDay:0.5, stormAuto:true, stormManual:0, tempestManual:0, fogManual:0, calmManual:0, drizzleManual:0, revealAll:false};   // playtest overrides (session-only)
 let explored=new Set();                 // packed explore cells (gx + gy*EGW)
 const EXP=14, EGW=Math.ceil(WORLD/EXP); // explore-grid resolution (the fog-of-war record)
 let discoveredCount=0, portCount=0, clearedCount=0;
@@ -980,11 +980,22 @@ function updateEnv(dt){            // day/night + weather — shared by sea AND 
   if(started) checkCapLevel();
   const sN=fbm(time*0.011, 7.3, 3);                    // slow weather noise → occasional storms
   env.storm = dev.stormAuto ? smooth(clamp((sN-0.6)/0.16,0,1)) : dev.stormManual;   // ...or pin the weather
+  const tN=fbm(time*0.006+57.3, 9.1, 3);              // a rarer, fiercer swell brings the great tempests
+  env.tempest = dev.stormAuto ? smooth(clamp((tN-0.80)/0.10,0,1)) : (dev.tempestManual||0);
+  if(env.tempest>0.01) env.storm = Math.max(env.storm, 0.62+0.38*env.tempest);      // a tempest IS a big storm
+  const fN=fbm(time*0.008+131.0, 5.7, 3), cN=fbm(time*0.007+211.0, 6.3, 3), dN=fbm(time*0.013+311.0, 4.9, 3);
+  env.fog     = (dev.stormAuto ? smooth(clamp((fN-0.62)/0.16,0,1)) : (dev.fogManual||0))     * (1-env.storm*0.7);   // rain disperses the mist
+  env.calm    = (dev.stormAuto ? smooth(clamp((cN-0.60)/0.18,0,1)) : (dev.calmManual||0))    * (1-env.storm);       // no calm in a blow
+  env.drizzle = (dev.stormAuto ? smooth(clamp((dN-0.58)/0.18,0,1)) : (dev.drizzleManual||0)) * (1-env.storm*0.9);
   env.flash=Math.max(0, env.flash - dt*3.2);
   if(started && !mapOpen){
-    if(env.storm>0.35 && !env.stormOn){ env.stormOn=true; toast('⛈  A storm is rolling in',''); }
+    if(env.storm>0.35 && !env.stormOn){ env.stormOn=true; toast(env.tempest>0.25?'🌩  A tempest is upon us!':'⛈  A storm is rolling in', env.tempest>0.25?'reef the sails — she bites hard':''); }
     if(env.storm<0.12 && env.stormOn){ env.stormOn=false; toast('☀  The skies clear',''); }
-    if(env.storm>0.55 && Math.random()<env.storm*0.012){ env.flash=1; thunder(); }
+    if(env.storm>0.55 && Math.random()<env.storm*0.012*(1+env.tempest*2)){ env.flash=1; thunder(); }
+    if(env.fog>0.45 && !env.fogOn){ env.fogOn=true; toast('🌫  A fog bank rolls in','keep a sharp watch'); }
+    if(env.fog<0.2 && env.fogOn){ env.fogOn=false; }
+    if(env.calm>0.55 && !env.calmOn){ env.calmOn=true; toast('🌊  Dead calm','the wind has died — patience, Captain'); }
+    if(env.calm<0.25 && env.calmOn){ env.calmOn=false; }
   }
 }
 function update(dt){
@@ -992,8 +1003,8 @@ function update(dt){
   if(paused||mapOpen||flogOpen||koOpen||menuOpen) return;
   // wind meanders gently (calm) — gustier & stronger in a storm
   wind.a = 0.6 + 0.55*Math.sin(time*0.035*TUNE.windDrift) + 0.3*Math.sin(time*0.013*TUNE.windDrift+1.7)
-           + env.storm*0.7*Math.sin(time*0.6);
-  wind.str = (0.82 + 0.18*Math.sin(time*0.02)) * (1 + env.storm*0.85);
+           + env.storm*0.7*Math.sin(time*0.6) + env.tempest*1.5*Math.sin(time*1.05+2.1);   // a tempest swings the wind hard
+  wind.str = (0.82 + 0.18*Math.sin(time*0.02)) * (1 + env.storm*0.85 + env.tempest*0.7) * (1 - env.calm*0.9);   // dead calm robs the wind
 
   // steering — need some way (speed) to turn well; never fully locked
   let turnIn=0;
@@ -1018,8 +1029,8 @@ function update(dt){
   groundCD=Math.max(0,groundCD-dt); stormHitCD=Math.max(0,stormHitCD-dt);
   if(hull<hullMaxNow()*0.35 && Math.random()<dt*(2.2-1.6*hull/Math.max(1,hullMaxNow())))
     splashAt(boat.x+(Math.random()-0.5)*12, boat.y+(Math.random()-0.5)*12,false);
-  if(env.storm>0.55 && boat.spd>TUNE.baseSpeed*0.5 && stormHitCD<=0 && Math.random()<dt*(env.storm-0.45)*0.9){
-    stormHitCD=5; hullHit((2+Math.random()*3)*ETUNE.stormDmg, '🌊 a sea breaks over the deck');
+  if(env.storm>0.55 && boat.spd>TUNE.baseSpeed*(env.tempest>0.3?0.4:0.5) && stormHitCD<=0 && Math.random()<dt*(env.storm-0.45)*0.9*(1+env.tempest)){
+    stormHitCD=env.tempest>0.3?3:5; hullHit((2+Math.random()*3)*ETUNE.stormDmg*(1+env.tempest*1.8), env.tempest>0.3?'🌩 a wave crashes over the bow':'🌊 a sea breaks over the deck');
     for(let i2=0;i2<3;i2++) splashAt(boat.x+(Math.random()-0.5)*18, boat.y+(Math.random()-0.5)*18, true);
   }
 
@@ -1120,7 +1131,8 @@ function drawSea(){
         const band=Math.sin(wy*0.16 + t*1.05 + Math.sin(wx*0.05+t*0.2)*1.3);
         const spark=Math.sin(wx*0.5+wy*0.31 - t*2.0);
         let lift=(band*0.5+0.5); lift=lift*lift;
-        let bright=(1-d)*9 + lift*(8+(1-d)*16) + (spark>0.93?22:0) + (spark>0.95-env.storm*0.2?env.storm*30:0);
+        const cm=1-env.calm*0.78;                                   // dead calm flattens the chop to glass
+        let bright=(1-d)*9 + lift*(8+(1-d)*16)*cm + ((spark>0.93&&env.calm<0.4)?22:0) + (spark>0.95-env.storm*0.2?env.storm*30:0);
         r=c[0]+bright; g=c[1]+bright; b=c[2]+bright*1.05;
         // shore foam where a neighbour is land
         if(d<0.2){
@@ -2596,8 +2608,8 @@ function drawHUD(){
 
   drawCompass();
   // time of day + weather, tucked under the compass
-  const wIcon = env.storm>0.4?'⛈' : env.dayName==='Night'?'🌙' : env.dayName==='Day'?'☀' : '🌅';
-  const wCond = env.storm>0.45?'Storm' : env.storm>0.12?'Squally' : 'Clear';
+  const wIcon = env.tempest>0.25?'🌩' : env.storm>0.4?'⛈' : env.fog>0.4?'🌫' : env.drizzle>0.3?'🌧' : env.calm>0.5?'🌊' : env.dayName==='Night'?'🌙' : env.dayName==='Day'?'☀' : '🌅';
+  const wCond = env.tempest>0.25?'Tempest' : env.storm>0.45?'Storm' : env.storm>0.12?'Squally' : env.fog>0.4?'Foggy' : env.drizzle>0.3?'Drizzle' : env.calm>0.5?'Becalmed' : 'Clear';
   ctx.textAlign='center'; ctx.font='600 12px system-ui';
   const wt=wIcon+'  '+env.dayName+' · '+wCond, ww=ctx.measureText(wt).width+22;
   ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(CSSW/2-ww/2,108,ww,22,9); ctx.fill();
@@ -7088,22 +7100,36 @@ function worldTint(darkMult){
   const dm=darkMult||1;
   const warm=clamp(1-Math.abs(env.sun)/0.32,0,1)*0.16;            // golden dawn/dusk wash
   if(warm>0.003){ ctx.fillStyle='rgba(255,168,92,'+warm+')'; ctx.fillRect(0,0,CSSW,CSSH); }
-  const dark=(1-env.L)*0.55*dm;                                   // night darkening (cool navy; islands keep it lighter for combat)
-  if(dark>0.003){ ctx.fillStyle='rgba(10,16,42,'+dark+')'; ctx.fillRect(0,0,CSSW,CSSH); }
-  if(env.storm>0.02){                                            // storm gloom + driving rain
-    ctx.fillStyle='rgba(38,46,66,'+(env.storm*0.4)+')'; ctx.fillRect(0,0,CSSW,CSSH);
-    const n=Math.floor(env.storm*260), slant=Math.cos(wind.a)*0.7+0.25;
-    ctx.strokeStyle='rgba(202,216,242,'+(0.34*env.storm)+')'; ctx.lineWidth=1.1; ctx.beginPath();
-    for(let i=0;i<n;i++){ const spd=360+(i*53%260), y=((time*spd+i*271)%(CSSH+44))-22,
-      x=((i*131.7)%CSSW + y*slant)%CSSW;
+  const grey=clamp(env.drizzle*0.34,0,0.4);                       // flat overcast light on a drizzly day
+  if(grey>0.01){ ctx.fillStyle='rgba(150,158,170,'+grey.toFixed(3)+')'; ctx.fillRect(0,0,CSSW,CSSH); }
+  const dark=(1-env.L)*0.70*dm;                                   // night darkening — deeper now (islands pass a smaller dm)
+  if(dark>0.003){ ctx.fillStyle='rgba(8,12,34,'+dark.toFixed(3)+')'; ctx.fillRect(0,0,CSSW,CSSH); }
+  if(env.storm>0.02){                                            // storm gloom + driving rain (a tempest is fiercer)
+    ctx.fillStyle='rgba(34,40,58,'+(env.storm*0.4+env.tempest*0.22).toFixed(3)+')'; ctx.fillRect(0,0,CSSW,CSSH);
+    const n=Math.floor(env.storm*260*(1+env.tempest)), slant=Math.cos(wind.a)*(0.7+env.tempest*0.5)+0.25;
+    ctx.strokeStyle='rgba(202,216,242,'+(0.34*env.storm).toFixed(3)+')'; ctx.lineWidth=1.1+env.tempest; ctx.beginPath();
+    for(let i=0;i<n;i++){ const spd=360+(i*53%260), y=((time*spd+i*271)%(CSSH+44))-22, x=((i*131.7)%CSSW + y*slant)%CSSW;
       ctx.moveTo(x,y); ctx.lineTo(x-slant*22-2, y+24); }
     ctx.stroke();
   }
-  const vig=env.storm*0.4+(1-env.L)*0.22;                         // tighter horizon when it's dark/stormy
-  if(vig>0.01){ const g=ctx.createRadialGradient(CSSW/2,CSSH*0.5,CSSH*0.25, CSSW/2,CSSH*0.5,CSSH*0.82);
-    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(2,6,16,'+clamp(vig,0,0.72)+')');
+  if(env.drizzle>0.05 && env.storm<0.2){                          // gentle, near-vertical drizzle (no storm)
+    const n=Math.floor(env.drizzle*120); ctx.strokeStyle='rgba(200,212,230,'+(0.2*env.drizzle).toFixed(3)+')'; ctx.lineWidth=1; ctx.beginPath();
+    for(let i=0;i<n;i++){ const spd=300+(i*47%180), y=((time*spd+i*211)%(CSSH+30))-15, x=(i*149.3)%CSSW;
+      ctx.moveTo(x,y); ctx.lineTo(x-2,y+16); }
+    ctx.stroke();
+  }
+  if(env.fog>0.02){                                               // a luminous grey veil that swallows the distance
+    ctx.fillStyle='rgba(206,212,220,'+(env.fog*0.34).toFixed(3)+')'; ctx.fillRect(0,0,CSSW,CSSH);
+    const fr=CSSH*(0.62-env.fog*0.34);
+    const fg=ctx.createRadialGradient(CSSW/2,CSSH*0.52,Math.max(10,fr*0.4), CSSW/2,CSSH*0.52,Math.max(20,fr*1.3));
+    fg.addColorStop(0,'rgba(210,216,224,0)'); fg.addColorStop(1,'rgba(210,216,224,'+clamp(env.fog*0.85,0,0.92).toFixed(3)+')');
+    ctx.fillStyle=fg; ctx.fillRect(0,0,CSSW,CSSH);
+  }
+  const vig=env.storm*0.4+env.tempest*0.3+(1-env.L)*0.3;          // tighter horizon when it is dark or wild
+  if(vig>0.01){ const g=ctx.createRadialGradient(CSSW/2,CSSH*0.5,CSSH*0.22, CSSW/2,CSSH*0.5,CSSH*0.82);
+    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(2,4,12,'+clamp(vig,0,0.82).toFixed(3)+')');
     ctx.fillStyle=g; ctx.fillRect(0,0,CSSW,CSSH); }
-  if(env.flash>0.01){ ctx.fillStyle='rgba(228,236,255,'+(env.flash*0.5)+')'; ctx.fillRect(0,0,CSSW,CSSH); }  // lightning
+  if(env.flash>0.01){ ctx.fillStyle='rgba(228,236,255,'+(env.flash*0.6).toFixed(3)+')'; ctx.fillRect(0,0,CSSW,CSSH); }  // lightning
 }
 
 function frame(ts){
@@ -7134,7 +7160,7 @@ function frameInner(ts){
     drawIslandWorld();
     ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=false;
     ctx.clearRect(0,0,CSSW,CSSH); ctx.drawImage(pix,0,0,IW,IH,0,0,CSSW,CSSH);
-    ctx.imageSmoothingEnabled=true; worldTint(0.72); islandHUD();
+    ctx.imageSmoothingEnabled=true; worldTint(0.55); islandHUD();
     if(imapOpen) drawIslandMap();
     return;
   }
