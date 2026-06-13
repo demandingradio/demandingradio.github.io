@@ -166,6 +166,19 @@ canvas{position:absolute;inset:0;display:block;}
   color:#2c0e14;background:linear-gradient(#ffb3a6,#e8786a);border:none;border-radius:10px;padding:10px 28px;box-shadow:0 6px 0 #8e3c2e;}
 #ko button:active{transform:translateY(2px);box-shadow:0 4px 0 #8e3c2e;}
 
+/* sticky notices — orders stay up until read */
+#notice{position:absolute;top:138px;left:50%;transform:translateX(-50%);z-index:58;
+  background:linear-gradient(#1d3050,#152643);border:1px solid #4a5f8e;border-radius:13px;
+  box-shadow:0 12px 40px rgba(0,0,0,.55);width:min(440px,92vw);padding:13px 16px 11px;}
+#notice .ntitle{font-weight:800;color:#ffe6a6;font-size:14px;}
+#notice .nbody{color:#cdd9f3;font-size:12.5px;line-height:1.5;margin:6px 0 10px;}
+#notice .nfoot{display:flex;justify-content:flex-end;align-items:center;gap:10px;}
+#notice .nmore{color:#7e93ba;font-size:10.5px;}
+.rbtns{display:flex;gap:9px;justify-content:center;margin-top:16px;}
+.rbtns button{display:inline-block !important;margin:0 !important;}
+.rbtns .rnd{background:linear-gradient(#cfe0ff,#9db9e6) !important;box-shadow:0 6px 0 #5f7398 !important;color:#0c1f3a !important;}
+.rbtns .rnd:active{box-shadow:0 4px 0 #5f7398 !important;}
+
 /* the Guild's welcome — crew dialogue cards over the home wharf */
 #intro{position:absolute;inset:0;z-index:74;display:flex;align-items:flex-end;justify-content:center;
   padding-bottom:7vh;background:linear-gradient(rgba(5,12,24,.18), rgba(5,12,24,.6));}
@@ -313,12 +326,14 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="mbox">
     <div class="mtabs">
       <button class="mtab" data-tab="crew">⚓ Crew</button>
+      <button class="mtab" data-tab="log">📜 Contracts</button>
       <button class="mtab" data-tab="tuning">⚙ Tuning</button>
       <button class="mtab" data-tab="voyage">🧭 Voyage</button>
       <span class="mx" id="menuClose" title="Close (Esc)">✕</span>
     </div>
     <div class="mbody">
       <div class="mtabpane" id="tabCrew"></div>
+      <div class="mtabpane" id="tabLog"></div>
       <div class="mtabpane" id="tabTuning">
 <div id="tune">
   <h3>⚙ Feel tuning</h3>
@@ -379,7 +394,7 @@ canvas{position:absolute;inset:0;display:block;}
     <div class="rtitle">✦ Isle charted &amp; cleared ✦</div>
     <p>Name your discovery, cartographer:</p>
     <input id="renameInput" maxlength="22" autocomplete="off" />
-    <button id="renameBtn">Name it</button>
+    <div class="rbtns"><button class="rnd" id="renameRnd">🎲 Random</button><button id="renameBtn">Name it</button></div>
   </div>
 </div>
 
@@ -428,6 +443,12 @@ canvas{position:absolute;inset:0;display:block;}
     <div class="sbody" id="jBody"></div>
     <div class="sfoot"><span class="gold" id="jGold"></span><button class="sbtn ghost" id="jClose">Close (J)</button></div>
   </div>
+</div>
+
+<div id="notice" class="hidden">
+  <div class="ntitle" id="nTitle"></div>
+  <div class="nbody" id="nBody"></div>
+  <div class="nfoot"><span class="nmore" id="nMore"></span><button class="sbtn" id="nOk">Understood ✓</button></div>
 </div>
 
 <div id="intro" class="hidden">
@@ -684,7 +705,7 @@ function doSave(){
       disc:discoveredCount, ports:portCount,
       hull:Math.round(hull), upg:UPG, act:missions, mdone:missionsDone, doneIds:doneIds.slice(-80), marks:marks,
       crew:crew, provisions:provisions, buoys:buoys, cu:crewUnpaid?1:0, chg:crewHungry?1:0, sda:Math.round(seaDayAcc),
-      curios:curios, expd:expd?{ci:expd.ci}:null, gift:giftCells, gnext:guildNextIdx,
+      curios:curios, expd:expd?{ci:expd.ci}:null, gift:giftCells, gnext:guildNextIdx, pend:pendingPay,
       tleads:cores.filter(c=>c.forceBuried).map(c=>c.idx),
       pv:cores.filter(c=>c.visitedPort).map(c=>c.idx),
       found:cores.filter(c=>c.found).map(c=>c.idx),
@@ -724,7 +745,7 @@ function loadSave(){
     provisions = s.provisions===undefined ? 20 : s.provisions;
     buoys=s.buoys||[]; crewUnpaid=!!s.cu; crewHungry=!!s.chg; seaDayAcc=s.sda||0;
     curios=s.curios||[]; expd=null; fogCache.idx=-1;
-    giftCells=s.gift||0; guildNextIdx=(s.gnext===undefined?-1:s.gnext);
+    giftCells=s.gift||0; guildNextIdx=(s.gnext===undefined?-1:s.gnext); pendingPay=s.pend||[];
     hull = (s.hull===undefined) ? hullMaxNow() : clamp(s.hull,0,hullMaxNow());
     (s.tleads||[]).forEach(idx=>{ if(cores[idx]) cores[idx].forceBuried=true; });
     (s.pv||[]).forEach(idx=>{ if(cores[idx]) cores[idx].visitedPort=true; });
@@ -4322,6 +4343,7 @@ function enterPort(core){
   toast('⚓  '+core.city, PORT_SIZE_NAME[PRT.SZ]); sfx('land');
   if(!core.visitedPort){ core.visitedPort=true; toast('✦  First call','the town turns out to see the new sail'); }
   missionEvent('dock', core.idx);
+  settlePendingPay();                          // the harbourmaster squares the ledger
   queueSave();
 }
 function leavePort(){
@@ -4357,17 +4379,66 @@ function updatePort(dt){
   }
   for(let i=ifloat.length-1;i>=0;i--){ const f=ifloat[i]; f.t+=dt; f.y-=14*dt; if(f.t>f.life) ifloat.splice(i,1); }
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
+  if(portChat){ portChat.t-=dt; if(portChat.t<=0) portChat=null; }
   const ce=1-Math.exp(-8*dt); icamX+=(player.x-icamX)*ce; icamY+=(player.y-30-icamY)*ce;
   if(time-lastSave>3){ lastSave=time; doSave(); }
+}
+function crewAshorePos(ci){
+  const TS=PRT.TS;
+  return {x:(PRT.jx+(ci%2?-0.9:1.9))*TS+(ci*7%11), y:(PRT.H-5.7+(ci%3)*0.5)*TS};
 }
 function nearestPortAct(){
   if(!PRT) return null; let best=null, bd=34*34;
   for(const a of PRT.acts){ const d=(player.x-a.x)**2+(player.y-a.y)**2; if(d<bd){ bd=d; best=a; } }
-  return best;
+  if(best) return best;
+  let bn=null; bd=34*34;                        // no shop near — maybe a friendly word
+  for(const n of PRT.npcs){ const d=(player.x-n.x)**2+(player.y-n.y)**2; if(d<bd){ bd=d; bn={kind:'talk', x:n.x, y:n.y, npc:n}; } }
+  for(let ci=1;ci<crew.length;ci++){ const cp=crewAshorePos(ci);
+    const d=(player.x-cp.x)**2+(player.y-cp.y)**2; if(d<bd){ bd=d; bn={kind:'talk', x:cp.x, y:cp.y, crewM:crew[ci]}; } }
+  if(bn){ bn.label='💬  Press  E  —  pass the time of day'; return bn; }
+  return null;
+}
+let portChat=null;
+const PORT_TALK=[
+  '“Past the old line the isles grow strange, they say — frost and ember and crystal.”',
+  '“Every league inked past the Guild’s charts is your name growing, Captain.”',
+  '“A white bull whale haunts these seas. Full of old iron. Never taken.”',
+  '“Saw a gold flag go up on a far isle last season. Some captain making a name.”',
+  '“Buried gold on the wild isles — every tavern has a map, and every map a liar.”',
+  '“Keep her hull tight. The shipwright drinks well on what storms do to the careless.”',
+  '“A hungry crew downs tools, and rightly so. Keep the barrel stocked, or the well full.”',
+  '“The harbourmaster posts honest work on the board. Mostly honest.”',
+  '“Explorers drink at the bigger taverns. Odd folk. Useful — the ones that live.”',
+  '“Gulls wheeling low mean fish worth the net, my father always said.”',
+  '“Storm runners only school in a blow. Mad fish for mad weather.”',
+  '“Grand harbours do grand work — top-tier fittings, rim prices.”',
+  '“Great Boars guard the old hoards. Tusks like anchors. Mind yourself ashore.”',
+  '“Mind the reef crabs — shell like a ship’s bell. Get behind them, or bait the lunge.”',
+];
+const CREW_TALK={
+  master:'“Hull’s holding, Cap’n. Let’s keep it that way.”',
+  carto:'“The chart fills wherever we sail dark water, Cap’n. M to see her.”',
+  craft:'“Bring me ore and herbs off the isles — the bench is ready when you are.”',
+  crewman:'“Fed and paid, Cap’n. Long may it last.”',
+  explorer:'“Point me at a foggy isle and I’ll walk the dark off it.”',
+};
+function portSay(bn){
+  let line;
+  if(bn.crewM){
+    line = crewStruck()&&bn.crewM.role!=='captain' ? '“We’re owed, Cap’n. Settle the ledger and we’ll talk.”'
+         : CREW_TALK[bn.crewM.role]||'“Cap’n.”';
+  } else {
+    if(Math.random()<0.18) line = captainRep()>1 ? '“'+capTitle()+', they’re calling you. The Guild talks, you know.”'
+                                                 : '“New commission, is it? The Guild’s charts only go so far out here.”';
+    else line=PORT_TALK[(Math.random()*PORT_TALK.length)|0];
+  }
+  portChat={x:bn.x, y:bn.y, line, t:4.6};
+  sfx('tink',0.7);
 }
 function doPortInteract(){
   const a=nearestPortAct(); if(!a) return;
   if(a.kind==='boat') leavePort();
+  else if(a.kind==='talk') portSay(a);
   else openShop(a.kind);
 }
 
@@ -4629,6 +4700,21 @@ function portHUD(){
     ctx.fillStyle='#ffe9a6'; ctx.fillText(nm,sxp,syp); }
   for(const f of ifloat){ const sxp=((f.x-icamX)*islScale()+IW/2)*(CSSW/IW), syp=((f.y-icamY)*islScale()+IH/2)*(CSSH/IH);
     ctx.globalAlpha=clamp(1-f.t/f.life,0,1); ctx.fillStyle=f.c; ctx.font='700 14px system-ui'; ctx.fillText(f.txt,sxp,syp); ctx.globalAlpha=1; }
+  if(portChat && portChat.t>0){                              // a word on the wharf
+    const [ix2,iy2]=iw2p(portChat.x, portChat.y);
+    const sxp=ix2*(CSSW/IW), syp=iy2*(CSSH/IH);
+    const words=portChat.line.split(' '), lines=[]; let ln='';
+    for(const w2 of words){ if((ln+' '+w2).trim().length>42){ lines.push(ln.trim()); ln=w2; } else ln+=' '+w2; }
+    if(ln.trim()) lines.push(ln.trim());
+    ctx.font='600 12px Georgia,serif'; let bw=0; for(const l of lines) bw=Math.max(bw, ctx.measureText(l).width);
+    const bh=lines.length*16+14, bx=clamp(sxp-(bw+24)/2, 8, CSSW-bw-32), by=Math.max(72, syp-58-bh);
+    ctx.globalAlpha=clamp(portChat.t/0.4,0,1);
+    ctx.fillStyle='rgba(14,24,44,.93)'; roundRect(bx,by,bw+24,bh,9); ctx.fill();
+    ctx.strokeStyle='#3a5080'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle='#e8e2cc'; ctx.textAlign='left';
+    lines.forEach((l,i2)=>ctx.fillText(l, bx+12, by+19+i2*16));
+    ctx.globalAlpha=1; ctx.textAlign='center';
+  }
   const it=nearestPortAct();
   if(it){ ctx.font='700 14px system-ui'; const w=ctx.measureText(it.label).width+30;
     ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-94,w,32,10); ctx.fill();
@@ -4782,8 +4868,9 @@ function boardAct(act){
   const parts=act.split(':'), verb=parts[0], id=parseInt(parts[1]);
   if(verb==='take'){ if(missions.length>=MAX_MISSIONS) return;
     const o=genOffers(PRT.core).find(x=>x.id===id); if(!o) return;
-    missions.push(o); sfx('secure'); toast('📜  Contract taken', missionTitle(o));
-    missionEvent('took', o.id); }
+    missions.push(o); sfx('secure');
+    showNotice('📜  Contract taken — '+o.pay+'g on completion', missionTitle(o)+'<br><span style="color:#8aa0c8;">'+missionDesc(o)+'</span>');
+    missionEvent('took', o.id); settlePendingPay(); }
   else { const i=missions.findIndex(m=>m.id===id); if(i<0) return;
     doneIds.push(id); toast('📜  Contract returned', missionTitle(missions[i])); missions.splice(i,1); }
   queueSave(); renderShop();
@@ -4924,10 +5011,21 @@ function genOffers(core){
   }
   return offers.filter(o=>!doneIds.includes(o.id) && !missions.some(m=>m.id===o.id) && !(o.urgent&&o.dl<=time));
 }
-function payMission(m,why){
-  const pay=Math.round(m.pay); cargo.gold+=pay; missionsDone++; doneIds.push(m.id);
+let pendingPay=[];
+function payMission(m,why){                    // fulfilled — but the coin waits at the quay
+  doneIds.push(m.id);
   const i=missions.indexOf(m); if(i>=0) missions.splice(i,1);
-  toast('📜  Contract fulfilled  +'+pay+'g', why||missionTitle(m)); sfx('chest'); queueSave();
+  pendingPay.push({pay:Math.round(m.pay), title:missionTitle(m), why:why||''});
+  toast('📜  Contract fulfilled', (why||missionTitle(m))+' — collect at any port'); sfx('secure'); queueSave();
+  if(menuOpen&&menuTab==='log') renderLogTab();
+}
+function settlePendingPay(){
+  if(!pendingPay.length) return;
+  let tot=0; for(const q of pendingPay) tot+=Math.round(q.pay);
+  cargo.gold+=tot; missionsDone+=pendingPay.length;
+  toast('🏛  The harbourmaster pays out','+'+tot+'g for '+pendingPay.length+' contract'+(pendingPay.length>1?'s':'')); sfx('chest');
+  pendingPay=[]; queueSave();
+  if(shopOpen) shopSetGold();
 }
 function failMission(m){
   const i=missions.indexOf(m); if(i>=0) missions.splice(i,1); doneIds.push(m.id);
@@ -4996,9 +5094,23 @@ function allMarks(){
 const MK_COL={deliver:'#a8741a',hunt:'#b8482f',find:'#2a7a8a',wreck:'#5a6a8a',whale:'#3a6ea5',isle:'#7a4aa0',treasure:'#a8861a'};
 const MK_GLYPH={deliver:'⚓',hunt:'⚔',find:'?',wreck:'⌖',whale:'≈',isle:'✦',treasure:'✕'};
 
+/* ---- sticky notices: orders wait until you've read them ---- */
+let noticeQ=[];
+function showNotice(title,body){
+  noticeQ.push({title,body});
+  if(noticeQ.length===1) renderNotice();
+}
+function renderNotice(){
+  const n=noticeQ[0]; if(!n){ document.getElementById('notice').classList.add('hidden'); return; }
+  document.getElementById('nTitle').textContent=n.title;
+  document.getElementById('nBody').innerHTML=n.body;
+  document.getElementById('nMore').textContent=noticeQ.length>1?(noticeQ.length-1)+' more waiting':'';
+  document.getElementById('notice').classList.remove('hidden');
+}
+document.getElementById('nOk').onclick=()=>{ noticeQ.shift(); renderNotice(); sfx('tink',0.8); };
+
 /* ---- the contracts journal (J) ---- */
-function openJournal(){ if(!started||renaming||shopOpen) return; journalOpen=true; renderJournal();
-  document.getElementById('journal').classList.remove('hidden'); }
+function openJournal(){ openMenu('log'); }
 function closeJournal(){ journalOpen=false; document.getElementById('journal').classList.add('hidden'); }
 function renderJournal(){
   document.getElementById('jSub').textContent=missionsDone+' fulfilled · boards at every port post the work';
@@ -5228,7 +5340,26 @@ function switchMenuTab(tab){
   document.querySelectorAll('.mtab').forEach(b=>b.classList.toggle('on', b.dataset.tab===tab));
   document.querySelectorAll('.mtabpane').forEach(p=>p.classList.toggle('on', p.id==='tab'+tab[0].toUpperCase()+tab.slice(1)));
   if(tab==='crew') renderCrewTab();
+  if(tab==='log') renderLogTab();
   if(tab==='voyage') renderVoyageTab();
+}
+function renderLogTab(){
+  const host=document.getElementById('tabLog'); if(!host) return;
+  let h='';
+  if(missions.length){ h+='<div class="shead">Under way ('+missions.length+'/'+MAX_MISSIONS+')</div>';
+    h+=missions.map(m=>'<div class="srow2"><span class="ic">'+MICON[m.t]+'</span><span class="nm">'+missionTitle(m)+
+      (m.urgent?' <span class="urgent">⏳ '+fmtT(urgentLeft(m))+'</span>':'')+'<small>'+missionDesc(m)+'</small></span>'+
+      '<span class="pr">'+m.pay+'g</span><button class="sbtn ghost" data-mdrop="'+m.id+'">✕</button></div>').join(''); }
+  else h+='<div style="color:#8aa0c8;text-align:center;padding:12px 0;font-style:italic;">no contracts under way — every port square has a 📜 board</div>';
+  if(pendingPay.length){ let tot=0; for(const q of pendingPay) tot+=Math.round(q.pay);
+    h+='<div class="shead">Fulfilled — collect at any port</div>';
+    h+=pendingPay.map(q=>'<div class="srow2"><span class="ic">✓</span><span class="nm">'+q.title+'<small>'+(q.why||'done and dusted')+'</small></span><span class="pr">'+Math.round(q.pay)+'g</span></div>').join('');
+    h+='<div style="text-align:right;color:#ffd86b;font-weight:700;font-size:13px;padding:6px 2px;">the harbourmaster owes you '+tot+'g</div>'; }
+  h+='<div style="color:#7e93ba;font-size:10.5px;text-align:center;margin-top:9px;">'+missionsDone+' contracts fulfilled this voyage · rewards are paid when you next dock</div>';
+  host.innerHTML=h;
+  host.querySelectorAll('[data-mdrop]').forEach(b=>{ b.onclick=()=>{ const id=parseInt(b.dataset.mdrop);
+    const i=missions.findIndex(m=>m.id===id); if(i<0) return;
+    doneIds.push(id); toast('📜  Contract returned', missionTitle(missions[i])); missions.splice(i,1); queueSave(); renderLogTab(); }; });
 }
 function repDots(r){ let s2='<span class="crep">'; for(let i=1;i<=10;i++) s2+=(i<=r?'<b>●</b>':'●'); return s2+'  <b>'+r+'</b>/10</span>'; }
 function renderCrewTab(){
@@ -5613,7 +5744,7 @@ function introNext(){ introIx++; if(introIx>=introCards.length) endIntro(); else
 function endIntro(){
   introOpen=false; document.getElementById('intro').classList.add('hidden');
   giveGuildStep(1);
-  toast('🏛  Guild orders posted','J opens your contracts — the way is marked on your chart');
+  toast('🏛  Guild orders posted','J or Esc → Contracts to review them any time');
   queueSave();
 }
 function giveGuildStep(n){
@@ -5621,8 +5752,8 @@ function giveGuildStep(n){
   if(n===1 && next) missions.push({id:910000001, t:'gvisit', to:next.idx, toName:next.city, pay:15});
   else if(n===2) missions.push({id:910000002, t:'gboard', pay:10});
   else if(n===3) missions.push({id:910000003, t:'gclear', pay:25});
-  if(n>1){ const t2=['','','“Good. Now take work from any harbour board — show them the Guild’s colours.”','“Last of the old orders: claim a wild isle. Land, clear her, raise your flag.”'][n];
-    if(t2) toast('🏛  The Guild’s next word', t2); }
+  const m=missions[missions.length-1];
+  if(m&&m.t&&m.t[0]==='g') showNotice('🏛  The Guild’s orders', missionTitle(m)+'<br><span style="color:#8aa0c8;">'+missionDesc(m)+' · '+m.pay+'g on completion</span>');
   queueSave();
 }
 
@@ -5898,6 +6029,11 @@ function buildIslandTune(){ const host=document.getElementById('tuneIslandRows')
   });
 }
 document.getElementById('renameBtn').onclick=finishRename;
+document.getElementById('renameRnd').onclick=()=>{
+  const a=NAME_A[(Math.random()*NAME_A.length)|0]+NAME_B[(Math.random()*NAME_B.length)|0];
+  const two=Math.random()<0.3 ? ' '+NAME_A[(Math.random()*NAME_A.length)|0]+NAME_B[(Math.random()*NAME_B.length)|0] : '';
+  document.getElementById('renameInput').value=(a+two).slice(0,22);
+};
 document.getElementById('sumBtn').onclick=hideSummary;
 document.getElementById('koBtn').onclick=hideKO;
 document.getElementById('leaveBtn').onclick=()=>{ if(mode==='island'&&islandCleared) leaveIsland(false); };
@@ -5912,14 +6048,14 @@ function begin(fresh){
     well={}; flog={}; fed=0; spoils={}; whiteTaken=false;
     UPG={}; missions=[]; marks=[]; doneIds=[]; missionsDone=0; hull=hullMaxNow();
     genCrew(); provisions=20; buoys=[]; crewUnpaid=false; crewHungry=false; seaDayAcc=0;
-    curios=[]; expd=null; fogCache.idx=-1; giftCells=0; guildNextIdx=-1;
+    curios=[]; expd=null; fogCache.idx=-1; giftCells=0; guildNextIdx=-1; pendingPay=[];
   }
   if(!crew.length) genCrew();
   lastCapLevel=captainRep();
   mode='sea'; nearLand=null; schools=[]; net=null; netCD=0; seafloat=[]; seafx=[]; popQueue=[];
   whales=[]; hunt=null; irons=[]; seadrops=[]; ironCD=0; limpT=0; whaleSpawnT=6;
   PRT=null; groundCD=0; stormHitCD=0; closeShop(); closeJournal(); hideKO(); closeMenu(); imapOpen=false;
-  ptMode=false; ISL_LVL=0; closePtMenu();   // a real voyage is never the sandbox
+  ptMode=false; ISL_LVL=0; closePtMenu(); noticeQ=[]; renderNotice(); portChat=null;   // a real voyage is never the sandbox
   if(fresh) potions=0;
   buildTunePanel(); syncTune(); buildPlaytest(); buildIslandTune(); buildFishTune(); buildWhaleTune(); buildPortTune(); buildLvlTune();
   document.getElementById('mute').textContent=audioOn?'🔊':'🔇';
