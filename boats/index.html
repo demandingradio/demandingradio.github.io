@@ -743,7 +743,7 @@ function doSave(){
   if(ptMode) return;                       // playtest trials never touch the real voyage
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      seed:SEED, time:Math.round(time), boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, tuneV:2, itune:ITUNE, ituneV:3, ftune:FTUNE, ftuneV:2, wtune:WTUNE, etune:ETUNE, ltune:LTUNE, audio:audioOn, cargo:cargo, potions:potions, plvl:plvl, pxp:pxp, skillPts:skillPts, skills:SKILLS, php:Math.round(player.hp), ptune:PTUNE, ptuneV:1,
+      seed:SEED, time:Math.round(time), boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, tuneV:2, itune:ITUNE, ituneV:4, ftune:FTUNE, ftuneV:2, wtune:WTUNE, etune:ETUNE, ltune:LTUNE, audio:audioOn, cargo:cargo, potions:potions, plvl:plvl, pxp:pxp, skillPts:skillPts, skills:SKILLS, php:Math.round(player.hp), ptune:PTUNE, ptuneV:2,
       well:well, flog:flog, fed:fed, spoils:spoils, whiteTaken:whiteTaken,
       disc:discoveredCount, ports:portCount,
       hull:Math.round(hull), upg:UPG, act:missions, mdone:missionsDone, doneIds:doneIds.slice(-80), marks:marks,
@@ -766,7 +766,7 @@ function loadSave(){
     buildWorld(s.seed);
     if(s.tune) TUNE=Object.assign({},DEFAULT_TUNE,s.tune);
     if(s.tuneV!==2) TUNE.zoom=DEFAULT_TUNE.zoom;                       // one-time: the closer default zoom
-    ITUNE = (s.itune && s.ituneV===3) ? Object.assign({},DEFAULT_ITUNE,s.itune) : Object.assign({},DEFAULT_ITUNE);   // v3 = playtested combat defaults
+    ITUNE = (s.itune && s.ituneV===4) ? Object.assign({},DEFAULT_ITUNE,s.itune) : Object.assign({},DEFAULT_ITUNE);   // v3 = playtested combat defaults
     if(s.cargo) cargo=Object.assign(loot0(),s.cargo);
     audioOn = s.audio!==false;
     boat.x=s.boat.x; boat.y=s.boat.y; boat.a=s.boat.a; boat.spd=0; boat.sail=0; time=s.time||0;
@@ -782,7 +782,7 @@ function loadSave(){
     ETUNE=Object.assign({},DEFAULT_ETUNE,s.etune||{});
     LTUNE=Object.assign({},DEFAULT_LTUNE,s.ltune||{});
     well=s.well||{}; flog=s.flog||{}; fed=s.fed||0; potions=s.potions||0;
-    plvl=s.plvl||1; pxp=s.pxp||0; skillPts=s.skillPts||0; SKILLS=Object.assign(SKILL0(),s.skills||{}); PTUNE=Object.assign({},DEFAULT_PTUNE,(s.ptuneV===1&&s.ptune)||{});
+    plvl=s.plvl||1; pxp=s.pxp||0; skillPts=s.skillPts||0; SKILLS=Object.assign(SKILL0(),s.skills||{}); PTUNE=Object.assign({},DEFAULT_PTUNE,(s.ptuneV===2&&s.ptune)||{});
     player.maxhp=eMaxHp(); player.hp=s.php?clamp(s.php,1,player.maxhp):player.maxhp;
     spoils=s.spoils||{}; whiteTaken=!!s.whiteTaken;
     UPG=s.upg||{}; missions=s.act||[]; missionsDone=s.mdone||0; doneIds=s.doneIds||[]; marks=s.marks||[];
@@ -2720,6 +2720,20 @@ function drawMinimap(){
     ctx.fillStyle=MK_COL[mk.kind]||'#8a5c2e'; ctx.fillRect(-3,-3,6,6); ctx.restore();
     ctx.strokeStyle='#fff6dd'; ctx.lineWidth=1; ctx.strokeRect(px-1.5,py-1.5,3,3);
   }
+  // nearest few uncleared wild isles — a "something to do here" nudge (amber pulsing pips)
+  { ctx.globalAlpha=1;
+    const todo=coresNear(boat.x,boat.y,6000).filter(c=>c.found&&!c.cleared&&!c.port)
+      .sort((a,b)=>((a.x-boat.x)**2+(a.y-boat.y)**2)-((b.x-boat.x)**2+(b.y-boat.y)**2)).slice(0,4);
+    for(let k=0;k<todo.length;k++){ const c=todo[k];
+      let px=mx+(c.x-boat.x)/span*size+size/2, py=my+(c.y-boat.y)/span*size+size/2;
+      const off=px<mx+7||px>mx+size-7||py<my+7||py>my+size-7;
+      if(off){ if(k>0) continue;                       // only the nearest one clamps to the rim, as a pointer
+        px=clamp(px,mx+8,mx+size-8); py=clamp(py,my+8,my+size-8); }
+      const pl=0.5+0.5*Math.sin(time*4-k*0.8);
+      ctx.strokeStyle='rgba(255,154,60,'+(0.55*(1-pl)).toFixed(2)+')'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.arc(px,py,3.4+pl*3.2,0,TAU); ctx.stroke();
+      ctx.fillStyle='#ff9a3c'; ctx.beginPath(); ctx.arc(px,py,2.7,0,TAU); ctx.fill();
+      ctx.strokeStyle='#ffe6a6'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(px,py,2.7,0,TAU); ctx.stroke(); } }
   // boat marker (arrow)
   const bx=mx+size/2, by=my+size/2;
   ctx.translate(bx,by); ctx.rotate(boat.a+Math.PI/2);
@@ -2945,7 +2959,7 @@ const LOOT_VAL={bits:1,herb:2,ore:3,gems:4,relic:5};          // gold is coin �
 function satchelCount(){ let n=0; for(const k in tripLoot) if(k!=='gold') n+=tripLoot[k]; return n; }
 function cargoCount(){ let n=0; for(const k in cargo) if(k!=='gold') n+=cargo[k]; return n; }
 const DEFAULT_ITUNE={ moveSpeed:86, slashRange:20, slashDmg:1, slashCD:0.14, arrowSpeed:140, arrowDmg:1,
-  boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, crabHP:3, dingoHP:2, enemyDmg:1, spawnCount:1.5, clearSize:1.5,
+  boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, crabHP:3, dingoHP:2, enemyDmg:2, spawnCount:1.5, clearSize:1.3,
   magnetR:95, satchel:40, hold:120, dashCool:0.9 };   // v3 = the user's playtested numbers (2026-06-13)
 let ITUNE=Object.assign({},DEFAULT_ITUNE);
 
@@ -2956,8 +2970,8 @@ let ITUNE=Object.assign({},DEFAULT_ITUNE);
  * pour into one of three trees. Base combat values start a touch below
  * the old tuned feel and climb back past it as you invest.
  * =================================================================== */
-const DEFAULT_PTUNE={ hpBase:100, hpPerLvl:8, lvlCap:30, ptsPerLvl:1,
-  xpBase:42, xpExp:1.55, xpNorm:10, xpElite:30, xpGuard:80,
+const DEFAULT_PTUNE={ hpBase:50, hpPerLvl:8, lvlCap:30, ptsPerLvl:1,
+  xpBase:42, xpExp:1.55, xpNorm:5, xpElite:15, xpGuard:40,
   potionFrac:0.40, reviveFrac:0.34, baseScale:0.82 };
 let PTUNE=Object.assign({},DEFAULT_PTUNE);
 let plvl=1, pxp=0, skillPts=0, levelFx=0;
@@ -3142,7 +3156,7 @@ function genIsland(core){
       const sM=bmods.spawnMul||1;
       const ec = Math.round((kind==='fight' ? Math.max(2,Math.round((2+big+(rng()*2|0))*ITUNE.spawnCount*sM))
                : kind==='bonus' ? Math.max(1,Math.round(ITUNE.spawnCount)+big)
-               : 1+(rng()*2|0)+big) * lvlCntMul());
+               : 1+(rng()*2|0)+big) * 2 * lvlCntMul());
       for(let k=0;k<ec;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
         mkEn(pickEnL(),p,i, rng()<lvlEliteCh()); cl.enemyCount++; }      // high levels field elites in the open
       if(kind==='bonus'){                            // an elite guards every cache
@@ -3287,13 +3301,14 @@ function showKO(st,lost){
 }
 function hideKO(){ document.getElementById('ko').classList.add('hidden'); koOpen=false; }
 /* physical loot — burst out, bounce, then magnet to the player */
-function spawnLoot(k,n,x,y){ for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp=30+Math.random()*85;
+let LOOT_RATE=0.5;          // every island loot drop comes at half rate
+function spawnLoot(k,n,x,y){ n=n*LOOT_RATE; n=(n|0)+(Math.random()<(n-(n|0))?1:0); if(n<=0) return; for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp=30+Math.random()*85;
   idrops.push({k, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, z:6+Math.random()*9, vz:70+Math.random()*80, t:0, settled:false}); } }
 /* chests, digging, and the one E key that does the right thing */
 function openChest(ch){ ch.opened=true; sfx('chest'); burst(ch.x,ch.y,'#ffd23f'); burst(ch.x,ch.y,'#ffffff');
   if(ch.big){ tripStats.hoard=true;
     spawnLoot('gold',Math.round((8+(Math.random()*6|0))*lvlLootMul()),ch.x,ch.y); spawnLoot('gems',2+(Math.random()*3|0)+(ISL_LVL>0?(ISL_LVL/3|0):0),ch.x,ch.y);
-    spawnLoot('relic',1+(Math.random()<0.4?1:0),ch.x,ch.y); spawnLoot('ore',2,ch.x,ch.y); spawnLoot('potion',1,ch.x,ch.y);
+    spawnLoot('relic',1+(Math.random()<0.4?1:0),ch.x,ch.y); spawnLoot('ore',2,ch.x,ch.y);
     iflag={x:ch.x, y:ch.y-12, t:0};               // the claim ceremony begins
   } else { tripStats.bonus=tripStats.bonus;       // cache
     spawnLoot('gold',Math.round((4+(Math.random()*4|0))*lvlLootMul()),ch.x,ch.y); spawnLoot('gems',1+(Math.random()*2|0),ch.x,ch.y);
@@ -3321,7 +3336,8 @@ function nearestInteract(){
   if(iburied && !iburied.dug && (player.x-iburied.x)**2+(player.y-iburied.y)**2 < (ISL.TS*1.1)**2)
     return {kind:'dig', label:'⛏  Press  E  to dig  ('+iburied.digs+')'};
   if((player.x-ISL.landing.x)**2+(player.y-ISL.landing.y)**2 < (ISL.TS*1.7)**2)
-    return {kind:'boat', label:'⚓  Press  E  to set sail (stow haul)'};
+    return islandCleared ? {kind:'boat', label:'⚓  Press  E  to set sail'}
+                         : {kind:'locked', label:'⚔  Clear every clearing to raise your flag & sail'};
   return null;
 }
 function doInteract(){ const it=nearestInteract(); if(!it) return;
@@ -3427,7 +3443,7 @@ function killEnemy(en){ const i=enemies.indexOf(en); if(i<0) return; enemies.spl
   const g = Math.round(((Math.random()<0.5?1+(Math.random()*2|0):0) + (en.guard?6:en.elite?2:0))*bm('goldMul')*lvlLootMul());
   if(g) spawnLoot('gold',g,en.x,en.y);
   if(Math.random() < (en.guard?0.9:en.elite?0.35:0.12)*bm('gemMul')) spawnLoot('gems', en.guard?2:1, en.x,en.y);
-  if(Math.random() < (en.guard?1:0.22+bAdd('heartCh'))) spawnLoot('potion',1,en.x,en.y);
+  // potions are no longer dropped by monsters — buy them at port
   const cl=ISL.clearings[en.clear]; if(cl){ cl.enemyCount--; if(cl.enemyCount<=0) secureClearing(cl); }
 }
 function hitNode(nd){ nd.hp--; nd.flash=0.14; burst(nd.x,nd.y, nd.type==='rock'?'#aab2bc':nd.type==='ruin'?'#d8b87a':'#8fd06a');
@@ -3436,7 +3452,7 @@ function hitNode(nd){ nd.hp--; nd.flash=0.14; burst(nd.x,nd.y, nd.type==='rock'?
     if(nd.cry){ spawnLoot('gems',1+(Math.random()*2|0),nd.x,nd.y); spawnLoot('ore',1,nd.x,nd.y); }
     else if(nd.type==='rock'){ spawnLoot('ore',Math.round((1+(Math.random()*2|0))*bm('oreMul')),nd.x,nd.y); if(Math.random()<(bAdd('gemRockCh')||0.3)) spawnLoot('gems',1,nd.x,nd.y); }
     else if(nd.type==='ruin'){ spawnLoot('gold',Math.round((2+(Math.random()*4|0))*bm('goldMul')*lvlLootMul()),nd.x,nd.y); if(Math.random()<0.4) spawnLoot('relic',1,nd.x,nd.y); if(Math.random()<0.2*bm('gemMul')) spawnLoot('gems',1,nd.x,nd.y); }
-    else { spawnLoot('herb',Math.round((1+(Math.random()*2|0))*bm('herbMul')),nd.x,nd.y); if(Math.random()<0.15+bAdd('heartCh')) spawnLoot('potion',1,nd.x,nd.y); }
+    else { spawnLoot('herb',Math.round((1+(Math.random()*2|0))*bm('herbMul')),nd.x,nd.y); }
   } else sfx('tink');
 }
 function burst(x,y,c){ for(let i=0;i<9;i++){ const a=Math.random()*TAU, s=24+Math.random()*70; ifx.push({k:'p', x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, t:0, life:0.4+Math.random()*0.3, c}); } }
@@ -3449,7 +3465,7 @@ function secureClearing(cl){ if(cl.secured) return; cl.secured=true;
   const ch=ichests.find(c=>c.clear===cl.id && !c.opened);
   if(ch) toast(ch.big?'🗝  The hoard lies unguarded':'✨  A cache is unguarded','walk up and press E');
 }
-function hurtPlayer(nx,ny){ if(player.invul>0) return; player.hp-=Math.max(0.5,(ITUNE.enemyDmg+lvlDmgAdd())*(1-armourDR())); player.invul=1.1; hurtFlash=0.45;
+function hurtPlayer(nx,ny,mult){ if(player.invul>0) return; player.hp-=Math.max(0.5,(ITUNE.enemyDmg+lvlDmgAdd())*(mult||1)*(1-armourDR())); player.invul=1.1; hurtFlash=0.45;
   moveSlide(player, nx*26, ny*26); sfx('hurt'); if(player.hp<=0) leaveIsland(true); }
 
 /* ---- island update ---- */
@@ -3496,7 +3512,7 @@ function updateIsland(dt){
       else updateNewMon(en,dx,dy,d,dt,active); }
     if(!ISL) return;
     if(en.hasted>0){ en.hasted-=dt; if(active && d>en.r+player.r) moveSlide(en, dx/d*34*dt, dy/d*34*dt); }
-    if(d<en.r+player.r && !(en.type==='lamprey'&&en.latched) && !(en.type==='sanddev'&&en.st==='sub') && en.type!=='diver' && en.type!=='urchin') hurtPlayer(-dx/d,-dy/d);
+    if(d<en.r+player.r && !(en.type==='lamprey'&&en.latched) && !(en.type==='sanddev'&&en.st==='sub') && en.type!=='diver' && en.type!=='urchin') hurtPlayer(-dx/d,-dy/d,(en.guard||en.elite)?2:1);
     if(!ISL) return;                         // knocked out mid-loop — island state is gone, stop here
   }
   player.potionJam = enemies.some(e=>e.type==='lamprey'&&e.latched);
@@ -3504,7 +3520,7 @@ function updateIsland(dt){
   for(const nd of inodes) if(nd.flash>0) nd.flash-=dt;
   // survey: your island chart fogs in around you as you walk
   { const ptx=(player.x/ISL.TS)|0, pty=(player.y/ISL.TS)|0;
-    for(let dy2=-3;dy2<=3;dy2++)for(let dx2=-3;dx2<=3;dx2++){ const tx=ptx+dx2, ty=pty+dy2;
+    for(let dy2=-9;dy2<=9;dy2++)for(let dx2=-9;dx2<=9;dx2++){ const tx=ptx+dx2, ty=pty+dy2;
       if(tx<0||ty<0||tx>=ISL.W||ty>=ISL.H) continue; const ix=ty*ISL.W+tx;
       if(!ivisit[ix]){ ivisit[ix]=1; paintChart(tx,ty); } } }
   // physical loot: tumble, settle, then magnet to you
@@ -3572,7 +3588,7 @@ function updateIsland(dt){
     const ptile=islTile(pr.x,pr.y);
     let gone = pr.life<=0 || ptile===W_WALL || ptile===W_GATE, L=Math.hypot(pr.vx,pr.vy)||1;   // arrows fly over lagoons & ice
     if(!gone){ if(pr.k==='arrow'){ for(const en of enemies){ if((en.x-pr.x)**2+(en.y-pr.y)**2 < (en.r+3)**2){ hurtEnemy(en,eArrowDmg(),pr.vx/L,pr.vy/L); gone=true; break; } } }
-      else if(pr.k==='spit'){ if((player.x-pr.x)**2+(player.y-pr.y)**2 < (player.r+4)**2){ hurtPlayer(pr.vx/L,pr.vy/L); gone=true; } } }
+      else if(pr.k==='spit'){ if((player.x-pr.x)**2+(player.y-pr.y)**2 < (player.r+4)**2){ hurtPlayer(pr.vx/L,pr.vy/L,pr.big?2:1); gone=true; } } }
     if(gone){ if(pr.k==='arrow') burst(pr.x,pr.y,'#e9e2c8'); iproj.splice(i,1); }
   }
   if(!ISL) return;                           // a venom hit can knock you out too
@@ -3600,8 +3616,8 @@ function updateSnake(en,dx,dy,d,dt,active){ en.tmr-=dt;
     if(en.tmr<=0 && d<230){ en.tmr=en.elite?2.1:1.8;
       const ss=86*((ISL&&ISL.biome.mods.spitSpd)||1)*lvlSpdMul();
       if(en.elite){ const ba=Math.atan2(ny,nx);                         // elite vipers spit a fan of three
-        for(const off of [-0.32,0,0.32]) iproj.push({k:'spit', x:en.x+Math.cos(ba+off)*10, y:en.y+Math.sin(ba+off)*10, vx:Math.cos(ba+off)*ss, vy:Math.sin(ba+off)*ss, life:2.6}); }
-      else iproj.push({k:'spit', x:en.x+nx*10, y:en.y+ny*10, vx:nx*ss, vy:ny*ss, life:2.6}); } }
+        for(const off of [-0.32,0,0.32]) iproj.push({k:'spit', big:!!(en.guard||en.elite), x:en.x+Math.cos(ba+off)*10, y:en.y+Math.sin(ba+off)*10, vx:Math.cos(ba+off)*ss, vy:Math.sin(ba+off)*ss, life:2.6}); }
+      else iproj.push({k:'spit', big:!!(en.guard||en.elite), x:en.x+nx*10, y:en.y+ny*10, vx:nx*ss, vy:ny*ss, life:2.6}); } }
 }
 /* the reef crab: shell blocks frontal hits — circle round it, or bait the pincer lunge and punish the recover */
 function updateCrab(en,dx,dy,d,dt,active){ en.tmr-=dt;
@@ -3674,7 +3690,7 @@ function updateNewMon(en,dx,dy,d,dt,active){ en.tmr-=dt; const nx=dx/d, ny=dy/d,
     if(en.st==='dive'){ en.alt=Math.max(0,(en.alt==null?1:en.alt)-dt*2.6);
       en.x+=(en.tx-en.x)*Math.min(1,dt*7); en.y+=(en.ty-en.y)*Math.min(1,dt*7);
       if(en.alt<=0){ en.st='grounded'; en.tmr=0.85; burst(en.x,en.y,'#d8c8a0'); sfx('thunk',0.9);
-        const ix=player.x-en.x, iy=player.y-en.y; if(ix*ix+iy*iy<(player.r+en.r+4)*(player.r+en.r+4)){ const il=Math.hypot(ix,iy)||1; hurtPlayer(ix/il,iy/il); } }
+        const ix=player.x-en.x, iy=player.y-en.y; if(ix*ix+iy*iy<(player.r+en.r+4)*(player.r+en.r+4)){ const il=Math.hypot(ix,iy)||1; hurtPlayer(ix/il,iy/il,(en.guard||en.elite)?2:1); } }
       break; }
     en.alt=1;
     if(active){ en.ang=(en.ang==null?en.sd:en.ang)+dt*1.5*(en.cw||1);
@@ -3686,7 +3702,7 @@ function updateNewMon(en,dx,dy,d,dt,active){ en.tmr-=dt; const nx=dx/d, ny=dy/d,
     if(en.st==='erupt'){ if(en.tmr<=0){ en.st='sub'; en.tmr=1.3+Math.random(); } break; }
     if(active){ moveSlide(en, nx*58*sm*dt, ny*58*sm*dt); en.fa=Math.atan2(dy,dx);
       if(d<en.r+10 && en.tmr<=0){ en.st='erupt'; en.tmr=1.05; burst(en.x,en.y,'#e3cf9c'); burst(en.x,en.y,'#caa46a'); sfx('dig',1.4);
-        if(d<en.r+player.r+8) hurtPlayer(-nx,-ny); } }
+        if(d<en.r+player.r+8) hurtPlayer(-nx,-ny,(en.guard||en.elite)?2:1); } }
     break;
   case 'alpha':                                                   // pack leader: howls to surge nearby beasts
     if(active){ moveSlide(en, nx*62*sm*dt, ny*62*sm*dt); en.fa=Math.atan2(dy,dx);
@@ -3723,7 +3739,7 @@ function updateNewMon(en,dx,dy,d,dt,active){ en.tmr-=dt; const nx=dx/d, ny=dy/d,
     en.fa=Math.atan2(dy,dx);
     if(active){ moveSlide(en, nx*34*sm*dt, ny*34*sm*dt);
       if(d<240){ const fdot=player.fx*(-nx)+player.fy*(-ny); if(fdot>0.15) player.snare=Math.min(1,(player.snare||0)+dt*1.25); }
-      if(d<en.r+player.r+4 && en.tmr<=0){ en.tmr=1.3; hurtPlayer(-nx,-ny); } }
+      if(d<en.r+player.r+4 && en.tmr<=0){ en.tmr=1.3; hurtPlayer(-nx,-ny,(en.guard||en.elite)?2:1); } }
     break;
   }
 }
