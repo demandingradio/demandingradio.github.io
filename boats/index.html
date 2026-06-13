@@ -2408,7 +2408,8 @@ function drawHUD(){
   let chipY=127;
   if(expd){ const core2=cores[expd.ci], nm=(core2&&(core2.customName||core2.label||core2.name))||'the isle';
     const t2=expd.waiting ? '⛺ '+expd.name+' waits at '+nm+' — swing back'
-      : '⛺ '+expd.name+' surveying '+nm+' — '+Math.round(clamp(expd.t/expd.dur,0,1)*100)+'%';
+      : expd.state==='return' ? '⛺ '+expd.name+' heading back from '+nm
+      : '⛺ '+expd.name+' surveying '+nm+' — '+Math.round(clamp(expd.frac,0,1)*100)+'%';
     ctx.textAlign='center'; ctx.font='600 11px system-ui'; const w2=ctx.measureText(t2).width+20;
     ctx.fillStyle='rgba(10,30,16,.55)'; roundRect(CSSW/2-w2/2,chipY,w2,20,8); ctx.fill();
     ctx.fillStyle='#b9e8a0'; ctx.fillText(t2, CSSW/2, chipY+14); ctx.textAlign='left'; chipY+=24; }
@@ -2441,7 +2442,7 @@ function drawHUD(){
     if(!nearLand.port){                                              // the Explorer's offer, above the landfall line
       let xline=null;
       const ck=canSendExplorer(nearLand);
-      if(ck&&ck.ex) xline='⛺  X — send '+ck.ex.name+' ashore  ·  ~'+Math.round(expDur(nearLand,ck.ex.rep))+'s · peril '+Math.round(expRisk(nearLand,ck.ex.rep)*100)+'%';
+      if(ck&&ck.ex) xline='⛺  X — send '+ck.ex.name+' ashore  ·  ~'+Math.round(expEstimate(nearLand,ck.ex.rep))+'s of fog · peril '+Math.round(expRisk(nearLand,ck.ex.rep)*100)+'%';
       else if(!hasExplorer() && !expd && fogFrac(nearLand)>0.12) xline='⛺  an explorer could chart her interior — they drink in harbour taverns';
       if(xline){ ctx.font='600 12px system-ui'; const w3=ctx.measureText(xline).width+24;
         ctx.fillStyle='rgba(12,28,16,.78)'; roundRect(CSSW/2-w3/2,CSSH-126,w3,24,9); ctx.fill();
@@ -5185,7 +5186,7 @@ function renderCrewTab(){
     '<div class="cinfo"><div class="cname">An empty berth</div><div class="crole">The Explorer</div>'+
     '<div class="cperk">wild isles keep their fog until someone treks them — explorers sign on in harbour taverns</div></div></div>';
   else if(expd){ const core2=cores[expd.ci];
-    h+='<div style="color:#9ad86a;font-size:11px;text-align:center;margin-top:4px;">⛺ '+expd.name+' is ashore at '+((core2&&(core2.customName||core2.label||core2.name))||'an isle')+(expd.waiting?' — waiting for you':' — '+Math.round(clamp(expd.t/expd.dur,0,1)*100)+'% surveyed')+'</div>'; }
+    h+='<div style="color:#9ad86a;font-size:11px;text-align:center;margin-top:4px;">⛺ '+expd.name+' is ashore at '+((core2&&(core2.customName||core2.label||core2.name))||'an isle')+(expd.waiting?' — waiting for you':expd.state==='return'?' — heading back':' — '+Math.round(clamp(expd.frac,0,1)*100)+'% surveyed')+'</div>'; }
   if(curios.length) h+='<div style="color:#cfc09a;font-size:10.5px;text-align:center;margin-top:7px;">🏺 the cabinet holds '+curios.length+' unique find'+(curios.length>1?'s':'')+' — see the Voyage tab</div>';
   h+='<div style="color:#7e93ba;font-size:10.5px;text-align:center;margin-top:9px;">rations at the port market · explorers sign at harbour taverns · nobles & scientists will follow…</div>';
   host.innerHTML=h;
@@ -5241,17 +5242,35 @@ const CURIOS=['a scrimshawed whale tooth','an ancient brass sextant','a jade ido
   'a bottled ghost-light','a sun-bleached figurehead','a ring of black pearl','an obsidian compass that points south',
   'a saint\u2019s knucklebone in silver','a dragon\u2019s scale (surely a fake)'];
 function hasExplorer(){ return crew.find(c=>c.role==='explorer')||null; }
-function expDur(core,rep){ return (14+core.r*0.22)*(1.65-0.085*rep)/Math.max(0.3,ETUNE.expSpd); }
 function expRisk(core,rep){ return clamp((0.20-0.018*rep+0.03*biomeOf(core).tier)*ETUNE.expRisk, 0, 0.95); }
-function islandLandCells(core){               // the explore-grid cells under this isle's footprint
-  const R=core.r*2.3+80, out=[];
-  const g0x=Math.max(0,Math.floor((core.x-R)/EXP)), g1x=Math.min(EGW-1,Math.floor((core.x+R)/EXP));
-  const g0y=Math.max(0,Math.floor((core.y-R)/EXP)), g1y=Math.min(EGW-1,Math.floor((core.y+R)/EXP));
-  for(let gy=g0y;gy<=g1y;gy++) for(let gx=g0x;gx<=g1x;gx++){
-    const wx=gx*EXP+EXP/2, wy=gy*EXP+EXP/2, dx=wx-core.x, dy=wy-core.y;
-    if(dx*dx+dy*dy>R*R) continue;
-    if(heightAt(wx,wy)>=SEA-0.03) out.push(gx+gy*EGW);
+function islandLandCells(core){               // the WHOLE landmass, flood-filled from her heart — not one blob's reach
+  const CAP=30000, land=new Set(), q=[];
+  let seed=Math.floor(core.x/EXP)+Math.floor(core.y/EXP)*EGW;
+  if(heightAt(core.x,core.y)<SEA-0.06){        // (a sunken core — walk inland for solid ground)
+    let found=false;
+    for(let rr=1;rr<8&&!found;rr++) for(let a=0;a<12&&!found;a++){
+      const x=core.x+Math.cos(a/12*TAU)*rr*EXP*2, y=core.y+Math.sin(a/12*TAU)*rr*EXP*2;
+      if(heightAt(x,y)>=SEA-0.06){ seed=Math.floor(x/EXP)+Math.floor(y/EXP)*EGW; found=true; } }
+    if(!found) return [];
   }
+  land.add(seed); q.push(seed);
+  let qi=0;
+  while(qi<q.length && land.size<CAP){
+    const k=q[qi++], gx=k%EGW, gy=(k/EGW)|0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      if(!dx&&!dy) continue;
+      const nx=gx+dx, ny=gy+dy; if(nx<0||ny<0||nx>=EGW||ny>=EGW) continue;
+      const nk=nx+ny*EGW; if(land.has(nk)) continue;
+      if(heightAt(nx*EXP+EXP/2, ny*EXP+EXP/2)>=SEA-0.06){ land.add(nk); q.push(nk); }
+    }
+  }
+  const out=[...land], fr=new Set();
+  for(const k of out){ const gx=k%EGW, gy=(k/EGW)|0;      // one cell of surf, so the chart reads clean
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      if(!dx&&!dy) continue;
+      const nx=gx+dx, ny=gy+dy; if(nx<0||ny<0||nx>=EGW||ny>=EGW) continue;
+      const nk=nx+ny*EGW; if(!land.has(nk)) fr.add(nk); } }
+  for(const k of fr) out.push(k);
   return out;
 }
 function fogFrac(core){                        // how much of her is still unknown?
@@ -5259,8 +5278,13 @@ function fogFrac(core){                        // how much of her is still unkno
   const cells=islandLandCells(core);
   let dark=0; for(const k of cells) if(!explored.has(k)) dark++;
   const frac=cells.length?dark/cells.length:0;
-  fogCache={idx:core.idx, frac};
+  fogCache={idx:core.idx, frac, dark, total:cells.length};
   return frac;
+}
+function expSpeed(rep){ return (34+4.2*rep)*Math.max(0.3,ETUNE.expSpd); }
+function expEstimate(core,rep){                // a fair guess at the trek, from how much fog is left
+  fogFrac(core);
+  return (fogCache.dark||0)*196/(expSpeed(rep)*140)*1.6 + 8;
 }
 function canSendExplorer(core){
   const ex=hasExplorer();
@@ -5275,23 +5299,20 @@ function trySendExplorer(core){
   if(!ck) return;
   if(ck.no){ seaMsg(ck.no,'#ff9f8a'); return; }
   const ex=ck.ex, rng=Math.random;
-  const dur=expDur(core,ex.rep), risk=expRisk(core,ex.rep);
-  // waypoints: a trek across her interior, starting at the shore nearest the boat
-  const wp=[]; const a0=Math.atan2(boat.y-core.y, boat.x-core.x);
-  let sx2=core.x+Math.cos(a0)*core.r*1.2, sy2=core.y+Math.sin(a0)*core.r*1.2;
-  for(let t2=0;t2<30 && heightAt(sx2,sy2)<SEA;t2++){ sx2=lerp(sx2,core.x,0.12); sy2=lerp(sy2,core.y,0.12); }
-  wp.push({x:sx2,y:sy2});
-  const n=7+(core.r/22|0);
-  for(let i=0;i<n;i++){ for(let t2=0;t2<24;t2++){ const a=rng()*TAU, d=rng()*core.r*1.7;
-      const x=core.x+Math.cos(a)*d, y=core.y+Math.sin(a)*d;
-      if(heightAt(x,y)>=SEA+0.02){ wp.push({x,y}); break; } } }
-  wp.push({x:sx2,y:sy2});                      // and back to the boats
-  let plen=0; for(let i=1;i<wp.length;i++) plen+=Math.hypot(wp[i].x-wp[i-1].x, wp[i].y-wp[i-1].y);
-  expd={ci:core.idx, name:ex.name, rep:ex.rep, t:0, dur, spd:plen/Math.max(1,dur), wp, wi:1,
-    px:wp[0].x, py:wp[0].y, deathT: rng()<risk ? dur*(0.25+rng()*0.6) : 0,
-    cells:islandLandCells(core), waiting:false};
+  const cells=islandLandCells(core);
+  const dark=cells.filter(k=>!explored.has(k));
+  if(!dark.length){ seaMsg('already charted \u2014 nothing left in the dark','#ff9f8a'); return; }
+  const est=dark.length*196/(expSpeed(ex.rep)*140)*1.6+8, risk=expRisk(core,ex.rep);
+  // ashore at the coast nearest the boat
+  let sx2=lerp(boat.x,core.x,0.25), sy2=lerp(boat.y,core.y,0.25);
+  for(let t2=0;t2<40 && heightAt(sx2,sy2)<SEA-0.04;t2++){ sx2=lerp(sx2,core.x,0.1); sy2=lerp(sy2,core.y,0.1); }
+  expd={ci:core.idx, name:ex.name, rep:ex.rep, t:0, spd:expSpeed(ex.rep),
+    px:sx2, py:sy2, tx:sx2, ty:sy2, home:{x:sx2,y:sy2},
+    cells, dark, baseDark:dark.length, frac:0, est,
+    deathT: rng()<risk ? est*(0.25+rng()*0.6) : 0,
+    state:'survey', waiting:false};
   fogCache.idx=-1;
-  toast('\u26fa  '+ex.name+' rows ashore', (core.customName||core.label||core.name||'the isle')+' \u2014 ~'+Math.round(dur)+'s \u00b7 peril '+Math.round(risk*100)+'%');
+  toast('\u26fa  '+ex.name+' rows ashore', (core.customName||core.label||core.name||'the isle')+' \u2014 ~'+Math.round(est)+'s of fog \u00b7 peril '+Math.round(risk*100)+'%');
   sfx('cast'); queueSave();
 }
 function expReveal(){                          // the fog peels around their boots
@@ -5301,7 +5322,7 @@ function expReveal(){                          // the fog peels around their boo
     explored.add(gx+gy*EGW); }
 }
 function expLoot(core,rep){
-  const got=loot0(); got.gold=3+(core.r/26|0)+(Math.random()*5|0);
+  const got=loot0(); got.gold=3+Math.min(30,((expd?expd.baseDark:300)/120)|0)+(Math.random()*5|0);
   const rolls=2+Math.floor(rep/2);
   for(let i=0;i<rolls;i++){ const r=Math.random();
     if(r<0.3) got.gold+=2+(Math.random()*4|0);
@@ -5344,19 +5365,41 @@ function updateExplorer(dt){
     if(menuOpen&&menuTab==='crew') renderCrewTab();
     queueSave(); return;
   }
-  // trek the waypoints, peeling fog
-  let step=expd.spd*dt;
-  while(step>0 && expd.wi<expd.wp.length){
-    const w=expd.wp[expd.wi], dx=w.x-expd.px, dy=w.y-expd.py, d=Math.hypot(dx,dy);
-    if(d<=step){ expd.px=w.x; expd.py=w.y; step-=d; expd.wi++; }
-    else { expd.px+=dx/d*step; expd.py+=dy/d*step; step=0; }
-  }
-  expReveal();
-  if(Math.random()<dt*0.5) seafx.push({k:'jump', x:expd.px+(Math.random()-0.5)*20, y:expd.py+(Math.random()-0.5)*20, a:Math.random()*TAU, t:0, life:0.5, col:'#ffe9a6'});
-  if(expd.t>=expd.dur || expd.wi>=expd.wp.length){
-    if((boat.x-expd.px)**2+(boat.y-expd.py)**2 < 650*650) finishExpedition();
-    else if(!expd.waiting){ expd.waiting=true;
-      toast('\u26fa  '+expd.name+' waits at the shore','swing back to take them aboard'); }
+  const dx0=expd.tx-expd.px, dy0=expd.ty-expd.py, dToT=Math.hypot(dx0,dy0);
+  if(expd.state==='survey'){                   // hunt the fog itself: walk to wherever is still dark
+    if(dToT<12){
+      expd.dark=expd.dark.filter(k=>!explored.has(k));
+      expd.frac=1-expd.dark.length/Math.max(1,expd.baseDark);
+      if(!expd.dark.length){                   // every corner charted \u2014 turn for home
+        expd.state='return';
+        toast('\u26fa  '+expd.name+' has charted it all','they turn for the boat');
+      } else {
+        let bd=1e18;                           // the nearest dark cell\u2026
+        for(const k of expd.dark){ const gx=(k%EGW)*EXP+EXP/2, gy=((k/EGW)|0)*EXP+EXP/2;
+          const d2=(gx-expd.px)**2+(gy-expd.py)**2; if(d2<bd) bd=d2; }
+        const lim=bd*1.96, near=[];            // \u2026then wander among the near ones, organically
+        for(const k of expd.dark){ const gx=(k%EGW)*EXP+EXP/2, gy=((k/EGW)|0)*EXP+EXP/2;
+          if((gx-expd.px)**2+(gy-expd.py)**2<=lim) near.push(k); }
+        const pick=near[(Math.random()*near.length)|0];
+        expd.tx=(pick%EGW)*EXP+EXP/2; expd.ty=((pick/EGW)|0)*EXP+EXP/2;
+      }
+    } else {
+      const step=Math.min(expd.spd*dt,dToT);
+      expd.px+=dx0/dToT*step; expd.py+=dy0/dToT*step;
+    }
+    expReveal();
+    if(Math.random()<dt*0.5) seafx.push({k:'jump', x:expd.px+(Math.random()-0.5)*20, y:expd.py+(Math.random()-0.5)*20, a:Math.random()*TAU, t:0, life:0.5, col:'#ffe9a6'});
+  } else {                                     // returning \u2014 make for the boat (or the old landing if she's gone)
+    const bD=Math.hypot(boat.x-expd.px, boat.y-expd.py);
+    if(bD<170){ finishExpedition(); return; }
+    const goBoat=bD<1700;
+    const gx=goBoat?boat.x:expd.home.x, gy=goBoat?boat.y:expd.home.y;
+    const ddx=gx-expd.px, ddy=gy-expd.py, dd=Math.hypot(ddx,ddy);
+    if(!goBoat && dd<14){ expd.waiting=true;
+      toast('\u26fa  '+expd.name+' waits at the shore','swing back to take them aboard'); return; }
+    const step=Math.min(expd.spd*1.25*dt,dd);  // homeward legs are brisker
+    expd.px+=ddx/dd*step; expd.py+=ddy/dd*step;
+    expReveal();
   }
 }
 function drawExpedition(){
