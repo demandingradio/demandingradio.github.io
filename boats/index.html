@@ -166,6 +166,21 @@ canvas{position:absolute;inset:0;display:block;}
   color:#2c0e14;background:linear-gradient(#ffb3a6,#e8786a);border:none;border-radius:10px;padding:10px 28px;box-shadow:0 6px 0 #8e3c2e;}
 #ko button:active{transform:translateY(2px);box-shadow:0 4px 0 #8e3c2e;}
 
+/* the Guild's welcome — crew dialogue cards over the home wharf */
+#intro{position:absolute;inset:0;z-index:74;display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:7vh;background:linear-gradient(rgba(5,12,24,.18), rgba(5,12,24,.6));}
+.inbx{background:linear-gradient(#1a2c4d,#13233f);border:1px solid #34466e;border-radius:15px;
+  box-shadow:0 18px 60px rgba(0,0,0,.65);width:min(580px,92vw);padding:16px 20px 13px;}
+.inhead{display:flex;gap:13px;align-items:center;}
+.inname{font-weight:800;color:#eaf2ff;font-size:16px;}
+.inrole{color:#7fd6c8;font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;}
+#inLine{color:#cdd9f3;font-size:13.5px;line-height:1.55;margin:10px 2px 12px;min-height:58px;}
+.infoot{display:flex;justify-content:space-between;align-items:center;}
+.indots{color:#3a5080;font-size:10px;letter-spacing:3px;}
+.indots b{color:#ffd86b;}
+#inSkip{color:#7e93ba;font-size:11px;text-decoration:none;}
+#inSkip:hover{color:#cdd9f3;}
+
 /* the island playtest — ten trials, no sailing */
 #ptest{position:absolute;inset:0;z-index:64;display:flex;align-items:center;justify-content:center;
   background:radial-gradient(120% 120% at 50% 40%, rgba(18,58,107,.6), rgba(7,16,29,.92));}
@@ -415,6 +430,21 @@ canvas{position:absolute;inset:0;display:block;}
   </div>
 </div>
 
+<div id="intro" class="hidden">
+  <div class="inbx">
+    <div class="inhead">
+      <canvas id="inFace" class="pface" width="28" height="28"></canvas>
+      <div><div class="inname" id="inName"></div><div class="inrole" id="inRole"></div></div>
+    </div>
+    <p id="inLine"></p>
+    <div class="infoot">
+      <a href="#" id="inSkip">skip the welcome →</a>
+      <span class="indots" id="inDots"></span>
+      <button class="sbtn" id="inNext">Next →</button>
+    </div>
+  </div>
+</div>
+
 <div id="ptest" class="hidden">
   <div class="ptbox">
     <div class="pttitle">⚔ Island Playtest — the Ten Trials</div>
@@ -654,7 +684,7 @@ function doSave(){
       disc:discoveredCount, ports:portCount,
       hull:Math.round(hull), upg:UPG, act:missions, mdone:missionsDone, doneIds:doneIds.slice(-80), marks:marks,
       crew:crew, provisions:provisions, buoys:buoys, cu:crewUnpaid?1:0, chg:crewHungry?1:0, sda:Math.round(seaDayAcc),
-      curios:curios, expd:expd?{ci:expd.ci}:null,
+      curios:curios, expd:expd?{ci:expd.ci}:null, gift:giftCells, gnext:guildNextIdx,
       tleads:cores.filter(c=>c.forceBuried).map(c=>c.idx),
       pv:cores.filter(c=>c.visitedPort).map(c=>c.idx),
       found:cores.filter(c=>c.found).map(c=>c.idx),
@@ -694,6 +724,7 @@ function loadSave(){
     provisions = s.provisions===undefined ? 20 : s.provisions;
     buoys=s.buoys||[]; crewUnpaid=!!s.cu; crewHungry=!!s.chg; seaDayAcc=s.sda||0;
     curios=s.curios||[]; expd=null; fogCache.idx=-1;
+    giftCells=s.gift||0; guildNextIdx=(s.gnext===undefined?-1:s.gnext);
     hull = (s.hull===undefined) ? hullMaxNow() : clamp(s.hull,0,hullMaxNow());
     (s.tleads||[]).forEach(idx=>{ if(cores[idx]) cores[idx].forceBuried=true; });
     (s.pv||[]).forEach(idx=>{ if(cores[idx]) cores[idx].visitedPort=true; });
@@ -713,6 +744,7 @@ addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','=','-','+','_','j','k'].includes(k)) e.preventDefault();
   if(summaryOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideSummary(); return; }
   if(invOpen){ if(k==='i'||k==='escape'||k==='e') closeInv(); return; }
+  if(introOpen){ if(k==='enter'||k===' '||k==='e') introNext(); else if(k==='escape') endIntro(); return; }
   if(ptestOpen){ if(k==='escape'){ closePtMenu(); document.getElementById('title').classList.remove('hidden'); } return; }
   if(menuOpen){ if(k==='escape') closeMenu(); else if(k==='t') switchMenuTab('tuning'); return; }
   if(flogOpen){ if(k==='l'||k==='escape'||k==='e') closeFlog(); return; }
@@ -2717,7 +2749,7 @@ function drawFullMap(){
   ctx.fillText('✦ The Charted Reaches ✦', CSSW/2, my-20);
   ctx.fillStyle='#b9a880'; ctx.font='12px Georgia,serif';
   const isle=discoveredCount+' isle'+(discoveredCount===1?'':'s'), prt=portCount+' port'+(portCount===1?'':'s');
-  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   click a ⚓ port to dock   •   '+isle+' & '+prt+' charted'+(clearedCount?'   •   ⚑ '+clearedCount+' cleared':'')+'   •   📒 '+biomesFound.size+'/'+BIOMES.length+' biomes', CSSW/2, my+size+27);
+  ctx.fillText('scroll / +− zoom   •   drag / arrows pan   •   click a ⚓ port to dock   •   '+isle+' & '+prt+' charted'+(clearedCount?'   •   ⚑ '+clearedCount+' cleared':'')+'   •   📒 '+biomesFound.size+'/'+BIOMES.length+' biomes'+(giftCells?'   •   '+(newCellsCharted()/1000|0)+'k leagues inked beyond the Guild’s line':''), CSSW/2, my+size+27);
   ctx.fillStyle='#8194b8'; ctx.fillText('M or Esc to close', CSSW/2, my+size+43);
 }
 
@@ -3188,6 +3220,7 @@ function startRename(core){ renaming=core; const ov=document.getElementById('ren
   inp.value=core.customName||core.name||''; ov.classList.remove('hidden'); setTimeout(()=>{inp.focus(); inp.select();},40); }
 function finishRename(){ if(!renaming) return; const v=document.getElementById('renameInput').value.trim().slice(0,22);
   if(v) renaming.customName=v; renaming.cleared=true;
+  if(!ptMode) missionEvent('cleared', renaming.idx);
   toast('⚑  '+(renaming.customName||renaming.name)+' claimed', clearedCount+' isle'+(clearedCount===1?'':'s')+' cleared  ·  ⭐ +60 renown');
   document.getElementById('rename').classList.add('hidden'); renaming=null; queueSave(); }
 
@@ -4300,7 +4333,7 @@ function leavePort(){
 /* ---- walking the town ---- */
 function updatePort(dt){
   itime+=dt; updateEnv(dt);
-  if(!shopOpen && !journalOpen && !mapOpen && !menuOpen){
+  if(!shopOpen && !journalOpen && !mapOpen && !menuOpen && !introOpen){
     let mvx=0,mvy=0;
     if(keys['arrowleft']||keys['a']) mvx-=1; if(keys['arrowright']||keys['d']) mvx+=1;
     if(keys['arrowup']||keys['w']) mvy-=1; if(keys['arrowdown']||keys['s']) mvy+=1;
@@ -4700,7 +4733,7 @@ function wrightAct(act){
   toast(u.icon+'  '+u.name+' — tier '+(lvl+1), u.fx(lvl+1));
   queueSave(); renderShop();
 }
-const MICON={deliver:'📦', fish:'🎣', whale:'🐋', boar:'🐗', chart:'🗺️', find:'🧭', salvage:'🛟'};
+const MICON={deliver:'📦', fish:'🎣', whale:'🐋', boar:'🐗', chart:'🗺️', find:'🧭', salvage:'🛟', gvisit:'🏛️', gboard:'🏛️', gclear:'🏛️'};
 function missionTitle(m){
   if(m.t==='deliver') return 'Deliver a sealed crate to '+m.toName;
   if(m.t==='fish') return 'Net '+m.need+' '+m.name+(m.need>1?'s':'');
@@ -4708,6 +4741,9 @@ function missionTitle(m){
   if(m.t==='boar') return 'Slay the Great Boar';
   if(m.t==='chart') return 'Chart '+m.need+' new isles';
   if(m.t==='find') return 'Find the rumored isle';
+  if(m.t==='gvisit') return 'Guild orders: report to '+m.toName;
+  if(m.t==='gboard') return 'Guild orders: take a contract';
+  if(m.t==='gclear') return 'Guild orders: claim your first isle';
   return 'Find the wreck';
 }
 function missionDesc(m){
@@ -4718,6 +4754,9 @@ function missionDesc(m){
   if(m.t==='boar') return 'an isle '+at(m.mx,m.my)+' — fell its hoard’s guardian';
   if(m.t==='chart') return (m.prog||0)+' / '+m.need+' charted — any new isle counts';
   if(m.t==='find') return 'search the ringed waters '+at(m.mx,m.my);
+  if(m.t==='gvisit'){ const c=cores[m.to]; return 'carry the Guild’s compliments · '+at(c.x,c.y); }
+  if(m.t==='gboard') return 'any harbour’s mission board will do';
+  if(m.t==='gclear') return 'land on a wild isle (E), clear her, raise your flag';
   return 'reported '+at(m.x,m.y)+' — the salvage is yours';
 }
 function fmtDist(d){ return d>=950 ? (d/1000).toFixed(1)+'k' : Math.round(d)+''; }
@@ -4743,7 +4782,8 @@ function boardAct(act){
   const parts=act.split(':'), verb=parts[0], id=parseInt(parts[1]);
   if(verb==='take'){ if(missions.length>=MAX_MISSIONS) return;
     const o=genOffers(PRT.core).find(x=>x.id===id); if(!o) return;
-    missions.push(o); sfx('secure'); toast('📜  Contract taken', missionTitle(o)); }
+    missions.push(o); sfx('secure'); toast('📜  Contract taken', missionTitle(o));
+    missionEvent('took', o.id); }
   else { const i=missions.findIndex(m=>m.id===id); if(i<0) return;
     doneIds.push(id); toast('📜  Contract returned', missionTitle(missions[i])); missions.splice(i,1); }
   queueSave(); renderShop();
@@ -4896,6 +4936,9 @@ function failMission(m){
 function missionEvent(ev,arg){
   for(let i=missions.length-1;i>=0;i--){ const m=missions[i];
     if(ev==='dock' && m.t==='deliver' && m.to===arg) payMission(m,'crate delivered to '+m.toName);
+    else if(ev==='dock' && m.t==='gvisit' && m.to===arg){ payMission(m,'the Guild’s word, carried'); giveGuildStep(2); }
+    else if(ev==='took' && m.t==='gboard' && arg!==m.id){ payMission(m,'work taken — the Guild approves'); giveGuildStep(3); }
+    else if(ev==='cleared' && m.t==='gclear') payMission(m,'your first flag — the Guild takes note');
     else if(ev==='catch' && m.t==='fish' && arg[m.key]){ m.prog=(m.prog||0)+arg[m.key];
       if(m.prog>=m.need) payMission(m); else seaMsg('📜 '+Math.min(m.prog,m.need)+' / '+m.need+' '+m.name+'s','#e8c06a'); }
     else if(ev==='whale' && m.t==='whale' && arg===m.key) payMission(m);
@@ -4943,6 +4986,7 @@ function allMarks(){
   const out=marks.slice();
   for(const m of missions){
     if(m.t==='deliver'){ const c=cores[m.to]; if(c) out.push({kind:'deliver',x:c.x,y:c.y,label:'deliver: '+m.toName}); }
+    else if(m.t==='gvisit'){ const c=cores[m.to]; if(c) out.push({kind:'deliver',x:c.x,y:c.y,label:'Guild orders: '+m.toName}); }
     else if(m.t==='boar') out.push({kind:'hunt',x:m.mx,y:m.my,r:550,label:'the Great Boar'});
     else if(m.t==='find') out.push({kind:'find',x:m.mx,y:m.my,r:m.r||750,label:'rumored isle'});
     else if(m.t==='salvage'&&!m.found) out.push({kind:'wreck',x:m.x,y:m.y,r:420,label:'reported wreck'});
@@ -5040,7 +5084,7 @@ const CAP_TITLES=['Unproven','Greenhorn','Coastwise','Saltworn','Far-Sailed','We
 const CAP_LVLS=[0,40,100,180,290,430,600,820,1100,1450];     // cumulative renown to reach level i+1
 let lastCapLevel=1;
 function capXPisles(){ return clearedCount*60; }              // a cleared isle is worth a season of sailing
-function capXPfog(){ return Math.floor(explored.size/2500); } // ~a point per league of fresh water charted
+function capXPfog(){ return Math.floor(newCellsCharted()/2500); } // ~a point per league of fresh water beyond the Guild's line
 function capXP(){ return capXPisles()+capXPfog(); }
 function captainRep(){ const xp=capXP();
   let l=1; for(let i=9;i>=0;i--){ if(xp>=CAP_LVLS[i]){ l=i+1; break; } } return l; }
@@ -5206,7 +5250,7 @@ function renderCrewTab(){
          (nx?'<span class="sbar" style="max-width:150px;"><i style="width:'+Math.round(100*nx.have/nx.need)+'%;background:#ff8d9c;"></i></span>'+
              '<small style="color:#9fb6dd;font-size:10.5px;">'+nx.have+' / '+nx.need+' to '+nx.title+'</small>'
            :'<small style="color:#ffd86b;font-size:10.5px;">★ your name is sung in every port</small>')+'</div>'+
-         '<div style="color:#7e93ba;font-size:10.5px;margin-top:3px;">⭐ '+capXP()+' renown — ⚑ '+clearedCount+' isles ('+capXPisles()+') · 🗺️ '+(explored.size/1000|0)+'k charted ('+capXPfog()+')</div>';
+         '<div style="color:#7e93ba;font-size:10.5px;margin-top:3px;">⭐ '+capXP()+' renown — ⚑ '+clearedCount+' isles ('+capXPisles()+') · 🗺️ '+(newCellsCharted()/1000|0)+'k inked beyond the Guild’s line ('+capXPfog()+')</div>';
     }
     if(m.role==='craft'){
       if(struck) h+='<div class="cperk" style="color:#ff9f8a;margin-top:6px;">the bench sits idle — settle the crew first</div>';
@@ -5245,6 +5289,7 @@ function renderVoyageTab(){
     ['Biomes found', biomesFound.size+' / '+BIOMES.length],
     ['Fish log', fc+' / '+FISH.length+'  ·  🐋 '+wc+' / '+WHALES.length],
     ['Contracts fulfilled', ''+missionsDone],
+    ['Beyond the Guild’s line', (newCellsCharted()/1000|0)+'k leagues inked'],
     ['The cabinet', curios.length? curios.length+' unique find'+(curios.length>1?'s':'') : '—'],
   ];
   host.innerHTML=rows.map(r=>'<div class="vrow"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('')+
@@ -5479,6 +5524,109 @@ function signExplorer(id){
 }
 
 /* ============================================================ *
+ *  THE GUILD COMMISSION — every voyage opens on a known wharf:
+ *  the Guild's charts cover the home waters out past the next
+ *  town, the crew says its piece, and three standing orders
+ *  walk you into the loop. Renown counts only the water YOU
+ *  ink beyond the Guild's old line.
+ * ============================================================ */
+let giftCells=0, introOpen=false, introCards=[], introIx=0, guildNextIdx=-1;
+function newCellsCharted(){ return Math.max(0, explored.size-giftCells); }
+function revealDisc(wx,wy,R){
+  const g0x=Math.max(0,((wx-R)/EXP)|0), g1x=Math.min(EGW-1,((wx+R)/EXP)|0);
+  const g0y=Math.max(0,((wy-R)/EXP)|0), g1y=Math.min(EGW-1,((wy+R)/EXP)|0);
+  const R2=R*R;
+  for(let gy=g0y;gy<=g1y;gy++) for(let gx=g0x;gx<=g1x;gx++){
+    const dx=gx*EXP+EXP/2-wx, dy=gy*EXP+EXP/2-wy;
+    if(dx*dx+dy*dy<=R2) explored.add(gx+gy*EGW);
+  }
+}
+function segDist(px,py,x1,y1,x2,y2){
+  const dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy||1;
+  const t=clamp(((px-x1)*dx+(py-y1)*dy)/L2,0,1);
+  return Math.hypot(px-(x1+dx*t), py-(y1+dy*t));
+}
+function setupGuildStart(){
+  // the home port: the Guild hall nearest the world's heart (always at least a proper town)
+  let home=null,hd=1e18;
+  for(const c of cores){ if(!c.port) continue; const d=(c.x-WORLD/2)**2+(c.y-WORLD/2)**2; if(d<hd){hd=d;home=c;} }
+  portSizeOf(home); home.portSize=Math.max(1,home.portSize);
+  let next=null,nd2=1e18;
+  for(const c of cores){ if(!c.port||c===home) continue; const d=(c.x-home.x)**2+(c.y-home.y)**2; if(d<nd2){nd2=d;next=c;} }
+  guildNextIdx=next.idx;
+  const D=Math.sqrt(nd2), rHome=Math.min(2600,D+600), rNext=1700, lane=620;
+  revealDisc(home.x,home.y,rHome); revealDisc(next.x,next.y,rNext);
+  { const steps=Math.ceil(D/(EXP*4));
+    for(let i=0;i<=steps;i++) revealDisc(lerp(home.x,next.x,i/steps), lerp(home.y,next.y,i/steps), lane); }
+  // everything inside the old charts arrives known & named (never cleared)
+  for(const c of cores){ if(c.found) continue;
+    const dh=Math.hypot(c.x-home.x,c.y-home.y), dn=Math.hypot(c.x-next.x,c.y-next.y);
+    const inLane=segDist(c.x,c.y,home.x,home.y,next.x,next.y)<lane;
+    if(dh<rHome||dn<rNext||inLane){
+      c.found=true;
+      if(c.port) portCount++;
+      else { discoveredCount++; const sx=SUFF[(Math.abs((c.x*7+c.y*13)|0))%SUFF.length]; c.label=c.name+' '+sx; }
+    } }
+  giftCells=explored.size;                      // the Guild's gift — renown begins past this line
+  // the Guild's grant
+  cargo.gold=25; provisions=15; potions=1; hull=hullMaxNow();
+  // her sloop rides in the bay
+  for(let t2=0;t2<80;t2++){ const a=Math.random()*TAU, dd=home.r*1.7+60+Math.random()*120;
+    const x=home.x+Math.cos(a)*dd, y=home.y+Math.sin(a)*dd;
+    if(isWater(x,y)&&isWater(x+28,y)&&isWater(x-28,y)&&isWater(x,y+28)&&isWater(x,y-28)){
+      boat.x=x; boat.y=y; boat.a=Math.atan2(home.y-y,home.x-x); camX=x; camY=y; break; } }
+  enterPort(home);
+  buildIntro(home, next);
+  showIntro();
+}
+function buildIntro(home,next){
+  const get=r=>crew.find(c=>c.role===r)||crew[0];
+  const bear=bearingName(next.x-home.x, next.y-home.y);
+  introCards=[
+    {m:get('captain'), name:'The Cartographers’ Guild', role:'the commission',
+     line:'“To the bearer: this sloop, her crew of five, and the Guild’s charts of the home waters are yours, Captain. Past the old line the world is uninked. Chart it. Claim it. Make your name worth singing.”'},
+    {m:get('master'), name:get('master').name, role:'the Master — your hull',
+     line:'“I keep her bones. Storms, stone and angry whales all crack the hull — watch her bar, top-left. Any shipwright patches her cheap. Let her go fully HOLED and we crawl home at half sail. Don’t.”'},
+    {m:get('carto'), name:get('carto').name, role:'the Cartographer — your chart',
+     line:'“The Guild’s maps end at the old line — press M and see. Sail dark water and I ink it as we go; wild isles too big to see from the rail want an Explorer, when you can afford one. Every league past the line is your renown growing.”'},
+    {m:get('crewman'), name:get('crewman').name, role:'the Crewman — food & wages',
+     line:'“Five mouths, Cap’n, fed once a day at sea — rations from any market, and when the barrel runs dry we eat from the fish well, so keep her stocked. F casts the net. Wages fall due daily too. An unfed, unpaid crew downs tools.”'},
+    {m:get('craft'), name:get('craft').name, role:'the Craftsman — the bench',
+     line:'“Bring me ore and herbs off the wild isles and I’ll turn them to hull patches and potions at sea. Esc opens the ship’s menu — my bench is on the crew page. The isles themselves: land with E, clear every clearing, crack the hoard, raise your flag.”'},
+    {m:get('captain'), name:'Your first orders', role:'the Guild’s word',
+     line:'“Carry the Guild’s compliments to '+next.city+' — she lies '+bear+' along the old charts, marked on your map. Report to her board, take what work suits you, and claim your first wild isle when you’re ready. The sea is yours, Captain.”'},
+  ];
+}
+function renderIntroCard(){
+  const c=introCards[introIx];
+  document.getElementById('inName').textContent=c.name;
+  document.getElementById('inRole').textContent=c.role;
+  document.getElementById('inLine').textContent=c.line;
+  let d=''; for(let i=0;i<introCards.length;i++) d+=(i<=introIx?'<b>●</b>':'●');
+  document.getElementById('inDots').innerHTML=d;
+  document.getElementById('inNext').textContent = introIx>=introCards.length-1 ? 'Begin ⛵' : 'Next →';
+  const cv2=document.getElementById('inFace'); cv2.getContext('2d').clearRect(0,0,28,28);
+  drawPortrait(cv2, c.m);
+}
+function showIntro(){ introOpen=true; introIx=0; renderIntroCard(); document.getElementById('intro').classList.remove('hidden'); }
+function introNext(){ introIx++; if(introIx>=introCards.length) endIntro(); else { renderIntroCard(); sfx('tink',0.9); } }
+function endIntro(){
+  introOpen=false; document.getElementById('intro').classList.add('hidden');
+  giveGuildStep(1);
+  toast('🏛  Guild orders posted','J opens your contracts — the way is marked on your chart');
+  queueSave();
+}
+function giveGuildStep(n){
+  const next=cores[guildNextIdx];
+  if(n===1 && next) missions.push({id:910000001, t:'gvisit', to:next.idx, toName:next.city, pay:15});
+  else if(n===2) missions.push({id:910000002, t:'gboard', pay:10});
+  else if(n===3) missions.push({id:910000003, t:'gclear', pay:25});
+  if(n>1){ const t2=['','','“Good. Now take work from any harbour board — show them the Guild’s colours.”','“Last of the old orders: claim a wild isle. Land, clear her, raise your flag.”'][n];
+    if(t2) toast('🏛  The Guild’s next word', t2); }
+  queueSave();
+}
+
+/* ============================================================ *
  *  ISLAND DANGER LEVELS (1-10) + THE PLAYTEST TRIALS
  *  A level scales the fight: tougher, meaner, quicker, more of
  *  them — and richer floors. Level 0 = the old unscaled world
@@ -5560,6 +5708,8 @@ function startPlaytest(L){
   enterIsland(ptCore(L,PT_SEEDS[L]));
   toast('⚔  PLAYTEST — Trial '+L, 'clear her or be carried off · ↻ on the menu rerolls her');
 }
+document.getElementById('inNext').onclick=introNext;
+document.getElementById('inSkip').onclick=e=>{ e.preventDefault(); endIntro(); };
 document.getElementById('ptestBtn').onclick=()=>{ ptBoot(); openPtMenu(); };
 document.getElementById('ptBack').onclick=()=>{ closePtMenu(); document.getElementById('title').classList.remove('hidden'); };
 
@@ -5762,7 +5912,7 @@ function begin(fresh){
     well={}; flog={}; fed=0; spoils={}; whiteTaken=false;
     UPG={}; missions=[]; marks=[]; doneIds=[]; missionsDone=0; hull=hullMaxNow();
     genCrew(); provisions=20; buoys=[]; crewUnpaid=false; crewHungry=false; seaDayAcc=0;
-    curios=[]; expd=null; fogCache.idx=-1;
+    curios=[]; expd=null; fogCache.idx=-1; giftCells=0; guildNextIdx=-1;
   }
   if(!crew.length) genCrew();
   lastCapLevel=captainRep();
@@ -5776,7 +5926,8 @@ function begin(fresh){
   document.getElementById('title').classList.add('hidden');
   started=true; paused=false; last=performance.now();
   initAudio();
-  toast('Set a heading','W to raise sail, M for your chart');
+  if(fresh) setupGuildStart();
+  else toast('Set a heading','W to raise sail, M for your chart');
 }
 document.getElementById('startBtn').onclick=()=>begin(true);
 document.getElementById('contBtn').onclick=()=>{ if(loadSave()) begin(false); else begin(true); };
