@@ -622,6 +622,7 @@ function doSave(){
       disc:discoveredCount, ports:portCount,
       hull:Math.round(hull), upg:UPG, act:missions, mdone:missionsDone, doneIds:doneIds.slice(-80), marks:marks,
       crew:crew, provisions:provisions, buoys:buoys, cu:crewUnpaid?1:0, chg:crewHungry?1:0, sda:Math.round(seaDayAcc),
+      curios:curios, expd:expd?{ci:expd.ci}:null,
       tleads:cores.filter(c=>c.forceBuried).map(c=>c.idx),
       pv:cores.filter(c=>c.visitedPort).map(c=>c.idx),
       found:cores.filter(c=>c.found).map(c=>c.idx),
@@ -659,10 +660,14 @@ function loadSave(){
     if(s.crew && s.crew.length) crew=s.crew; else genCrew();         // older saves sign a crew on the spot
     provisions = s.provisions===undefined ? 20 : s.provisions;
     buoys=s.buoys||[]; crewUnpaid=!!s.cu; crewHungry=!!s.chg; seaDayAcc=s.sda||0;
+    curios=s.curios||[]; expd=null; fogCache.idx=-1;
     hull = (s.hull===undefined) ? hullMaxNow() : clamp(s.hull,0,hullMaxNow());
     (s.tleads||[]).forEach(idx=>{ if(cores[idx]) cores[idx].forceBuried=true; });
     (s.pv||[]).forEach(idx=>{ if(cores[idx]) cores[idx].visitedPort=true; });
     explored=new Set(s.explored||[]);
+    if(s.expd && cores[s.expd.ci]){                       // the survey finished while you were away
+      for(const k of islandLandCells(cores[s.expd.ci])) explored.add(k);
+      toast('⛺  The survey finished while you were away','the isle is charted — the haul was lost to the tide'); }
     camX=boat.x; camY=boat.y;
     return true;
   }catch(e){ return false; }
@@ -724,6 +729,7 @@ addEventListener('keydown',e=>{
   if(k==='l'){ openFlog(); return; }                          // the fish log
   if(k==='c'){ cookFish(); return; }                          // galley: a hot meal = bonus hearts ashore
   if(k==='j'){ openJournal(); return; }                       // the contracts journal
+  if(k==='x' && nearLand && !nearLand.port){ trySendExplorer(nearLand); return; }   // the Explorer rows ashore
   if(k==='g' && nearLand && nearLand.port){ sellFish(); return; }   // the dockside fish merchant
   if(k==='e'){
     if(nearLand){ if(nearLand.port) enterPort(nearLand); else enterIsland(nearLand); return; }   // dock / landfall
@@ -930,6 +936,7 @@ function update(dt){
   updateWhaling(dt);
   updateMissions(dt);
   updateCrew(dt);                 // wages & rations fall due with the sea-day
+  updateExplorer(dt);             // and the one ashore walks their trek
 
   // toasts
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
@@ -2397,14 +2404,21 @@ function drawHUD(){
     ctx.fillText(low?(hull<=0?'HOLED — find a shipwright':'leaking — repair at port'):Math.round(hull)+' / '+hm, 196, 114);
     if(crewStruck()){ ctx.fillStyle='#ff9f8a'; ctx.font='700 10px system-ui';
       ctx.fillText('⚠ crew '+(crewUnpaid?'unpaid':'')+(crewUnpaid&&crewHungry?' & ':'')+(crewHungry?'hungry':'')+' — Esc to settle', 22, 124); } }
-  // nearest charted objective, under the weather pill
+  // the one ashore, under the weather pill — then the nearest charted objective
+  let chipY=127;
+  if(expd){ const core2=cores[expd.ci], nm=(core2&&(core2.customName||core2.label||core2.name))||'the isle';
+    const t2=expd.waiting ? '⛺ '+expd.name+' waits at '+nm+' — swing back'
+      : '⛺ '+expd.name+' surveying '+nm+' — '+Math.round(clamp(expd.t/expd.dur,0,1)*100)+'%';
+    ctx.textAlign='center'; ctx.font='600 11px system-ui'; const w2=ctx.measureText(t2).width+20;
+    ctx.fillStyle='rgba(10,30,16,.55)'; roundRect(CSSW/2-w2/2,chipY,w2,20,8); ctx.fill();
+    ctx.fillStyle='#b9e8a0'; ctx.fillText(t2, CSSW/2, chipY+14); ctx.textAlign='left'; chipY+=24; }
   { let best=null,bd=1e18;
     for(const mk of allMarks()){ const d=(mk.x-boat.x)**2+(mk.y-boat.y)**2; if(d<bd){ bd=d; best=mk; } }
     if(best){ const d=Math.sqrt(bd);
       const t2=(MK_GLYPH[best.kind]||'◎')+' '+best.label+' — '+bearTo(best.x,best.y)+' '+fmtDist(d);
       ctx.textAlign='center'; ctx.font='600 11px system-ui'; const w2=ctx.measureText(t2).width+20;
-      ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(CSSW/2-w2/2,127,w2,20,8); ctx.fill();
-      ctx.fillStyle='#cfc09a'; ctx.fillText(t2, CSSW/2, 141); ctx.textAlign='left'; } }
+      ctx.fillStyle='rgba(8,17,31,.42)'; roundRect(CSSW/2-w2/2,chipY,w2,20,8); ctx.fill();
+      ctx.fillStyle='#cfc09a'; ctx.fillText(t2, CSSW/2, chipY+14); ctx.textAlign='left'; } }
 
   drawCompass();
   // time of day + weather, tucked under the compass
@@ -2423,7 +2437,16 @@ function drawHUD(){
       t='⚓  Press  E  to explore '+biomeOf(nearLand).icon+' '+nm; }
     ctx.font='700 15px system-ui';
     const w=ctx.measureText(t).width+30; ctx.fillStyle='rgba(10,20,38,.82)'; roundRect(CSSW/2-w/2,CSSH-96,w,34,11); ctx.fill();
-    ctx.fillStyle='#ffe6a6'; ctx.fillText(t, CSSW/2, CSSH-74); ctx.textAlign='left'; }
+    ctx.fillStyle='#ffe6a6'; ctx.fillText(t, CSSW/2, CSSH-74);
+    if(!nearLand.port){                                              // the Explorer's offer, above the landfall line
+      let xline=null;
+      const ck=canSendExplorer(nearLand);
+      if(ck&&ck.ex) xline='⛺  X — send '+ck.ex.name+' ashore  ·  ~'+Math.round(expDur(nearLand,ck.ex.rep))+'s · peril '+Math.round(expRisk(nearLand,ck.ex.rep)*100)+'%';
+      else if(!hasExplorer() && !expd && fogFrac(nearLand)>0.12) xline='⛺  an explorer could chart her interior — they drink in harbour taverns';
+      if(xline){ ctx.font='600 12px system-ui'; const w3=ctx.measureText(xline).width+24;
+        ctx.fillStyle='rgba(12,28,16,.78)'; roundRect(CSSW/2-w3/2,CSSH-126,w3,24,9); ctx.fill();
+        ctx.fillStyle='#b9e8a0'; ctx.fillText(xline, CSSW/2, CSSH-109); } }
+    ctx.textAlign='left'; }
   drawFishHUD();
   drawHuntHUD();
   drawToasts();
@@ -4048,7 +4071,7 @@ function drawIslandMap(){
  *  hull that now carries its scars and sells tiered upgrades,
  *  the board posts contracts, the tavern trades in rumors.
  * ============================================================ */
-const DEFAULT_ETUNE={ sellMul:1, payMul:1, repairCost:0.5, stormDmg:1, groundDmg:1, wageMul:1, rationCost:1 };
+const DEFAULT_ETUNE={ sellMul:1, payMul:1, repairCost:0.5, stormDmg:1, groundDmg:1, wageMul:1, rationCost:1, expSpd:1, expRisk:1 };
 let ETUNE=Object.assign({},DEFAULT_ETUNE);
 let UPG={};                       // owned upgrade levels, by track key
 let hull=100, groundCD=0, stormHitCD=0;       // the persistent hull (limpT lives with the whaling code)
@@ -4696,7 +4719,16 @@ function tavernHTML(){
     for(const r of rums) h+='<div class="srow2"><span class="ic">'+r.icon+'</span><span class="nm">'+r.title+'<small>'+r.sub+'</small></span>'+
       '<span class="pr">'+r.cost+'g</span><button class="sbtn" data-act="rumor:'+r.id+'" '+(cargo.gold<r.cost?'disabled':'')+'>Buy</button></div>'; }
   else h+='<div style="color:#8aa0c8;text-align:center;padding:12px 0;font-style:italic;">the regulars have nothing new tonight</div>';
-  h+='<div class="shead">The crew corner</div><div style="color:#8aa0c8;font-size:11.5px;padding:2px 0 6px;">Hands for hire will gather here one day — a crew of five to work the ship. <i>(coming soon)</i></div>';
+  h+='<div class="shead">The crew corner — explorers</div>';
+  tavCands=genExplorerCands(PRT.core);
+  const exNow=hasExplorer();
+  if(exNow) h+='<div style="color:#8aa0c8;font-size:11.5px;padding:2px 0 6px;">Your berth is filled — <b style="color:#9ad86a;">'+exNow.name+'</b> sails with you.</div>';
+  else if(!tavCands.length) h+='<div style="color:#8aa0c8;font-size:11.5px;padding:2px 0 6px;font-style:italic;">no explorers drinking tonight'+(PRT.SZ<1?' — hamlets seldom see their kind':' — try another day, or a grander port')+'</div>';
+  else for(const c of tavCands){
+    h+='<div class="srow2"><span class="ic">⛺</span><span class="nm">'+c.name+' <span class="dots">'+'<b>●</b>'.repeat(c.rep)+'●'.repeat(10-c.rep)+'</span>'+
+       '<small>explorer · rep '+c.rep+' · peril ~'+Math.round(clamp(0.20-0.018*c.rep,0.02,1)*100)+'% · 3g/day</small></span>'+
+       '<span class="pr">'+c.fee+'g</span><button class="sbtn" data-act="sign:'+c.id+'" '+(cargo.gold<c.fee?'disabled':'')+'>Sign on</button></div>'; }
+  h+='<div style="color:#7e93ba;font-size:10.5px;padding:4px 0 2px;">a renowned captain draws abler hands — nobles & scientists will drink here one day <i>(soon)</i></div>';
   return h;
 }
 function genRumors(core){
@@ -4736,6 +4768,7 @@ function wireShop(){
       else if(shopOpen==='wright') wrightAct(act);
       else if(shopOpen==='board') boardAct(act);
       else if(act.indexOf('rumor:')===0) buyRumor(parseInt(act.split(':')[1]));
+      else if(act.indexOf('sign:')===0) signExplorer(parseInt(act.split(':')[1]));
     };
   });
 }
@@ -4912,6 +4945,8 @@ const ETUNE_DEF=[
   ['groundDmg','Grounding dmg ×',0,3,0.1],
   ['wageMul','Crew wages ×',0,3,0.1],
   ['rationCost','Ration cost ×',0,3,0.1],
+  ['expSpd','Explorer speed ×',0.3,3,0.1],
+  ['expRisk','Explorer peril ×',0,3,0.1],
 ];
 function buildPortTune(){ const host=document.getElementById('tunePortRows'); if(!host) return; host.innerHTML='';
   ETUNE_DEF.forEach(([k,label,min,max,step])=>{ const row=document.createElement('div'); row.className='row';
@@ -4948,6 +4983,7 @@ const ROLE_DEF={
   carto:{title:'The Cartographer', icon:'🗺️', col:'#ffd86b', perk:r=>'+'+Math.round(r*11)+'% fog-of-war cleared as you sail'},
   craft:{title:'The Craftsman', icon:'🔨', col:'#c98a4a', perk:r=>'works the bench below — higher rep, more trades'},
   crewman:{title:'The Crewman', icon:'🪢', col:'#9aa6b8', perk:r=>'works the ship — the abler the hand, the smaller the wage'},
+  explorer:{title:'The Explorer', icon:'⛺', col:'#9ad86a', perk:r=>'treks the fog off wild isles (X offshore) — peril ~'+Math.round(clamp(0.20-0.018*r,0.02,1)*100)+'%, and a keen eye for curios'},
 };
 function genCrew(){
   const rng=mulberry32((SEED>>>0) ^ 0xC4E3D);
@@ -5093,6 +5129,9 @@ function drawPortrait(cv2,m){
   else if(m.role==='carto'){ g.fillStyle='#54483c'; g.fillRect(7,4,14,3); g.fillRect(5,6,18,2);     // slouch hat
     g.strokeStyle='#c8ccd4'; g.lineWidth=1; g.strokeRect(10.5,11.5,3,3); g.strokeRect(15.5,11.5,3,3); }  // spectacles
   else if(m.role==='craft'){ g.fillStyle='#6e4a28'; g.fillRect(8,4,12,3); g.fillRect(8,6,16,2); }   // flat cap
+  else if(m.role==='explorer'){ g.fillStyle='#6e5128'; g.fillRect(5,6,18,2); g.fillRect(8,3,12,4);   // wide-brimmed trek hat
+    g.fillStyle='#503a1c'; g.fillRect(8,6,12,1);
+    g.strokeStyle='#5a3a22'; g.lineWidth=2; g.beginPath(); g.moveTo(7,21); g.lineTo(21,27); g.stroke(); }  // bandolier
   else { g.fillStyle='#8a4a3a'; g.fillRect(8,4,12,4); }                          // knit cap
 }
 /* ---- the menu itself ---- */
@@ -5142,7 +5181,13 @@ function renderCrewTab(){
     }
     h+='</div><div class="cwage">'+(m.role==='captain'?'no wage':crewWage(m).toFixed(1).replace(/\.0$/,'')+'g / day')+'</div></div>';
   }
-  h+='<div style="color:#7e93ba;font-size:10.5px;text-align:center;margin-top:9px;">rations at the port market · finer crew will one day drink at the tavern — explorers, nobles, scientists…</div>';
+  if(!hasExplorer()) h+='<div class="ccard" style="opacity:.55;"><div class="pface" style="display:flex;align-items:center;justify-content:center;font-size:22px;">⛺</div>'+
+    '<div class="cinfo"><div class="cname">An empty berth</div><div class="crole">The Explorer</div>'+
+    '<div class="cperk">wild isles keep their fog until someone treks them — explorers sign on in harbour taverns</div></div></div>';
+  else if(expd){ const core2=cores[expd.ci];
+    h+='<div style="color:#9ad86a;font-size:11px;text-align:center;margin-top:4px;">⛺ '+expd.name+' is ashore at '+((core2&&(core2.customName||core2.label||core2.name))||'an isle')+(expd.waiting?' — waiting for you':' — '+Math.round(clamp(expd.t/expd.dur,0,1)*100)+'% surveyed')+'</div>'; }
+  if(curios.length) h+='<div style="color:#cfc09a;font-size:10.5px;text-align:center;margin-top:7px;">🏺 the cabinet holds '+curios.length+' unique find'+(curios.length>1?'s':'')+' — see the Voyage tab</div>';
+  h+='<div style="color:#7e93ba;font-size:10.5px;text-align:center;margin-top:9px;">rations at the port market · explorers sign at harbour taverns · nobles & scientists will follow…</div>';
   host.innerHTML=h;
   host.querySelectorAll('canvas[data-crew]').forEach(cv2=>{ const m=crew.find(x=>x.role===cv2.dataset.crew); if(m) drawPortrait(cv2,m); });
   host.querySelectorAll('[data-bench]').forEach(b=>{ b.onclick=()=>benchDo(b.dataset.bench); });
@@ -5163,8 +5208,10 @@ function renderVoyageTab(){
     ['Biomes found', biomesFound.size+' / '+BIOMES.length],
     ['Fish log', fc+' / '+FISH.length+'  ·  🐋 '+wc+' / '+WHALES.length],
     ['Contracts fulfilled', ''+missionsDone],
+    ['The cabinet', curios.length? curios.length+' unique find'+(curios.length>1?'s':'') : '—'],
   ];
   host.innerHTML=rows.map(r=>'<div class="vrow"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('')+
+    (curios.length?'<div style="color:#cfc09a;font-size:11.5px;line-height:1.6;padding:8px 2px 0;">🏺 '+curios.map(i=>CURIOS[i]).join(' · ')+'</div>':'')+
     '<div class="vbtns"><button class="sbtn ghost" id="vMute">'+(audioOn?'🔊 Sound on':'🔇 Sound off')+'</button>'+
     '<button class="sbtn ghost" id="vNew">⛵ New voyage</button></div>'+
     '<div class="shint">a new voyage scuttles this one — world, chart, crew and coin</div>';
@@ -5177,6 +5224,180 @@ document.getElementById('menuBtn').onclick=()=>{ if(!started) return; menuOpen?c
 document.getElementById('menuClose').onclick=closeMenu;
 document.getElementById('menu').addEventListener('click',e=>{ if(e.target.id==='menu') closeMenu(); });
 document.querySelectorAll('.mtab').forEach(b=>{ b.onclick=()=>switchMenuTab(b.dataset.tab); });
+
+/* ============================================================ *
+ *  THE EXPLORER — the first specialist. Sailing only ever
+ *  charts the coast; the deep interiors stay fogged. Stand off
+ *  a wild isle and press X: the Explorer rows ashore and treks
+ *  it, peeling the fog as they walk. Green hands are slow and
+ *  some don't come back; the seasoned are swift, safe, and
+ *  have an eye for unique finds.
+ * ============================================================ */
+let expd=null;            // the running expedition
+let curios=[];            // the cabinet of unique finds (indices into CURIOS)
+let fogCache={idx:-1, frac:1};
+const CURIOS=['a scrimshawed whale tooth','an ancient brass sextant','a jade idol with shell eyes','a captain\u2019s log, half burned',
+  'a sliver of fallen star-iron','a crown of red coral','a music box that plays under water','a chart of a sea no one knows',
+  'a bottled ghost-light','a sun-bleached figurehead','a ring of black pearl','an obsidian compass that points south',
+  'a saint\u2019s knucklebone in silver','a dragon\u2019s scale (surely a fake)'];
+function hasExplorer(){ return crew.find(c=>c.role==='explorer')||null; }
+function expDur(core,rep){ return (14+core.r*0.22)*(1.65-0.085*rep)/Math.max(0.3,ETUNE.expSpd); }
+function expRisk(core,rep){ return clamp((0.20-0.018*rep+0.03*biomeOf(core).tier)*ETUNE.expRisk, 0, 0.95); }
+function islandLandCells(core){               // the explore-grid cells under this isle's footprint
+  const R=core.r*2.3+80, out=[];
+  const g0x=Math.max(0,Math.floor((core.x-R)/EXP)), g1x=Math.min(EGW-1,Math.floor((core.x+R)/EXP));
+  const g0y=Math.max(0,Math.floor((core.y-R)/EXP)), g1y=Math.min(EGW-1,Math.floor((core.y+R)/EXP));
+  for(let gy=g0y;gy<=g1y;gy++) for(let gx=g0x;gx<=g1x;gx++){
+    const wx=gx*EXP+EXP/2, wy=gy*EXP+EXP/2, dx=wx-core.x, dy=wy-core.y;
+    if(dx*dx+dy*dy>R*R) continue;
+    if(heightAt(wx,wy)>=SEA-0.03) out.push(gx+gy*EGW);
+  }
+  return out;
+}
+function fogFrac(core){                        // how much of her is still unknown?
+  if(fogCache.idx===core.idx) return fogCache.frac;
+  const cells=islandLandCells(core);
+  let dark=0; for(const k of cells) if(!explored.has(k)) dark++;
+  const frac=cells.length?dark/cells.length:0;
+  fogCache={idx:core.idx, frac};
+  return frac;
+}
+function canSendExplorer(core){
+  const ex=hasExplorer();
+  if(!ex||expd||!core||core.port) return null;
+  if(crewStruck()) return {no:'the Explorer won\u2019t go ashore for an unpaid table'};
+  if(fogFrac(core)<0.12) return {no:'already charted \u2014 nothing left in the dark'};
+  return {ex};
+}
+function trySendExplorer(core){
+  if(hasExplorer()&&expd){ seaMsg('the Explorer is already ashore','#ff9f8a'); return; }
+  const ck=canSendExplorer(core);
+  if(!ck) return;
+  if(ck.no){ seaMsg(ck.no,'#ff9f8a'); return; }
+  const ex=ck.ex, rng=Math.random;
+  const dur=expDur(core,ex.rep), risk=expRisk(core,ex.rep);
+  // waypoints: a trek across her interior, starting at the shore nearest the boat
+  const wp=[]; const a0=Math.atan2(boat.y-core.y, boat.x-core.x);
+  let sx2=core.x+Math.cos(a0)*core.r*1.2, sy2=core.y+Math.sin(a0)*core.r*1.2;
+  for(let t2=0;t2<30 && heightAt(sx2,sy2)<SEA;t2++){ sx2=lerp(sx2,core.x,0.12); sy2=lerp(sy2,core.y,0.12); }
+  wp.push({x:sx2,y:sy2});
+  const n=7+(core.r/22|0);
+  for(let i=0;i<n;i++){ for(let t2=0;t2<24;t2++){ const a=rng()*TAU, d=rng()*core.r*1.7;
+      const x=core.x+Math.cos(a)*d, y=core.y+Math.sin(a)*d;
+      if(heightAt(x,y)>=SEA+0.02){ wp.push({x,y}); break; } } }
+  wp.push({x:sx2,y:sy2});                      // and back to the boats
+  let plen=0; for(let i=1;i<wp.length;i++) plen+=Math.hypot(wp[i].x-wp[i-1].x, wp[i].y-wp[i-1].y);
+  expd={ci:core.idx, name:ex.name, rep:ex.rep, t:0, dur, spd:plen/Math.max(1,dur), wp, wi:1,
+    px:wp[0].x, py:wp[0].y, deathT: rng()<risk ? dur*(0.25+rng()*0.6) : 0,
+    cells:islandLandCells(core), waiting:false};
+  fogCache.idx=-1;
+  toast('\u26fa  '+ex.name+' rows ashore', (core.customName||core.label||core.name||'the isle')+' \u2014 ~'+Math.round(dur)+'s \u00b7 peril '+Math.round(risk*100)+'%');
+  sfx('cast'); queueSave();
+}
+function expReveal(){                          // the fog peels around their boots
+  const cgx=Math.floor(expd.px/EXP), cgy=Math.floor(expd.py/EXP), R=5;
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){ if(dx*dx+dy*dy>R*R) continue;
+    const gx=cgx+dx, gy=cgy+dy; if(gx<0||gy<0||gx>=EGW||gy>=EGW) continue;
+    explored.add(gx+gy*EGW); }
+}
+function expLoot(core,rep){
+  const got=loot0(); got.gold=3+(core.r/26|0)+(Math.random()*5|0);
+  const rolls=2+Math.floor(rep/2);
+  for(let i=0;i<rolls;i++){ const r=Math.random();
+    if(r<0.3) got.gold+=2+(Math.random()*4|0);
+    else if(r<0.55) got.ore++;
+    else if(r<0.78) got.herb++;
+    else if(r<0.92) got.gems++;
+    else got.relic++;
+  }
+  return got;
+}
+function finishExpedition(){
+  const core=cores[expd.ci];
+  for(const k of expd.cells) explored.add(k);  // the last corners, sketched from the summit
+  const got=expLoot(core,expd.rep);
+  let space=Math.max(0, eHold()-cargoCount()); const banked=[];
+  cargo.gold+=got.gold; banked.push('\ud83e\ude99 '+got.gold);
+  for(const k of ['relic','gems','ore','herb']){ const take=Math.min(got[k],space);
+    if(take>0){ cargo[k]+=take; space-=take; banked.push(LOOT_ICON[k]+' '+take); } }
+  if(Math.random() < 0.05+0.015*expd.rep){
+    const left=CURIOS.map((c,i)=>i).filter(i=>!curios.includes(i));
+    if(left.length){ const ci2=left[(Math.random()*left.length)|0]; curios.push(ci2);
+      toast('\ud83c\udffa  A unique find!', CURIOS[ci2]+' \u2014 kept in the cabinet'); sfx('chest'); } }
+  toast('\u26fa  '+expd.name+' is back aboard', banked.join('  ')+' \u00b7 the isle is charted');
+  sfx('secure'); expd=null; fogCache.idx=-1; queueSave();
+}
+function updateExplorer(dt){
+  if(!expd) return;
+  const core=cores[expd.ci];
+  if(expd.waiting){                            // standing at the shore till you swing back
+    if((boat.x-expd.px)**2+(boat.y-expd.py)**2 < 650*650) finishExpedition();
+    return;
+  }
+  expd.t+=dt;
+  if(expd.deathT && expd.t>=expd.deathT){      // some don't come back
+    const ex=hasExplorer();
+    toast('\u26b0\ufe0f  '+expd.name+' never returned', 'lost to '+(core.customName||core.label||core.name||'the isle')+' \u2014 a berth stands empty');
+    sfx('snap'); sfx('hurt');
+    if(ex) crew.splice(crew.indexOf(ex),1);
+    expd=null; fogCache.idx=-1;
+    if(menuOpen&&menuTab==='crew') renderCrewTab();
+    queueSave(); return;
+  }
+  // trek the waypoints, peeling fog
+  let step=expd.spd*dt;
+  while(step>0 && expd.wi<expd.wp.length){
+    const w=expd.wp[expd.wi], dx=w.x-expd.px, dy=w.y-expd.py, d=Math.hypot(dx,dy);
+    if(d<=step){ expd.px=w.x; expd.py=w.y; step-=d; expd.wi++; }
+    else { expd.px+=dx/d*step; expd.py+=dy/d*step; step=0; }
+  }
+  expReveal();
+  if(Math.random()<dt*0.5) seafx.push({k:'jump', x:expd.px+(Math.random()-0.5)*20, y:expd.py+(Math.random()-0.5)*20, a:Math.random()*TAU, t:0, life:0.5, col:'#ffe9a6'});
+  if(expd.t>=expd.dur || expd.wi>=expd.wp.length){
+    if((boat.x-expd.px)**2+(boat.y-expd.py)**2 < 650*650) finishExpedition();
+    else if(!expd.waiting){ expd.waiting=true;
+      toast('\u26fa  '+expd.name+' waits at the shore','swing back to take them aboard'); }
+  }
+}
+function drawExpedition(){
+  if(!expd) return;
+  const [sx,sy]=w2pix(expd.px,expd.py);
+  if(sx<-30||sy<-30||sx>IW+30||sy>IH+30) return;
+  const s=iscale(), bob=expd.waiting?0:Math.abs(Math.sin(time*9))*1.2*s;
+  pctx.fillStyle='rgba(0,20,10,.3)'; pctx.beginPath(); pctx.ellipse(sx,sy+1.6*s,2.2*s,1*s,0,0,TAU); pctx.fill();
+  pctx.fillStyle='#b9925c'; pctx.fillRect(sx-1.2*s, sy-3.4*s-bob, 2.4*s, 3.4*s);          // the khaki coat
+  pctx.fillStyle='#e8c39a'; pctx.fillRect(sx-0.9*s, sy-4.6*s-bob, 1.8*s, 1.4*s);          // face
+  pctx.fillStyle='#6e5128'; pctx.fillRect(sx-1.8*s, sy-5.2*s-bob, 3.6*s, 1*s);            // the brimmed hat
+  if(expd.waiting){                              // a pennant and a thread of smoke
+    pctx.fillStyle='#e8e2d2'; pctx.fillRect(sx+2.4*s, sy-7.5*s, 0.8*s, 7*s);
+    const wv=Math.sin(time*4)*0.7*s;
+    pctx.fillStyle='#ffd23f'; pctx.beginPath(); pctx.moveTo(sx+3*s,sy-7.4*s);
+    pctx.lineTo(sx+6.4*s,sy-6.6*s+wv); pctx.lineTo(sx+3*s,sy-5.8*s); pctx.closePath(); pctx.fill();
+    for(let i=0;i<3;i++){ const pr2=((time*0.3+i*0.33)%1);
+      pctx.fillStyle='rgba(220,220,224,'+(0.3*(1-pr2))+')';
+      pctx.beginPath(); pctx.arc(sx-3*s+Math.sin((time+i*2)*0.9)*2*s, sy-5*s-pr2*9*s, (1+pr2*2)*s, 0, TAU); pctx.fill(); }
+  }
+}
+/* the tavern signs explorers now — the first specialists */
+let tavCands=[];
+function genExplorerCands(core){
+  const day=Math.floor(time/210);
+  const rng=mulberry32((((core.idx+41)*1597334677)>>>0) ^ Math.imul(day+7,2654435761) ^ 0xE9B);
+  const SZ=portSizeOf(core), out=[], n=SZ;          // towns see one a day, grand harbours two
+  for(let i=0;i<n;i++){
+    const rep=clamp(1+(rng()*3|0)+(SZ===2?1:0)+Math.floor((captainRep()-1)/3), 1, 10);
+    const id=800000000+core.idx*100+(day%89)*2+i;
+    out.push({id, name:CREW_FIRST[(rng()*CREW_FIRST.length)|0]+' '+CREW_LAST[(rng()*CREW_LAST.length)|0], rep, fee:25+rep*20});
+  }
+  return out.filter(c=>!doneIds.includes(c.id));
+}
+function signExplorer(id){
+  const c=tavCands.find(x=>x.id===id); if(!c||cargo.gold<c.fee||hasExplorer()) return;
+  cargo.gold-=c.fee; doneIds.push(c.id);
+  crew.push({role:'explorer', name:c.name, rep:c.rep});
+  toast('\u26fa  '+c.name+' signs aboard','an explorer \u2014 X at any wild isle sends them ashore');
+  sfx('secure'); queueSave(); renderShop();
+}
 
 /* ============================ main loop ============================ */
 let last=0;
@@ -5233,7 +5454,7 @@ function frameInner(ts){
   update(dt);
   // draw world to low-res buffer
   if(started){
-    drawSea(); drawPorts(); drawCleared(); drawWake(); drawSchools(); drawWhales(); drawNet(); drawSpoilsDrops(); drawBoat(); drawIrons(); drawSeaFx();
+    drawSea(); drawPorts(); drawCleared(); drawExpedition(); drawWake(); drawSchools(); drawWhales(); drawNet(); drawSpoilsDrops(); drawBoat(); drawIrons(); drawSeaFx();
   }
   // composite to screen
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -5314,7 +5535,9 @@ function buildPlaytest(){
              ['Skip day',()=>{ if(mode==='sea') settleCrewDay(); }],
              ['Rep +1',()=>{ for(const m of crew) if(m.role!=='captain') m.rep=Math.min(10,m.rep+1);
                toast('⭐  (debug) crew rep +1',''); queueSave(); if(menuOpen) renderCrewTab(); }],
-             ['Strike',()=>{ crewUnpaid=!crewUnpaid; toast('⚠  (debug) strike '+(crewUnpaid?'ON':'off'),''); }]], cwEl=document.getElementById('ptCrew');
+             ['Strike',()=>{ crewUnpaid=!crewUnpaid; toast('⚠  (debug) strike '+(crewUnpaid?'ON':'off'),''); }],
+             ['Explorer 5',()=>{ if(!hasExplorer()){ crew.push({role:'explorer', name:'Tess Marrow', rep:5});
+               toast('⛺  (debug) explorer aboard','rep 5'); queueSave(); if(menuOpen) renderCrewTab(); } }]], cwEl=document.getElementById('ptCrew');
   if(cwEl){ cwEl.innerHTML='';
     crw.forEach(([label,fn])=>{ const b=document.createElement('button'); b.className='ptb'; b.textContent=label;
       b.onclick=fn;
@@ -5375,6 +5598,7 @@ function begin(fresh){
     well={}; flog={}; fed=0; spoils={}; whiteTaken=false;
     UPG={}; missions=[]; marks=[]; doneIds=[]; missionsDone=0; hull=hullMaxNow();
     genCrew(); provisions=20; buoys=[]; crewUnpaid=false; crewHungry=false; seaDayAcc=0;
+    curios=[]; expd=null; fogCache.idx=-1;
   }
   if(!crew.length) genCrew();
   lastCapLevel=captainRep();
