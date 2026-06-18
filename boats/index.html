@@ -266,6 +266,13 @@ canvas{position:absolute;inset:0;display:block;}
 .mbody{border-top:1px solid #3a5080;padding:14px 18px 16px;max-height:70vh;overflow-y:auto;}
 .mtabpane{display:none;}
 .mtabpane.on{display:block;}
+/* gamepad: focus highlight + the Controls tab rows */
+.padfocus{outline:3px solid #ffd86b !important; outline-offset:2px; border-radius:8px;}
+.ctlrows{display:flex;flex-direction:column;gap:1px;}
+.ctlrow{display:flex;align-items:center;gap:10px;padding:6px 2px;border-bottom:1px dashed #243352;font-size:13px;color:#dbe6ff;}
+.ctlrow .cln{flex:1;min-width:0;}
+.ctlrow .clb{color:#ffd86b;font-weight:700;font-size:12px;min-width:108px;text-align:right;}
+.ctlrow .clb i{color:#7fd6c8;font-style:normal;}
 /* crew cards */
 .crewbar{display:flex;justify-content:space-between;align-items:center;gap:10px;
   background:#14223c;border:1px solid #2a3a5c;border-radius:10px;padding:9px 12px;margin-bottom:11px;
@@ -386,6 +393,7 @@ canvas{position:absolute;inset:0;display:block;}
       <button class="mtab" data-tab="log">📜 Contracts</button>
       <button class="mtab" data-tab="tuning">⚙ Tuning</button>
       <button class="mtab" data-tab="voyage">🧭 Voyage</button>
+      <button class="mtab" data-tab="controls">🎮 Controls</button>
       <span class="mx" id="menuClose" title="Close (Esc)">✕</span>
     </div>
     <div class="mbody">
@@ -433,6 +441,7 @@ canvas{position:absolute;inset:0;display:block;}
 </div>
       </div>
       <div class="mtabpane" id="tabVoyage"></div>
+      <div class="mtabpane" id="tabControls"></div>
     </div>
   </div>
 </div>
@@ -936,6 +945,182 @@ addEventListener('mousemove',e=>{ if(started&&mode==='hex'&&HEX) hexHover(e.clie
 addEventListener('mousedown',e=>{ if(!started||mode!=='hex'||!HEX||e.button!==0) return; if(e.target!==cv) return; hexClick(e.clientX,e.clientY); });
 addEventListener('wheel',e=>{ if(started&&mode==='hex'&&HEX){ e.preventDefault(); hexRotate(e.deltaY>0?1:-1); } },{passive:false});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ============================ gamepad ============================ *
+ *  The controller rides ON TOP of the keyboard/mouse: each frame we
+ *  poll the pad and either fill the same `keys` the keyboard fills
+ *  (movement) or call the same functions keydown calls (actions). An
+ *  idle pad never writes to `keys`, so it never fights the keyboard.
+ * ================================================================= */
+const PAD_KEY='mj_boats_pad_v1';
+const PAD_ROLES=[
+  ['attack','Slash · Confirm · Harpoon',0],
+  ['cancel','Dash · Anchor · Back',1],
+  ['ranged','Arrow · Cast net',2],
+  ['potion','Drink potion',3],
+  ['inventory','Inventory · Tab ◀',4],
+  ['interact','Interact · Dock · Tab ▶',5],
+  ['zoomout','Chart zoom out',6],
+  ['zoomin','Chart zoom in',7],
+  ['map','Open chart / island map',8],
+  ['menu',"Ship's menu",9],
+];
+function padDefBind(){ const o={}; for(const r of PAD_ROLES) o[r[0]]=r[2]; return o; }
+function padLoadCfg(){ try{ const s=JSON.parse(localStorage.getItem(PAD_KEY)); if(s&&s.bind){ const b=padDefBind(); Object.assign(b,s.bind); return {enabled:s.enabled!==false, bind:b}; } }catch(e){} return {enabled:true, bind:padDefBind()}; }
+function padSaveCfg(){ try{ localStorage.setItem(PAD_KEY, JSON.stringify(PAD)); }catch(e){} }
+let PAD=padLoadCfg();
+let padIndex=null, padDevName='', padPrev=[], padCapture=null, padFocusEl=null, padHexSel=0;
+let padNav={u:false,d:false,l:false,r:false}, padHeldKeys={};
+const PAD_DZ=0.35;
+function padAx(v){ return Math.abs(v)<PAD_DZ?0:v; }
+function padCur(){ const g=navigator.getGamepads?navigator.getGamepads():[]; if(padIndex!=null&&g[padIndex]) return g[padIndex];
+  for(let i=0;i<g.length;i++){ if(g[i]){ padIndex=i; if(!padDevName) padDevName=g[i].id||'gamepad'; return g[i]; } } return null; }
+function padBtn(gp,i){ return i!=null && !!(gp.buttons[i]&&gp.buttons[i].pressed); }
+function padSnap(gp){ padPrev=gp.buttons.map(b=>b.pressed); }
+function padBtnName(i){ const n={0:' (A)',1:' (B)',2:' (X)',3:' (Y)',4:' (LB)',5:' (RB)',6:' (LT)',7:' (RT)',8:' (Back)',9:' (Start)',10:' (L3)',11:' (R3)',12:' (D↑)',13:' (D↓)',14:' (D←)',15:' (D→)',16:' (Home)'}; return n[i]||''; }
+addEventListener('gamepadconnected',e=>{ if(padIndex==null) padIndex=e.gamepad.index; padDevName=e.gamepad.id||'gamepad'; padPrev=[];
+  toast('🎮  Controller connected', String(padDevName).slice(0,30)+' · remap in Esc → 🎮 Controls');
+  if(menuOpen&&menuTab==='controls') renderControlsTab(); });
+addEventListener('gamepaddisconnected',e=>{ if(padIndex===e.gamepad.index) padIndex=null; if(menuOpen&&menuTab==='controls') renderControlsTab(); });
+
+function padClickEl(sel){ const el=document.querySelector(sel); if(el) el.click(); }
+function padRelease(){ for(const k in padHeldKeys){ if(padHeldKeys[k]){ keys[k]=false; padHeldKeys[k]=false; } } }
+function padSetMove(lx,ly){ const want={arrowleft:lx<0,arrowright:lx>0,arrowup:ly<0,arrowdown:ly>0};
+  for(const k in want){ if(want[k]){ keys[k]=true; padHeldKeys[k]=true; } else if(padHeldKeys[k]){ keys[k]=false; padHeldKeys[k]=false; } } }
+function padFocusables(c){ if(!c) return []; return Array.prototype.slice.call(c.querySelectorAll('button,input,select')).filter(el=>!el.disabled && el.offsetParent!==null); }
+function padSetFocus(el){ if(padFocusEl&&padFocusEl!==el) padFocusEl.classList.remove('padfocus'); padFocusEl=el||null;
+  if(padFocusEl){ padFocusEl.classList.add('padfocus'); try{ padFocusEl.scrollIntoView({block:'nearest'}); }catch(e){} } }
+function padNavList(c,P,eU,eD,eL,eR,onBack){
+  const els=padFocusables(c); if(!els.length){ if(onBack&&P('cancel')) onBack(); return; }
+  let i=els.indexOf(padFocusEl); if(i<0){ i=0; padSetFocus(els[0]); }
+  if(eD||eR) padSetFocus(els[(i+1)%els.length]);
+  else if(eU||eL) padSetFocus(els[(i-1+els.length)%els.length]);
+  if(P('attack')&&padFocusEl){ if(padFocusEl.tagName==='INPUT') padFocusEl.focus(); else padFocusEl.click(); return; }
+  if(onBack&&P('cancel')) onBack();
+}
+function padCycleMenuTab(d){ const t=['char','crew','log','tuning','voyage','controls']; let i=t.indexOf(menuTab); if(i<0)i=0; switchMenuTab(t[(i+d+t.length)%t.length]); padSetFocus(null); }
+function padCycleHubTab(d){ const t=['crawl','shop','char']; let i=t.indexOf(ptTab); if(i<0)i=0; ptTab=t[(i+d+t.length)%t.length]; renderPtMenu(); padSetFocus(null); }
+function padNavHex(P,eL,eR){
+  if(HEX.phase==='bet'){ if(eL) hexBet(-1); else if(eR) hexBet(1); if(P('attack')) hexDeal(); else if(P('cancel')||P('menu')) hexLeave(); return; }
+  if(HEX.phase==='play'){
+    if(HEX.turn===1 && HEX.deal){
+      const legal=[]; for(let h=0;h<7;h++) if(legalHex(h)) legal.push(h);
+      if(legal.length){ if(legal.indexOf(padHexSel)<0) padHexSel=legal[0];
+        if(eR) padHexSel=legal[(legal.indexOf(padHexSel)+1)%legal.length];
+        else if(eL) padHexSel=legal[(legal.indexOf(padHexSel)-1+legal.length)%legal.length];
+        HEX.hover=padHexSel; }
+      if(P('inventory')) hexRotate(-1);
+      if(P('ranged')||P('interact')) hexRotate(1);
+      if(P('attack')) hexPlace(padHexSel);
+    }
+    if(P('cancel')||P('menu')) hexLeave(); return;
+  }
+  if(P('attack')){ if(cargo.gold>=1) hexAgain(); else hexLeave(); } else if(P('cancel')||P('menu')) hexLeave();
+}
+function padNavMap(lx,ly,P,D,dt){
+  if(imapOpen){ if(P('map')||P('cancel')||P('interact')||P('menu')) imapOpen=false; return; }
+  if(lx||ly) panMap(lx*0.9*dt, ly*0.9*dt);
+  if(D('zoomin')) zoomMap(1-1.3*dt, null);
+  if(D('zoomout')) zoomMap(1+1.5*dt, null);
+  if(P('map')||P('cancel')||P('menu')) mapOpen=false;
+}
+function padHarpoon(lx,ly){ let dx=lx,dy=ly; if(!dx&&!dy){ dx=Math.cos(boat.a); dy=Math.sin(boat.a); }
+  const m=Math.hypot(dx,dy)||1; mouseX=CSSW/2+dx/m*180; mouseY=CSSH/2+dy/m*180; tryThrowIron(); }
+function padSeaDock(){ if(nearLand){ if(nearLand.port) enterPort(nearLand); else enterIsland(nearLand); return; }
+  let p=null,pd=1e18; for(const c of coresNear(boat.x,boat.y,1800)){ if(!c.port) continue; const d=(boat.x-c.x)**2+(boat.y-c.y)**2; if(d<pd){pd=d;p=c;} }
+  if(p&&Math.sqrt(pd)<=portReach(p)) tryDockAt(p); }
+
+function pollPad(dt){
+  const gp=padCur();
+  if(!gp||!PAD.enabled){ if(padPrev.length){ padRelease(); padPrev=[]; } return; }
+  if(padPrev.length!==gp.buttons.length){ padSnap(gp); return; }   // first frame with this pad: just sync, no spurious actions
+  if(padCapture!=null){                                            // rebinding: grab the next fresh button press
+    for(let i=0;i<gp.buttons.length;i++){ if(gp.buttons[i].pressed && !padPrev[i]){ PAD.bind[padCapture]=i; padCapture=null; padSaveCfg(); sfx('tink',1.2); if(menuOpen&&menuTab==='controls') renderControlsTab(); break; } }
+    padSnap(gp); return;
+  }
+  const lx=padAx(gp.axes[0]||0), ly=padAx(gp.axes[1]||0);
+  const P=r=>{ const i=PAD.bind[r]; return padBtn(gp,i)&&!padPrev[i]; };
+  const D=r=>padBtn(gp,PAD.bind[r]);
+  const dU=ly<0||padBtn(gp,12), dD=ly>0||padBtn(gp,13), dL=lx<0||padBtn(gp,14), dR=lx>0||padBtn(gp,15);
+  const eU=dU&&!padNav.u, eD=dD&&!padNav.d, eL=dL&&!padNav.l, eR=dR&&!padNav.r;
+  padNav.u=dU; padNav.d=dD; padNav.l=dL; padNav.r=dR;
+
+  // ---- modal cards (can appear around any mode) ----
+  if(introOpen){ padRelease(); if(P('attack')||P('interact')) introNext(); else if(P('cancel')) endIntro(); padSnap(gp); return; }
+  const ntc=document.getElementById('notice');
+  if(ntc&&!ntc.classList.contains('hidden')){ padRelease(); if(P('attack')||P('interact')||P('cancel')||P('menu')) padClickEl('#nOk'); padSnap(gp); return; }
+  if(summaryOpen){ padRelease(); if(P('attack')||P('interact')||P('menu')) hideSummary(); padSnap(gp); return; }
+  if(koOpen){ padRelease(); if(P('attack')||P('interact')||P('menu')) hideKO(); padSnap(gp); return; }
+  if(renaming){ padRelease(); if(P('attack')||P('interact')) finishRename(); padSnap(gp); return; }
+  if(!started){ padRelease(); padNavList(document.getElementById('title'),P,eU,eD,eL,eR,null); padSnap(gp); return; }
+  if(mode==='hex'&&HEX){ padRelease(); padNavHex(P,eL,eR); padSnap(gp); return; }
+  if(invOpen){ padRelease(); if(P('inventory')||P('cancel')||P('interact')) closeInv(); padSnap(gp); return; }
+  if(flogOpen){ padRelease(); if(P('cancel')||P('interact')||P('attack')) closeFlog(); padSnap(gp); return; }
+  if(ptestOpen){ padRelease();
+    if(P('inventory')) padCycleHubTab(-1); else if(P('interact')) padCycleHubTab(1);
+    else if(P('cancel')||P('menu')){ padSetFocus(null); padClickEl('#ptBack'); }
+    else padNavList(document.getElementById('ptest'),P,eU,eD,eL,eR,null);
+    padSnap(gp); return; }
+  if(menuOpen){ padRelease();
+    if(P('inventory')) padCycleMenuTab(-1); else if(P('interact')) padCycleMenuTab(1);
+    else if(P('cancel')||P('menu')){ padSetFocus(null); closeMenu(); }
+    else padNavList(document.getElementById('menu'),P,eU,eD,eL,eR,null);
+    padSnap(gp); return; }
+  if(shopOpen){ padRelease(); padNavList(document.getElementById('shop'),P,eU,eD,eL,eR,()=>closeShop()); if(P('menu')) closeShop(); padSnap(gp); return; }
+  if(journalOpen){ padRelease(); if(P('cancel')||P('interact')||P('menu')) closeJournal(); padSnap(gp); return; }
+  if(mapOpen||imapOpen){ padRelease(); padNavMap(lx,ly,P,D,dt); padSnap(gp); return; }
+
+  // ---- live gameplay ----
+  let mvx=lx, mvy=ly;                                  // the D-pad moves too, not just the stick
+  if(padBtn(gp,14)) mvx=-1; else if(padBtn(gp,15)) mvx=1;
+  if(padBtn(gp,12)) mvy=-1; else if(padBtn(gp,13)) mvy=1;
+  padSetMove(mvx,mvy);
+  if(mode==='island'){
+    if(mvx||mvy){ const m=Math.hypot(mvx,mvy); player.fx=mvx/m; player.fy=mvy/m; }   // face the way you move (attacks fire this way)
+    if(P('attack')) doSlash();
+    if(P('ranged')) doShoot();
+    if(P('cancel')) doDash();
+    if(P('potion')) drinkPotion();
+    if(P('interact')) doInteract();
+    if(P('inventory')) openInv();
+    if(P('map')) imapOpen=true;
+    if(P('menu')) openMenu();
+  } else if(mode==='port'){
+    if(P('interact')) doPortInteract();
+    if(P('map')){ mapOpen=true; openFullMap(); }
+    if(P('menu')) openMenu();
+  } else if(mode==='interior'){
+    if(P('interact')) intInteract();
+    if(P('cancel')){ if(intCard) intCard=null; else leaveInterior(); }
+    if(P('menu')) openMenu();
+  } else {  // ---- sea ----
+    if(D('cancel')){ keys[' ']=true; padHeldKeys[' ']=true; } else if(padHeldKeys[' ']){ keys[' ']=false; padHeldKeys[' ']=false; }
+    if(P('ranged')) netKey();
+    if(P('attack')) padHarpoon(lx,ly);
+    if(P('interact')) padSeaDock();
+    if(P('map')){ mapOpen=true; openFullMap(); }
+    if(P('menu')) openMenu();
+  }
+  padSnap(gp);
+}
+
+function renderControlsTab(){
+  const host=document.getElementById('tabControls'); if(!host) return;
+  const gp=padCur();
+  let h='<div id="tune"><h3>🎮 Controller</h3>';
+  h+='<p class="sub">'+(gp?('Connected: <b>'+String(padDevName).replace(/[<>&]/g,'').slice(0,40)+'</b>'):'No controller detected — connect one and press any button.')+'</p>';
+  h+='<label style="display:flex;align-items:center;gap:8px;color:#cdd9f3;font-size:13px;margin:4px 0 8px;"><input type="checkbox" id="ctlEnable"'+(PAD.enabled?' checked':'')+'> Controller enabled</label>';
+  h+='<p class="hint">Left stick moves / steers &amp; works the sail. With the chart open it pans; the triggers zoom. Attacks fire the way you face. In menus the stick or D-pad moves the highlight, the bind button confirms, back closes, and the shoulder buttons flip tabs.</p>';
+  h+='<div class="pt-sep"></div><div class="ctlrows">';
+  for(const r of PAD_ROLES){ const idx=PAD.bind[r[0]], cap=padCapture===r[0];
+    h+='<div class="ctlrow"><span class="cln">'+r[1]+'</span><span class="clb">'+(cap?'<i>press a button…</i>':('btn '+idx+padBtnName(idx)))+'</span><button class="sbtn ghost" data-rebind="'+r[0]+'">'+(cap?'…':'Rebind')+'</button></div>';
+  }
+  h+='</div><div class="btns" style="margin-top:12px;"><button id="ctlReset">Reset to defaults</button></div></div>';
+  host.innerHTML=h;
+  const en=host.querySelector('#ctlEnable'); if(en) en.onchange=e=>{ PAD.enabled=e.target.checked; padSaveCfg(); };
+  host.querySelectorAll('[data-rebind]').forEach(b=>{ b.onclick=()=>{ padCapture=b.dataset.rebind; renderControlsTab(); }; });
+  const rs=host.querySelector('#ctlReset'); if(rs) rs.onclick=()=>{ PAD.bind=padDefBind(); padSaveCfg(); renderControlsTab(); };
+}
 
 /* ============================ audio (calm ambience) ============================ */
 let actx=null, masterG=null, windG=null, waveG=null;
@@ -6526,6 +6711,7 @@ function switchMenuTab(tab){
   if(tab==='crew') renderCrewTab();
   if(tab==='log') renderLogTab();
   if(tab==='voyage') renderVoyageTab();
+  if(tab==='controls') renderControlsTab();
 }
 const GEAR_TIERS={
   sword:['Rusty Cutlass','Iron Cutlass','Fine Sabre','Captain’s Blade'],
@@ -7263,6 +7449,7 @@ function frame(ts){
 }
 function frameInner(ts){
   const dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
+  pollPad(dt);                                 // controller → same keys/actions the keyboard drives
   if(started && mode==='hex'){               // ---- the Maelstrom table ----
     updateHex(dt);
     if(mode!=='hex' || !HEX) return;
