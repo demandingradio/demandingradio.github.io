@@ -210,6 +210,25 @@ canvas{position:absolute;inset:0;display:block;}
 .ptdesc{color:#8aa0c8;font-size:10.5px;line-height:1.4;}
 .ptbtns2{display:flex;flex-direction:column;gap:4px;flex:none;}
 .ptfoot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:#7e93ba;font-size:10.5px;}
+/* the proving-grounds hub: stat strip, tabs, dev row, character readout */
+.ptstat{display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;background:#15243f;border:1px solid #2a3a5c;border-radius:10px;padding:7px 12px;margin:0 0 10px;font-size:13px;color:#dbe6ff;}
+.ptstat b{color:#ffe6a6;}
+.ptstat .ptxp{position:relative;width:90px;height:7px;background:#0c1830;border-radius:4px;overflow:hidden;border:1px solid #2a3a5c;}
+.ptstat .ptxp i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(#7fd6c8,#5ab0a2);}
+.ptstat .ptpts{color:#08213d;background:linear-gradient(#ffe8a6,#f4c869);border-radius:7px;padding:2px 8px;font-weight:800;font-size:11px;}
+.pttabrow{display:flex;gap:6px;margin-bottom:10px;}
+.pttab{font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:#9fb6dd;flex:1;background:#14223c;border:1px solid #2a3a5c;border-radius:9px;padding:8px 4px;}
+.pttab.on{background:#22375e;color:#ffe6a6;border-color:#3a5080;}
+.ptbody{overflow-y:auto;padding:0 2px;flex:1;min-height:130px;}
+.ptdev{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;margin-top:11px;padding-top:10px;border-top:1px dashed #2a3a5c;}
+.ptdev .sbtn{font-size:11px;padding:4px 9px;}
+.ptdevlbl{color:#7fd6c8;font-size:10.5px;font-weight:800;letter-spacing:.1em;}
+.ptset{display:flex;align-items:center;gap:4px;color:#bcd2ff;font-size:12px;}
+.ptset b{color:#ffd86b;min-width:18px;text-align:center;}
+.ptstats2{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 10px;font-size:12px;color:#bcd2ff;margin-bottom:4px;}
+.ptstats2 b{color:#eaf2ff;}
+.ptsktree{margin-bottom:4px;}
+.ptsktitle{color:#9fb6dd;font-size:12px;font-weight:700;margin:6px 0 2px;}
 
 /* the claimed isle's leave button */
 #leaveBtn{position:absolute;left:16px;bottom:56px;z-index:42;font:inherit;font-weight:700;font-size:14px;
@@ -423,7 +442,7 @@ canvas{position:absolute;inset:0;display:block;}
   <div class="tag">a cartographer's voyage</div>
   <button class="start" id="startBtn">⛵ Set sail</button>
   <button class="start secondary hidden" id="contBtn">Continue voyage</button>
-  <button class="start secondary" id="ptestBtn" style="font-size:13px;padding:8px 20px;">⚔ Island playtest — ten trials</button>
+  <button class="start secondary" id="ptestBtn" style="font-size:13px;padding:8px 20px;">⚔ The Proving Grounds</button>
   <div class="keys">
     <kbd>W</kbd>/<kbd>↑</kbd> raise sail &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> furl &nbsp; <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> steer<br>
     <kbd>Space</kbd> drop sail &nbsp; <kbd>M</kbd> map &nbsp; <kbd>F</kbd> cast the net &nbsp; <kbd>🖱</kbd> harpoon a spout &nbsp; <kbd>E</kbd> dock &amp; explore<br>
@@ -510,11 +529,13 @@ canvas{position:absolute;inset:0;display:block;}
 
 <div id="ptest" class="hidden">
   <div class="ptbox">
-    <div class="pttitle">⚔ Island Playtest — the Ten Trials</div>
-    <div class="ptsub">each door is one danger level · tune the fight here, then we wire it to the sea · Esc in-game → Tuning → Island level scaling</div>
-    <div id="ptPlvlBar" style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;margin:2px 0 12px;"></div>
-    <div class="ptgrid" id="ptGrid"></div>
-    <div class="ptfoot"><span>↻ re-rolls a fresh isle at that level · nothing here touches your real voyage</span>
+    <div class="pttitle">⚔ The Proving Grounds</div>
+    <div class="ptsub">a self-contained crawl rig — clear caves, level up, kit out · nothing here touches your voyage</div>
+    <div id="ptStat"></div>
+    <div class="pttabrow" id="ptTabs"></div>
+    <div id="ptBody" class="ptbody"></div>
+    <div id="ptDev" class="ptdev"></div>
+    <div class="ptfoot"><span id="ptFootMsg">clear a cave → bank gold → buy gear → go deeper</span>
       <button class="sbtn ghost" id="ptBack">↩ Back to title</button></div>
   </div>
 </div>
@@ -3260,8 +3281,14 @@ function leaveIsland(ko){
   const st=Object.assign({},tripStats,{ name:(ISL&&(ISL.core.customName||ISL.core.label||ISL.core.name))||'the isle',
     biome:ISL?(ISL.biome.icon+' '+ISL.biome.name):'', main:securedCount, mainN:ISL?ISL.mainN:0, cleared:!!(ISL&&ISL.core.cleared&&islandCleared) });
   const banked={}, left={}, lost=ko?Object.assign({},tripLoot):null;
+  let ptGain=0;
+  if(ptMode){                                   // the proving grounds: every spoil becomes coin in the purse
+    ptGain=tripLoot.gold; for(const gk of ['relic','gems','ore','herb','bits']) ptGain+=tripLoot[gk]*(LOOT_VAL[gk]||0);
+    if(!ko && st.cleared) ptGain+=Math.round(40*Math.max(1,ISL_LVL)*lvlLootMul());   // a clear bounty that scales with the danger
+    cargo.gold+=ptGain; tripLoot=loot0();
+  }
   if(ko){ boat.sail=0; boat.spd=0; player.hp=Math.max(player.hp,Math.ceil(eMaxHp()*PTUNE.reviveFrac)); }   // hauled aboard, just breathing - bring potions next time
-  else {
+  else if(!ptMode){
     const cap=eHold();
     if(tripLoot.gold>0){ banked.gold=tripLoot.gold; cargo.gold+=tripLoot.gold; }   // coin needs no room
     let space=Math.max(0, cap-cargoCount());
@@ -3277,9 +3304,10 @@ function leaveIsland(ko){
   closeInv();
   mode='sea'; setPixScale(3); fed=0; player.maxhp=eMaxHp(); if(player.hp>player.maxhp)player.hp=player.maxhp; ISL_LVL=0;   // the meal is eaten - back to base max HP
   document.getElementById('leaveBtn').classList.add('hidden'); imapOpen=false;
-  if(ptMode){ paused=true; openPtMenu(); }      // a trial ends back at the ten doors
+  if(ptMode){ paused=true; toast(ko?'☠  Carried off — back to the grounds':'⚑  Cleared! +'+ptGain+' 🪙', ko?'kit up and try her again':'kit up and crawl deeper'); openPtMenu(); }
   enemies=[]; inodes=[]; iproj=[]; ifx=[]; ifloat=[]; idrops=[]; ichests=[]; iburied=null; iflag=null; ihaz=[]; iflies=[]; ileaves=[]; ISL=null; queueSave();
-  if(!ko && (hadAny||st.cleared)) showSummary(st,banked);
+  if(ptMode){}                                  // the grounds handle their own return (above)
+  else if(!ko && (hadAny||st.cleared)) showSummary(st,banked);
   else if(!ko) toast('Back aboard','');
   else showKO(st,lost);
 }
@@ -6993,7 +7021,7 @@ function giveGuildStep(n){
  *  them — and richer floors. Level 0 = the old unscaled world
  *  (the sea keeps it until the feel is locked here).
  * ============================================================ */
-let ISL_LVL=0, ptMode=false, ptestOpen=false, PT_SEEDS=[], ptPlvl=1;
+let ISL_LVL=0, ptMode=false, ptestOpen=false, PT_SEEDS=[], ptPlvl=1, ptTab='crawl';
 for(let i=0;i<=10;i++) PT_SEEDS.push((Math.random()*1e9)|0);
 const DEFAULT_LTUNE={ hpPerLvl:0.22, cntPerLvl:0.09, spdPerLvl:0.03, elitePerLvl:0.035, dmgEvery:3, lootPerLvl:0.12 };
 let LTUNE=Object.assign({},DEFAULT_LTUNE);
@@ -7041,18 +7069,41 @@ function openPtMenu(){
   document.getElementById('ptest').classList.remove('hidden');
 }
 function closePtMenu(){ ptestOpen=false; document.getElementById('ptest').classList.add('hidden'); }
-function renderPtMenu(){
-  const g=document.getElementById('ptGrid'); if(!g) return;
-  const pb=document.getElementById('ptPlvlBar');
-  if(pb){ const mh=Math.round(PTUNE.hpBase+PTUNE.hpPerLvl*(ptPlvl-1)), sp=(ptPlvl-1)*PTUNE.ptsPerLvl;
-    pb.innerHTML='<span style="color:#bcd2ff;font-weight:700;">🧬 Your level:</span>'+
-      '<button class="sbtn ghost" data-pl="-1" style="padding:3px 11px;">◀</button>'+
-      '<b style="color:#ffd86b;font-size:17px;min-width:22px;text-align:center;display:inline-block;">'+ptPlvl+'</b>'+
-      '<button class="sbtn ghost" data-pl="1" style="padding:3px 11px;">▶</button>'+
-      '<span style="color:#8aa0c8;font-size:11px;">'+mh+' max HP · '+sp+' skill pts auto-spread · basic gear</span>';
-    pb.querySelectorAll('[data-pl]').forEach(b=>{ b.onclick=()=>{ ptPlvl=clamp(ptPlvl+parseInt(b.dataset.pl),1,PTUNE.lvlCap); renderPtMenu(); }; });
+const PT_GEAR=['sword','bow','hearts','boots','satchel'];   // the on-foot kit the grounds' shop will fit
+function ptNewChar(){                       // a fresh, ephemeral test character — never saved (ptMode guards doSave)
+  ptMode=true;
+  plvl=1; pxp=0; skillPts=0; SKILLS=SKILL0(); UPG={};
+  cargo=loot0(); cargo.gold=120; tripLoot=loot0(); potions=3; fed=0; ptPlvl=1; ptTab='crawl';
+  player.maxhp=eMaxHp(); player.hp=player.maxhp;
+}
+function renderPtMenu(){                     // renders the whole hub: stat strip + tabs + body + dev row
+  if(!document.getElementById('ptest')) return;
+  const xn=xpToNext(plvl), stat=document.getElementById('ptStat');
+  if(stat) stat.innerHTML='<div class="ptstat">'+
+    '<span>🧬 <b>Lvl '+plvl+'</b></span>'+
+    '<span class="ptxp" title="'+pxp+' / '+xn+' XP"><i style="width:'+Math.round(100*Math.min(1,pxp/xn))+'%"></i></span>'+
+    '<span>❤ <b>'+Math.round(player.hp)+' / '+player.maxhp+'</b></span>'+
+    '<span>🪙 <b>'+cargo.gold+'</b></span>'+
+    '<span>🧪 <b>'+potions+' / '+POT_CAP+'</b></span>'+
+    (skillPts>0?'<span class="ptpts">✦ '+skillPts+' skill pts</span>':'')+'</div>';
+  const tabs=document.getElementById('ptTabs');
+  if(tabs){ const T=[['crawl','⚔ Crawl'],['shop','🛒 Shop'],['char','🧍 Character']];
+    tabs.innerHTML=T.map(t=>'<button class="pttab'+(ptTab===t[0]?' on':'')+'" data-pttab="'+t[0]+'">'+t[1]+'</button>').join('');
+    tabs.querySelectorAll('[data-pttab]').forEach(b=>{ b.onclick=()=>{ ptTab=b.dataset.pttab; renderPtMenu(); }; }); }
+  const body=document.getElementById('ptBody');
+  if(body){
+    if(ptTab==='shop'){ body.innerHTML=ptShopHTML();
+      body.querySelectorAll('[data-ptbuy]').forEach(b=>{ b.onclick=()=>ptShopBuy(b.dataset.ptbuy); }); }
+    else if(ptTab==='char'){ body.innerHTML=ptCharHTML();
+      body.querySelectorAll('[data-ptsk]').forEach(b=>{ b.onclick=()=>{ spendSkill(b.dataset.ptsk); player.maxhp=eMaxHp(); renderPtMenu(); }; }); }
+    else { body.innerHTML=ptCrawlHTML();
+      body.querySelectorAll('[data-land]').forEach(b=>{ b.onclick=()=>startPlaytest(parseInt(b.dataset.land)); });
+      body.querySelectorAll('[data-roll]').forEach(b=>{ b.onclick=()=>{ PT_SEEDS[parseInt(b.dataset.roll)]=(Math.random()*1e9)|0; renderPtMenu(); }; }); }
   }
-  let h='';
+  renderPtDev();
+}
+function ptCrawlHTML(){                       // the ten danger-level cards — pick one and Land
+  let h='<div class="ptgrid">';
   for(let L=1;L<=10;L++){
     const c=ptCore(L,PT_SEEDS[L]), b=c.biomeObj;
     const zones=Math.round(3.5+clamp((c.r-44)/100,0,1)*14);
@@ -7064,11 +7115,85 @@ function renderPtMenu(){
        '<div class="ptbtns2"><button class="sbtn" data-land="'+L+'">Land</button>'+
        '<button class="sbtn ghost" data-roll="'+L+'">↻</button></div></div>';
   }
-  g.innerHTML=h;
-  g.querySelectorAll('[data-land]').forEach(btn=>{ btn.onclick=()=>startPlaytest(parseInt(btn.dataset.land)); });
-  g.querySelectorAll('[data-roll]').forEach(btn=>{ btn.onclick=()=>{ PT_SEEDS[parseInt(btn.dataset.roll)]=(Math.random()*1e9)|0; renderPtMenu(); }; });
+  return h+'</div>';
 }
-function applyPtLevel(){
+function ptShopHTML(){                         // buy potions + gear tiers with crawl gold (no port-size gate)
+  const ptc=Math.max(1,Math.round(ETUNE.potionCost));
+  let h='<div class="shead">Health draughts</div>';
+  h+='<div class="srow2"><span class="ic">🧪</span><span class="nm">Draughts ×'+potions+' / '+POT_CAP+'<small>each restores '+Math.round(PTUNE.potionFrac*100)+'% HP ashore · '+ptc+'g</small></span>'+
+     '<button class="sbtn" data-ptbuy="pot" '+((cargo.gold<ptc||potions>=POT_CAP)?'disabled':'')+'>+1 · '+ptc+'g</button>'+
+     '<button class="sbtn" data-ptbuy="potfill" '+((cargo.gold<ptc||potions>=POT_CAP)?'disabled':'')+'>Fill</button></div>';
+  h+='<div class="shead">Expedition gear</div>';
+  for(const k of PT_GEAR){ const u=UPGS.find(x=>x.k===k); if(!u) continue;
+    const lvl=uLvl(k), max=lvl>=3, c=max?0:u.cost[lvl];
+    const dots='<span class="dots">'+'<b>●</b>'.repeat(lvl)+'●'.repeat(3-lvl)+'</span>';
+    h+='<div class="srow2"><span class="ic">'+u.icon+'</span><span class="nm">'+u.name+' '+dots+'<small>'+(max?u.fx(lvl)+' — a masterwork':'next: '+u.fx(lvl+1))+'</small></span>'+
+       (max?'<span class="pr" style="color:#7fd6c8;">MAX</span>'
+        :'<span class="pr">'+c+'g</span><button class="sbtn" data-ptbuy="gear:'+k+'" '+(cargo.gold<c?'disabled':'')+'>Buy</button>')+'</div>';
+  }
+  return h;
+}
+function ptShopBuy(act){
+  const ptc=Math.max(1,Math.round(ETUNE.potionCost));
+  if(act==='pot'||act==='potfill'){
+    let want=act==='potfill'?(POT_CAP-potions):1, bought=0;
+    while(bought<want && potions<POT_CAP && cargo.gold>=ptc){ cargo.gold-=ptc; potions++; bought++; }
+    if(bought) sfx('pick',1.1);
+    renderPtMenu(); return;
+  }
+  if(act.indexOf('gear:')===0){
+    const k=act.split(':')[1], u=UPGS.find(x=>x.k===k); if(!u) return;
+    const lvl=uLvl(k); if(lvl>=3) return;
+    const c=u.cost[lvl]; if(cargo.gold<c) return;
+    cargo.gold-=c; UPG[k]=lvl+1; sfx('secure');
+    player.maxhp=eMaxHp(); if(player.hp>player.maxhp) player.hp=player.maxhp;   // hearts changes max HP
+    toast(u.icon+'  '+u.name+' — tier '+(lvl+1), u.fx(lvl+1));
+    renderPtMenu();
+  }
+}
+function ptCharHTML(){                          // live combat numbers + skill spend (reuses the real helpers)
+  let h='<div class="shead">Combat — current numbers</div><div class="ptstats2">'+
+    '<div>🗡 dmg <b>'+eSlashDmg().toFixed(1)+'</b></div><div>reach <b>'+Math.round(eSlashRange())+'</b></div><div>rate <b>'+eSlashCD().toFixed(2)+'s</b></div>'+
+    '<div>🏹 dmg <b>'+eArrowDmg().toFixed(1)+'</b></div><div>arrows <b>'+arrowCount()+'</b></div><div>spd <b>'+Math.round(eArrowSpeed())+'</b></div>'+
+    '<div>🥾 move <b>'+Math.round(eMoveSpeed())+'</b></div><div>❤ max <b>'+eMaxHp()+'</b></div><div>DR <b>'+Math.round(armourDR()*100)+'%</b></div>'+
+    '</div>';
+  h+='<div class="shead">Skills'+(skillPts>0?' — <b style="color:#ffd86b;">'+skillPts+' to spend</b>':'')+'</div>';
+  for(const t of SKILL_DEF){
+    h+='<div class="ptsktree"><div class="ptsktitle">'+t.icon+' '+t.name+'</div>';
+    for(const n of t.nodes){ const r=SKILLS[n.k], full=r>=n.max, can=skillPts>0&&!full;
+      const pips='<span class="dots">'+'<b>●</b>'.repeat(r)+'●'.repeat(n.max-r)+'</span>';
+      h+='<div class="srow2"><span class="nm">'+n.name+' '+pips+'<small>'+n.fx(r||1)+(full?' · maxed':'')+'</small></span>'+
+         (can?'<button class="sbtn" data-ptsk="'+n.k+'">+</button>':(full?'<span class="pr" style="color:#7fd6c8;">MAX</span>':'<span class="pr" style="color:#5a6f96;">—</span>'))+'</div>';
+    }
+    h+='</div>';
+  }
+  return h;
+}
+function renderPtDev(){                          // the star of an ephemeral rig — jump to any test state instantly
+  const d=document.getElementById('ptDev'); if(!d) return;
+  d.innerHTML='<span class="ptdevlbl">🛠 DEV</span>'+
+    '<span class="ptset">Lvl <button class="sbtn ghost" data-ptdev="lvl-">◀</button><b>'+ptPlvl+'</b>'+
+      '<button class="sbtn ghost" data-ptdev="lvl+">▶</button><button class="sbtn" data-ptdev="setlvl">Set</button></span>'+
+    '<button class="sbtn ghost" data-ptdev="gold100">+100🪙</button>'+
+    '<button class="sbtn ghost" data-ptdev="gold1k">+1000🪙</button>'+
+    '<button class="sbtn ghost" data-ptdev="maxgear">Max gear</button>'+
+    '<button class="sbtn ghost" data-ptdev="fillpot">Fill 🧪</button>'+
+    '<button class="sbtn ghost" data-ptdev="reset">Reset</button>';
+  d.querySelectorAll('[data-ptdev]').forEach(b=>{ b.onclick=()=>ptDev(b.dataset.ptdev); });
+}
+function ptDev(a){
+  if(a==='lvl-') ptPlvl=clamp(ptPlvl-1,1,PTUNE.lvlCap);
+  else if(a==='lvl+') ptPlvl=clamp(ptPlvl+1,1,PTUNE.lvlCap);
+  else if(a==='setlvl'){ applyPtLevel(); toast('🧬  Set to level '+plvl,'skills auto-spread · full HP'); }
+  else if(a==='gold100') cargo.gold+=100;
+  else if(a==='gold1k') cargo.gold+=1000;
+  else if(a==='maxgear'){ for(const k of PT_GEAR) UPG[k]=3; player.maxhp=eMaxHp(); player.hp=player.maxhp; toast('🛡  Gear maxed','all on-foot kit at tier 3'); }
+  else if(a==='fillpot') potions=POT_CAP;
+  else if(a==='reset'){ ptNewChar(); toast('↺  Fresh character','level 1 · 120🪙'); }
+  sfx('tink',1.0);
+  renderPtMenu();
+}
+function applyPtLevel(){                         // dev "Set level": jump to ptPlvl with skills auto-spread
   plvl=clamp(ptPlvl,1,PTUNE.lvlCap); pxp=0; skillPts=0; SKILLS=SKILL0();
   let pts=(plvl-1)*PTUNE.ptsPerLvl;
   const order=['edge','heads','reach','loft','stride','flow','wind','lunge','split'];
@@ -7077,20 +7202,20 @@ function applyPtLevel(){
     if(nd && SKILLS[k]<nd.max){ SKILLS[k]++; pts--; } gi++; guard++; }
   player.maxhp=eMaxHp(); player.hp=player.maxhp;
 }
-function startPlaytest(L){
+function startPlaytest(L){                       // drop into a crawl — keep level/gear/gold/potions, just refill HP
   ptBoot();
   ptMode=true;
-  potions=3; tripLoot=loot0(); cargo=loot0(); fed=0;
-  applyPtLevel();
+  tripLoot=loot0(); fed=0;
+  player.maxhp=eMaxHp(); player.hp=player.maxhp;
   closePtMenu(); closeMenu();
   document.getElementById('title').classList.add('hidden');
   paused=false;
   enterIsland(ptCore(L,PT_SEEDS[L]));
-  toast('⚔  PLAYTEST — Trial '+L, 'clear her or be carried off · ↻ on the menu rerolls her');
+  toast('⚔  Crawl — danger level '+L, 'clear her or be carried off');
 }
 document.getElementById('inNext').onclick=introNext;
 document.getElementById('inSkip').onclick=e=>{ e.preventDefault(); endIntro(); };
-document.getElementById('ptestBtn').onclick=()=>{ ptBoot(); openPtMenu(); };
+document.getElementById('ptestBtn').onclick=()=>{ ptBoot(); ptNewChar(); openPtMenu(); };
 document.getElementById('ptBack').onclick=()=>{ closePtMenu(); document.getElementById('title').classList.remove('hidden'); };
 
 /* ============================ main loop ============================ */
