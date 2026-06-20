@@ -3116,6 +3116,8 @@ let tripStats={kills:0,t:0,bonus:0,hoard:false,dug:false};
 let pickCombo=0, pickT=0, haulPulse=0, summaryOpen=false, invOpen=false, koOpen=false, imapOpen=false;
 let potions=0; const POT_CAP=5;     // health draughts — H to drink (+2 hearts); these drop where hearts used to
 let mouseX=0, mouseY=0;        // cursor, for mouse-aimed sword & bow
+let hitStop=0, iShake=0, killStreak=0, killStreakT=0;   // ARPG clear-feel: freeze-frame on a connecting hit, screen-shake, kill-streak ramp
+const DMG_DISP=10, CRIT_CH=0.20, CRIT_X=1.8;            // combat numbers shown ×10 (juicy), with the odd gold crit
 const LOOT_NAME={gold:'Gold — coin, takes no space', gems:'Gem — precious', ore:'Ore chunk',
   bits:'Monster bits', herb:'Wild herb', relic:'Ancient relic — most precious'};
 let hurtFlash=0;                // red screen-edge flash when the player takes a hit
@@ -3189,7 +3191,7 @@ function satchelCount(){ let n=0; for(const k in tripLoot) if(k!=='gold') n+=tri
 function cargoCount(){ let n=0; for(const k in cargo) if(k!=='gold') n+=cargo[k]; return n; }
 const DEFAULT_ITUNE={ moveSpeed:86, slashRange:20, slashDmg:1, slashCD:0.14, arrowSpeed:140, arrowDmg:1,
   boarHP:4, boarSpeed:60, boarCharge:150, snakeHP:2, crabHP:3, dingoHP:2, enemyDmg:2, spawnCount:1.5, clearSize:1.3,
-  magnetR:95, satchel:40, hold:120, dashCool:0.9 };   // v3 = the user's playtested numbers (2026-06-13)
+  magnetR:95, satchel:40, hold:120, dashCool:0.9, fodderMul:1.4, realShare:0.5, enemySep:0.6 };   // v3 + ARPG fodder swarm + enemy-separation knobs
 let ITUNE=Object.assign({},DEFAULT_ITUNE);
 
 /* ====================== PLAYER RPG PROGRESSION ======================
@@ -3353,6 +3355,10 @@ function genIsland(core){
   const mkEn=(type,p,i,elite)=>{ const b3=EBASE[type];
     enemies.push({type, elite:!!elite, x:p.x, y:p.y, r:b3[0]+(elite?2.5:0), hp:Math.max(1,Math.round(b3[1]()*(elite?2.2:1)*lvlHpMul())),
       clear:i, st:'idle', tmr:0.4+rng()*1.4, vx:0,vy:0, flash:0, stun:0, aggro:false, cw:rng()<0.5?1:-1, fa:rng()*TAU, sd:rng()*TAU}); };
+  const FODDER_TYPES=['boar','dingo','crab','snake'];   // one-hit trash reuses the basic-four sprites, smaller & weaker
+  const mkFodder=(p,i)=>{ const t=FODDER_TYPES[(rng()*FODDER_TYPES.length)|0];
+    enemies.push({type:t, fodder:true, x:p.x, y:p.y, r:Math.max(5,EBASE[t][0]*0.62), hp:1,
+      clear:i, st:'run', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false, cw:rng()<0.5?1:-1, fa:rng()*TAU, sd:rng()*TAU, spd:0.85+rng()*0.5}); };
   const pickEn=()=>{ const wb=(bmods.boarW===undefined?0.5:bmods.boarW)*2, ws=2-wb,   // boar/snake keep their old biome ratio
       wc=bmods.crabW===undefined?0.55:bmods.crabW, wd=bmods.dingoW===undefined?0.55:bmods.dingoW;
     let r3=rng()*(wb+ws+wc+wd);
@@ -3386,16 +3392,24 @@ function genIsland(core){
       const ec = Math.round((kind==='fight' ? Math.max(2,Math.round((2+big+(rng()*2|0))*ITUNE.spawnCount*sM))
                : kind==='bonus' ? Math.max(1,Math.round(ITUNE.spawnCount)+big)
                : 1+(rng()*2|0)+big) * 2 * lvlCntMul());
-      for(let k=0;k<ec;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
-        mkEn(pickEnL(),p,i, rng()<lvlEliteCh()); cl.enemyCount++; }      // high levels field elites in the open
-      if(kind==='bonus'){                            // an elite guards every cache
+      // the dangerous few: real, mechanical enemies (higher danger fields more elites)
+      const realN = kind==='fight' ? Math.max(1,Math.round(ec*ITUNE.realShare)) : ec;
+      for(let k=0;k<realN;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
+        mkEn(pickEnL(),p,i, rng()<lvlEliteCh()); cl.enemyCount++; }
+      // the swarm: one-hit fodder you mow through — this is where the crowd-clear feel lives
+      const fodderN = kind==='fight' ? Math.round(ec*ITUNE.fodderMul) : 0;
+      for(let k=0;k<fodderN;k++){ const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2, y:cl.y+(rng()-0.5)*TS*2};
+        mkFodder(p,i); cl.enemyCount++; }
+      if(kind==='bonus'){                            // an elite guards every cache, amid a little swarm
         const p=randIn(cl,rng,TS,tiles,W)||{x:cl.x,y:cl.y-TS};
         mkEn(pickEn(),p,i,true); cl.enemyCount++;
+        for(let k=0,fn=2+(rng()*3|0);k<fn;k++){ const fp=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2,y:cl.y+(rng()-0.5)*TS*2}; mkFodder(fp,i); cl.enemyCount++; }
         ichests.push({x:cl.x, y:cl.y, big:false, clear:i, opened:false});
       }
-      if(kind==='hoard'){                            // the GREAT BOAR guards the island's hoard
+      if(kind==='hoard'){                            // the GREAT BOAR guards the island's hoard, amid its herd
         enemies.push({type:'boar', guard:true, x:cl.x, y:cl.y-TS*1.5, r:17, hp:Math.max(10,Math.round(ITUNE.boarHP*3*lvlHpMul())), clear:i, st:'idle', tmr:0, vx:0,vy:0, flash:0, stun:0, aggro:false, chain:0, cw:1, fa:0, sd:rng()*TAU});
         cl.enemyCount++;
+        for(let k=0,fn=4+(rng()*4|0);k<fn;k++){ const fp=randIn(cl,rng,TS,tiles,W)||{x:cl.x+(rng()-0.5)*TS*2,y:cl.y+(rng()-0.5)*TS*2}; mkFodder(fp,i); cl.enemyCount++; }
         ichests.push({x:cl.x, y:cl.y, big:true, clear:i, opened:false});
       }
     }
@@ -3651,6 +3665,7 @@ function doShoot(){ if(player.shootCD>0) return; player.shootCD=0.28; player.sho
     iproj.push({k:'arrow', x:player.x+cx*10, y:player.y+cy*10, vx:cx*sp, vy:cy*sp, life:1.2}); }
   sfx('shoot'); }
 function hurtEnemy(en,dmg,nx,ny,melee){
+  if(en.fodder){ killEnemy(en); hitStop=Math.max(hitStop, melee?0.05:0.03); iShake=Math.min(8,iShake+0.7); return; }   // one-hit trash — always pops
   if(en.type==='clam' && en.st!=='open'){ sfx('tink',0.6); ifloat.push({x:en.x,y:en.y-en.r-4,txt:'clink',t:0,life:0.4,c:'#cfd8e2'}); return; }   // shut tight
   if(en.type==='diver' && en.st!=='grounded') return;                                            // can't hit it in the air
   if(en.type==='sanddev' && en.st!=='erupt') return;                                             // can't hit it underground
@@ -3662,18 +3677,33 @@ function hurtEnemy(en,dmg,nx,ny,melee){
     ifloat.push({x:en.x, y:en.y-en.r-4, txt:'clink', t:0, life:0.45, c:'#cfd8e2'});
     ifx.push({k:'p', x:en.x-nx*en.r*0.7, y:en.y-ny*en.r*0.7, vx:-nx*70, vy:-ny*70, t:0, life:0.25, c:'#ffe9a6'});
     return; }
-  en.hp-=dmg; en.flash=0.14; en.stun=0.2; en.aggro=true;   // hits interrupt + shove — landing blows keeps you safe
-  moveSlide(en, nx*20, ny*20);
-  burst(en.x-nx*en.r*0.6, en.y-ny*en.r*0.6, '#ffffff');
-  ifloat.push({x:en.x, y:en.y-en.r-4, txt:'-'+dmg, t:0, life:0.5, c:'#ffffff'});
+  const crit=Math.random()<CRIT_CH, dealt=dmg*(crit?CRIT_X:1);
+  en.hp-=dealt; en.flash=0.14; en.stun=0.2; en.aggro=true;   // hits interrupt + shove — landing blows keeps you safe
+  moveSlide(en, nx*(crit?30:20), ny*(crit?30:20));
+  burst(en.x-nx*en.r*0.6, en.y-ny*en.r*0.6, crit?'#ffd23f':'#ffffff');
+  hitStop=Math.max(hitStop, melee?(crit?0.07:0.045):(crit?0.05:0.03)); iShake=Math.min(8,iShake+(crit?2.4:1));
+  ifloat.push({x:en.x, y:en.y-en.r-4, txt:Math.max(1,Math.round(dealt*DMG_DISP))+(crit?'!':''), t:0, life:crit?0.7:0.5, c:crit?'#ffd23f':'#ffffff', big:crit});
   if(en.type==='ooze' && en.hp>0) oozeSplit(en);
   if(en.hp<=0) killEnemy(en); }
 function killEnemy(en){ const i=enemies.indexOf(en); if(i<0) return; enemies.splice(i,1);
-  tripStats.kills++; addXP(xpFor(en));
+  tripStats.kills++; addXP(en.fodder?2:xpFor(en));
+  // kill-streak ramp — the screen kicks harder and the chime climbs as the bodies pile up
+  killStreak++; killStreakT=2.4;
+  iShake=Math.min(8, iShake + (en.guard?6:en.elite?3.4:en.fodder?1:1.8) + Math.min(killStreak,30)*0.1);
+  hitStop=Math.max(hitStop, en.guard?0.12:en.elite?0.09:en.fodder?0.05:0.07);
+  if(killStreak===5||killStreak===10||killStreak===18||killStreak===28||killStreak===40){
+    ifloat.push({x:player.x, y:player.y-26, txt:killStreak+'  STREAK!', t:0, life:1.2, c:'#ffd23f', big:true});
+    sfx('secure', Math.min(2.4, 1+killStreak*0.02)); }
+  if(en.fodder){                                   // trash pops in a little puff — the odd coin, rarely a gem
+    burst(en.x,en.y, en.type==='boar'?'#9a6b43':en.type==='snake'?'#6fae5a':en.type==='crab'?'#d06a48':'#c8a06a');
+    if(Math.random()<0.45) spawnLoot('gold', 1+(Math.random()*2|0), en.x,en.y);
+    if(Math.random()<0.04) spawnLoot('gems', 1, en.x,en.y);
+    const cl0=ISL.clearings[en.clear]; if(cl0){ cl0.enemyCount--; if(cl0.enemyCount<=0) secureClearing(cl0); }
+    return; }
   if(en.type==='urchin'){ for(let a=0;a<8;a++){ const an=a/8*TAU+0.2; iproj.push({k:'spit', pearl:true, x:en.x+Math.cos(an)*en.r, y:en.y+Math.sin(an)*en.r, vx:Math.cos(an)*150, vy:Math.sin(an)*150, life:0.55}); } burst(en.x,en.y,'#ffd9a8'); burst(en.x,en.y,'#ff7a3c'); sfx('break',0.9); }
   if(en.guard && ISL) missionEvent('guard', ISL.core.idx);
   burst(en.x,en.y, en.type==='boar'?'#9a6b43':en.type==='snake'?'#6fae5a':en.type==='crab'?'#d06a48':'#c8a06a');
-  if(en.guard||en.elite) burst(en.x,en.y,'#ffd23f');
+  if(en.guard||en.elite){ burst(en.x,en.y,'#ffd23f'); burst(en.x,en.y,'#fff3b0'); }   // a richer pop for the dangerous ones
   const bm=k2=>(ISL&&ISL.biome.mods[k2])||1, bAdd=k2=>(ISL&&ISL.biome.mods[k2])||0;
   spawnLoot('bits', en.guard?4:en.elite?2:1, en.x,en.y);
   const g = Math.round(((Math.random()<0.5?1+(Math.random()*2|0):0) + (en.guard?6:en.elite?2:0))*bm('goldMul')*lvlLootMul());
@@ -3713,6 +3743,7 @@ function updateIsland(dt){
   player.slashT=Math.max(0,player.slashT-dt); player.invul=Math.max(0,player.invul-dt);
   player.shootT=Math.max(0,player.shootT-dt);
   hurtFlash=Math.max(0,hurtFlash-dt*1.7); haulPulse=Math.max(0,haulPulse-dt);
+  iShake=Math.max(0,iShake-dt*22); killStreakT=Math.max(0,killStreakT-dt); if(killStreakT<=0) killStreak=0;
   pickT=Math.max(0,pickT-dt); if(pickT<=0) pickCombo=0;
   player.dashCD=Math.max(0,player.dashCD-dt);
   let mvx=0,mvy=0;
@@ -3741,7 +3772,8 @@ function updateIsland(dt){
   for(const en of [...enemies]){ en.flash=Math.max(0,en.flash-dt); en.stun=Math.max(0,en.stun-dt);
     const dx=player.x-en.x, dy=player.y-en.y, d=Math.hypot(dx,dy)||1;
     const active = en.aggro || en.clear===curCl;
-    if(en.stun<=0){ if(en.type==='boar') updateBoar(en,dx,dy,d,dt,active);
+    if(en.stun<=0){ if(en.fodder) updateFodder(en,dx,dy,d,dt,active);
+      else if(en.type==='boar') updateBoar(en,dx,dy,d,dt,active);
       else if(en.type==='snake') updateSnake(en,dx,dy,d,dt,active);
       else if(en.type==='crab') updateCrab(en,dx,dy,d,dt,active);
       else if(en.type==='dingo') updateDingo(en,dx,dy,d,dt,active);
@@ -3751,6 +3783,14 @@ function updateIsland(dt){
     if(d<en.r+player.r && !(en.type==='lamprey'&&en.latched) && !(en.type==='sanddev'&&en.st==='sub') && en.type!=='diver' && en.type!=='urchin') hurtPlayer(-dx/d,-dy/d,(en.guard||en.elite)?2:1);
     if(!ISL) return;                         // knocked out mid-loop — island state is gone, stop here
   }
+  // soft separation — enemies shoulder each other apart instead of phasing into one blob; heavier foes hold their ground
+  if(ITUNE.enemySep>0){ for(let a=0;a<enemies.length;a++){ const e1=enemies[a];
+    if((e1.type==='diver'&&e1.st!=='grounded')||(e1.type==='sanddev'&&e1.st==='sub')) continue;
+    for(let b=a+1;b<enemies.length;b++){ const e2=enemies[b];
+      if((e2.type==='diver'&&e2.st!=='grounded')||(e2.type==='sanddev'&&e2.st==='sub')) continue;
+      const sx=e1.x-e2.x, sy=e1.y-e2.y, rr=(e1.r+e2.r)*0.92, q=sx*sx+sy*sy;
+      if(q<rr*rr && q>0.01){ const dd=Math.sqrt(q), ov=(rr-dd)/dd*ITUNE.enemySep, w1=e1.r*e1.r, w2=e2.r*e2.r, tw=w1+w2;
+        moveSlide(e1, sx*ov*(w2/tw), sy*ov*(w2/tw)); moveSlide(e2, -sx*ov*(w1/tw), -sy*ov*(w1/tw)); } } } }
   player.potionJam = enemies.some(e=>e.type==='lamprey'&&e.latched);
   player.snare = Math.max(0, (player.snare||0) - dt*0.7);
   for(const nd of inodes) if(nd.flash>0) nd.flash-=dt;
@@ -3832,6 +3872,11 @@ function updateIsland(dt){
   for(let i=ifloat.length-1;i>=0;i--){ const f=ifloat[i]; f.t+=dt; f.y-=14*dt; if(f.t>f.life) ifloat.splice(i,1); }
   const ce=1-Math.exp(-8*dt); icamX+=(player.x-icamX)*ce; icamY+=(player.y-icamY)*ce;
   for(let i=toasts.length-1;i>=0;i--){ toasts[i].t+=dt; if(toasts[i].t>toasts[i].life) toasts.splice(i,1); }
+}
+function updateFodder(en,dx,dy,d,dt,active){    // simple rusher: closes straight in, dies to one hit, dangerous only in a pack
+  if(!active) return; en.aggro=true;
+  const sp=ITUNE.boarSpeed*1.05*(en.spd||1)*lvlSpdMul();
+  if(d>en.r+player.r-2){ moveSlide(en, dx/d*sp*dt, dy/d*sp*dt); en.fa=Math.atan2(dy,dx); }
 }
 function updateBoar(en,dx,dy,d,dt,active){ en.tmr-=dt;
   const chg=ITUNE.boarCharge*(en.guard?1.12:en.elite?1.2:1)*((ISL&&ISL.biome.mods.chargeMul)||1)*lvlSpdMul();
@@ -4299,6 +4344,7 @@ function iw2p(x,y){ const s=islScale(); return [ (x-icamX)*s+IW/2, (y-icamY)*s+I
 function drawIslandWorld(){
   const s=islScale(), pal=ISL.pal, bmods=ISL.biome.mods;
   pctx.fillStyle=pal.under; pctx.fillRect(0,0,IW,IH);
+  const _shk=iShake>0.05; if(_shk){ pctx.save(); pctx.translate((Math.random()-0.5)*iShake*s, (Math.random()-0.5)*iShake*s); }   // screen-shake: kick the whole island render a few px
   const halfW=(IW/2)/s, halfH=(IH/2)/s, TS=ISL.TS;
   const minTX=Math.max(0,((icamX-halfW)/TS|0)-1), maxTX=Math.min(ISL.W-1,((icamX+halfW)/TS|0)+1);
   const minTY=Math.max(0,((icamY-halfH)/TS|0)-2), maxTY=Math.min(ISL.H-1,((icamY+halfH)/TS|0)+1);
@@ -4483,6 +4529,9 @@ function drawIslandWorld(){
   // loot on the ground — run it over to scoop it up
   for(const d of idrops){ const [sx,sy0]=iw2p(d.x,d.y); const Y=sy0-(d.z+(d.settled?Math.sin(itime*4+d.x)*1.2:0))*s*0.55;
     pctx.fillStyle='rgba(0,20,10,.2)'; pctx.beginPath(); pctx.ellipse(sx,sy0+1.5*s,2.6*s,1.1*s,0,0,TAU); pctx.fill();
+    if(d.k==='gems'||d.k==='relic'){ const bc=d.k==='relic'?'255,170,60':'120,230,230', bp=0.5+0.5*Math.sin(itime*5+d.x);   // a beacon so the rare drops shout across the clearing
+      const grd=pctx.createLinearGradient(sx,Y-26*s,sx,Y); grd.addColorStop(0,'rgba('+bc+',0)'); grd.addColorStop(1,'rgba('+bc+','+(0.32+0.3*bp)+')');
+      pctx.fillStyle=grd; pctx.fillRect(sx-1.6*s,Y-26*s,3.2*s,26*s); }
     if(d.k==='gold'){ pctx.fillStyle='#ffd23f'; pctx.beginPath(); pctx.arc(sx,Y,2.5*s,0,TAU); pctx.fill();
       pctx.strokeStyle='#b8860b'; pctx.lineWidth=1; pctx.stroke(); }
     else if(d.k==='gems'){ pctx.fillStyle='#6fe3e0'; pctx.beginPath(); pctx.moveTo(sx,Y-3*s); pctx.lineTo(sx+2.6*s,Y); pctx.lineTo(sx,Y+3*s); pctx.lineTo(sx-2.6*s,Y); pctx.closePath(); pctx.fill();
@@ -4555,6 +4604,7 @@ function drawIslandWorld(){
     pctx.fillStyle='rgba(216,255,138,'+(0.18+0.25*gl)+')'; pctx.beginPath(); pctx.arc(sx,sy,3.2*s*(0.7+gl*0.5),0,TAU); pctx.fill();
     pctx.fillStyle='rgba(240,255,200,'+(0.55+0.4*gl)+')'; pctx.fillRect(sx-1,sy-1,2,2); }
   for(const f of ifx){ if(f.k!=='p') continue; const [sx,sy]=iw2p(f.x,f.y); pctx.globalAlpha=clamp(1-f.t/f.life,0,1); pctx.fillStyle=f.c; pctx.fillRect(sx-1,sy-1,2.6,2.6); pctx.globalAlpha=1; }
+  if(_shk) pctx.restore();
 }
 /* the explorer sprite — shared by island crawls (sword in hand) and port strolls (sword sheathed) */
 function drawExplorerSprite(armed){
@@ -7467,7 +7517,7 @@ function frameInner(ts){
     return;
   }
   if(started && mode==='island'){            // ---- island exploration mode ----
-    if(!invOpen && !imapOpen && !menuOpen) updateIsland(dt);   // time stands still while you rummage, read or muster
+    if(!invOpen && !imapOpen && !menuOpen){ if(hitStop>0) hitStop=Math.max(0,hitStop-dt); else updateIsland(dt); }   // hit-stop freezes the world a few frames on impact; menus/maps pause it
     if(mode!=='island' || !ISL) return;      // knocked out / set sail mid-update — the sea resumes next frame
     drawIslandWorld();
     ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=false;
@@ -7606,6 +7656,9 @@ const ITUNE_DEF=[
   ['dingoHP','Dingo HP',1,8,1],
   ['enemyDmg','Enemy damage',0,3,1],
   ['spawnCount','Enemy count ×',0.4,2.5,0.1],
+  ['fodderMul','Fodder swarm ×',0,3,0.1],
+  ['realShare','Real-enemy share',0.1,1,0.05],
+  ['enemySep','Enemy spacing',0,1.5,0.1],
   ['clearSize','Clearing size ×',0.6,1.8,0.1],
   ['magnetR','Magnet reach',40,170,5],
   ['satchel','Satchel size',8,60,1],
