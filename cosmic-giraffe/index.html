@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmic Giraffe - Monday Jeffrey</title>
+  <meta name="description" content="A giraffe, adrift in space, licks its way to the stars. The sequel to Cosmic Ascent.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Everything (menus, gameplay, HUD) renders to this one canvas. -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Same soundtrack as Cosmic Ascent (shared file, not duplicated). -->
+  <audio id="bg-music" src="../cosmic/music.mp3" loop preload="auto"></audio>
+
+  <!-- Scripts load in dependency order, each attaching to window.ASCENT.
+       Bump ?v= when iterating so browsers don't serve stale JS. -->
+  <script src="js/config.js?v=4"></script>
+  <script src="js/draw.js?v=4"></script>
+  <script src="js/bus.js?v=4"></script>
+  <script src="js/input.js?v=4"></script>
+  <script src="js/audio.js?v=4"></script>
+  <script src="js/save.js?v=4"></script>
+  <script src="js/cam.js?v=4"></script>
+  <script src="js/level.js?v=4"></script>
+  <script src="js/rope.js?v=4"></script>
+  <script src="js/player.js?v=4"></script>
+  <script src="js/space.js?v=4"></script>
+  <script src="js/world.js?v=4"></script>
+  <script src="js/giraffe-cartoon.js?v=4"></script>
+  <script src="js/giraffe-plush.js?v=4"></script>
+  <script src="js/giraffe-naturalist.js?v=4"></script>
+  <script src="js/giraffe.js?v=4"></script>
+  <script src="js/particles.js?v=4"></script>
+  <script src="js/ui.js?v=4"></script>
+  <script src="js/render.js?v=4"></script>
+  <script src="js/game.js?v=4"></script>
+  <script src="js/main.js?v=4"></script>
+</body>
+</html>

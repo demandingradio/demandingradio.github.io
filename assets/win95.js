@@ -11,6 +11,7 @@
     { label: 'Notes',        icon: '\u{1F5D2}', href: '/notes/',        title: 'Notes' },
     { label: 'Footy',        icon: '\u{1F3C9}', href: '/footy/',        title: 'Footy' },
     { label: 'Cosmic Ascent',icon: '\u{1F680}', href: '/cosmic/',       title: 'Cosmic Ascent' },
+    { label: 'Cosmic Giraffe',icon: '\u{1F992}', href: '/cosmic-giraffe/', title: 'Cosmic Giraffe' },
     { label: 'WFM Tycoon',   icon: '\u{1F4DE}', href: '/wfm-au/',       title: 'WFM Tycoon' },
     { label: 'TV Ratings',   icon: '\u{1F4FA}', href: '/tv-ratings/',   title: 'TV Ratings' },
     { label: 'Cave Ball',    icon: '\u{1F535}', href: '/cave-ball/',    title: 'Cave Ball' },
