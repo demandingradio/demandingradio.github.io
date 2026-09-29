@@ -6344,7 +6344,7 @@ const TRAITS={   // dg: the isle danger a trait first turns up from (× ITUNE.tr
   venom:  {n:'Venomous',  ic:'☣',  c:'#b8ff6a', dg:2, no:{snake:1}, lore:'glows green, then spits a venom fan — sidestep it'},
   summon: {n:'Summoning', ic:'💀', c:'#8fe0c0', dg:12, no:{tidecaller:1}, lore:'raises the drowned dead — kill it first'},
   leech:  {n:'Leeching',  ic:'🩸', c:'#ff6a8a', dg:5, no:{lamprey:1,urchin:1}, lore:'every bite heals it — dodge, then punish'},
-  mirror: {n:'Mirrored',  ic:'🪞', c:'#ffe9a6', dg:8, no:{reefspike:1,clam:1}, lore:'throws your blade back — switch to arrows'},   // (a clam already punishes the blade through its shell)
+  mirror: {n:'Mirrored',  ic:'🪞', c:'#ffe9a6', dg:8, no:{reefspike:1,clam:1,crab:1}, lore:'throws your blade back — switch to arrows'},   // (a clam already punishes the blade through its shell)
   stone:  {n:'Stoneskin', ic:'🪨', c:'#c8bfa8', dg:8, no:{reefspike:1}, lore:'shrugs off half of ONE weapon (its nameplate shows which) — use the other'},
   frenzy: {n:'Frenzied',  ic:'💢', c:'#ff5d4a', dg:12, no:{}, lore:'turns frantic below half health — burst it down'},
   burning:{n:'Burning',   ic:'🔥', c:'#ff9a3c', dg:10, no:{}, lore:'leaves lava in its wake — never chase along its trail'},
@@ -11816,7 +11816,7 @@ function lighthouseSpr(V){ return tProp(V,'lh', ()=>{ const S=PS(40,156), Wh=tRa
 function buoySpr(V){ return tProp(V,'buoy', ()=>{ const S=PS(9,14), Rd=tRamp('#c2402e'), Wh=tRamp('#efe6d2');
   psPoly(S,[[1,12],[4,2],[8,12]],(x,y)=>(y>=6&&y<=8?Wh:Rd)[x<4?4:x>5?1:3]); pR(S,0,11,9,2,Rd[1]); pR(S,3,0,3,2,cI('#2a2c34'));
   return tOut(S,4,12); }); }
-function ropeSpr(V){ return tProp(V,'rope', ()=>{ const S=PS(15,9), R=cIR(['#6a4e2a','#a07f4e','#c8a870','#e0c890']);
+function townRopeSpr(V){ return tProp(V,'rope', ()=>{ const S=PS(15,9), R=cIR(['#6a4e2a','#a07f4e','#c8a870','#e0c890']);
   for(let k=3;k>=1;k--) psDisc(S,7.5,4.5,k*2.3,k*1.2+0.4,(nx,ny)=>{ const r=nx*nx+ny*ny; return r>0.55?R[ny<0?3:1]:0; }); psP(S,7,4,R[0]); psP(S,8,4,R[0]); return tOut(S,7,7); }); }
 function anchorSprT(V){ return tProp(V,'anch', ()=>{ const S=PS(16,17), I=cIR(['#1e2228','#3a4048','#5a6470','#8a96a2']);
   psDisc(S,8,2.5,2.4,2.4,(nx,ny)=>nx*nx+ny*ny>0.3?I[ny<0?3:1]:0); pR(S,7,4,2,11,I[2]); pR(S,7,4,1,11,I[3]); pR(S,3,6,10,2,I[1]); pR(S,3,6,10,1,I[3]);
@@ -12031,7 +12031,7 @@ function drawPropT(V,p,night){ const P=PRT;
     case 'monument': { const o=monumentSpr(V); pctx.drawImage(o.cv,TX(p.x)-o.ax,TY(p.y)+10-o.ay); return; }
     case 'lighthouse': { const o=lighthouseSpr(V); pctx.drawImage(o.cv,TX(p.x)-o.ax,TY(p.y)-o.ay); return; }
     case 'buoy': { const o=buoySpr(V), X=TX(p.x), Y=TY(p.y)+(Math.sin(itime*1.8+(p.ph||0))>0?1:0), rr=Math.floor(itime*2+(p.ph||0))%3; pctx.fillStyle='rgba(230,246,255,0.6)'; pctx.fillRect(X-4-rr,Y+1,2,1); pctx.fillRect(X+3+rr,Y+1,2,1); pctx.drawImage(o.cv,X-o.ax,Y-o.ay); return; }
-    case 'rope': { const o=ropeSpr(V); pctx.drawImage(o.cv,TX(p.x)-o.ax,TY(p.y)-o.ay); return; }
+    case 'rope': { const o=townRopeSpr(V); pctx.drawImage(o.cv,TX(p.x)-o.ax,TY(p.y)-o.ay); return; }
     case 'anchor': { const o=anchorSprT(V); pctx.drawImage(o.cv,TX(p.x)-o.ax,TY(p.y)-o.ay); return; }
     case 'nets': { const o=netsSpr(V); pctx.drawImage(o.cv,TX(p.x)-o.ax,TY(p.y)-o.ay); return; }
     case 'cat': { const o=catSpr(V,Math.sin(itime*2+(p.ph||0))>0.2?1:0); pctx.drawImage(o.cv,TX(p.x)-o.ax,TY(p.y)-o.ay); return; }
