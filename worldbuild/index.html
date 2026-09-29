@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diorama - Monday Jeffrey</title>
+  <meta name="description" content="Diorama: a sandbox world builder. Sculpt landscapes, carve rivers, plant forests and watch medieval villages, towns, castles and harbours grow.">
+  <link rel="stylesheet" href="style.css?v=28">
+</head>
+<body>
+<div id="app">
+  <!-- Top menu bar -->
+  <header id="menubar">
+    <div class="brand"><span class="logo"></span>Diorama</div>
+    <nav id="menus"></nav>
+    <div class="spacer"></div>
+    <div id="quick"></div>
+    <a class="back" href="../index.html">&larr; Desktop</a>
+  </header>
+
+  <!-- Contextual tool options (like Photoshop's options bar) -->
+  <div id="optionsbar"></div>
+
+  <!-- Tool strip -->
+  <aside id="toolstrip"></aside>
+
+  <!-- 3D viewport -->
+  <main id="viewport">
+    <canvas id="c"></canvas>
+    <div id="vp-hint"></div>
+    <div id="letterbox-top" class="letterbox"></div>
+    <div id="letterbox-bot" class="letterbox"></div>
+    <div id="thirds" hidden></div>
+  </main>
+
+  <!-- Right panel dock -->
+  <aside id="panels"></aside>
+
+  <!-- Status bar -->
+  <footer id="statusbar">
+    <span id="st-tool">Ready</span>
+    <span class="sep"></span>
+    <span id="st-pos">x — z —</span>
+    <span id="st-elev">elev —</span>
+    <span id="st-slope">slope —</span>
+    <span class="grow"></span>
+    <span id="st-save">not saved</span>
+    <span id="st-perf">— fps</span>
+  </footer>
+</div>
+
+<!-- Menus / floating bits -->
+<div id="dropdown" hidden></div>
+<div id="tooltip" hidden></div>
+<div id="toast"></div>
+
+<!-- New world dialog -->
+<div id="newworld" class="modal" hidden>
+  <div class="dialog wide">
+    <div class="dlg-title"><span class="logo"></span>New World</div>
+    <div class="dlg-body nw-body">
+      <div class="nw-left">
+        <div class="field-label">Landscape style</div>
+        <div id="nw-styles" class="style-grid"></div>
+        <div class="nw-row">
+          <div>
+            <div class="field-label">Climate</div>
+            <select id="nw-climate">
+              <option value="auto">Match the style</option>
+              <option value="0">Temperate green</option>
+              <option value="1">Alpine / snowy</option>
+              <option value="2">Desert / arid</option>
+              <option value="3">Tropical</option>
+              <option value="mixed">Mixed regions</option>
+            </select>
+          </div>
+          <div>
+            <div class="field-label">Seed</div>
+            <div class="seed-row"><input id="nw-seed" type="text" spellcheck="false"><button id="nw-dice" class="btn icon-btn" title="Random seed">&#x2684;</button></div>
+          </div>
+        </div>
+        <div class="nw-row checks">
+          <label><input type="checkbox" id="nw-forests" checked> Grow forests</label>
+          <label><input type="checkbox" id="nw-rivers" checked> Carve rivers</label>
+          <label><input type="checkbox" id="nw-erosion" checked> Erosion (slower, prettier)</label>
+        </div>
+      </div>
+      <div class="nw-right">
+        <div class="field-label">Preview <span class="muted">16 km &times; 16 km</span></div>
+        <canvas id="nw-preview" width="256" height="256"></canvas>
+        <div id="nw-desc" class="muted small"></div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button id="nw-cancel" class="btn">Cancel</button>
+      <button id="nw-go" class="btn primary">Generate world</button>
+    </div>
+  </div>
+</div>
+
+<!-- Progress -->
+<div id="loading" class="modal" hidden>
+  <div class="dialog">
+    <div class="dlg-title"><span class="logo"></span><span id="ld-title">Building world</span></div>
+    <div class="dlg-body">
+      <div id="ld-step" class="small">Starting…</div>
+      <div class="bar"><div id="ld-fill"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Photo mode panel -->
+<div id="photoui" hidden></div>
+
+<!-- Help -->
+<div id="help" class="modal" hidden></div>
+
+<div id="webgl-error" class="modal" hidden>
+  <div class="dialog"><div class="dlg-title">WebGL unavailable</div>
+  <div class="dlg-body">Diorama needs WebGL 2, which your browser couldn't start. Try Chrome, Edge or Firefox with hardware acceleration on.</div></div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="js/core.js?v=28"></script>
+<script src="js/history.js?v=28"></script>
+<script src="js/terrain.js?v=28"></script>
+<script src="js/gen.js?v=28"></script>
+<script src="js/sky.js?v=28"></script>
+<script src="js/water.js?v=28"></script>
+<script src="js/nature.js?v=28"></script>
+<script src="js/kit.js?v=28"></script>
+<script src="js/roads.js?v=28"></script>
+<script src="js/town.js?v=28"></script>
+<script src="js/townx.js?v=28"></script>
+<script src="js/life.js?v=28"></script>
+<script src="js/post.js?v=28"></script>
+<script src="js/camera.js?v=28"></script>
+<script src="js/tools.js?v=28"></script>
+<script src="js/audio.js?v=28"></script>
+<script src="js/save.js?v=28"></script>
+<script src="js/ui.js?v=28"></script>
+<script src="js/main.js?v=28"></script>
+</body>
+</html>
