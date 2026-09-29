@@ -41,12 +41,14 @@ function isTyping(e) { const t = e.target; return t && (t.tagName === 'INPUT' ||
 
 // ---- Orbit controls (driven from tools.js pointer handlers) --------------------------
 Cam.orbitBy = function (dx, dy) {
+  Cam.cancelFly();
   const g = Cam.goal;
   g.yaw -= dx * 0.0055;
   g.pitch = D.clamp(g.pitch + dy * 0.0045, 0.06, 1.53);
   Cam.autoOrbit = 0;
 };
 Cam.zoomAt = function (delta, ground) {
+  Cam.cancelFly();
   const g = Cam.goal;
   const f = Math.pow(1.0018, delta);
   const nd = D.clamp(g.dist * f, 14, 32000);
@@ -60,9 +62,66 @@ Cam.zoomAt = function (delta, ground) {
 const edgeMargin = () => D.clamp(Cam.goal.dist * 0.45, 500, SIZE * 0.25);
 function over(v) { return v < 0 ? -v : v > SIZE ? v - SIZE : 0; }
 function resist(v, d) { const o = over(v); if (!o || (v < 0) === (d > 0)) return 1; return 1 / (1 + Math.pow(o / 250, 1.5)); }
-Cam.panBy = function (dx, dz) { const g = Cam.goal; g.x += dx * resist(g.x, dx); g.z += dz * resist(g.z, dz); clampGoal(); };
-Cam.focusOn = function (x, z, dist) { Cam.goal.x = x; Cam.goal.z = z; if (dist) Cam.goal.dist = dist; clampGoal(); };
-Cam.overview = function () { Object.assign(Cam.goal, { x: SIZE / 2, z: SIZE / 2, dist: 21000, pitch: 0.95 }); };
+Cam.panBy = function (dx, dz) { Cam.cancelFly(); const g = Cam.goal; g.x += dx * resist(g.x, dx); g.z += dz * resist(g.z, dz); clampGoal(); };
+
+// ---- Eased fly-to (chronicle rows, atlas pull-back) -------------------------------------
+// A tween of Cam.goal processed at the top of the orbit branch; the usual smooth follow still
+// applies on top. The distance travels in log space and lifts mid-way by `arc` of the ground
+// distance covered, so long hops rise and swoop. orbitBy / panBy / zoomAt cancel it.
+// 'cam:arrived'(flyId) fires when a fly (or a flyPath's last hold) completes, and
+// 'cam:arrived'(flyId, true) when it is cancelled, so awaiting code never hangs.
+let fly = null, flySeq = 0;
+function flyLeg(L) {
+  const g = Cam.goal;
+  const to = { x: L.x, z: L.z, dist: D.clamp(L.dist || g.dist, 14, 32000), pitch: L.pitch !== undefined ? D.clamp(L.pitch, 0.06, 1.53) : g.pitch, yaw: L.yaw !== undefined ? L.yaw : g.yaw };
+  return { from: { x: g.x, z: g.z, dist: g.dist, pitch: g.pitch, yaw: g.yaw }, to, t: 0, dur: Math.max(0.05, L.dur !== undefined ? L.dur : 1.6),
+    arc: L.arc !== undefined ? L.arc : 0.25, hold: L.hold || 0, travel: Math.hypot(to.x - g.x, to.z - g.z) };
+}
+function startFly(legs, onDone) {
+  if (Cam.mode === 'walk' || Cam.mode === 'drive') Cam.exitStreet();
+  if (Cam.flyT >= 0) Cam.stopFly();
+  Cam.cancelFly();
+  const id = ++flySeq;
+  fly = { id, legs, i: 0, leg: flyLeg(legs[0]), holdT: 0, onDone };
+  Cam.autoOrbit = 0;
+  return id;
+}
+Cam.flyTo = function (x, z, dist, o) {
+  o = o || {};
+  return startFly([{ x, z, dist, dur: o.dur, pitch: o.pitch, yaw: o.yaw, arc: o.arc }], null);
+};
+Cam.flyPath = function (legs, onDone) {
+  if (!legs || !legs.length) { if (onDone) onDone(false); return 0; }
+  return startFly(legs.slice(), onDone || null);
+};
+Cam.cancelFly = function () {
+  if (!fly) return;
+  const f = fly; fly = null;
+  if (f.onDone) { try { f.onDone(true); } catch (e) { console.error(e); } }
+  D.emit('cam:arrived', f.id, true);
+};
+Cam.flying = () => !!fly;
+const easeIO = u => u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+function updateFlyTo(dt) {
+  const f = fly, L = f.leg, g = Cam.goal;
+  if (L.t < L.dur) {
+    L.t = Math.min(L.dur, L.t + dt);
+    const u = easeIO(L.t / L.dur), a = L.from, b = L.to;
+    g.x = a.x + (b.x - a.x) * u; g.z = a.z + (b.z - a.z) * u;
+    g.dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * u) + L.arc * L.travel * Math.sin(Math.PI * u);
+    g.dist = D.clamp(g.dist, 14, 32000);
+    g.pitch = a.pitch + (b.pitch - a.pitch) * u;
+    g.yaw = a.yaw + D.angDiff(a.yaw, b.yaw) * u;
+    return;
+  }
+  if (f.holdT < L.hold) { f.holdT += dt; return; }
+  if (++f.i < f.legs.length) { f.leg = flyLeg(f.legs[f.i]); f.holdT = 0; return; }
+  fly = null;
+  if (f.onDone) { try { f.onDone(false); } catch (e) { console.error(e); } }
+  D.emit('cam:arrived', f.id);
+}
+Cam.focusOn = function (x, z, dist) { Cam.cancelFly(); Cam.goal.x = x; Cam.goal.z = z; if (dist) Cam.goal.dist = dist; clampGoal(); };
+Cam.overview = function () { Cam.cancelFly(); Object.assign(Cam.goal, { x: SIZE / 2, z: SIZE / 2, dist: 21000, pitch: 0.95 }); };
 function clampGoal() {
   const g = Cam.goal, m = edgeMargin();
   g.x = D.clamp(g.x, -m, SIZE + m); g.z = D.clamp(g.z, -m, SIZE + m);
@@ -100,6 +159,7 @@ Cam.update = function (dt) {
   if (Cam.flyT >= 0) { updateFly(dt); return; }
   if (Cam.mode === 'walk') { updateWalk(dt); return; }
   if (Cam.mode === 'drive') { updateDrive(dt); return; }
+  if (fly) updateFlyTo(dt);
   const g = Cam.goal, K = Cam.keys;
   // keyboard pan / rotate
   let keyPan = false;

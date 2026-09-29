@@ -729,7 +729,9 @@ function manageNav(focus) {
 
 // ---- per-frame update ---------------------------------------------------------------------
 Life.update = function (dt, camera) {
-  const vis = D.Layers ? D.Layers.visible('life') : true;
+  let vis = D.Layers ? D.Layers.visible('life') : true;
+  // Living History: no carts or folk on the plaster Atlas table, nor in a time-lapse replay
+  vis = vis && !(D.Atlas && D.Atlas.k > 0.5) && !(D.Story && D.Story.replaying);
   Life.group.visible = vis;
   if (!vis) return;
   LU.uClockL.value = (performance.now() * 0.001) % 3600;

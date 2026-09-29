@@ -782,7 +782,10 @@ Tools.init = function (canvas) {
   Tools.overhang = (ah, o) => (ah && ah.outside && o && o.size !== undefined && ah.dOut < o.size * 0.9)
     ? { x: ah.x, z: ah.z, y: D.Terrain.hAt(D.clamp(ah.x, 0, SIZE), D.clamp(ah.z, 0, SIZE)), outside: true } : null;
   canvas.addEventListener('contextmenu', e => e.preventDefault());
+  let down = null;  // {x, y, t} of the last left press (atlas click detection)
   canvas.addEventListener('pointerdown', e => {
+    if (D.Story && D.Story.catchingUp) return;   // the "years pass" veil blocks input so no stroke can force-end an open entry
+    down = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
     if (D.Cam.mode !== 'orbit' || D.Cam.flyT >= 0) {
       if (D.Cam.mode !== 'orbit' && !document.pointerLockElement) { try { canvas.requestPointerLock(); } catch (er) { } }
       return;
@@ -800,6 +803,7 @@ Tools.init = function (canvas) {
       return;
     }
     if (e.button !== 0) return;
+    if (D.Story && D.Story.replaying) return;      // time-lapse replay is view-only: camera works, tools don't
     let hit = pick(e.clientX, e.clientY);
     if (D.UI && D.UI.photo) { // photo mode: click sets focus
       if (hit && D.Post.p.dofOn) { D.Post.p.dofFocus = D.camera.position.distanceTo(new THREE.Vector3(hit.x, hit.y, hit.z)); D.emit('post'); D.toast('Focus set'); }
@@ -845,6 +849,13 @@ Tools.init = function (canvas) {
     }
   });
   const end = e => {
+    // Atlas: a plain click (< 4 px, < 350 ms) with the Hand or Select tool asks "whose land is this?"
+    const d0 = down; down = null;
+    if (d0 && e.type === 'pointerup' && e.button === 0 && D.Atlas && D.Atlas.on && D.Atlas.click && (Tools.cur === 'hand' || Tools.cur === 'select')
+      && Math.hypot(e.clientX - d0.x, e.clientY - d0.y) < 4 && performance.now() - d0.t < 350) {
+      const hit = pick(e.clientX, e.clientY);
+      if (hit) { try { D.Atlas.click(hit.x, hit.z); } catch (er) { console.error('[tools] atlas click', er); } }
+    }
     if (!drag) return;
     const k = drag.kind; drag = null;
     D.Cam.dragging = false;
@@ -919,6 +930,25 @@ function onKey(e) {
     if (e.code === 'Escape') D.UI.exitPhoto();
     if (e.code === 'KeyH' && !ctrl) D.UI.togglePhotoPanel();
     return;
+  }
+  // Living History & Atlas keys (verified free: Shift+P/C/H/M, Backquote, PageUp/PageDown)
+  if (!ctrl && !e.altKey) {
+    const St = D.Story, At = D.Atlas;
+    if (e.shiftKey && e.code === 'KeyP' && St) { e.preventDefault(); St.toggle(); return; }
+    if (e.code === 'Backquote' && St) { e.preventDefault(); St.cycleSpeed(); return; }
+    if (e.shiftKey && e.code === 'KeyC' && St) { e.preventDefault(); St.openChronicle(); return; }
+    if (e.shiftKey && e.code === 'KeyH' && St) { e.preventDefault(); St.toggleReplay(); return; }
+    if (e.shiftKey && e.code === 'KeyM' && At && At.toggle) { e.preventDefault(); At.toggle(); return; }
+    if (At && At.on && At.page && (e.code === 'PageUp' || e.code === 'PageDown')) { e.preventDefault(); At.page(e.code === 'PageUp' ? -1 : 1); return; }
+    // Esc cascade: a running pull-back / fly → replay → atlas → the tool's own Esc below
+    if (e.code === 'Escape') {
+      // Atlas.cancel() ends a pull-back or closes the answer card; it returns true when it had one
+      if (At && At.cancel && At.cancel()) return;
+      if (At && At.pulling && At.cancelPull) { At.cancelPull(); return; }
+      if (D.Cam.flying && D.Cam.flying()) { D.Cam.cancelFly(); return; }
+      if (St && St.replaying) { St.exitReplay(); return; }
+      if (At && At.on && At.toggle) { At.toggle(false); return; }
+    }
   }
   if (e.code === 'Space') { Tools.space = true; if (Tools.canvas) Tools.canvas.style.cursor = 'grab'; if (e.target === document.body || e.target === Tools.canvas) e.preventDefault(); return; }
   const def = Tools.defs[Tools.cur], o = Tools.o();

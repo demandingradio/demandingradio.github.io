@@ -5,7 +5,7 @@
 const D = window.D;
 const W = D.W;
 
-const Save = D.Save = { dirty: false, lastSave: 0, saving: false };
+const Save = D.Save = { dirty: false, dirtyStory: false, lastSave: 0, saving: false };   // dirtyStory: history-only changes (saved every 90 s)
 const DB = 'diorama', STORE = 'worlds', KEY = 'current', PREFS = 'diorama-prefs';
 
 // ---- prefs ------------------------------------------------------------------------
@@ -49,6 +49,7 @@ function snapshot() {
     env: { time: D.Env.time, weather: D.Env.weather, season: D.Env.season, wind: D.Env.wind },
     cam: Object.assign({}, D.Cam.goal),
     view: { edge: D.Terrain.edgeMode, faceted: D.Terrain.material.flatShading, grid: D.TU.uGrid.value, contour: D.TU.uContour.value, border: D.Terrain.showBorder !== false },
+    story: D.Story ? D.Story.serialize() : null,
     saved: Date.now()
   };
 }
@@ -81,6 +82,8 @@ function apply(s) {
   if (D.Roads) D.Roads.deserialize(s.roads);
   if (legacy && D.Nature.migrateV1) D.Nature.migrateV1();
   if (D.City) { D.City.deserialize(legacy ? null : s.city); if (D.City.zoneTex) D.City.zoneTex.needsUpdate = true; }
+  // Living History (optional): a missing section means a fresh, paused, not-started chronicle
+  if (D.Story) { try { D.Story.deserialize(legacy ? null : s.story || null); } catch (e) { console.warn('[save] story', e); D.Story.deserialize(null); } }
   if (legacy && (s.city && s.city.list && s.city.list.length || s.roads && s.roads.segs && s.roads.segs.length))
     setTimeout(() => D.toast('This world predates the medieval update: modern buildings and zones were cleared and roads were converted.', 'warn', 6000), 400);
   if (s.env) { Object.assign(D.Env, { time: s.env.time, wind: s.env.wind }); D.Sky.setWeather(s.env.weather || 'clear', true); D.Sky.setSeason(s.env.season || 'summer', true); }
@@ -108,7 +111,7 @@ Save.load = async function () {
   await new Promise(r => setTimeout(r, 30));
   apply(s);
   el.hidden = true;
-  Save.lastSave = Date.now(); Save.dirty = false;
+  Save.lastSave = Date.now(); Save.dirty = false; Save.dirtyStory = false;
   if (D.UI) D.UI.setSave('saved ' + new Date(s.saved || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
   return true;
 };
@@ -120,7 +123,7 @@ Save.saveNow = async function (announce) {
   if (D.UI) D.UI.setSave('saving…');
   try {
     await put(KEY, snapshot());
-    Save.dirty = false; Save.lastSave = Date.now();
+    Save.dirty = false; Save.dirtyStory = false; Save.lastSave = Date.now();
     if (D.UI) D.UI.setSave('saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     if (announce) D.toast('World saved in this browser');
   } catch (e) {
@@ -132,15 +135,16 @@ Save.saveNow = async function (announce) {
 };
 
 Save.init = function () {
-  D.on('changed', () => { Save.dirty = true; if (D.UI) D.UI.setSave('unsaved changes'); });
-  document.addEventListener('visibilitychange', () => { if (document.hidden && Save.dirty) Save.saveNow(false); });
-  window.addEventListener('beforeunload', () => { if (Save.dirty) Save.saveNow(false); });
+  D.on('changed', what => { if (what === 'story') Save.dirtyStory = true; else Save.dirty = true; if (D.UI) D.UI.setSave('unsaved changes'); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && (Save.dirty || Save.dirtyStory)) Save.saveNow(false); });
+  window.addEventListener('beforeunload', () => { if (Save.dirty || Save.dirtyStory) Save.saveNow(false); });
 };
 let t = 0;
 Save.update = function (dt) {
   t += dt;
   if (t < 2) return; t = 0;
-  if (Save.dirty && !D.History.active() && Date.now() - Save.lastSave > 20000) Save.saveNow(false);
+  const age = Date.now() - Save.lastSave;
+  if (!D.History.active() && ((Save.dirty && age > 20000) || (Save.dirtyStory && age > 90000))) Save.saveNow(false);
 };
 
 // ---- export / import ------------------------------------------------------------------------
@@ -187,7 +191,7 @@ Save.decode = async function (buf) {
   const { header, plain } = JSON.parse(new TextDecoder().decode(buf.subarray(8, 8 + hl)));
   const hdrLen = (8 + hl + 7) & ~7;
   const s = Object.assign({}, plain);
-  const T = { Float32Array, Uint8Array, Uint32Array, Int32Array };
+  const T = { Float32Array, Uint8Array, Uint32Array, Int32Array, Uint16Array, Int16Array };
   for (const k in header) {
     const h = header[k], C = T[h.type];
     const bytes = buf.slice(hdrLen + h.off, hdrLen + h.off + h.len * C.BYTES_PER_ELEMENT);

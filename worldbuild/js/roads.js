@@ -24,6 +24,40 @@ const LEGACY = { path: 'footpath', lane: 'track', street: 'street', tram: 'stree
 
 const R = D.Roads = { TYPES, TYPE_IDS, nodes: new Map(), segs: new Map(), nextId: 1, draft: null, version: 0, dirty: false };
 
+// ---- Living History metadata (spec §5.7) ------------------------------------------------------
+// seg.by 0 = the player's road (also when missing), 1 = worn in by history · seg.yr build year
+// (missing = before the chronicle) · seg.up [[yr, type], ...] type log (up[0] = the built type) ·
+// seg.rt wayfarer route id. All four are saved; seg._gw {st, n} (bridge works stage) is derived.
+let batchDepth = 0, batchLive = null, batchChanged = false;   // R.batch state
+let viewY;                                                     // R.setViewYear (undefined = live)
+const gwMap = new Map();                                       // segId -> {st, n}: survives undo/reload rebuilds
+const yearNow = () => { try { const y = D.Town && D.Town.yearNow ? +D.Town.yearNow() : 0; return y > 0 ? Math.round(y * 100) / 100 : 0; } catch (e) { return 0; } };
+function applyMeta(seg, m) {
+  if (m) {
+    seg.by = m.by === 1 ? 1 : 0;
+    if (m.yr) seg.yr = m.yr;
+    if (m.rt) seg.rt = m.rt;
+    if (m.up && m.up.length) seg.up = m.up.map(u => u.slice());
+    else if (seg.by === 1) seg.up = [[m.yr || 0, seg.type]];
+  } else { seg.by = 0; const y = yearNow(); if (y) seg.yr = y; }
+}
+function copyMeta(from, to) {
+  to.by = from.by ? 1 : 0;
+  if (from.yr) to.yr = from.yr;
+  if (from.rt) to.rt = from.rt;
+  if (from.up) to.up = from.up.map(u => u.slice());
+}
+// type log: every entry is [year, type]; the list is replaced (never edited) so snapshots stay immutable
+function logType(seg, type, yr) { seg.up = (seg.up || [[seg.yr || 0, seg.type]]).concat([[yr || 0, type]]); }
+// type of a seg at year Y (replay); the live type when no log or no year
+function typeAt(seg, Y) {
+  if (Y === undefined || !seg.up || !seg.up.length) return seg.type;
+  let t = seg.up[0][1];
+  for (const u of seg.up) if (u[0] <= Y) t = u[1];
+  return TYPES[t] ? t : seg.type;
+}
+R.typeAt = typeAt;
+
 const BED = 0.35;                       // road surface sits this far above the graded bed
 const K_SURF = 0, K_FLAG = 1, K_SHOULDER = 4, K_PATCH = 6, K_PATCHFLAG = 7;
 const hcOf = T => T.w / 2 - (T.margin || T.shoulder || 0);
@@ -170,18 +204,32 @@ const HC = 128;
 let hash = new Map();
 const hcell = v => D.clamp(Math.floor(v / HC), -16, 200);
 const hkey = (cx, cz) => (cx + 16) * 512 + (cz + 16);
+function hashAdd(seg) {
+  const S = ensureS(seg), w = typeOf(seg.type).w / 2 + 2;
+  let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
+  for (let q = 0; q < S.n; q++) { x0 = Math.min(x0, S.x[q]); x1 = Math.max(x1, S.x[q]); z0 = Math.min(z0, S.z[q]); z1 = Math.max(z1, S.z[q]); }
+  const bb = seg._bb = [x0 - w, z0 - w, x1 + w, z1 + w];
+  for (let cz = hcell(bb[1]); cz <= hcell(bb[3]); cz++)
+    for (let cx = hcell(bb[0]); cx <= hcell(bb[2]); cx++) {
+      const k = hkey(cx, cz); let l = hash.get(k); if (!l) hash.set(k, l = []); l.push(seg.id);
+    }
+}
+// remove a seg from the cells of the bbox it was hashed with (_bb is only ever set by hashAdd)
+function hashDel(seg) {
+  const bb = seg._bb; if (!bb) return;
+  for (let cz = hcell(bb[1]); cz <= hcell(bb[3]); cz++)
+    for (let cx = hcell(bb[0]); cx <= hcell(bb[2]); cx++) {
+      const k = hkey(cx, cz), l = hash.get(k); if (!l) continue;
+      const i = l.indexOf(seg.id); if (i >= 0) l.splice(i, 1);
+      if (!l.length) hash.delete(k);
+    }
+}
+// Inside R.batch the hash is kept current by link/unlink (incremental), so the many rehash()
+// calls of build/tidy cost nothing; the batch ends with one full, deterministic rehash.
 function rehash() {
+  if (batchDepth) return;
   hash = new Map();
-  R.segs.forEach(seg => {
-    const S = ensureS(seg), w = typeOf(seg.type).w / 2 + 2;
-    let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
-    for (let q = 0; q < S.n; q++) { x0 = Math.min(x0, S.x[q]); x1 = Math.max(x1, S.x[q]); z0 = Math.min(z0, S.z[q]); z1 = Math.max(z1, S.z[q]); }
-    seg._bb = [x0 - w, z0 - w, x1 + w, z1 + w];
-    for (let cz = hcell(z0 - w); cz <= hcell(z1 + w); cz++)
-      for (let cx = hcell(x0 - w); cx <= hcell(x1 + w); cx++) {
-        const k = hkey(cx, cz); let l = hash.get(k); if (!l) hash.set(k, l = []); l.push(seg.id);
-      }
-  });
+  R.segs.forEach(hashAdd);
 }
 let qStamp = 0;
 // visit each segment whose hash cells overlap the rect once; fn returns true to stop
@@ -347,8 +395,9 @@ function newNode(x, z, y) {
 }
 function delNode(n) { if (!n) return; R.nodes.delete(n.id); nhDel(n); }
 function dropIfOrphan(nid) { const n = R.nodes.get(nid); if (n && !n.segs.length) delNode(n); }
-function link(seg) { R.segs.set(seg.id, seg); R.nodes.get(seg.a).segs.push(seg.id); R.nodes.get(seg.b).segs.push(seg.id); }
+function link(seg) { R.segs.set(seg.id, seg); R.nodes.get(seg.a).segs.push(seg.id); R.nodes.get(seg.b).segs.push(seg.id); if (batchDepth) hashAdd(seg); }
 function unlink(seg) {
+  if (batchDepth) hashDel(seg);
   R.segs.delete(seg.id);
   [seg.a, seg.b].forEach(nid => { const n = R.nodes.get(nid); if (n) n.segs = n.segs.filter(s => s !== seg.id); });
 }
@@ -531,10 +580,50 @@ function resampleProf(seg, oldProf, oldFlags) {
 
 function makeSeg(aId, bId, c1, c2, type, opts, seps) {
   const seg = { id: R.nextId++, a: aId, b: bId, c1: c1.slice(), c2: c2.slice(), type };
+  applyMeta(seg, opts && opts.meta);
   profileSeg(seg, Object.assign({}, opts, { seps }));
   link(seg);
-  clearCorridor(seg);
+  if (opts && opts.noClear) hideCorridor(seg); else clearCorridor(seg);
   return seg;
+}
+function corridorBB(seg, w) {
+  const S = ensureS(seg);
+  let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
+  for (let q = 0; q < S.n; q++) { x0 = Math.min(x0, S.x[q]); x1 = Math.max(x1, S.x[q]); z0 = Math.min(z0, S.z[q]); z1 = Math.max(z1, S.z[q]); }
+  return [x0 - w, z0 - w, x1 + w, z1 + w];
+}
+// history roads never delete plants or buildings: Town's hide mask hides plants under them instead
+function hideCorridor(seg) {
+  if (D.Town && D.Town.hideRoadRect) { try { D.Town.hideRoadRect(corridorBB(seg, typeOf(seg.type).w / 2 + 2.5)); } catch (e) { console.warn('[roads] hideRoadRect', e); } }
+}
+// manual (player-placed, no sid) building records whose centre lies in the rect grown by their own size
+function manualIn(x0, z0, x1, z1, fn) {
+  const T = D.Town; if (!T || !T.chunks || !T.chunks.length) return;
+  const NC = D.NCH || 16, CS = (D.CHUNK || 64) * CELL, pad = 60;
+  const cx0 = D.clamp(Math.floor((x0 - pad) / CS), 0, NC - 1), cx1 = D.clamp(Math.floor((x1 + pad) / CS), 0, NC - 1);
+  const cz0 = D.clamp(Math.floor((z0 - pad) / CS), 0, NC - 1), cz1 = D.clamp(Math.floor((z1 + pad) / CS), 0, NC - 1);
+  for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) {
+    const a = T.chunks[cz * NC + cx]; if (!a) continue;
+    for (let k = 0; k < a.length; k++) {
+      const b = a[k]; if (!b || b.sid) continue;
+      const r = Math.hypot(b.w || 0, b.d || 0) / 2;
+      if (b.x + r < x0 || b.x - r > x1 || b.z + r < z0 || b.z - r > z1) continue;
+      if (fn(b, r) === true) return;
+    }
+  }
+}
+R._manualIn = manualIn;
+// does any manual record come within `m` metres of the centreline of samples S (x, z arrays)?
+function manualHitS(S, m) {
+  let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
+  for (let q = 0; q < S.n; q++) { x0 = Math.min(x0, S.x[q]); x1 = Math.max(x1, S.x[q]); z0 = Math.min(z0, S.z[q]); z1 = Math.max(z1, S.z[q]); }
+  let hit = false;
+  manualIn(x0 - m, z0 - m, x1 + m, z1 + m, (b, r) => {
+    const lim = (r + m) * (r + m);
+    for (let q = 0; q < S.n; q++) { const dx = S.x[q] - b.x, dz = S.z[q] - b.z; if (dx * dx + dz * dz < lim) { hit = true; return true; } }
+    return false;
+  });
+  return hit;
 }
 function clearCorridor(seg) {
   const S = ensureS(seg), T = typeOf(seg.type), w = T.w / 2 + 2.5;
@@ -554,6 +643,7 @@ function splitAt(seg, t) {
   const X = newNode(p1[3][0], p1[3][1], profAt(seg, dSplit));
   const mk = (aId, bId, part, d0, d1) => {
     const s = { id: R.nextId++, a: aId, b: bId, c1: part[1], c2: part[2], type: seg.type, dr: seg.dr };
+    copyMeta(seg, s);
     const SS = ensureS(s);
     const pr = new Float32Array(SS.n), fl = new Uint8Array(SS.n);
     for (let q = 0; q < SS.n; q++) {
@@ -670,12 +760,25 @@ function resolve(spec, type) {
   return newNode(spec.x, spec.z).id;
 }
 const sepsBefore = (seps, d) => seps.filter(s => s.dNew < d);
+// height a snap spec is pinned to (null for open ground)
+const specY = sp => sp.node && R.nodes.has(sp.node) ? R.nodes.get(sp.node).y : sp.seg && R.segs.has(sp.seg) ? profAt(R.segs.get(sp.seg), sp.dist) : null;
+const specSkip = (A, B) => { const s = new Set(); if (A.node) s.add(A.node); if (B.node) s.add(B.node); return s; };
 
 // Build a road from spec A to spec B with the given control points.
+// Living History options (all off for the player's tool, so player roads behave as before):
+//   grade:false drape only · noUnders: refuse ([] before mutating) where an existing road would have
+//   to be bridged over us · keepPlayer: tidy never moves, merges, collapses or re-settles player (by 0)
+//   work · noClear: no clearCorridor; Town's hide mask hides plants instead · meta {by, yr, rt}
 R.build = function (A, B, c1, c2, type, opts) {
   opts = opts || {};
   const T = typeOf(type); type = T.id;
+  const ctl = { keepPlayer: !!opts.keepPlayer };
   rehash();
+  if (opts.noUnders) {
+    const pre = crossings([A.x, A.z], c1, c2, [B.x, B.z], T, specSkip(A, B), specY(A), specY(B));
+    if (pre.unders.length) return [];
+  }
+  if (batchDepth) batchChanged = true;
   let aId = resolve(A, type);
   rehash();
   let bId = resolve(B, type);
@@ -688,7 +791,7 @@ R.build = function (A, B, c1, c2, type, opts) {
   for (let guard = 0; guard < 24; guard++) {
     rehash();
     const cr = crossings(a, C1, C2, b, T, new Set([aId, bId]), R.nodes.get(aId).y, R.nodes.get(bId).y);
-    unders.push(...cr.unders);
+    if (!opts.noUnders) unders.push(...cr.unders);
     const hit = cr.hits.find(h => !h.invalid);
     if (!hit) { made.push(makeSeg(aId, bId, C1, C2, type, opts, cr.seps)); break; }
     const len = cr.S.len, ms = minSeg(T.w, hit.wO || T.w);
@@ -722,14 +825,19 @@ R.build = function (A, B, c1, c2, type, opts) {
     for (let q = 1; q < S.n - 1; q++) if (Math.abs(S.L[q] - u.dOld) <= u.reach && !f[q]) { f[q] = 1; any = true; }
     if (any) setProf(s, s.prof, f);
   }
-  tidy(touched);
+  tidy(touched, ctl);
   const live = made.filter(s => R.segs.has(s.id));
+  return finishEdit(live);
+};
+// end of an edit: immediately, or once at the end of an R.batch
+function finishEdit(live) {
+  if (batchDepth) { batchChanged = true; live.forEach(s => batchLive.add(s.id)); return live; }
   rehash();
   R.dirty = true; R.version++;
   layoutAll();
   D.emit('roads:changed', live);
   return live;
-};
+}
 
 // ---- Validation --------------------------------------------------------------------------------
 function segBetween(n1, n2) {
@@ -821,7 +929,7 @@ R.validate = function (A, B, c1, c2, type) {
   for (const [spec, t] of [[A, ta], [B, tb]]) {
     for (const d of armDirs(spec)) if (d[0] * t[0] + d[1] * t[1] > cos20) return { ok: false, reason: 'Roads meet at too sharp an angle' };
   }
-  return { ok: true };
+  return { ok: true, seps: cr.seps.length + cr.unders.length };   // seps: grade separations this road would need (history paths avoid them)
 };
 
 // ---- Tidy: merge close nodes, collapse slivers, settle heights, grade -----------------------------
@@ -851,8 +959,17 @@ function mergeNodes(keep, gone, mod) {
   gone.segs = [];
   delNode(gone);
 }
-function tidy(touched) {
-  const mod = new Set();
+// keepPlayer (history builds): a node carrying any player (by 0) seg is never the one that goes, two
+// player nodes are never merged, and player segs are never collapsed, deduped or re-settled
+const playerNode = n => n.segs.some(id => { const s = R.segs.get(id); return s && !s.by; });
+function keeperKP(n, m, keepP) {
+  if (!keepP) return keeperOf(n, m);
+  const pn = playerNode(n), pm = playerNode(m);
+  if (pn && pm) return null;
+  return pn ? n : pm ? m : keeperOf(n, m);
+}
+function tidy(touched, ctl) {
+  const mod = new Set(), keepP = !!(ctl && ctl.keepPlayer);
   // 1. merge nodes within max(6, 0.35·max(nodeW))
   for (const nid of Array.from(touched)) {
     const n = R.nodes.get(nid); if (!n) continue;
@@ -863,7 +980,8 @@ function tidy(touched) {
       if (!R.nodes.has(n.id) || !R.nodes.has(m.id)) continue;
       const thr = Math.max(6, 0.35 * Math.max(nodeW(n), nodeW(m)));
       if (Math.hypot(m.x - n.x, m.z - n.z) >= thr) continue;
-      const keep = keeperOf(n, m), gone = keep === n ? m : n;
+      const keep = keeperKP(n, m, keepP); if (!keep) continue;
+      const gone = keep === n ? m : n;
       mergeNodes(keep, gone, mod);
       touched.delete(gone.id); touched.add(keep.id);
       if (gone === n) break;
@@ -880,8 +998,9 @@ function tidy(touched) {
         if (!A || !B || A === B) continue;
         const w = typeOf(s.type).w;
         if (ensureS(s).len >= minSeg(w, w) || A.segs.length < 2 || B.segs.length < 2) continue;
+        if (keepP && (!s.by || !keeperKP(A, B, true))) continue;
         unlink(s); mod.delete(sid);
-        const keep = keeperOf(A, B), gone = keep === A ? B : A;
+        const keep = keeperKP(A, B, keepP), gone = keep === A ? B : A;
         mergeNodes(keep, gone, mod);
         touched.delete(gone.id); touched.add(keep.id);
         any = true; break;
@@ -889,7 +1008,9 @@ function tidy(touched) {
     }
     if (!any) break;
   }
-  // 3. settle heights, level junction discs, regrade what moved
+  // 3. settle heights, level junction discs, regrade what moved (history builds are draped and never
+  //    touch the terrain or a player profile, so they stop here; layout happens once at the end)
+  if (keepP) return;
   touched.forEach(nid => { const n = R.nodes.get(nid); if (n) n.segs.forEach(id => mod.add(id)); });
   rehash();
   layoutAll();
@@ -1126,19 +1247,54 @@ function boxAt(o, cx, cy, cz, w, h, d, rot, pitch) {
 
 function buildGeometry() {
   ensureLayout();
-  const road = { pos: [], nor: [], rd: [], re: [], idx: [] };
-  const st = { pos: [], nor: [] }, wd = { pos: [], nor: [] };
-  const lamps = [], crosses = [];
-  R.segs.forEach(seg => buildSegment(seg, road, st, wd, lamps, crosses));
+  // junction / taper / cap pieces are cheap and rebuilt every time (small JS arrays); segs come from their caches
+  const jr = { pos: [], nor: [], rd: [], re: [], idx: [] };
+  const lamps = [], crosses = [], gs = [];
+  R.segs.forEach(seg => { const g = segGeo(seg); gs.push(g); for (const l of g.lamps) lamps.push(l); for (const c of g.crosses) crosses.push(c); });
   R.nodes.forEach(n => {
     const L = n._jl; if (!L) return;
-    if (L.kind === 'junction' && L.ring) buildJunction(n, L, road);
-    else if (L.kind === 'taper') buildTaper(n, L, road);
-    else if (L.kind === 'cap') buildCap(n, L, road);
+    if (L.kind === 'junction' && L.ring) buildJunction(n, L, jr);
+    else if (L.kind === 'taper') buildTaper(n, L, jr);
+    else if (L.kind === 'cap') buildCap(n, L, jr);
   });
+  // assemble with block copies into typed arrays sized up front (element-wise pushes into huge JS arrays stall on GC)
+  let nv = jr.pos.length, ni = jr.idx.length, ns = 0, nw = 0;
+  for (const g of gs) { nv += g.road.pos.length; ni += g.road.idx.length; ns += g.st.pos.length; nw += g.wd.pos.length; }
+  const road = { pos: new Float32Array(nv), nor: new Float32Array(nv), rd: new Float32Array(nv / 3 * 4), re: new Float32Array(nv / 3), idx: new Uint32Array(ni) };
+  const st = { pos: new Float32Array(ns), nor: new Float32Array(ns) }, wd = { pos: new Float32Array(nw), nor: new Float32Array(nw) };
+  let ov = 0, oi = 0, os = 0, ow = 0;
+  const addRoad = (P, N, RD, RE, IX) => {
+    const base = ov / 3;
+    road.pos.set(P, ov); road.nor.set(N, ov); road.rd.set(RD, base * 4); road.re.set(RE, base);
+    for (let i = 0; i < IX.length; i++) road.idx[oi + i] = IX[i] + base;
+    ov += P.length; oi += IX.length;
+  };
+  for (const g of gs) {
+    addRoad(g.road.pos, g.road.nor, g.road.rd, g.road.re, g.road.idx);
+    st.pos.set(g.st.pos, os); st.nor.set(g.st.nor, os); os += g.st.pos.length;
+    wd.pos.set(g.wd.pos, ow); wd.nor.set(g.wd.nor, ow); ow += g.wd.pos.length;
+  }
+  addRoad(jr.pos, jr.nor, jr.rd, jr.re, jr.idx);
   return { road, st, wd, lamps, crosses };
 }
 
+// A seg's ribbon, bridges, lamps and crosses depend only on its own curve (_s), type, profile/flags and the trims
+// layoutAll gives its ends, so each seg's geometry is cached and rebuilt only when one of those changes. A network
+// rebuild (a new road, a history year of paths) then re-meshes the few segs that changed instead of all of them.
+function segGeo(seg) {
+  const m = v => v ? v[0].toFixed(4) + ',' + v[1].toFixed(4) + ',' + v[2].toFixed(4) : '';
+  const gw = seg._gw && typeOf(seg.type).stone ? seg._gw.st + '/' + seg._gw.n : '';
+  const key = seg.type + '|' + (seg._tA || 0).toFixed(3) + '|' + (seg._tB || 0).toFixed(3) + '|' + m(seg._mA) + '|' + m(seg._mB) + '|' + gw;
+  const c = seg._gc;
+  if (c && c.key === key && c.s === seg._s && c.prof === seg.prof && c.flags === seg.flags) return c.g;
+  const b = { road: { pos: [], nor: [], rd: [], re: [], idx: [] }, st: { pos: [], nor: [] }, wd: { pos: [], nor: [] }, lamps: [], crosses: [] };
+  buildSegment(seg, b.road, b.st, b.wd, b.lamps, b.crosses);
+  const F = a => new Float32Array(a);
+  const g = { road: { pos: F(b.road.pos), nor: F(b.road.nor), rd: F(b.road.rd), re: F(b.road.re), idx: new Uint32Array(b.road.idx) },
+    st: { pos: F(b.st.pos), nor: F(b.st.nor) }, wd: { pos: F(b.wd.pos), nor: F(b.wd.nor) }, lamps: b.lamps, crosses: b.crosses };
+  seg._gc = { key, s: ensureS(seg), prof: seg.prof, flags: seg.flags, g };
+  return g;
+}
 function buildSegment(seg, road, st, wd, lamps, crosses) {
   const T = typeOf(seg.type), typ = T.rank, S = ensureS(seg), sec = SECTIONS[T.id], hw = T.w / 2, zr = zrank(T);
   let tA = seg._tA || 0, tB = seg._tB || 0;
@@ -1193,16 +1349,24 @@ function buildSegment(seg, road, st, wd, lamps, crosses) {
 // ---- Bridges: stone arches for lanes, streets and the King's road; timber for paths and tracks ----
 function buildBridges(seg, S, T, st, wd, tA, tB) {
   const f = seg.flags, n = S.n;
+  // a bridge work in hand (stone types only, before its final stage): the longest run is staged
+  const gw = seg._gw && T.stone && seg._gw.st < 2 * seg._gw.n ? seg._gw : null, wr = gw ? workRun(seg) : null;
   let q = 0;
   while (q < n) {
     if (f[q] !== 1) { q++; continue; }
     let e = q; while (e + 1 < n && f[e + 1] === 1) e++;
     const d0 = Math.max(tA, q > 0 ? (S.L[q - 1] + S.L[q]) * 0.5 : 0), d1 = Math.min(S.len - tB, e < n - 1 ? (S.L[e] + S.L[e + 1]) * 0.5 : S.len);
-    if (d1 - d0 > 2) { if (T.stone) stoneBridge(seg, S, T, st, d0, d1, tA, tB); else timberBridge(seg, S, T, wd, d0, d1, tA, tB); }
+    if (d1 - d0 > 2) {
+      if (wr && wr.q0 === q) {                // timber deck stays usable while the stone rises around it
+        timberBridge(seg, S, T, wd, d0, d1, tA, tB);
+        stoneBridge(seg, S, T, st, d0, d1, tA, tB, stageOf(gw, spanLayout(d1 - d0).k, bankAtEnd(seg, d0, d1)));
+      } else if (T.stone) stoneBridge(seg, S, T, st, d0, d1, tA, tB); else timberBridge(seg, S, T, wd, d0, d1, tA, tB);
+    }
     q = e + 1;
   }
 }
-function stoneBridge(seg, S, T, st, d0, d1, tA, tB) {
+// stage (optional, bridge works): which piers and arches stand yet, and whether the parapets are up
+function stoneBridge(seg, S, T, st, d0, d1, tA, tB, stage) {
   const hw = T.w / 2, W2 = hw + 0.4, zr = zrank(T), H = D.Terrain.hAt;
   const Ls = d1 - d0, k = Math.max(1, Math.round(Ls / 15)), span = Ls / k;
   const ph = D.clamp(span * 0.09, 0.6, 1.5);
@@ -1226,6 +1390,7 @@ function stoneBridge(seg, S, T, st, d0, d1, tA, tB) {
     const spring = crown - rise;
     springs.push(spring);
     const intr = d => { const u = D.clamp((d - a0) / cs, 0, 1), v = 2 * u - 1; return spring + rise * Math.sqrt(Math.max(0, 1 - v * v)); };
+    if (stage && !stage.arch(j)) continue;   // this arch is not turned yet
     const steps = Math.max(6, Math.ceil(cs / 0.8));
     let prev = null;
     for (let s = 0; s <= steps; s++) {
@@ -1242,6 +1407,7 @@ function stoneBridge(seg, S, T, st, d0, d1, tA, tB) {
   }
   // piers with cutwaters between the arches
   for (let j = 1; j < k; j++) {
+    if (stage && !stage.pier(j)) continue;
     const dc = d0 + j * span, P = pointAt(seg, dc), rot = Math.atan2(P.tx, P.tz);
     const bed = Math.min(H(P.x, P.z), H(P.x - P.tz * W2, P.z + P.tx * W2), H(P.x + P.tz * W2, P.z - P.tx * W2)) - 2;
     const top = deck(dc) - 0.02;
@@ -1261,6 +1427,7 @@ function stoneBridge(seg, S, T, st, d0, d1, tA, tB) {
     if (top - bed > 0.5) boxAt(st, P.x, bed, P.z, 2 * W2, top - bed, 2.4, rot);
   }
   // parapets (they replace railings), running a little onto the approaches
+  if (stage && !stage.parapet) return;
   const pa0 = Math.max(tA, d0 - 3), pa1 = Math.min(S.len - tB, d1 + 3);
   const steps = Math.max(2, Math.ceil((pa1 - pa0) / 1.0));
   const ph2 = 0.9 + dyAt(T, hw);
@@ -1387,6 +1554,20 @@ const RU = {
   uTimeR: { value: 0 }, uSnowR: { value: 0 }, uSeasonR: { value: new THREE.Vector4(0, 1, 0, 0) },
   uPull: { value: new THREE.Vector4(0.03, 0.0005, 3000, 0.004) }
 };
+// Atlas table (spec §3.12): the shared uniforms by reference, and the at_ helpers in the fragment
+// shaders. Everything is gated on D.AU / D.GLSL_ATLAS (absent without the atlas hooks in terrain.js).
+if (D.AU) Object.assign(RU, D.AU);
+function atlasGLSL() {
+  const G = D.GLSL_ATLAS, AU = D.AU; if (!G || !AU) return '';
+  let decl = '';   // declare any shared uniform the helper block does not declare itself
+  for (const k in AU) {
+    if (new RegExp('uniform\\s+\\w+\\s+' + k + '\\b').test(G)) continue;
+    const v = AU[k] && AU[k].value;
+    const t = typeof v === 'number' ? 'float' : v && v.isTexture ? 'sampler2D' : v && v.isVector4 ? 'vec4' : v && v.isVector3 ? 'vec3' : v && v.isVector2 ? 'vec2' : null;
+    if (t) decl += `uniform ${t} ${k};\n`;
+  }
+  return decl + G;
+}
 const PULL_VERT = `
     vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
     float dcP = length(mvPosition.xyz);
@@ -1403,6 +1584,8 @@ function roadMaterial() {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, RU);
+    const AT = atlasGLSL();
+    if (AT) Object.assign(sh.uniforms, D.AU);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\nattribute vec4 rd; attribute float re; varying vec4 vRd; varying float vRe; varying vec3 vWPr;\nuniform vec4 uPull;`)
       .replace('#include <project_vertex>', PULL_VERT)
@@ -1413,6 +1596,7 @@ uniform float uNightR, uWetR, uTimeR, uSnowR; uniform vec3 uCamR; uniform vec4 u
 varying vec4 vRd; varying float vRe; varying vec3 vWPr;
 float R_rough; vec3 R_emis;
 ${D.GLSL_NOISE}
+${AT}
 vec3 r_seas(vec3 a, vec3 b, vec3 c, vec3 d){ return a * uSeasonR.x + b * uSeasonR.y + c * uSeasonR.z + d * uSeasonR.w; }
 vec3 r_cobble(vec2 uv, float fine, float mid, out float joint){
   vec2 cc = vec2(uv.x / 0.28, uv.y / 0.36); cc.y += floor(cc.x) * 0.5;
@@ -1429,6 +1613,7 @@ vec3 roadCol(){
   // derivatives first, in uniform control flow
   float fwA = fwidth(along), fwL = fwidth(lat);
   vec2 fwW = fwidth(vWPr.xz);
+  float gpxR = max(fwW.x, fwW.y);   // metres per pixel (Atlas ink)
   float bridge = step(50.0, vRe), hw = vRe - bridge * 100.0;
   bool isPatch = kind > 5.5;
   vec2 uv = isPatch ? vWPr.xz : vec2(along, lat);
@@ -1506,12 +1691,14 @@ vec3 roadCol(){
     float fl = 0.9 + 0.1 * sin(uTimeR * 9.0 + k * 3.1);
     R_emis = vec3(1.0, 0.62, 0.3) * pool * fl * uNightR * 0.16;
   }
+  ${AT ? 'if (uAtlas > .001) { c = at_surface(c, vWPr.xz); c = at_ink(c, vWPr.xz, gpxR, 0.); R_emis *= 1.0 - at_k(vWPr.xz); }' : ''}
   return pow(max(c, vec3(0.0)), vec3(2.2));
 }`)
       .replace('#include <color_fragment>', `diffuseColor.rgb = roadCol();`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = R_rough;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += R_emis;`);
     checkShader(sh, ['uniform vec4 uPull', 'dcP', 'vRd = rd', 'roadCol()', 'roughnessFactor = R_rough', 'totalEmissiveRadiance += R_emis'], 'road');
+    if (AT) checkShader(sh, ['at_ink(c, vWPr.xz, gpxR'], 'road atlas');
   };
   m.customProgramCacheKey = () => 'dio-road-medieval';
   return m;
@@ -1521,6 +1708,8 @@ function stoneMaterial() {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0 });
   m.onBeforeCompile = sh => {
     sh.uniforms.uPull = RU.uPull; sh.uniforms.uWetR = RU.uWetR; sh.uniforms.uSnowR = RU.uSnowR;
+    const AT = atlasGLSL();
+    if (AT) Object.assign(sh.uniforms, D.AU);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\nuniform vec4 uPull; varying vec3 vWPs; varying vec3 vWNs;`)
       .replace('#include <project_vertex>', PULL_VERT)
@@ -1530,6 +1719,7 @@ function stoneMaterial() {
 uniform float uWetR, uSnowR; varying vec3 vWPs; varying vec3 vWNs;
 float S_rough;
 ${D.GLSL_NOISE}
+${AT}
 vec3 ashlar(){
   vec3 p = vWPs, nw = normalize(vWNs);
   float px = max(max(fwidth(p.x), fwidth(p.z)), fwidth(p.y));
@@ -1545,11 +1735,13 @@ vec3 ashlar(){
   c *= 1.0 - uWetR * (0.25 + 0.2 * mortar);
   S_rough = mix(0.92, 0.45, uWetR * (1.0 - mortar));
   if (uSnowR > 0.01) c = mix(c, vec3(.92,.93,.96), smoothstep(0.6, 0.9, nw.y) * uSnowR);
+  ${AT ? 'if (uAtlas > .001) { c = at_surface(c, p.xz); c = at_ink(c, p.xz, px, 0.); }' : ''}
   return pow(c, vec3(2.2));
 }`)
       .replace('#include <color_fragment>', `diffuseColor.rgb = ashlar();`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = S_rough;`);
     checkShader(sh, ['dcP', 'vWNs = normalize', 'diffuseColor.rgb = ashlar()', 'roughnessFactor = S_rough'], 'bridge stone');
+    if (AT) checkShader(sh, ['at_ink(c, p.xz, px'], 'bridge stone atlas');
   };
   m.customProgramCacheKey = () => 'dio-road-stone';
   return m;
@@ -1561,6 +1753,17 @@ function woodMaterial() {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\nuniform vec4 uPull;`)
       .replace('#include <project_vertex>', PULL_VERT);
+    const AT = atlasGLSL();
+    if (AT) {   // Atlas plaster on the timber: a world-position varying and a color_fragment hook
+      Object.assign(sh.uniforms, D.AU);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', `#include <common>\nvarying vec3 vWPw;`)
+        .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>\nvWPw = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>\nvarying vec3 vWPw;\n${D.GLSL_NOISE}\n${AT}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>\nif (uAtlas > .001) diffuseColor.rgb = at_surfaceLin(diffuseColor.rgb, vWPw.xz, 0.);`);
+      checkShader(sh, ['vWPw = (modelMatrix', 'at_surfaceLin(diffuseColor.rgb, vWPw.xz'], 'bridge timber atlas');
+    }
     checkShader(sh, ['uniform vec4 uPull', 'dcP'], 'bridge timber');
   };
   m.customProgramCacheKey = () => 'dio-road-wood';
@@ -1574,9 +1777,10 @@ R.init = function (scene) {
   R.structMat = stoneMaterial();
   R.woodMat = woodMaterial();
   R.group = new THREE.Group(); scene.add(R.group);
-  D.History.regObj('roads', { save: R.serialize, load: s => { R.deserialize(s); } });
+  D.History.regObj('roads', { save: R.serialize, load: s => { R.deserialize(s); }, bytes: s => (s && s.segs ? s.segs.length : 0) * 400 });
   D.on('restored', () => { R.dirty = true; });
-  D.on('world:reset', R.reset);
+  D.on('world:reset', () => { gwMap.clear(); R.setViewYear(undefined); R.reset(); });
+  D.on('story:view', y => R.setViewYear(y === null ? undefined : y));
   // preview ghost
   R.ghost = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0x31a8ff, transparent: true, opacity: 0.45, depthTest: false, side: THREE.DoubleSide }));
   R.ghost.renderOrder = 25; R.ghost.frustumCulled = false; R.ghost.visible = false;
@@ -1591,7 +1795,18 @@ R.reset = function () {
 };
 R.clearAll = function () {
   D.History.begin('Clear Roads', 'trash'); D.History.touchObj('roads');
-  R.reset(); D.emit('roads:changed', []); D.History.end();
+  // history roads cleared by the player are reported (their routes are vetoed); nothing else changes
+  // with the union of their boxes, so Town re-derives the plants hidden under them (§5.7 roads:removed)
+  const metas = []; let bb = null;
+  R.segs.forEach(s => {
+    if (!s.by) return;
+    metas.push({ by: 1, yr: s.yr, rt: s.rt });
+    if (!s._bb) hashAdd(s);          // (its hash entry is dropped with the reset below)
+    const b = s._bb; bb = bb ? [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[2]), Math.max(bb[3], b[3])] : b.slice();
+  });
+  R.reset(); D.emit('roads:changed', []);
+  if (metas.length) D.emit('roads:removed', bb, metas);
+  D.History.end();
 };
 
 let rebuildT = 0;
@@ -1604,12 +1819,38 @@ R.update = function (dt, camera) {
   RU.uCamR.value.copy(camera.position);
   RU.uPull.value.z = (D.Q.high ? 1350 : 800) * 2.5 * 0.9;
   rebuildT -= dt;
-  if (R.dirty && rebuildT <= 0) { R.dirty = false; rebuildT = 0.05; rebuild(); }
+  // replay: rebuild only when the visible (id, type, bridge stage) set changes, at most twice a second
+  if (viewY !== undefined && (viewT -= dt) <= 0) { viewT = 0.5; const sg = viewSignature(); if (sg !== viewSig) { viewSig = sg; R.dirty = true; } }
+  if (R.dirty && rebuildT <= 0) { R.dirty = false; rebuildT = viewY !== undefined ? 0.5 : 0.05; rebuild(); }
   const vis = D.Layers ? D.Layers.visible('roads') : true;
   R.group.visible = vis;
 };
+// Replay (R.setViewYear): build the meshes from the network as it stood in year Y (segs built later
+// left out, older types restored), then put the live network back exactly (same Map order).
 function rebuild() {
-  R.segs.forEach(seg => { seg._s = null; seg._cb = null; seg._hr = null; });
+  if (viewY === undefined) { rebuildMeshes(); return; }
+  const all = Array.from(R.segs.entries()), nodeSegs = [], retyped = [];
+  R.nodes.forEach(n => nodeSegs.push([n, n.segs]));
+  try {
+    R.segs.clear();
+    for (const [id, s] of all) {
+      if (s.yr && s.yr > viewY) continue;
+      R.segs.set(id, s);
+      const t = typeAt(s, viewY);
+      if (t !== s.type) { retyped.push([s, s.type]); s.type = t; s._hr = null; }
+    }
+    R.nodes.forEach(n => { n.segs = n.segs.filter(id => R.segs.has(id)); });
+    rebuildMeshes();
+  } finally {
+    for (const [s, t] of retyped) { s.type = t; s._hr = null; }
+    R.segs.clear(); for (const [id, s] of all) R.segs.set(id, s);
+    for (const [n, l] of nodeSegs) n.segs = l;
+    rehash(); layoutAll();
+  }
+}
+function rebuildMeshes() {
+  // per-seg caches (_s samples, _cb chunk boxes, _hr humps, _gc geometry) are dropped or replaced where a seg's
+  // curve, type or profile changes (splits make new segs; merges, retypes and setProf null them), so a rebuild keeps the rest
   rehash();
   layoutAll();
   while (R.group.children.length) {
@@ -1621,11 +1862,11 @@ function rebuild() {
   const G = buildGeometry();
   if (G.road.pos.length) {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(G.road.pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(G.road.nor, 3));
-    g.setAttribute('rd', new THREE.Float32BufferAttribute(G.road.rd, 4));
-    g.setAttribute('re', new THREE.Float32BufferAttribute(G.road.re, 1));
-    g.setIndex(G.road.idx);
+    g.setAttribute('position', new THREE.BufferAttribute(G.road.pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(G.road.nor, 3));
+    g.setAttribute('rd', new THREE.BufferAttribute(G.road.rd, 4));
+    g.setAttribute('re', new THREE.BufferAttribute(G.road.re, 1));
+    g.setIndex(new THREE.BufferAttribute(G.road.idx, 1));
     g.computeBoundingSphere();
     const m = new THREE.Mesh(g, R.mat); m.receiveShadow = true;
     R.group.add(m);
@@ -1665,12 +1906,385 @@ function rebuild() {
 }
 R.rebuildNow = rebuild;
 
+// ---- Living History API (spec §5.7; used by wayfarer.js, works.js, atlas.js) ----------------------
+// Several edits as one: a single layoutAll, one 'roads:changed' and one dirty flag at the end.
+R.batch = function (fn) {
+  if (batchDepth) return fn();
+  rehash();                               // start from a coherent hash, then keep it incrementally
+  batchDepth = 1; batchLive = new Set(); batchChanged = false;
+  try { return fn(); }
+  finally {
+    batchDepth = 0;
+    const changed = batchChanged, ids = batchLive;
+    batchLive = null; batchChanged = false;
+    if (changed) {
+      rehash();
+      R.dirty = true; R.version++;
+      layoutAll();
+      const live = []; ids.forEach(id => { const s = R.segs.get(id); if (s) live.push(s); });
+      D.emit('roads:changed', live);
+    }
+  }
+};
+R.inBatch = () => batchDepth > 0;
+// highest float of the road over the ground at its centreline, away from water: bridges and their
+// approach ramps (as long as the type's grade needs to climb to the bridge clearance) are fine
+function floatOf(prof, S, wet, T) {
+  const H = D.Terrain.hAt, n = S.n, step = S.len / Math.max(1, n - 1);
+  const ramp = Math.ceil((clearance(T) + 0.5) / Math.max(1e-3, T.grade * step));
+  const near = new Uint8Array(n);
+  for (let q = 0; q < n; q++) if (wet[q]) for (let k = Math.max(0, q - ramp); k <= Math.min(n - 1, q + ramp); k++) near[k] = 1;
+  let m = 0;
+  for (let q = 0; q < n; q++) {
+    if (near[q]) continue;
+    const f = prof[q] - H(S.x[q], S.z[q]); if (f > m) m = f;
+  }
+  return m;
+}
+function wetOf(S) {
+  const H = D.Terrain.hAt, WA = D.Terrain.waterAt, w = new Uint8Array(S.n);
+  for (let q = 0; q < S.n; q++) w[q] = WA(S.x[q], S.z[q]) > H(S.x[q], S.z[q]) - 0.3 ? 1 : 0;
+  return w;
+}
+// runs of 1s in a per-sample mask, as arc-length spans (the humpRuns convention)
+function maskRuns(S, f) {
+  const out = []; let q = 0; const n = S.n;
+  while (q < n) {
+    if (!f[q]) { q++; continue; }
+    let e = q; while (e + 1 < n && f[e + 1]) e++;
+    const d0 = q > 0 ? (S.L[q - 1] + S.L[q]) * 0.5 : 0, d1 = e < n - 1 ? (S.L[e] + S.L[e + 1]) * 0.5 : S.len;
+    out.push({ q0: q, q1: e, d0, d1, len: d1 - d0 });
+    q = e + 1;
+  }
+  return out;
+}
+// Upgrade a history seg in place (player roads are refused). Draped roads stay draped; no corridor
+// clearing. Options: yr (log year) · maxFloat (revert and refuse when the new profile floats higher) ·
+// manual:false to skip the "no manual record in the widened corridor" refusal.
+R.upgrade = function (segId, type, o) {
+  o = o || {};
+  const seg = R.segs.get(segId), T = TYPES[type];
+  if (!seg || seg.by !== 1 || !T || seg.type === type) return [];
+  if (o.manual !== false) { const S0 = ensureS(seg); if (manualHitS(S0, T.w / 2 + 1.5)) return []; }
+  const old = { type: seg.type, prof: seg.prof, flags: seg.flags, dr: seg.dr };
+  if (batchDepth) hashDel(seg);
+  seg.type = type; seg._s = null; seg._cb = null; seg._hr = null;
+  profileSeg(seg, { grade: !seg.dr });
+  if (o.maxFloat !== undefined) {
+    const S = ensureS(seg);
+    if (floatOf(seg.prof, S, wetOf(S), T) > o.maxFloat) {
+      seg.type = old.type; seg.dr = old.dr; seg._s = null; seg._cb = null; setProf(seg, old.prof, old.flags);
+      if (batchDepth) hashAdd(seg);
+      return [];
+    }
+  }
+  if (batchDepth) { hashAdd(seg); batchChanged = true; }
+  logType(seg, type, o.yr || yearNow());
+  hideCorridor(seg);
+  tidy(new Set([seg.a, seg.b]), { keepPlayer: true });
+  return finishEdit(R.segs.has(seg.id) ? [seg] : []);
+};
+// Control points for a leg from start to end, leaving along dir (unit or not) when it roughly agrees
+// with the chord; otherwise a straight leg. Pure.
+R.curveFor = function (start, end, dir) {
+  const a = [start[0], start[1]], b = [end[0], end[1]];
+  const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1, cx = dx / L, cz = dz / L;
+  let c1 = [a[0] + dx / 3, a[1] + dz / 3], c2 = [a[0] + dx * 2 / 3, a[1] + dz * 2 / 3];
+  if (dir) {
+    const dl = Math.hypot(dir[0], dir[1]);
+    if (dl > 1e-9) {
+      const sx = dir[0] / dl, sz = dir[1] / dl, dot = sx * cx + sz * cz;
+      if (dot > Math.cos(55 * DEG)) {
+        const k = L * 0.38, ex = 2 * dot * cx - sx, ez = 2 * dot * cz - sz;   // mirrored end tangent: a circular-ish arc
+        c1 = [a[0] + sx * k, a[1] + sz * k]; c2 = [b[0] - ex * k, b[1] - ez * k];
+      }
+    }
+  }
+  return { c1, c2 };
+};
+// What R.build would lay (draped) between two snap specs, without mutating anything.
+R.previewProfile = function (A, B, c1, c2, type, o) {
+  const T = typeOf(type), hw = T.w / 2;
+  const S = sampleCurve([A.x, A.z], c1, c2, [B.x, B.z], 4), n = S.n, H = D.Terrain.hAt, WA = D.Terrain.waterAt;
+  const g = new Float32Array(n), wl = new Float32Array(n), dg = new Float32Array(n), wet = new Uint8Array(n), r = new Float32Array(n);
+  for (let q = 0; q < n; q++) {
+    const x = S.x[q], z = S.z[q], tx = S.tx[q], tz = S.tz[q];
+    g[q] = H(x, z); wl[q] = WA(x, z); wet[q] = wl[q] > g[q] - 0.3 ? 1 : 0;
+    let m = -1e9;
+    for (let a = -2; a <= 2; a += 2) {
+      const px = x + tx * a, pz = z + tz * a;
+      for (let k = -1; k <= 1; k += 0.5) { const h = H(px - tz * hw * k, pz + tx * hw * k); if (h > m) m = h; }
+    }
+    dg[q] = m + 0.02;
+    r[q] = wet[q] ? Math.max(dg[q], wl[q] + clearance(T)) : dg[q];
+  }
+  const yA = specY(A), yB = specY(B);
+  if (yA !== null) r[0] = yA;
+  if (yB !== null) r[n - 1] = yB;
+  const qLo = yA !== null ? 1 : 0, qHi = yB !== null ? n - 2 : n - 1, maxD = T.grade * S.len / (n - 1);
+  for (let it = 0; it < 4; it++) {
+    for (let q = Math.max(1, qLo); q <= qHi; q++) r[q] = D.clamp(r[q], r[q - 1] - maxD, r[q - 1] + maxD);
+    for (let q = Math.min(n - 2, qHi); q >= qLo; q--) r[q] = D.clamp(r[q], r[q + 1] - maxD, r[q + 1] + maxD);
+  }
+  for (let q = qLo; q <= qHi; q++) r[q] = Math.max(r[q], wet[q] ? wl[q] + 1.2 : dg[q]);
+  let wetLen = 0; for (const run of maskRuns(S, wet)) wetLen = Math.max(wetLen, run.len);
+  const maxFloat = floatOf(r, S, wet, T), manualHit = manualHitS(S, hw + 1.5);
+  // grade separations (flying over / diving under another road) are not for draped history paths
+  const sep = o && o.seps !== undefined ? o.seps : (c => c.seps.length + c.unders.length)(crossings([A.x, A.z], c1, c2, [B.x, B.z], T, specSkip(A, B), yA, yB));
+  return { ok: maxFloat <= 1.2 && !manualHit && wetLen <= 60 && !sep, maxFloat, wetLen, manualHit, sep, len: S.len };
+};
+// stretches of a seg that lie over water
+R.wetRuns = function (segId) {
+  const seg = R.segs.get(segId); if (!seg) return [];
+  const S = ensureS(seg);
+  return maskRuns(S, wetOf(S)).map(run => { const P = pointAt(seg, (run.d0 + run.d1) / 2); return { d0: run.d0, d1: run.d1, len: run.len, x: P.x, z: P.z }; });
+};
+
+// Id- and split-independent fingerprint of the player's roads (by 0): geometry, type, drape flag and
+// node heights. History may split a player seg where a path joins it (a geometry-preserving
+// de Casteljau split), so exact halves are glued back before hashing. Profiles are not hashed (a
+// split resamples them; R.playerProfiles/playerProfileDelta compare them with a tolerance instead).
+function unsplit(P, Q) {   // P ends at the shared node, Q starts there: [a, c1, c2, b]
+  const a = P[0], q1 = P[1], q2 = P[2], m = P[3], r1 = Q[1], r2 = Q[2], b = Q[3];
+  const l1 = Math.hypot(m[0] - q2[0], m[1] - q2[1]), l2 = Math.hypot(r1[0] - m[0], r1[1] - m[1]);
+  if (l1 < 1e-7 || l2 < 1e-7) return null;
+  const t = l1 / (l1 + l2); if (t < 1e-3 || t > 1 - 1e-3) return null;
+  const c1 = [a[0] + (q1[0] - a[0]) / t, a[1] + (q1[1] - a[1]) / t], c2 = [b[0] + (r2[0] - b[0]) / (1 - t), b[1] + (r2[1] - b[1]) / (1 - t)];
+  const [h1, h2] = splitBez(a, c1, c2, b, t);
+  const off = (p, q) => Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]);
+  if (off(h1[1], q1) + off(h1[2], q2) + off(h1[3], m) + off(h2[1], r1) + off(h2[2], r2) > 1e-3) return null;
+  return [c1, c2];
+}
+// player records with exact history splits glued back: [{key, parts:[{seg, rev}], ...}] (parts run a→b
+// of the canonical orientation used in the key)
+function playerRecs() {
+  const recs = [], at = new Map();
+  const put = (nid, r) => { let l = at.get(nid); if (!l) at.set(nid, l = []); l.push(r); };
+  const flip = parts => parts.slice().reverse().map(p => ({ seg: p.seg, rev: !p.rev }));
+  R.segs.forEach(s => {
+    if (s.by) return;
+    const A = R.nodes.get(s.a), B = R.nodes.get(s.b); if (!A || !B) return;
+    const r = { a: [A.x, A.z], c1: s.c1.slice(), c2: s.c2.slice(), b: [B.x, B.z], t: s.type, dr: s.dr ? 1 : 0, na: s.a, nb: s.b, ya: A.y, yb: B.y, dead: false, parts: [{ seg: s, rev: false }] };
+    recs.push(r); put(s.a, r); put(s.b, r);
+  });
+  for (let pass = 0, any = true; any && pass < 64; pass++) {
+    any = false;
+    at.forEach((l, nid) => {
+      const live = l.filter(r => !r.dead); at.set(nid, live);
+      if (live.length !== 2) return;
+      const p = live[0], q = live[1];
+      if (p === q || p.t !== q.t || p.dr !== q.dr || (p.na === p.nb) || (q.na === q.nb)) return;
+      const pf = p.nb === nid, qf = q.na === nid;
+      const P = pf ? [p.a, p.c1, p.c2, p.b, p.na, p.ya] : [p.b, p.c2, p.c1, p.a, p.nb, p.yb];
+      const Q = qf ? [q.a, q.c1, q.c2, q.b, q.nb, q.yb] : [q.b, q.c2, q.c1, q.a, q.na, q.ya];
+      const m = unsplit(P, Q); if (!m) return;
+      p.dead = q.dead = true; at.set(nid, []);
+      const parts = (pf ? p.parts : flip(p.parts)).concat(qf ? q.parts : flip(q.parts));
+      const r = { a: P[0], c1: m[0], c2: m[1], b: Q[3], t: p.t, dr: p.dr, na: P[4], ya: P[5], nb: Q[4], yb: Q[5], dead: false, parts };
+      recs.push(r); put(r.na, r); put(r.nb, r); any = true;
+    });
+  }
+  const f = v => (Math.round(v * 20) / 20).toFixed(2), pt = p => f(p[0]) + ',' + f(p[1]);
+  const out = [];
+  for (const r of recs) {
+    if (r.dead) continue;
+    let { a, c1, c2, b, ya, yb, parts } = r;
+    const ka = pt(a), kb = pt(b);
+    if (kb < ka || (kb === ka && pt(c2) < pt(c1))) { [a, b] = [b, a]; [c1, c2] = [c2, c1]; [ya, yb] = [yb, ya]; parts = flip(parts); }
+    out.push({ key: [r.t, r.dr, pt(a), pt(c1), pt(c2), pt(b), ya.toFixed(2), yb.toFixed(2)].join('|'), parts });
+  }
+  return out;
+}
+R.playerHash = function () {
+  const keys = playerRecs().map(r => r.key);
+  keys.sort();
+  const s = keys.join('\n');
+  let h1 = 2166136261 >>> 0, h2 = 0x9e3779b9;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619); h2 = Math.imul(h2 ^ c, 0x85ebca77) ^ (h2 >>> 13); }
+  return keys.length + ':' + (h1 >>> 0).toString(16) + (h2 >>> 0).toString(16);
+};
+// The profile half of the I2 check, compared with a tolerance (a split resamples a profile, so it cannot
+// be hashed exactly): per player record (same keys as playerHash) the profile at 17 arc-length
+// fractions and the bridged length. R.playerProfileDelta(a, b) -> the largest difference in metres
+// (Infinity when the record sets differ); under ~0.1 m is resampling noise, more is a re-profile.
+R.playerProfiles = function () {
+  const out = new Map();
+  for (const r of playerRecs()) {
+    let total = 0; const lens = r.parts.map(p => { const L = ensureS(p.seg).len; total += L; return L; });
+    const y = new Float32Array(17);
+    for (let i = 0; i <= 16; i++) {
+      let d = total * i / 16, k = 0;
+      while (k < lens.length - 1 && d > lens[k]) { d -= lens[k]; k++; }
+      const p = r.parts[k], L = lens[k]; d = Math.min(d, L);
+      y[i] = profAt(p.seg, p.rev ? L - d : d);
+    }
+    let br = 0; for (const p of r.parts) for (const run of maskRuns(ensureS(p.seg), p.seg.flags)) br += run.len;
+    let key = r.key; while (out.has(key)) key += '+';          // (two identical records: keep both)
+    out.set(key, { y, br });
+  }
+  return out;
+};
+R.playerProfileDelta = function (A, B) {
+  if (!A || !B || A.size !== B.size) return Infinity;
+  let mx = 0;
+  for (const [k, a] of A) {
+    const b = B.get(k); if (!b) return Infinity;
+    for (let i = 0; i < a.y.length; i++) mx = Math.max(mx, Math.abs(a.y[i] - b.y[i]));
+    mx = Math.max(mx, Math.abs(a.br - b.br));
+  }
+  return mx;
+};
+
+// ---- Replay view year: segs built after Y are hidden and types are taken from seg.up at Y --------
+let viewSig = '', viewT = 0;
+R.setViewYear = function (y) {
+  const v = y === undefined || y === null || !isFinite(y) ? undefined : +y;
+  if (v === viewY) return;
+  const was = viewY;
+  viewY = v; R.viewYear = v;
+  if (v === undefined) { viewSig = ''; R.dirty = true; rebuildT = 0; }   // the Present restores at once
+  else if (was === undefined) viewT = 0;
+};
+function viewSignature() {
+  let s = '';
+  R.segs.forEach(seg => { if (seg.yr && seg.yr > viewY) return; s += seg.id + ':' + typeOf(typeAt(seg, viewY)).rank + (seg._gw ? '.' + seg._gw.st : '') + ','; });
+  return s;
+}
+
+// ---- Great stone bridges built pier by pier (spec §3.8; stages driven by works.js) ---------------
+// _gw {st, n}: piers rise for st 0..n-1, arches close from the town bank for st n..2n-1, and the
+// deck and parapets appear at 2n (then the seg is simply a stone bridge). The timber deck stays.
+R.setBridgeWork = function (segId, gw) {
+  const seg = R.segs.get(segId);
+  if (!gw) { gwMap.delete(segId); if (seg && seg._gw) { seg._gw = null; R.dirty = true; } return; }
+  const v = { st: Math.max(0, gw.st | 0), n: Math.max(1, gw.n | 0) };
+  // remembered with the seg's identity, so undo/redo (deserialize) re-applies it to the same seg only
+  if (seg) gwMap.set(segId, { st: v.st, n: v.n, sig: seg.a + ':' + seg.b + ':' + seg.c1[0] });
+  if (seg) { const o = seg._gw; seg._gw = v; if (!o || o.st !== v.st || o.n !== v.n) R.dirty = true; }
+};
+// the bridge run a work applies to: the longest bridged stretch of the seg
+function workRun(seg) {
+  const S = ensureS(seg); let best = null;
+  for (const run of maskRuns(S, seg.flags)) if (!best || run.len > best.len) best = run;
+  return best;
+}
+// does the town bank lie at the far end (d1) of the run?
+function bankAtEnd(seg, d0, d1) {
+  const gw = seg._gw; if (gw && gw.fe !== undefined) return gw.fe;
+  const P0 = pointAt(seg, d0), P1 = pointAt(seg, d1);
+  let b0 = 1e18, b1 = 1e18;
+  const see = (x, z) => { b0 = Math.min(b0, (x - P0.x) ** 2 + (z - P0.z) ** 2); b1 = Math.min(b1, (x - P1.x) ** 2 + (z - P1.z) ** 2); };
+  try {
+    const TW = D.Town;
+    if (TW && TW.hist && TW.hist.list) TW.hist.list().forEach(s => { if (s.type !== 2) see(s.x, s.z); });
+    else if (TW && TW.list && TW.originOf) TW.list.forEach((S, sid) => { const o = TW.originOf(sid); if (o) see(o.x, o.z); });
+  } catch (e) { /* no towns: build from d0 */ }
+  const fe = b1 < b0;
+  if (gw) gw.fe = fe;
+  return fe;
+}
+function spanLayout(Ls) { const k = Math.max(1, Math.round(Ls / 15)); return { k, span: Ls / k }; }
+// which piers / arches of a k-span bridge stand at stage st of n (indices counted from d0)
+function stageOf(gw, k, fromEnd) {
+  const np = k - 1, st = gw.st, n = gw.n;
+  const nP = st >= n ? np : Math.min(np, Math.floor((st + 1) * np / n));
+  const nA = st < n ? 0 : st >= 2 * n ? k : Math.min(k, Math.floor((st - n + 1) * k / n));
+  return {
+    pier: j => (fromEnd ? np - j : j - 1) < nP,           // pier j = 1..k-1
+    arch: j => (fromEnd ? k - 1 - j : j) < nA,            // arch j = 0..k-1
+    parapet: st >= 2 * n
+  };
+}
+R.bridgeWorkSite = function (segId) {
+  const seg = R.segs.get(segId); if (!seg) return null;
+  const run = workRun(seg); if (!run) return null;
+  // the run clamped to the junction trims exactly as buildSegment/buildBridges do, so the worksite's
+  // piers (and works.js's n) are the piers that render
+  ensureLayout();
+  const S = ensureS(seg);
+  let tA = seg._tA || 0, tB = seg._tB || 0;
+  if (tA + tB > S.len - 1) { const kk = Math.max(0, S.len - 1) / Math.max(1e-6, tA + tB); tA *= kk; tB *= kk; }
+  const d0 = Math.max(tA, run.d0), d1 = Math.min(S.len - tB, run.d1); if (d1 - d0 <= 2) return null;
+  const T = typeOf(seg.type), H = D.Terrain.hAt, Ls = d1 - d0, { k, span } = spanLayout(Ls);
+  const fe = bankAtEnd(seg, d0, d1), W2 = T.w / 2 + 0.4, zr = zrank(T);
+  const piers = [];
+  for (let j = 1; j < k; j++) {
+    const dc = d0 + j * span, P = pointAt(seg, dc);
+    const bed = Math.min(H(P.x, P.z), H(P.x - P.tz * W2, P.z + P.tx * W2), H(P.x + P.tz * W2, P.z - P.tx * W2)) - 2;
+    piers.push({ x: P.x, z: P.z, yBase: bed, yTop: profAt(seg, dc) + zr - 0.02, d: dc });
+  }
+  if (fe) piers.reverse();
+  const gw = seg._gw || gwMap.get(segId) || { st: 0, n: Math.max(1, piers.length) };
+  let dAct = (d0 + d1) / 2;
+  if (gw.st < gw.n && piers.length) dAct = piers[Math.min(piers.length - 1, Math.floor(gw.st * piers.length / gw.n))].d;
+  else if (gw.st < 2 * gw.n) { const a = Math.min(k - 1, Math.floor((gw.st - gw.n) * k / gw.n)); dAct = d0 + (fe ? k - 1 - a : a) * span + span / 2; }
+  const P = pointAt(seg, dAct);
+  return { x: P.x, z: P.z, y: profAt(seg, dAct) + zr, rot: Math.atan2(P.tx, P.tz), len: Ls, n: piers.length, piers: piers.map(p => ({ x: p.x, z: p.z, yBase: p.yBase, yTop: p.yTop })) };
+};
+
+// ---- Atlas page drawing (atlas.js 'roads' page and growth rings) -------------------------------------
+// ctx2d in canvas pixels = world metres * scale. mode 'type' (colour by type), 'traffic' (width by
+// o.traffic Map "a-b" -> flow) or 'age' (colour by build year); o.year hides later roads.
+const AGE_BANDS = [[0.36, 0.25, 0.16], [0.72, 0.52, 0.22], [0.78, 0.45, 0.46], [0.96, 0.88, 0.62]];
+function ageCol(yr, y0, y1) {
+  if (!yr) return 'rgb(92,64,41)';                       // before the chronicle: the oldest band
+  const t = D.clamp((yr - y0) / Math.max(1, y1 - y0), 0, 1) * (AGE_BANDS.length - 1), i = Math.min(AGE_BANDS.length - 2, Math.floor(t)), u = t - i;
+  const c = AGE_BANDS[i].map((v, k) => Math.round(255 * (v + (AGE_BANDS[i + 1][k] - v) * u)));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+const pairKey = (a, b) => a < b ? a + '-' + b : b + '-' + a;
+R.pairKey = pairKey;
+R.drawAtlas = function (ctx, scale, o) {
+  o = o || {};
+  const mode = o.mode || 'type', Y = o.year === undefined || o.year === null ? undefined : o.year, tr = o.traffic;
+  const y0 = (D.Story && D.Story.Y0) || 1086, y1 = Y !== undefined ? Y : (D.Story && D.Story.displayYear ? D.Story.displayYear() : y0 + 1) || y0 + 1;
+  let tmax = 1; if (mode === 'traffic' && tr && tr.forEach) tr.forEach(v => { if (v > tmax) tmax = v; });
+  const list = [];
+  R.segs.forEach(seg => { if (Y !== undefined && seg.yr && seg.yr > Y) return; list.push(seg); });
+  list.sort((p, q) => typeOf(typeAt(p, Y)).rank - typeOf(typeAt(q, Y)).rank || p.id - q.id);
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const seg of list) {
+    const T = typeOf(typeAt(seg, Y)), S = ensureS(seg);
+    let w = Math.max(T.id === 'footpath' ? 0.6 : 0.9, T.w * scale * 1.4);
+    if (mode === 'traffic') { const f = tr && tr.get ? tr.get(pairKey(seg.a, seg.b)) || 0 : 0; w = 0.6 + 5 * Math.sqrt(D.clamp(f / tmax, 0, 1)); }
+    ctx.strokeStyle = mode === 'age' ? ageCol(seg.yr, y0, y1) : T.col;
+    ctx.lineWidth = w;
+    ctx.setLineDash(T.id === 'footpath' && mode !== 'traffic' ? [w * 2.5, w * 2] : []);
+    ctx.beginPath();
+    const st = Math.max(1, Math.floor(6 / Math.max(1e-3, scale * 4)));   // ~6 canvas px between points
+    for (let q = 0; q < S.n; q += st) { const x = S.x[q] * scale, z = S.z[q] * scale; q ? ctx.lineTo(x, z) : ctx.moveTo(x, z); }
+    ctx.lineTo(S.x[S.n - 1] * scale, S.z[S.n - 1] * scale);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // great bridges starred: stone bridges over 60 m of water, and bridge works in hand
+  const star = (x, z, r) => {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; ctx.lineTo(x + Math.cos(a) * rr, z + Math.sin(a) * rr); }
+    ctx.closePath(); ctx.fillStyle = '#e9c46a'; ctx.strokeStyle = '#3a2a18'; ctx.lineWidth = 1; ctx.fill(); ctx.stroke();
+  };
+  for (const seg of list) {
+    const T = typeOf(typeAt(seg, Y)); if (!T.stone) continue;
+    const run = workRun(seg); if (!run || (run.len < 60 && !seg._gw)) continue;
+    const P = pointAt(seg, (run.d0 + run.d1) / 2); star(P.x * scale, P.z * scale, 6);
+  }
+  ctx.restore();
+};
+
 // ---- Save / load ----------------------------------------------------------------------------------
 R.serialize = function () {
   const nodes = [], segs = [];
   R.nodes.forEach(n => nodes.push([n.id, n.x, n.z, n.y]));
   // copies: history snapshots must never share arrays with the live network
-  R.segs.forEach(s => segs.push({ id: s.id, a: s.a, b: s.b, t: s.type, c1: s.c1.slice(), c2: s.c2.slice(), p: s.prof.slice(), f: s.flags.slice(), d: s.dr ? 1 : 0, m: 1 }));
+  R.segs.forEach(s => {
+    const o = { id: s.id, a: s.a, b: s.b, t: s.type, c1: s.c1.slice(), c2: s.c2.slice(), p: s.prof.slice(), f: s.flags.slice(), d: s.dr ? 1 : 0, m: 1 };
+    // Living History (all optional; absent = a player road from before the chronicle)
+    if (s.by) o.by = 1;
+    if (s.yr) o.yr = s.yr;
+    if (s.up && s.up.length) o.up = s.up.map(u => u.slice());
+    if (s.rt) o.rt = s.rt;
+    segs.push(o);
+  });
   return { v: 2, nodes, segs, next: R.nextId };
 };
 // v1 roads: map the modern types onto medieval ones, drop railways, turn tunnels into cuttings
@@ -1697,6 +2311,12 @@ R.deserialize = function (d) {
       if (!R.nodes.has(s.a) || !R.nodes.has(s.b) || s.a === s.b) return;
       const seg = { id: s.id, a: s.a, b: s.b, type: t, c1: Array.from(s.c1), c2: Array.from(s.c2), prof: new Float32Array(s.p), flags: new Uint8Array(s.f), dr: s.d ? 1 : (!isNew && TYPES[t].drape ? 1 : 0) };
       if (s.d === undefined && isNew) seg.dr = TYPES[t].drape ? 1 : 0;
+      seg.by = s.by === 1 ? 1 : 0;
+      if (s.yr) seg.yr = +s.yr;
+      if (Array.isArray(s.up) && s.up.length) seg.up = s.up.filter(u => Array.isArray(u) && u.length >= 2).map(u => [+u[0] || 0, String(u[1])]);
+      if (s.rt) seg.rt = s.rt;
+      const gw = gwMap.get(seg.id);
+      if (gw && gw.sig === seg.a + ':' + seg.b + ':' + seg.c1[0]) seg._gw = { st: gw.st, n: gw.n };
       link(seg);
       if (seg.prof.length !== ensureS(seg).n) { // sampling changed: stretch the stored profile
         resampleProf(seg, seg.prof.length ? seg.prof : new Float32Array([R.nodes.get(seg.a).y, R.nodes.get(seg.b).y]), seg.flags.length ? seg.flags : new Uint8Array(2));
@@ -1793,6 +2413,11 @@ function curveFor(start, end, straight) {
 function clearGhost() { if (R.ghost) R.ghost.visible = false; D.TU.uBrushOn.value.x = 0; }
 function upgradeSeg(id, type, grade) {
   const seg = R.segs.get(id); if (!seg) return [];
+  // Living History: log the change once the chronicle runs; a history road the player rebuilds
+  // becomes the player's own (history never touches it again)
+  const y = yearNow();
+  if (y || seg.up) logType(seg, type, y);
+  if (seg.by) seg.by = 0;
   seg.type = type; seg._s = null; seg._cb = null; seg._hr = null;
   profileSeg(seg, { grade });
   clearCorridor(seg);
@@ -1916,7 +2541,7 @@ R.removeSeg = function (seg) {
   if (!seg._bb) rehash();
   const bb = seg._bb;
   unlink(seg);
-  if (bb) D.emit('roads:removed', bb);
+  if (bb) D.emit('roads:removed', bb, [{ by: seg.by ? 1 : 0, yr: seg.yr, rt: seg.rt }]);
   [seg.a, seg.b].forEach(dropIfOrphan);
   R.dirty = true; R.version++;
 };

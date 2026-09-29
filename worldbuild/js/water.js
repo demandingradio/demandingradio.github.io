@@ -21,12 +21,14 @@ const WU = {
   // border uniforms are the terrain's own objects (shared, not copies)
   uEdge: D.TU.uEdge, uEdgeCfg: D.TU.uEdgeCfg
 };
+if (D.AU) Object.assign(WU, D.AU);   // Atlas uniforms: the shared objects, spread in before the materials are built
 Water.U = WU;
 const WATER_COMMON = `
 uniform sampler2D uH; uniform float uTime; uniform vec3 uSunDir, uSunCol, uSky, uHor, uCam, uFogCol, uShallow, uDeep;
 uniform float uFogD, uNight, uSea, uChop, uSlab, uSnow;
 ${D.GLSL_NOISE}
 ${D.GLSL_EDGE || ''}
+${D.GLSL_ATLAS || ''}
 float groundH(vec2 xz){
   vec2 g = clamp(xz / ${CELL.toFixed(1)}, vec2(0.0), vec2(${N.toFixed(1)}));
   ivec2 i = min(ivec2(floor(g)), ivec2(${N - 1}));
@@ -83,6 +85,11 @@ vec4 shadeWater(vec3 wp, float depth, float flowFoam){
   col = edgeApply(col, wp.xz, sd, epx, epr, uNight, 1.0, eBand, eEmis);
   col += eEmis;
   alpha = max(alpha, eBand);
+${D.GLSL_ATLAS ? `  if (uAtlas > 0.001) {   // Atlas: a still blue-grey plaster table of water (the dark table beyond the map)
+    float ak = at_k(wp.xz);
+    vec3 tab = sd > 0.0 ? vec3(.30, .24, .19) : vec3(.62, .70, .74) * mix(vec3(1.0), at_pageCol(wp.xz), 0.35) * (0.97 + 0.03 * at_vn(wp.xz * 0.5));
+    col = mix(col, pow(tab, vec3(2.2)), ak); alpha = mix(alpha, 1.0, ak);
+  }` : ''}
   float fog = 1.0 - exp(-pow(dist * uFogD, 2.0));
   col = mix(col, uFogCol, fog);
   return vec4(col, alpha);
@@ -804,6 +811,7 @@ Water.update = function (dt, camera) {
   const l = 0.25 + 0.75 * E.day;
   Water.mistU.uCol.value.setRGB(l, l, l);
   const vis = D.Layers ? D.Layers.visible('water') : true;
-  Water.sea.visible = vis; Water.lakeGroup.visible = vis; Water.riverGroup.visible = vis; Water.mist.visible = vis;
+  const ak = D.AU ? D.AU.uAtlas.value : 0;   // Atlas: no mist over the plaster table
+  Water.sea.visible = vis; Water.lakeGroup.visible = vis; Water.riverGroup.visible = vis; Water.mist.visible = vis && ak <= 0.5;
 };
 })();

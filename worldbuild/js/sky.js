@@ -32,6 +32,10 @@ const SEASONS = { spring: [1, 0, 0, 0], summer: [0, 1, 0, 0], autumn: [0, 0, 1, 
 D.WEATHERS = WEATHERS; D.SEASONS = SEASONS;
 
 const Sky = D.Sky = {};
+// Atlas table lighting targets (spec 3.12 / E sky.js): ak = D.AU.uAtlas, the global drain 0..1
+const atlasK = () => (D.AU ? D.AU.uAtlas.value : 0);
+const ATLAS_LIGHT = new THREE.Vector3(-0.5, 0.7071, -0.5).normalize();   // from the north-west, 45 degrees up
+const ATLAS_WHITE = new THREE.Color(1, 1, 1), ATLAS_HEMI = new THREE.Color(0.62, 0.62, 0.64), ATLAS_GROUND = new THREE.Color(0.30, 0.29, 0.27);
 let cur = Object.assign({}, WEATHERS.clear); // smoothed weather params
 const seasonW = new THREE.Vector4(0, 1, 0, 0);
 
@@ -173,7 +177,9 @@ Sky.update = function (dt, camera, focus, camDist) {
   // sunset tint strongest when sun is near the horizon
   const sunsetAmt = D.smooth(-0.12, 0.0, e) * (1 - D.smooth(0.05, 0.25, e));
   U.uSunset.value.setHex(0xff7a3a).multiplyScalar(sunsetAmt * 0.55);
-  Env.night = D.smooth(0.02, -0.14, e);
+  // Atlas table (ak = the global drain): lamps out, a neutral studio light, no weather
+  const ak = D.AU ? D.AU.uAtlas.value : 0;
+  Env.night = D.smooth(0.02, -0.14, e) * (1 - ak);
   Env.day = 1 - Env.night;
   U.uNight.value = Env.night;
   U.uCloudy.value = D.clamp((cur.cloud - 0.25) / 0.75, 0, 1);
@@ -182,10 +188,10 @@ Sky.update = function (dt, camera, focus, camDist) {
   U.uMoonDir.value.set(-Env.sunDir.x, Math.max(0.35, -Env.sunDir.y), -Env.sunDir.z * 0.6 + 0.3).normalize();
   // convert keyframe sRGB colours to linear for rendering
   [U.uZen.value, U.uHor.value, U.uSunCol.value, U.uSunset.value, U.uGround.value].forEach(c => c.convertSRGBToLinear());
-  U.uStudio.value = Env.studio;
+  U.uStudio.value = Math.max(Env.studio, ak);   // never writes Env.studio
 
   // lightning
-  if (Env.weather === 'storm' && Math.random() < dt * 0.12) { Env.flash = 1; D.emit('lightning'); }
+  if (Env.weather === 'storm' && ak < 0.5 && Math.random() < dt * 0.12) { Env.flash = 1; D.emit('lightning'); }
   Env.flash = Math.max(0, Env.flash - dt * 5);
   U.uFlash.value = Env.flash * (Math.random() > 0.3 ? 0.6 : 0.2);
 
@@ -194,6 +200,7 @@ Sky.update = function (dt, camera, focus, camDist) {
   const isMoon = e < -0.03;
   Env.lightDir.copy(isMoon ? U.uMoonDir.value : Env.sunDir);
   if (!isMoon && Env.lightDir.y < 0.05) Env.lightDir.y = 0.05, Env.lightDir.normalize();
+  if (ak > 0) Env.lightDir.lerp(ATLAS_LIGHT, ak).normalize();   // a fixed north-west raking hillshade
   const si = D.lerp(a.si, b.si, t) * cur.sun;
   sun.intensity = si * (isMoon ? 1 : D.smooth(-0.03, 0.05, e)) + Env.flash * 2;
   sun.color.copy(U.uSunCol.value);
@@ -201,6 +208,11 @@ Sky.update = function (dt, camera, focus, camDist) {
   lerpHex(a.hs, b.hs, t, Sky.hemi.color).lerp(greyCol, grey * 0.6).convertSRGBToLinear();
   lerpHex(a.hg, b.hg, t, Sky.hemi.groundColor).convertSRGBToLinear();
   Sky.hemi.intensity = D.lerp(a.hi, b.hi, t) * (1 + grey * 0.25) + Env.flash * 1.5;
+  if (ak > 0) {   // white sun at ~1.8, neutral sky fill
+    sun.intensity += (1.8 - sun.intensity) * ak; sun.color.lerp(ATLAS_WHITE, ak);
+    Sky.hemi.color.lerp(ATLAS_HEMI, ak); Sky.hemi.groundColor.lerp(ATLAS_GROUND, ak);
+    Sky.hemi.intensity += (0.55 - Sky.hemi.intensity) * ak;
+  }
 
   // shadow frustum follows the focus point
   const sd = D.clamp(camDist * 1.15, 260, D.Q.high ? 5200 : 3200);
@@ -218,9 +230,10 @@ Sky.update = function (dt, camera, focus, camDist) {
 
   // fog
   Env.fogColor.copy(U.uHor.value).lerp(U.uZen.value, 0.15);
-  if (Env.studio > 0) Env.fogColor.lerp(new THREE.Color(0.06, 0.065, 0.07), Env.studio);
+  const stF = Math.max(Env.studio, ak);
+  if (stF > 0) Env.fogColor.lerp(new THREE.Color(0.06, 0.065, 0.07), stF);
   Sky.scene.fog.color.copy(Env.fogColor);
-  Env.fogDensity = cur.fog * (1 - Env.studio * 0.7);
+  Env.fogDensity = cur.fog * (1 - Env.studio * 0.7) * (1 - 0.9 * ak);
   Sky.scene.fog.density = Env.fogDensity;
   Env.sky.copy(U.uZen.value); Env.horizon.copy(U.uHor.value); Env.sunColor.copy(sun.color).multiplyScalar(sun.intensity / 3);
   Env.cloud = cur.cloud;
@@ -232,9 +245,9 @@ Sky.update = function (dt, camera, focus, camDist) {
   const TU = D.TU;
   TU.uSea.value = D.W.seaLevel;
   TU.uTime.value = T % 10000;
-  TU.uCloud.value = D.clamp(cur.cloud * 1.2, 0, 1) * (1 - Env.night);
-  TU.uSnow.value = Env.snow;
-  TU.uWet.value = D.clamp(Env.wet, 0, 1);
+  TU.uCloud.value = D.clamp(cur.cloud * 1.2, 0, 1) * (1 - Env.night) * (1 - ak);
+  TU.uSnow.value = Env.snow * (1 - ak);
+  TU.uWet.value = D.clamp(Env.wet, 0, 1) * (1 - ak);
   TU.uNight.value = Env.night;
   TU.uWind.value.set(Math.cos(0.6) * Env.wind * 10, Math.sin(0.6) * Env.wind * 10);
 
@@ -294,7 +307,7 @@ function updateClouds(dt, camera) {
     const c = clouds[i];
     c.x += wx * dt; c.z += wz * dt;
     if (c.x > lo + span) c.x -= span; if (c.z > lo + span) c.z -= span;
-    if (i >= n || !vis) continue;
+    if (i >= n || !vis || atlasK() > 0.5) continue;
     if (Env.studio > 0.5 && (c.x < 300 || c.z < 300 || c.x > SIZE - 300 || c.z > SIZE - 300)) continue;
     const cdx = c.x - camera.position.x, cdy = c.y - camera.position.y, cdz = c.z - camera.position.z;
     if (cdx * cdx + cdy * cdy + cdz * cdz < 900 * 900 * c.s * c.s) continue; // don't fly through clouds
@@ -382,13 +395,13 @@ function updatePrecip(dt, camera, camDist) {
   U.uAlpha.value = D.clamp(cur.rain, 0, 1.6) * 0.16;
   const lum = 0.16 + 0.42 * Env.day;
   U.uCol.value.setRGB(lum * 0.8, lum * 0.85, lum * 0.9);
-  Sky.rain.visible = cur.rain > 0.02 && Env.studio < 0.5;
+  Sky.rain.visible = cur.rain > 0.02 && Env.studio < 0.5 && atlasK() <= 0.5;
   const S = Sky.snowU;
   S.uCam.value.copy(camera.position);
   S.uBox.value = box;
   S.uT.value = (S.uT.value + dt * (40 / box) * 0.8) % 1000;
   S.uAlpha.value = D.clamp(cur.snow, 0, 1) * 0.85;
   S.uSize.value = 3 * (D.Post ? D.Post.pixelRatio : 1);
-  Sky.snowPts.visible = cur.snow > 0.02 && Env.studio < 0.5;
+  Sky.snowPts.visible = cur.snow > 0.02 && Env.studio < 0.5 && atlasK() <= 0.5;
 }
 })();

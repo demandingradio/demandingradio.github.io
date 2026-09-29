@@ -18,7 +18,12 @@ const clamp = D.clamp, lerp = D.lerp;
 const F = {
   DOOR_F: 1, DOOR_B: 2, DOOR_R: 4, PARTY_L: 8, PARTY_R: 16, PARTY_B: 32, SHOP: 64, FRAMESTAGE: 128,
   SILL: 256, QUOINS: 512, BARNDOOR: 1024, STABLE: 2048, ROSE: 4096, GABLE: 8192, NOWIN: 16384,
-  DBLDOOR: 32768, BELFRY: 65536
+  DBLDOOR: 32768, BELFRY: 65536,
+  // Living History (decoded in GROW from iParams2.w; float-exact below 2^24)
+  SCAFF: 131072, RIDE: 262144, PEG: 524288, LATE: 1048576,  // scaffolding · crane rides the cap · pegs & lines · roof rises late
+  // FRAMESTAGE = may show a skeleton stage when a history reveal sets rec._fe; FRAMEOLD = the v44 2.2 s timber
+  // skeleton on every animated reveal (only where v44 set it: framed timber storeys / gables)
+  FRAMEOLD: 2097152
 };
 const WS = { wattle: 0, timber: 1, rubble: 2, ashlar: 3, plank: 4, log: 5, castle: 6, church: 7, render: 8 };
 const RS = { thatch: 0, tile: 1, slate: 2, shingle: 3, lead: 4, turf: 5, stone: 6 };
@@ -236,7 +241,7 @@ function gableRoof(thatch) {
   const mb = new MB(RDEF);
   const U = thatch ? 0.075 : 0.035; // underside offset / fascia depth (unit y)
   const rows = thatch
-    ? [{ y: 0, z: 0.5 }, { y: 0.5, z: 0.262 }, { y: 0.999, z: 0.0005, row: 1 }, { y: 0.985, z: 0.03 }, { y: 1.02, z: 0 }]
+    ? [{ y: 0, z: 0.5 }, { y: 0.5, z: 0.262 }, { y: 0.97, z: 0.0157, row: 1 }, { y: 0.999, z: 0.0005 }, { y: 0.985, z: 0.03 }, { y: 1.02, z: 0 }]
     : [{ y: 0, z: 0.5 }, { y: 0.999, z: 0.0005, row: 1 }, { y: 1, z: 0 }];
   for (const sg of [-1, 1]) {
     const n = nrm([0, 0.5, sg]);
@@ -514,20 +519,37 @@ const G_VC = {
     return vmerge([vbox(1, 0.2, 1, 0, 0.1, 0, 0x6a5038), vbox(0.14, 0.9, 0.14, 0, 0.6, 0, COL.darkWood), vbox(0.7, 0.14, 0.1, 0, 0.9, 0, COL.darkWood),
       vbox(0.04, 0.04, 0.12, -0.22, 0.9, 0, COL.soot), vbox(0.04, 0.04, 0.12, 0, 0.9, 0, COL.soot), vbox(0.04, 0.04, 0.12, 0.22, 0.9, 0, COL.soot)]);
   },
-  crane() { // treadwheel crane frame + jib reaching to -z (the wheel is a separate part)
-    const w = COL.darkWood, P = [];
-    P.push(vbox(1, 0.06, 1, 0, 0.03, 0, 0x5a4633));
-    for (const xs of [-0.3, 0.3]) { P.push(vbeam([xs, 0.05, 0.35], [xs * 0.4, 0.95, 0], 0.07, w), vbeam([xs, 0.05, -0.35], [xs * 0.4, 0.95, 0], 0.07, w)); }
-    P.push(vbeam([0, 0.2, 0.3], [0, 1.0, -0.48], 0.07, w), vbeam([0, 0.95, 0.0], [0, 0.98, -0.48], 0.04, w));
-    P.push(vbox(0.012, 0.5, 0.012, 0, 0.73, -0.47, 0xbba27a), vbox(0.08, 0.06, 0.08, 0, 0.46, -0.47, COL.iron));
-    P.push(vbox(0.7, 0.34, 0.5, 0, 0.23, 0.2, 0x6a5038));
+  crane() { return craneGeo(true); },   // treadwheel crane frame + jib reaching to -z (the wheel is a separate part)
+  craneT() { return craneGeo(false); }, // the same without its ground plate: rides the construction cap on a worksite
+  // one bay of putlog scaffolding in a unit cube: x along the wall face, y up (3 lifts), +z against the wall.
+  // Member sizes are pre-compensated for the usual bay scale (≈ 4.5 × 6 × 1.4 m).
+  scaffold() {
+    const P = [], pole = 0x8a7a62, led = 0x6b5a44, brd = 0x9c7e56, zo = -0.36, zi = 0.3;
+    for (const x of [-0.49, 0.49]) for (const z of [zo, zi]) P.push(vbox(0.022, 1.0, 0.07, x, 0.5, z, pole));
+    for (let k = 1; k <= 3; k++) {
+      const y = k / 3 - 0.02;
+      for (const z of [zo, zi]) P.push(vbox(1.0, 0.015, 0.05, 0, y, z, led));
+      for (const x of [-0.3, 0.05, 0.4]) P.push(vbox(0.018, 0.012, 0.95, x, y - 0.012, 0.03, led));   // putlogs into the wall
+      P.push(vbox(0.98, 0.008, 0.62, 0, y + 0.006, -0.03, brd));                                        // boards
+      P.push(vbox(1.0, 0.012, 0.03, 0, y + 0.16, zo, led));                                            // guard rail
+    }
+    P.push(vbeam([-0.48, 0.02, zo - 0.03], [0.48, 0.98, zo - 0.03], 0.02, led));                       // raking brace
     return vmerge(P);
   }
 };
+function craneGeo(plate) {
+  const w = COL.darkWood, P = [];
+  if (plate) P.push(vbox(1, 0.06, 1, 0, 0.03, 0, 0x5a4633));
+  for (const xs of [-0.3, 0.3]) { P.push(vbeam([xs, 0.05, 0.35], [xs * 0.4, 0.95, 0], 0.07, w), vbeam([xs, 0.05, -0.35], [xs * 0.4, 0.95, 0], 0.07, w)); }
+  P.push(vbeam([0, 0.2, 0.3], [0, 1.0, -0.48], 0.07, w), vbeam([0, 0.95, 0.0], [0, 0.98, -0.48], 0.04, w));
+  P.push(vbox(0.012, 0.5, 0.012, 0, 0.73, -0.47, 0xbba27a), vbox(0.08, 0.06, 0.08, 0, 0.46, -0.47, COL.iron));
+  P.push(vbox(0.7, 0.34, 0.5, 0, 0.23, 0.2, 0x6a5038));
+  return vmerge(P);
+}
 
 // ---- registry ---------------------------------------------------------------------------------
 const MAT = { WALL: 0, ROOF: 1, PLAIN: 2, VC: 3 };
-const DETAIL = new Set(['torch', 'lantern', 'signArm', 'signBoard', 'aleStake', 'windlass', 'anvil', 'goods', 'pillory', 'bell', 'pennant', 'ladder', 'trough', 'crossHead']);
+const DETAIL = new Set(['torch', 'lantern', 'signArm', 'signBoard', 'aleStake', 'windlass', 'anvil', 'goods', 'pillory', 'bell', 'pennant', 'ladder', 'trough', 'crossHead', 'scaffold']);
 const GEO_LIST = [];
 for (const [lib, mat] of [[G_WALL, MAT.WALL], [G_ROOF, MAT.ROOF], [G_PLAIN, MAT.PLAIN], [G_VC, MAT.VC]]) {
   for (const name in lib) GEO_LIST.push({ name, mat, detail: DETAIL.has(name), build: lib[name], geo: null });
@@ -544,18 +566,46 @@ function buildGeos() {
 // ---- shaders ---------------------------------------------------------------------------------
 const CU = {
   uClock: { value: 0 }, uNightC: { value: 0 }, uLateC: { value: 0 }, uSnowC: { value: 0 }, uWindK: { value: 0.5 },
-  uSpin: { value: 0 }   // integrated sail angle so a wind change never makes the sails jump
+  uSpin: { value: 0 },  // integrated sail angle so a wind change never makes the sails jump
+  // Living History: display year (0 = no story → legacy static age), replay view year (1e6 = live), rise span in years,
+  // weathering spans in years (thatch, limewash, stone, lichen) and ivy (D.TUNE.kit.age)
+  uYear: { value: 0 }, uView: { value: 1e6 }, uViewRise: { value: 1.5 },
+  uAgeT: { value: new THREE.Vector4(35, 60, 160, 180) }, uAgeIvy: { value: 220 }
 };
+const TUNE = D.TUNE = D.TUNE || {};
+TUNE.kit = Object.assign({ age: { thatch: 35, limewash: 60, stone: 160, lichen: 180, ivy: 220 } }, TUNE.kit || {});
 const GLSL_U = `
-uniform float uClock; uniform float uNightC; uniform float uLateC; uniform float uSnowC; uniform float uWindK; uniform float uSpin;`;
+uniform float uClock; uniform float uNightC; uniform float uLateC; uniform float uSnowC; uniform float uWindK; uniform float uSpin;
+uniform float uYear; uniform float uView; uniform float uViewRise; uniform vec4 uAgeT; uniform float uAgeIvy;`;
+// iLife replaces the old per-instance iDie float: x = die clock (the former iDie), y = built year (0 unknown),
+// z = construction cap world Y (1e7 = complete), w = skeleton-stage end on the Kit clock (0 = legacy window)
 const GLSL_IA = `
-attribute vec4 iParams; attribute vec4 iParams2; attribute vec4 iAnim; attribute float iDie;`;
-// shared growth / sink chunk (appended after project_vertex in every kit material and depth material)
+attribute vec4 iParams; attribute vec4 iParams2; attribute vec4 iAnim; attribute vec4 iLife; // iLife.x = the former iDie
+`;
+// shared growth / sink chunk (appended after project_vertex in every kit material and depth material).
+// Part flags (iParams2.w): SCAFF clips to the cap + 2.4, RIDE rides the cap (crane), PEG shows only before the
+// walls start, LATE (house roofs) is born 60% of the way into the skeleton stage. Other parts squash-rise as the
+// cap passes them, except in the main WALL material (KIT_WALLCUT) whose fragments are cut at the cap instead.
+// A RIDE part's iParams.w (vo) is its lift above the cap (only VC parts ride; VC never reads iParams.w otherwise).
 const GROW = `
 vec4 wpA = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
-float gA = clamp((uClock - iAnim.x) / 1.4, 0.0, 1.0); gA = 1.0 - pow(1.0 - gA, 3.0);
-if (iDie > 0.0) gA *= 1.0 - clamp((uClock - iDie) / 0.8, 0.0, 1.0);
+float kf = floor(iParams2.w + 0.5);
+bool kSC = mod(floor(kf / 131072.0), 2.0) > 0.5, kRI = mod(floor(kf / 262144.0), 2.0) > 0.5,
+     kPG = mod(floor(kf / 524288.0), 2.0) > 0.5, kLT = mod(floor(kf / 1048576.0), 2.0) > 0.5;
+float kB = iAnim.x; if (kLT && iLife.w > 0.0 && iLife.w > kB) kB = mix(kB, iLife.w, 0.6);
+float gA = clamp((uClock - kB) / 1.4, 0.0, 1.0); gA = 1.0 - pow(1.0 - gA, 3.0);
+if (iLife.x > 0.0) gA *= 1.0 - clamp((uClock - iLife.x) / 0.8, 0.0, 1.0);
+if (iLife.y > 0.5 && uView < 1e5) gA = min(gA, clamp((uView - iLife.y) / uViewRise, 0.0, 1.0));
+float kCap = iLife.z, kTop = iAnim.y + length(instanceMatrix[1].xyz);
+if (kPG && kCap > iAnim.y + 0.5) gA = 0.0;
+if (kCap < 1e6) {
+  if (kSC) { if (kCap + 2.4 < iAnim.y) gA = 0.0; }
+#ifndef KIT_WALLCUT
+  else if (!kRI && !kPG) gA = min(gA, clamp((kCap - iAnim.y) / max(kTop - iAnim.y, 0.1), 0.0, 1.0));
+#endif
+}
 wpA.y = iAnim.y + (wpA.y - iAnim.y) * max(gA, 0.002);
+if (kCap < 1e6) { if (kRI) wpA.y += kCap - iAnim.y + iParams.w; else if (kSC) wpA.y = min(wpA.y, kCap + 2.4); }
 mvPosition = viewMatrix * wpA; gl_Position = projectionMatrix * mvPosition;
 if (gA < 0.004) gl_Position = vec4(0.0, 0.0, -2.0, 1.0);`;
 // main materials only: shadow lookups use the grown / sunk position too (worldpos_vertex runs after project_vertex)
@@ -568,13 +618,20 @@ const KSC = `vec3 kSc = vec3(length(instanceMatrix[0].xyz), length(instanceMatri
 // -- WALL
 const WALL_VDECL = `
 attribute float aU; attribute float gTop;
-varying vec3 vKF; varying vec3 vKN; varying vec3 vKS; varying float vKU; varying vec4 vKP; varying vec4 vKP2; varying float vKB;`;
+// born, skeleton end, built year and construction cap share one vec4 (varying budget)
+varying vec3 vKF; varying vec3 vKN; varying vec3 vKS; varying float vKU; varying vec4 vKP; varying vec4 vKP2; varying vec4 vKT; varying vec3 vAtW;
+#define vKB vKT.x
+#define vKFe vKT.y
+#define vKY vKT.z
+#define vKCap vKT.w
+`;
 const WALL_SHAPE = `
 ${KSC}
 if (abs(gTop) > 0.5) { float kHg = clamp(iAnim.z, 0.0, 1.0); transformed.y = 1.0 - kHg; transformed.z = gTop * 0.5 * kHg; }`;
 const WALL_VOUT = `
 vKF = transformed * kSc; vKN = normal; vKS = kSc; vKU = aU > -5.0 ? aU * 3.14159265 * kSc.x : -1e4;
-vKP = iParams; vKP2 = iParams2; vKB = iAnim.x;`;
+vKP = iParams; vKP2 = iParams2; vKB = iAnim.x;
+vKFe = iLife.w; vKY = iLife.y; vKCap = iLife.z;`;
 const FRAG_HELP = `
 float kline(float d, float w, float px){ return 1.0 - smoothstep(w - px, w + px, d); }
 float kbit(int f, int b){ return (f & b) != 0 ? 1.0 : 0.0; }
@@ -590,7 +647,13 @@ function glslVec(hex) { const c = lin(hex); return `vec3(${c[0].toFixed(4)}, ${c
 function wallFDecl() {
   const T = PAL.timber, S = [0x7a2f25, 0x3e5a36, 0x3f526a, 0xa8823a, 0x5e4632, 0x4e6a70];
   return `
-varying vec3 vKF; varying vec3 vKN; varying vec3 vKS; varying float vKU; varying vec4 vKP; varying vec4 vKP2; varying float vKB;
+// born, skeleton end, built year and construction cap share one vec4 (varying budget)
+varying vec3 vKF; varying vec3 vKN; varying vec3 vKS; varying float vKU; varying vec4 vKP; varying vec4 vKP2; varying vec4 vKT; varying vec3 vAtW;
+#define vKB vKT.x
+#define vKFe vKT.y
+#define vKY vKT.z
+#define vKCap vKT.w
+
 vec3 K_em; float K_ro;
 vec3 kTcol(float t){ return t < 0.5 ? ${glslVec(T[0])} : t < 1.5 ? ${glslVec(T[1])} : t < 2.5 ? ${glslVec(T[2])} : t < 3.5 ? ${glslVec(T[3])} : ${glslVec(T[4])}; }
 vec3 kShut(float h){ return h < 0.17 ? ${glslVec(S[0])} : h < 0.34 ? ${glslVec(S[1])} : h < 0.5 ? ${glslVec(S[2])} : h < 0.67 ? ${glslVec(S[3])} : h < 0.84 ? ${glslVec(S[4])} : ${glslVec(S[5])}; }`;
@@ -603,6 +666,13 @@ vec3 facade(vec3 base){
   float st = floor(stF); float tone = floor(fract(stF) * 10.0);
   float seed = vKP.y, lit = vKP.z, vo = vKP.w;
   float wl = vKP2.x, age = vKP2.y, fh = max(vKP2.z, 1.2);
+  // weathering: dated records (built year + a running chronicle) age from the clock; everything else keeps
+  // its legacy static age, so undated records render exactly as before
+  float kNew = (vKY > 0.5 && uYear > 0.5) ? 1.0 : 0.0;
+  float ageY = kNew > 0.5 ? max(uYear - vKY, 0.0) : age * 110.0;
+  if (kNew > 0.5) age = clamp(ageY / 110.0, 0.0, 1.0);
+  float aWa = smoothstep(5.0, uAgeT.y, ageY) * kNew, aSt = smoothstep(15.0, uAgeT.z, ageY) * kNew;
+  float aLi = smoothstep(40.0, uAgeT.w, ageY) * kNew, aIv = smoothstep(70.0, uAgeIvy, ageY) * kNew;
   int fl = int(vKP2.w + 0.5);
   float curved = step(-5000.0, vKU);
   float faceX = step(abs(n.z), abs(n.x));
@@ -645,6 +715,7 @@ vec3 facade(vec3 base){
   vec3 col = base; vec3 avg = base;
   // ---- base material
   if (st < 1.5 || st > 7.5) {                 // daub / limewash / render
+    if (kNew > 0.5) base *= mix(vec3(1.0), vec3(0.85, 0.75, 0.55), aWa);   // fresh limewash mellows to cream
     col = base * (0.9 + 0.16 * nA) * (1.0 - 0.07 * nB * fine);
     avg = base * 0.97; K_ro = 0.92;
     if (st < 0.5) {                            // wattle: flaking daub shows the hazel weave
@@ -653,6 +724,10 @@ vec3 facade(vec3 base){
       col = mix(col, vec3(0.21, 0.14, 0.08) * (0.7 + 0.6 * wv), fk * fine);
     }
   } else if (isStone > 0.5) {                  // rubble / ashlar / castle / church
+    if (kNew > 0.5) {                          // new stone is pale; it darkens and greys with the years
+      base *= 1.0 + (1.0 - aSt) * 0.12;
+      base = mix(base, vec3(dot(base, vec3(0.3, 0.59, 0.11))), aSt * 0.45) * (1.0 - 0.25 * aSt);
+    }
     float rowH = st < 2.5 ? 0.27 : st < 3.5 ? 0.34 : st < 6.5 ? 0.46 : 0.36;
     float row = floor(v / rowH), fr = fract(v / rowH);
     float bl = st < 2.5 ? mix(0.32, 0.75, d_hash12(vec2(row, seed))) : st < 3.5 ? 0.86 : st < 6.5 ? 1.05 : 0.78;
@@ -665,6 +740,10 @@ vec3 facade(vec3 base){
     vec3 sc = base * (0.8 + 0.34 * bh) * (0.9 + 0.16 * nA);
     col = mix(sc, base * 0.62 + vec3(0.05), mort * fine);
     avg = base * 0.93; K_ro = 0.86;
+    if (kNew > 0.5) {                          // lichen speckle
+      float lch = aLi * smoothstep(0.58, 0.78, d_fbm(vec2(u, v) / 0.7 + seed * 0.31)) * 0.55;
+      col = mix(col, vec3(0.42, 0.43, 0.30) * (0.8 + 0.3 * nB), lch); avg = mix(avg, vec3(0.42, 0.43, 0.30), lch * 0.4);
+    }
   } else if (st < 4.5) {                       // plank: vertical boards
     float bw = 0.26; float bq = u / bw; float bj = min(fract(bq), 1.0 - fract(bq)) * bw;
     float gap = 1.0 - smoothstep(0.006, 0.02, bj);
@@ -893,8 +972,36 @@ vec3 facade(vec3 base){
   col *= 1.0 - 0.25 * age * (1.0 - smoothstep(0.0, 1.3, v)) * ground;
   col *= 1.0 - 0.13 * age * smoothstep(0.55, 0.9, d_vnoise(vec2(u * 1.8, v * 0.09) + seed)) * fine;
   col = mix(col, vec3(0.13, 0.17, 0.07) * (0.8 + 0.4 * nB), isStone * age * 0.6 * (1.0 - smoothstep(0.0, 1.1, v)) * ground * smoothstep(0.5, 0.75, d_fbm(q * 1.3)));
-  // ---- framing stage: the skeleton stands first, infill follows
-  if (kbit(fl, 128) > 0.5) { float tb = uClock - vKB; if (tb > -0.05 && tb < 2.2 && v > 0.45 && tim < 0.5) discard; }
+  if (kNew > 0.5) {
+    // limewash grime streaks
+    float wash = (st < 1.5 || st > 7.5) ? 1.0 : 0.0;
+    col *= 1.0 - 0.1 * aWa * wash * smoothstep(0.6, 0.95, d_vnoise(vec2(u * 2.6, v * 0.12) + seed * 1.7)) * fine;
+    // ivy: church and castle walls, and any stone wall past 80 years; climbs from the ground, keenest at corners
+    float ivyOk = max(max(church, castle), isStone * step(80.0, ageY)) * ground * (1.0 - isGable) * (1.0 - step(0.5, tim));
+    if (ivyOk > 0.5 && aIv > 0.0) {
+      float reach = aIv * topV * (0.5 + 0.5 * d_vnoise(vec2(u * 0.3, seed))) * mix(0.55, 1.0, 1.0 - smoothstep(0.0, 3.0, edge * (1.0 - curved) + curved * 3.0));
+      float leaf = d_vnoise(vec2(u, v) * 7.0 + seed);
+      float iv = (1.0 - smoothstep(reach - 0.6, reach, v)) * smoothstep(0.25, 0.5, leaf + 0.2);
+      col = mix(col, vec3(0.16, 0.24, 0.10) * (0.6 + 0.7 * leaf), iv); K_ro = mix(K_ro, 0.75, iv);
+    }
+  }
+  // ---- framing stage: the skeleton stands first, infill follows. FRAMEOLD (framed timber, as in v44) keeps the
+  // legacy 2.2 s window; with a history reveal (vKFe > 0) every style gets a stage, non-timber walls a
+  // synthesised post-and-rail frame.
+  if (kbit(fl, 128) > 0.5) {
+    float fe = vKFe > 0.0 ? vKFe : (kbit(fl, 2097152) > 0.5 ? vKB + 2.2 : -1e9);
+    if (uClock > vKB - 0.05 && uClock < fe && v > 0.45) {
+      float fr = tim;
+      if (isTimber < 0.5) {
+        float bp = min(fract((u + halfW) / 2.4), 1.0 - fract((u + halfW) / 2.4)) * 2.4;
+        fr = max(kline(edge, 0.2, px) * (1.0 - curved), kline(bp, 0.11, px));
+        if (isGable > 0.5) fr = max(fr, kline(halfW * (1.0 - v / max(vKS.y, 0.1)) - abs(u), 0.16, px));
+        else fr = max(fr, max(kline(abs(vs - 0.09), 0.09, px), kline(abs(v - (topV - 0.1)), 0.1, px)));
+        col = mix(col, tcv, fr);
+      }
+      if (fr < 0.5) discard;
+    }
+  }
   return col;
 }`;
 
@@ -903,12 +1010,12 @@ const ROOF_DECL = `
 attribute vec3 rUV; attribute float rRow; attribute vec2 rCap;
 vec3 roofShape(vec3 p, vec3 kSc, float kHc){
   if (rCap.x >= 0.0) { p.y = (1.0 - kHc) + kHc * rCap.x; p.z = rCap.y * 0.5 * (1.0 - p.y); p.x = sign(position.x) * 0.5; }
-  if (rRow > 0.5)    { p.y = 1.0 - kHc; p.z = sign(position.z) * 0.5 * kHc; }
+  if (rRow > 0.5 && kHc > 0.001) { p.y = 1.0 - kHc; p.z = sign(position.z) * 0.5 * kHc; }   // hinge row moves only for a half-hip
   if (abs(position.x) > 0.499 && rUV.z < 0.5) { float e = max(0.0, p.y - (1.0 - kHc)); p.x = sign(position.x) * max(0.5 - e * 0.5 * kSc.z / kSc.x, 0.0); }
   return p;
 }`;
 const ROOF_VDECL = ROOF_DECL + `
-varying vec2 vKR; varying float vKM; varying float vKUp; varying vec4 vKP; varying vec4 vKP2; varying float vKL;`;
+varying vec2 vKR; varying float vKM; varying float vKUp; varying vec4 vKP; varying vec4 vKP2; varying float vKL; varying float vKY;`;
 const ROOF_NORMAL = `
 ${KSC}
 float kHc = clamp(iAnim.z, 0.0, 1.0);
@@ -923,14 +1030,14 @@ if (kM > 0.5 && kM < 1.5) { kSl = sqrt(0.25 * kSc.x * kSc.x + kSc.y * kSc.y); kr
 else if (kM > 1.5 && kM < 2.5) { kSl = sqrt(kSc.z * kSc.z + kSc.y * kSc.y); kr = vec2(transformed.x * kSc.x, (1.0 - transformed.y) * kSl); }
 else if (rCap.x >= 0.0) kr = vec2(transformed.z * kSc.z, (1.0 - transformed.y) * kSl);
 else kr = vec2(transformed.x * kSc.x, (1.0 - transformed.y) * kSl);
-vKR = kr; vKM = kM; vKL = kSl; vKP = iParams; vKP2 = iParams2;
+vKR = kr; vKM = kM; vKL = kSl; vKP = iParams; vKP2 = iParams2; vKY = iLife.y;
 vKUp = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * (objectNormal / (kSc * kSc))).y;`;
 const ROOF_DEPTH_BEGIN = `
 ${KSC}
 float kHc = clamp(iAnim.z, 0.0, 1.0);
 transformed = roofShape(transformed, kSc, kHc);`;
 const ROOF_FDECL = `
-varying vec2 vKR; varying float vKM; varying float vKUp; varying vec4 vKP; varying vec4 vKP2; varying float vKL;
+varying vec2 vKR; varying float vKM; varying float vKUp; varying vec4 vKP; varying vec4 vKP2; varying float vKL; varying float vKY;
 vec3 K_em; float K_ro;
 vec3 roofCol(vec3 base){
   K_em = vec3(0.0); K_ro = 0.85;
@@ -939,6 +1046,10 @@ vec3 roofCol(vec3 base){
   float fine = 1.0 - smoothstep(0.03, 0.10, pxm);
   float midF = 1.0 - smoothstep(0.10, 0.35, pxm);
   float st = floor(vKP.x + 0.001), seed = vKP.y, wl = vKP2.x, age = vKP2.y;
+  float kNew = (vKY > 0.5 && uYear > 0.5) ? 1.0 : 0.0;       // dated record + running chronicle (else legacy age)
+  float ageY = max(uYear - vKY, 0.0);
+  if (kNew > 0.5) age = clamp(ageY / 110.0, 0.0, 1.0);
+  if (kNew > 0.5 && st < 0.5) base = mix(base, vec3(0.237, 0.218, 0.181), smoothstep(2.0, uAgeT.x, ageY));   // straw gold → silver-grey
   vec2 q = vec2(a, s) + seed * 0.37;
   float nA = d_vnoise(q * 0.9);
   float nB = d_vnoise(q * 3.7 + 5.0);
@@ -1089,7 +1200,21 @@ varying float vKG; varying float vKFl; varying float vKUp;`;
 function checkShader(sh, name, vMarks, fMarks) {
   for (const m of vMarks) if (sh.vertexShader.indexOf(m) < 0) console.warn('[kit] ' + name + ': vertex injection missing "' + m + '"');
   for (const m of fMarks || []) if (sh.fragmentShader.indexOf(m) < 0) console.warn('[kit] ' + name + ': fragment injection missing "' + m + '"');
-  if (sh.vertexShader.indexOf('iDie') <= 0) console.warn('[kit] ' + name + ': iDie not injected');
+  if (sh.vertexShader.indexOf('iDie') <= 0) console.warn('[kit] ' + name + ': iDie not injected');   // GLSL_IA keeps it in a comment
+  if (sh.vertexShader.indexOf('attribute vec4 iLife') <= 0 || sh.vertexShader.indexOf('float kCap = iLife.z') <= 0) console.warn('[kit] ' + name + ': iLife / GROW not injected');
+}
+// ---- Atlas plaster hook (E defines the D.AU uniforms and the D.GLSL_ATLAS at_* helpers). Compiled in only when
+// both exist, so a build without atlas.js / the terrain AU block compiles exactly the legacy programs.
+function atlasOn() { return !!(D.AU && typeof D.GLSL_ATLAS === 'string' && D.GLSL_ATLAS.indexOf('at_surfaceLin') >= 0 && D.GLSL_ATLAS.indexOf('at_k') >= 0); }
+function atlasGlsl() {   // helpers, plus uniform declarations for any AU entry the helper text does not declare itself
+  const src = D.GLSL_ATLAS; let decl = '';
+  for (const k in D.AU) {
+    if (new RegExp('uniform\\s+\\w+\\s+' + k + '\\b').test(src)) continue;
+    const v = D.AU[k] && D.AU[k].value;
+    const t = typeof v === 'number' ? 'float' : !v ? null : v.isTexture ? 'sampler2D' : v.isVector4 ? 'vec4' : (v.isVector3 || v.isColor) ? 'vec3' : v.isVector2 ? 'vec2' : null;
+    if (t) decl += `uniform ${t} ${k};\n`;
+  }
+  return '\n' + decl + src + '\n';
 }
 const NOISE = () => D.GLSL_NOISE || `
 float d_hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -1104,79 +1229,92 @@ float d_fbm(vec2 p){ float s = 0.0, a = 0.5; for (int k = 0; k < 4; k++){ s += a
 function cen(src) { return D.renderer && D.renderer.capabilities && D.renderer.capabilities.isWebGL2 ? src.replace(/\bvarying\b/g, 'centroid varying') : src; }
 const SAFE_COL = 'diffuseColor.rgb = clamp(diffuseColor.rgb, 0.0, 1.5);';
 function makeMaterials() {
+  const ATL = atlasOn(), AG = ATL ? atlasGlsl() : '';
+  const U = sh => { Object.assign(sh.uniforms, CU); if (ATL) Object.assign(sh.uniforms, D.AU); };
+  // vAtW: world position after grow / sink (WALL always has it: the construction cut needs it; the rest only for the Atlas)
+  const ATW_OUT = '\nvAtW = wpA.xyz;';
+  const atSurf = yr => ATL ? `\nif (uAtlas > 0.001) diffuseColor.rgb = at_surfaceLin(diffuseColor.rgb, vAtW.xz, ${yr});` : '';
+  const atEm = ATL ? ' * (1.0 - at_k(vAtW.xz))' : '';
+  // walls under construction are cut at the cap along ragged courses (not squashed; the depth material squashes)
+  const CUT = '\nif (vKCap < 1e6 && vAtW.y > vKCap + 0.35 * d_vnoise(vec2((vAtW.x + vAtW.z) * 1.2, 7.0))) discard;';
   const wall = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
   wall.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, CU);
+    U(sh);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(WALL_VDECL))
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n// kit-wall')
       .replace('#include <begin_vertex>', '#include <begin_vertex>' + WALL_SHAPE + WALL_VOUT)
-      .replace('#include <project_vertex>', '#include <project_vertex>' + GROW)
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS);
+      .replace('#include <project_vertex>', '#include <project_vertex>\n#define KIT_WALLCUT' + GROW)
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS + ATW_OUT);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + FRAG_HELP + cen(wallFDecl()) + FACADE)
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = facade(diffuseColor.rgb);' + SAFE_COL)
+      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + AG + FRAG_HELP + cen(wallFDecl()) + FACADE)
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = facade(diffuseColor.rgb);' + SAFE_COL + CUT + atSurf('vKY'))
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(K_ro, 0.3, 1.0); K_em = clamp(K_em, 0.0, 8.0);')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em * uNightC * 1.6;');
-    checkShader(sh, 'kit-wall', ['vKU =', 'wpA.y', '// kit-wall', '// kit-wpos'], ['facade(diffuseColor', 'roughnessFactor = K_ro', 'K_em * uNightC']);
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em * uNightC * 1.6' + atEm + ';');
+    checkShader(sh, 'kit-wall', ['vKU =', 'wpA.y', '// kit-wall', '// kit-wpos', 'KIT_WALLCUT', 'vAtW = wpA.xyz', 'vKFe = iLife.w'],
+      ['facade(diffuseColor', 'roughnessFactor = clamp(K_ro', 'K_em * uNightC', 'vAtW.y > vKCap'].concat(ATL ? ['at_surfaceLin(diffuseColor'] : []));
   };
-  wall.customProgramCacheKey = () => 'kit-wall';
+  wall.customProgramCacheKey = () => 'kit-wall' + (ATL ? '-at' : '');
 
   const roof = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0 });
   roof.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, CU);
+    U(sh);
+    const V = ATL ? '\nvarying vec3 vAtW;' : '';
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(ROOF_VDECL))
+      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(ROOF_VDECL + V))
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>' + ROOF_NORMAL)
       .replace('#include <begin_vertex>', '#include <begin_vertex>' + ROOF_BEGIN)
       .replace('#include <project_vertex>', '#include <project_vertex>' + GROW)
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS);
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS + (ATL ? ATW_OUT : ''));
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + FRAG_HELP + cen(ROOF_FDECL))
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = roofCol(diffuseColor.rgb);' + SAFE_COL)
+      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + AG + FRAG_HELP + cen(ROOF_FDECL.replace('varying float vKY;', 'varying float vKY;' + V)))
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = roofCol(diffuseColor.rgb);' + SAFE_COL + atSurf('vKY'))
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(K_ro, 0.3, 1.0); K_em = clamp(K_em, 0.0, 8.0);')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em;');
-    checkShader(sh, 'kit-roof', ['roofShape(transformed', 'wpA.y', 'objectNormal = normalize', '// kit-wpos'], ['roofCol(diffuseColor', 'roughnessFactor = K_ro']);
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em' + atEm + ';');
+    checkShader(sh, 'kit-roof', ['roofShape(transformed', 'wpA.y', 'objectNormal = normalize', '// kit-wpos', 'vKY = iLife.y'], ['roofCol(diffuseColor', 'roughnessFactor = clamp(K_ro', 'uAgeT.x']);
   };
-  roof.customProgramCacheKey = () => 'kit-roof';
+  roof.customProgramCacheKey = () => 'kit-roof' + (ATL ? '-at' : '');
 
   const plainM = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0 });
   plainM.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, CU);
+    U(sh);
+    const V = ATL ? '\nvarying vec3 vAtW;' : '';
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(PLAIN_VDECL))
+      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(PLAIN_VDECL + V))
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = kAnim(objectNormal, 1.0);')
       .replace('#include <begin_vertex>', '#include <begin_vertex>' + PLAIN_BEGIN)
       .replace('#include <project_vertex>', '#include <project_vertex>' + GROW)
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS);
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS + (ATL ? ATW_OUT : ''));
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + cen(PLAIN_FDECL))
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = plainCol(diffuseColor.rgb);' + SAFE_COL)
+      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + AG + cen(PLAIN_FDECL + V))
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = plainCol(diffuseColor.rgb);' + SAFE_COL + atSurf('0.0'))
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(K_ro, 0.3, 1.0); K_em = clamp(K_em, 0.0, 8.0);')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em * (0.3 + uNightC * 3.0);');
-    checkShader(sh, 'kit-plain', ['kAnim(objectNormal', 'vKF = transformed', 'wpA.y', '// kit-wpos'], ['plainCol(diffuseColor', 'roughnessFactor = K_ro']);
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em * (0.3 + uNightC * 3.0)' + atEm + ';');
+    checkShader(sh, 'kit-plain', ['kAnim(objectNormal', 'vKF = transformed', 'wpA.y', '// kit-wpos'], ['plainCol(diffuseColor', 'roughnessFactor = clamp(K_ro']);
   };
-  plainM.customProgramCacheKey = () => 'kit-plain';
+  plainM.customProgramCacheKey = () => 'kit-plain' + (ATL ? '-at' : '');
 
   const vcM = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, vertexColors: true, flatShading: true });
   vcM.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, CU);
+    U(sh);
+    const V = ATL ? '\nvarying vec3 vAtW;' : '';   // VC keeps plain (non-centroid) varyings like its other ones
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + VC_VDECL)
+      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + VC_VDECL + V)
       .replace('#include <color_vertex>', '#include <color_vertex>' + VC_COLOR)
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = kAnim(objectNormal, 1.0);')
       .replace('#include <begin_vertex>', '#include <begin_vertex>' + VC_BEGIN)
       .replace('#include <project_vertex>', '#include <project_vertex>' + GROW)
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS);
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS + (ATL ? ATW_OUT : ''));
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + VC_FDECL)
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.9, 0.95), uSnowC * smoothstep(0.55, 0.85, vKUp) * 0.9);')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vKG * (0.4 + uNightC * 5.0) * vKFl;');
+      .replace('#include <common>', '#include <common>' + GLSL_U + (ATL ? NOISE() + AG : '') + VC_FDECL + V)
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.9, 0.95), uSnowC * smoothstep(0.55, 0.85, vKUp) * 0.9);' + atSurf('0.0'))
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vKG * (0.4 + uNightC * 5.0) * vKFl' + atEm + ';');
     checkShader(sh, 'kit-vc', ['vColor.xyz = color.xyz', 'kAnim(objectNormal', 'vKFl =', 'wpA.y', '// kit-wpos'], ['vKG * (0.4']);
   };
-  vcM.customProgramCacheKey = () => 'kit-vc';
+  vcM.customProgramCacheKey = () => 'kit-vc' + (ATL ? '-at' : '');
 
-  // depth materials: identical position code so shadows follow shape, animation and growth
+  // depth materials: identical position code so shadows follow shape, animation and growth (no KIT_WALLCUT:
+  // construction shadows squash; never atlas-aware)
   function depth(name, decl, begin) {
     const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     m.onBeforeCompile = sh => {
@@ -1333,7 +1471,8 @@ function look(rec) {
   const L = { r, wl, tier, reg, ws, rs, age: rec.age || 0 };
   const j = 0.93 + r() * 0.14;
   L.wc = jit(wallColFor(ws, tier, reg, r()), j);
-  L.rc = jit(roofColFor(rs, tier, reg, L.age, r()), 0.94 + r() * 0.12);
+  // dated records start from fresh straw (the shader silvers it with the years); r() is drawn either way
+  L.rc = jit(roofColFor(rs, tier, reg, rec.year > 0 ? 0 : L.age, r()), 0.94 + r() * 0.12);
   L.stoneC = jit(stoneColFor(reg, r()), 0.95 + r() * 0.1);
   L.tone = wl > 0.66 ? (r() < 0.5 ? 3 : 2) : wl < 0.3 ? (r() < 0.6 ? 4 : 1) : (r() < 0.5 ? 0 : 1);
   L.tc = lin(PAL.timber[L.tone]);
@@ -1414,7 +1553,12 @@ function design(kind, x, z, rot, opts) {
   const dm = defaultMat(kind, wealth, region, r);
   const mat = { wall: opts.mat && opts.mat.wall != null ? matCode(opts.mat.wall, WALL_NAMES) : dm.wall, roof: opts.mat && opts.mat.roof != null ? matCode(opts.mat.roof, ROOF_NAMES) : dm.roof };
   if (mat.wall === null) mat.wall = dm.wall; if (mat.roof === null) mat.roof = dm.roof;
-  return { kind: KINDS[kind] ? kind : 'cottage', x, z, rot: rot || 0, w, d, h, floors, wealth, age, seed, var: vr, region, gable, party, jetty, trade, water, mat };
+  const out = { kind: KINDS[kind] || kind === 'worksite' ? kind : 'cottage', x, z, rot: rot || 0, w, d, h, floors, wealth, age, seed, var: vr, region, gable, party, jetty, trade, water, mat };
+  // Living History (only present when given, so undated records keep exactly their old fields)
+  if (opts.year > 0) out.year = +opts.year;
+  if (opts.gw) out.gw = opts.gw;
+  if (kind === 'worksite') { if (opts.target) out.target = opts.target; if (opts.site) out.site = opts.site; }
+  return out;
 }
 
 // ---- part builder --------------------------------------------------------------------------------------
@@ -1504,7 +1648,9 @@ function house(P, L, o) {
       P.box(o.cx, y - 0.26, cz - d / 2 + 0.16, o.w - 0.02, 0.28, 0.32, L.tc, 0);
     }
     P.dl = dl0 + i * 0.45;
-    const fl = (s.fl || 0) | partyF | (o.frame && s.st === WS.timber ? F.FRAMESTAGE : 0);
+    // every storey carries FRAMESTAGE (a skeleton when a history reveal sets rec._fe; facade: vKFe); only
+    // framed timber keeps the v44 2.2 s skeleton on every animated reveal (FRAMEOLD)
+    const fl = (s.fl || 0) | partyF | F.FRAMESTAGE | (o.frame && s.st === WS.timber ? F.FRAMEOLD : 0);
     P.body(o.cx, cz, o.w, d, i === 0 ? null : y, s.h, s.st, s.col, { fl, fh: s.fh || s.h, lit: o.lit });
     y += s.h;
   }
@@ -1517,7 +1663,7 @@ function house(P, L, o) {
   const dlR = dl0 + n * 0.45 + 0.25;
   const ryR = o.alongZ ? HALF_PI : 0;
   P.dl = dlR + 0.2;
-  P.add(o.thatch ? 'roofT' : 'roofG', o.cx, eave - ov * tanP, cz, len + 2 * ovE, roofSy, span + 2 * ov, ryR, o.rc, o.rs, { p0: hc });
+  P.add(o.thatch ? 'roofT' : 'roofG', o.cx, eave - ov * tanP, cz, len + 2 * ovE, roofSy, span + 2 * ov, ryR, o.rc, o.rs, { p0: hc, fl: F.LATE });
   P.dl = dlR;
   const gSt = o.gableSt !== undefined ? o.gableSt : o.storeys[n - 1].st, gCol = o.gableCol || o.storeys[n - 1].col;
   const toLocal = (along, across) => o.alongZ ? [o.cx + across, cz + along] : [o.cx + along, cz + across];
@@ -1528,7 +1674,7 @@ function house(P, L, o) {
     }
   } else if (hc < 0.99) {
     const hcG = hc > 0 ? clamp(hc * roofSy / rise, 0, 1) : 0;
-    P.add('gwall', o.cx, eave, cz, len, rise, span, ryR, gCol, gSt, { p0: hcG, fl: F.GABLE | partyF | (o.frame && gSt === WS.timber ? F.FRAMESTAGE : 0), fh: 99, lit: o.lit });
+    P.add('gwall', o.cx, eave, cz, len, rise, span, ryR, gCol, gSt, { p0: hcG, fl: F.GABLE | partyF | F.FRAMESTAGE | (o.frame && gSt === WS.timber ? F.FRAMEOLD : 0), fh: 99, lit: o.lit });
   }
   const ridgeY = eave + rise;
   // chimneys
@@ -1566,7 +1712,7 @@ function house(P, L, o) {
       const acrossR = face * (span / 2 - q - depth / 2 + 0.12);
       const [xr, zr] = toLocal(along, acrossR);
       const dryR = o.alongZ ? 0 : HALF_PI;
-      P.add('roofG', xr, yTop - 0.12, zr, depth + 0.25, 0.9, wD + 0.3, dryR, o.rc, o.rs, { dl: dlR + 0.6 });
+      P.add('roofG', xr, yTop - 0.12, zr, depth + 0.25, 0.9, wD + 0.3, dryR, o.rc, o.rs, { dl: dlR + 0.6, fl: F.LATE });
       P.add('gwall', x, yTop, z, depth, 0.75, wD, dryR, gCol, gSt, { fl: F.GABLE | F.NOWIN, fh: 99, dl: dlR + 0.5 });
     }
   }
@@ -2420,10 +2566,109 @@ RC.beacontower = (P, rec, L) => {
   P.smoke.push([0, h + 2.4, 0, SMOKE.forge, 2.5]);
 };
 
+// ---- worksite (Living History) ------------------------------------------------------------------------
+// A derived record owned by works.js: never saved, never in Town.chunks, not pickable, re-derived on load.
+// rec.target = the live Kit record being built (the worksite shares its x / z / rot / y / y0): scaffold bays wrap
+// every face of its WALL bodies (4.5 m bays, ~6 m tiers, SCAFF: clipped to the cap + 2.4), a treadwheel crane
+// rides the cap on the tallest body (RIDE; a ridden part's iParams.w = its lift above the cap), pegs and string
+// lines mark the footprint (PEG: gone once the walls start), and a stone heap + timber stack sit beside it.
+// rec.site = a bridge work site {x, z, y, rot, len, piers:[{x, z, yBase, yTop}]}: a scaffold tower round the pier
+// nearest (x, z) with the crane on it (works.js gives the worksite rec._cap = that pier's top).
+const SCAF_BODY = new Set(['body', 'cylW', 'cylT', 'frustum']);
+const SCAF_MAX = 900;
+function scaffoldBox(P, bodies, i, S, white) {   // bodies[i] = {lx, lz, ry, sx, sz, base, top}; S = bay / tier scale
+  const b = bodies[i], c = Math.cos(b.ry), s = Math.sin(b.ry), dep = 1.4, off = 0.4 + dep / 2;
+  const inside = (x, z, y) => {                  // a bay tucked inside a neighbouring body (nave face under an aisle) is skipped
+    for (let j = 0; j < bodies.length; j++) {
+      if (j === i) continue;
+      const o = bodies[j]; if (o.top < y + 1) continue;
+      const dx = x - o.lx, dz = z - o.lz, co = Math.cos(o.ry), so = Math.sin(o.ry);
+      const px = dx * co - dz * so, pz = dx * so + dz * co;
+      if (Math.abs(px) < o.sx / 2 && Math.abs(pz) < o.sz / 2) return true;
+    }
+    return false;
+  };
+  const H = b.top + 1 - b.base, nT = Math.max(1, Math.round(H / (6 * S))), th = H / nT;
+  for (const [fx, fz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const half = fx ? b.sx / 2 : b.sz / 2, len = fx ? b.sz : b.sx;
+    const nB = Math.max(1, Math.round(len / (4.5 * S))), bw = len / nB;
+    const nx = fx * c + fz * s, nz = -fx * s + fz * c, ry = Math.atan2(-nx, -nz);   // local −z faces outward
+    const tx = fz ? 1 : 0, tz = fx ? 1 : 0;                                         // face tangent (part frame)
+    for (let k = 0; k < nB; k++) {
+      const a = -len / 2 + (k + 0.5) * bw, px = fx * (half + off) + tx * a, pz = fz * (half + off) + tz * a;
+      const x = b.lx + px * c + pz * s, z = b.lz - px * s + pz * c;
+      for (let t = 0; t < nT; t++) {
+        const y = b.base + t * th;
+        if (inside(x, z, y)) continue;
+        P.dl = t * 0.12;
+        P.add('scaffold', x, y, z, bw + 0.05, th, dep, ry, white, 0, { fl: F.SCAFF });
+      }
+    }
+  }
+}
+function craneAt(P, x, z, ry, white, s) {        // treadwheel crane + turning wheel, both riding the cap
+  P.dl = 0.4;
+  P.add('craneT', x, 0, z, 5 * s, 7 * s, 5 * s, ry, white, 0, { fl: F.RIDE });
+  const ox = 1.4 * s, oz = 0.6 * s, c = Math.cos(ry), sn = Math.sin(ry);
+  P.add('wheel', x + ox * c + oz * sn, 0, z - ox * sn + oz * c, 1.0 * s, 2.8 * s, 2.8 * s, ry, white, 0,
+    { fl: F.RIDE, vo: 1.7 * s, p0: (P.rec.seed % 628) / 100, p1: AN.wheel * 16 + 5 });
+}
+RC.worksite = (P, rec, L) => {
+  const white = lin(0xffffff);
+  if (rec.site) {                                 // bridge: the active pier
+    const S = rec.site, piers = S.piers || [];
+    let pr = null, bd = 1e18;
+    for (const q of piers) { const d = (q.x - S.x) ** 2 + (q.z - S.z) ** 2; if (d < bd) { bd = d; pr = q; } }
+    const c = Math.cos(rec.rot), s = Math.sin(rec.rot), y = rec.y || 0;
+    const wx = pr ? pr.x - rec.x : 0, wz = pr ? pr.z - rec.z : 0, lx = wx * c - wz * s, lz = wx * s + wz * c;
+    const base = pr && pr.yBase !== undefined ? pr.yBase - y : -4, top = pr && pr.yTop !== undefined ? pr.yTop - y : 0;
+    // the site's rot runs local +z along the bridge: the pier is deck-wide across (x) and ~3 m along (z)
+    scaffoldBox(P, [{ lx, lz, ry: 0, sx: Math.max(4, Math.min(9, S.w || 7)), sz: 3.2, base, top }], 0, 0.75, white);
+    craneAt(P, lx, lz, 0, white, 0.8);
+    return;
+  }
+  const T = rec.target; if (!T) return;
+  const TP = ensureParts(T), bodies = [];
+  let maxA = 0;
+  for (let o = 0; o < TP.length; o += PSTR) {
+    const G = GEO_LIST[TP[o]]; if (!G || !SCAF_BODY.has(G.name)) continue;
+    const sx = TP[o + 4], sz = TP[o + 6], ly = TP[o + 2], top = ly + TP[o + 5];
+    const base = Math.max(ly, 0);
+    if (top - base < 2 || Math.max(sx, sz) < 2.5 || sx * sz < 4) continue;       // chimneys, stubs
+    bodies.push({ lx: TP[o + 1], lz: TP[o + 3], ry: TP[o + 7], sx, sz, base, top, ground: ly <= 0.5 });
+    maxA = Math.max(maxA, sx * sz);
+  }
+  if (!bodies.length) return;
+  // bay / tier scale so a huge cathedral stays within SCAF_MAX scaffold instances
+  let area = 0; for (const b of bodies) area += 2 * (b.sx + b.sz) * (b.top + 1 - b.base);
+  const S = Math.max(1, Math.sqrt(area / (4.5 * 6) / SCAF_MAX));
+  for (let i = 0; i < bodies.length; i++) scaffoldBox(P, bodies, i, S, white);
+  // crane on the tallest body
+  let tb = bodies[0]; for (const b of bodies) if (b.top > tb.top) tb = b;
+  craneAt(P, tb.lx, tb.lz, tb.ry, white, clamp(Math.sqrt(tb.sx * tb.sz) / 10, 0.7, 1.4));
+  // pegs and string lines on the main footprint
+  P.dl = 0;
+  const wood = lin(COL.wood), line = lin(0xe8dcc0);
+  for (const b of bodies) {
+    if (!b.ground || b.sx * b.sz < maxA * 0.1) continue;
+    const c = Math.cos(b.ry), s = Math.sin(b.ry), hx = b.sx / 2, hz = b.sz / 2;
+    const at = (px, pz) => [b.lx + px * c + pz * s, b.lz - px * s + pz * c];
+    for (const [px, pz] of [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]) { const [x, z] = at(px, pz); P.add('stakes', x, 0, z, 0.3, 0.7, 0.12, b.ry, wood, 0, { fl: F.PEG }); }
+    for (const [px, pz, len, r] of [[0, -hz, b.sx, 0], [0, hz, b.sx, 0], [-hx, 0, b.sz, HALF_PI], [hx, 0, b.sz, HALF_PI]]) {
+      const [x, z] = at(px, pz); P.add('box', x, 0.35, z, len, 0.025, 0.025, b.ry + r, line, 0, { fl: F.PEG });
+    }
+  }
+  // stone heap and timber stack beside the site (+x side of the record)
+  const hx = (T.w || 10) / 2 + 4, stoneC = lin(COL.stone);
+  P.add('mound', hx, -0.3, -2, 4.5, 1.6, 3.5, 0.3, stoneC, 0, { fl: F.SCAFF });
+  for (let k = 0; k < 4; k++) P.add('box', hx + 0.2, k * 0.34, 3 + (k % 2) * 0.2, 4.2, 0.34, 1.6 - k * 0.3, HALF_PI * 0.1, wood, PS.boards, { fl: F.SCAFF });
+};
+
 function recipe(rec) {
   const P = new PB(rec);
   const L = look(rec);
   P.tone = L.tone;
+  rec._tho = L.rs === RS.thatch && L.age > 0.5;   // undated, this roof bakes old thatch: a year flip must re-derive it
   const fn = RC[rec.kind] || RC.cottage;
   try { fn(P, rec, L); } catch (e) { console.warn('[kit] recipe failed for', rec.kind, e); }
   return { parts: new Float32Array(P.a), smoke: P.smoke, lights: P.lights };
@@ -2577,6 +2822,11 @@ let emitDirty = true;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 function tileIndex(x, z) { return clamp(Math.floor(z / TS), 0, NT - 1) * NT + clamp(Math.floor(x / TS), 0, NT - 1); }
 let GEN = 1;                                        // globally unique tile generations (a stale rec._gen never matches another tile)
+// full tile rebuilds share a per-frame budget (the first always runs); a mass restamp spreads over frames and the
+// round-robin start keeps any tile from starving. A stale full tile keeps drawing its last good buffers meanwhile.
+const RB_MS = 6;
+let rbNext = 0;
+const nowMs = typeof performance !== 'undefined' && performance.now ? () => performance.now() : () => Date.now();
 function newTile(i) { return { i, recs: new Set(), meshes: new Array(NG), full: false, last: -1, gen: ++GEN, cy: 0, hasY: false }; }
 function createMesh(T, gi, cap) {
   const G = GEO_LIST[gi], base = G.geo;
@@ -2584,8 +2834,8 @@ function createMesh(T, gi, cap) {
   for (const k in base.attributes) g.setAttribute(k, base.attributes[k]);
   if (base.index) g.setIndex(base.index);
   const mk = (n, s) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(n * s), s); a.setUsage(THREE.DynamicDrawUsage); return a; };
-  const iP = mk(cap, 4), iP2 = mk(cap, 4), iA = mk(cap, 4), iD = mk(cap, 1);
-  g.setAttribute('iParams', iP); g.setAttribute('iParams2', iP2); g.setAttribute('iAnim', iA); g.setAttribute('iDie', iD);
+  const iP = mk(cap, 4), iP2 = mk(cap, 4), iA = mk(cap, 4), iL = mk(cap, 4);   // iLife: die, year, cap, skeleton end
+  g.setAttribute('iParams', iP); g.setAttribute('iParams2', iP2); g.setAttribute('iAnim', iA); g.setAttribute('iLife', iL);
   const cx = (T.i % NT + 0.5) * TS, cz = (Math.floor(T.i / NT) + 0.5) * TS;
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, T.cy, cz), TILE_R);
   const im = new THREE.InstancedMesh(g, mats[G.mat], cap);
@@ -2599,7 +2849,7 @@ function createMesh(T, gi, cap) {
   im.matrixAutoUpdate = false;
   group.add(im);
   // own/ownK: which record part sits in each slot (lets removals swap the last instance in instead of a tile rebuild)
-  return { mesh: im, geo: g, gi, cap, count: 0, iP, iP2, iA, iD, r0: Infinity, r1: -1, own: new Array(cap).fill(null), ownK: new Int32Array(cap) };
+  return { mesh: im, geo: g, gi, cap, count: 0, iP, iP2, iA, iL, r0: Infinity, r1: -1, own: new Array(cap).fill(null), ownK: new Int32Array(cap) };
 }
 // The per-tile geometry shares the base position/normal/... buffers: detach those first, then dispose, so only this
 // tile's own instanced attributes (and its VAO states) are freed. (r137 cannot free instanceMatrix/instanceColor.)
@@ -2616,8 +2866,48 @@ function ensureParts(rec) {
     const R = recipe(rec);
     rec._parts = R.parts; rec._smoke = R.smoke; rec._lights = R.lights; rec._pk = pk;
     rec._slots = new Int32Array(R.parts.length / PSTR); rec._gen = 0;
+    const K = partTops(R.parts); rec._eav = K.eav; rec._rdg = K.rdg; rec._top = K.top;
   }
   return rec._parts;
+}
+// construction knots (heights above rec.y): _eav = top of the highest main WALL body (bodies ≥ 25% of the largest
+// footprint, so towers and chimneys don't count), _rdg = the same over roofs (≥ eav), _top = everything
+function partTops(parts) {
+  let aW = 0, aR = 0, eav = 0, rdg = 0, top = 0;
+  for (let o = 0; o < parts.length; o += PSTR) {
+    const G = GEO_LIST[parts[o]], a = parts[o + 4] * parts[o + 6];
+    if (G.mat === MAT.WALL && SCAF_BODY.has(G.name)) aW = Math.max(aW, a); else if (G.mat === MAT.ROOF) aR = Math.max(aR, a);
+  }
+  for (let o = 0; o < parts.length; o += PSTR) {
+    const G = GEO_LIST[parts[o]], a = parts[o + 4] * parts[o + 6], rx = parts[o + 8];
+    const t = parts[o + 2] + parts[o + 5] + (rx ? parts[o + 6] * Math.abs(Math.sin(rx)) : 0);
+    if (t > top) top = t;
+    if (G.mat === MAT.WALL && SCAF_BODY.has(G.name) && a >= aW * 0.25 && t > eav) eav = t;
+    if (G.mat === MAT.ROOF && a >= aR * 0.25 && t > rdg) rdg = t;
+  }
+  rdg = Math.max(rdg, eav); top = Math.max(top, rdg);
+  return { eav, rdg, top };
+}
+// cap height above rec.y at build progress p: pegs (≤ .04) → footings 1.5 m (.10) → eaves (.75) → ridge (.85) → top (1)
+const CAP_X = [0, 0.04, 0.10, 0.75, 0.85, 1];
+function capKnots(p, eav, rdg, top) {
+  const Y = [-0.2, -0.2, 1.5, eav, rdg, top + 0.5];
+  for (let i = 1; i < Y.length; i++) if (Y[i] < Y[i - 1]) Y[i] = Y[i - 1];
+  p = clamp(p, 0, 1);
+  let i = 1; while (i < CAP_X.length - 1 && p > CAP_X[i]) i++;
+  const t = (p - CAP_X[i - 1]) / (CAP_X[i] - CAP_X[i - 1]);
+  return Y[i - 1] + (Y[i] - Y[i - 1]) * clamp(t, 0, 1);
+}
+function capFor(rec, prog) {
+  if (prog === undefined || prog === null || !isFinite(prog)) return 1e7;
+  if (rec._top === undefined) ensureParts(rec);
+  return (rec.y || 0) + capKnots(prog, rec._eav || 0, rec._rdg || 0, rec._top || 0);
+}
+// iLife.z: a worksite follows its target's cap (or a bridge pier top given as _cap); complete = 1e7
+function capOf(rec) {
+  if (rec._cap !== undefined) return rec._cap;
+  if (rec.prog === undefined) return 1e7;
+  return capFor(rec.kind === 'worksite' && rec.target ? rec.target : rec, rec.prog);
 }
 function writePart(M, slot, rec, P, k) {
   const o = k * PSTR;
@@ -2641,8 +2931,22 @@ function writePart(M, slot, rec, P, k) {
   const a = M.iP.array; a[slot * 4] = P[o + 13]; a[slot * 4 + 1] = ((rec.seed >>> 0) + k * 31) % 997; a[slot * 4 + 2] = P[o + 14]; a[slot * 4 + 3] = P[o + 15];
   const a2 = M.iP2.array; a2[slot * 4] = rec.wealth || 0; a2[slot * 4 + 1] = rec.age || 0; a2[slot * 4 + 2] = P[o + 16]; a2[slot * 4 + 3] = P[o + 17];
   const a3 = M.iA.array; a3[slot * 4] = (rec.born !== undefined ? rec.born : -100) + P[o + 18]; a3[slot * 4 + 1] = Math.max(y0, wy); a3[slot * 4 + 2] = P[o + 19]; a3[slot * 4 + 3] = P[o + 20];
-  M.iD.array[slot] = rec.die || 0;
+  lifeOf(rec, M.iL.array, slot * 4);
+  if (rec._stag && rec.die) M.iL.array[slot * 4] = stagDie(rec, P, k);
   M.own[slot] = rec; M.ownK[slot] = k;
+}
+// iLife from rec fields only (die clock, built year, construction cap, skeleton-stage end), so tile rebuilds and
+// swaps reproduce the state exactly
+function lifeOf(rec, a, i) {
+  a[i] = rec.die || 0;
+  a[i + 1] = rec.year > 0 ? rec.year : 0;
+  a[i + 2] = capOf(rec);
+  a[i + 3] = rec._fe > 0 ? rec._fe : 0;
+}
+// staggered sink (remove(rec, true, {stagger})): the highest parts go first, the lowest `stagger` s later
+function stagDie(rec, P, k) {
+  const o = k * PSTR, top = rec._top > 0 ? rec._top : 1;
+  return rec.die + rec._stag * (1 - clamp((P[o + 2] + P[o + 5]) / top, 0, 1));
 }
 // move the instance in slot a into slot b (all attributes + ownership)
 function copySlot(M, a, b) {
@@ -2651,7 +2955,7 @@ function copySlot(M, a, b) {
   M.iP.array.copyWithin(b * 4, a * 4, a * 4 + 4);
   M.iP2.array.copyWithin(b * 4, a * 4, a * 4 + 4);
   M.iA.array.copyWithin(b * 4, a * 4, a * 4 + 4);
-  M.iD.array[b] = M.iD.array[a];
+  M.iL.array.copyWithin(b * 4, a * 4, a * 4 + 4);
   const o = M.own[a], k = M.ownK[a];
   M.own[b] = o; M.ownK[b] = k;
   if (o && o._slots) o._slots[k] = b;
@@ -2678,7 +2982,7 @@ function flushRange(M) {
   if (M.r1 < M.r0) return;
   const off = M.r0, cnt = M.r1 - M.r0 + 1;
   const set = (attr, s) => { attr.updateRange.offset = off * s; attr.updateRange.count = cnt * s; attr.needsUpdate = true; };
-  set(M.mesh.instanceMatrix, 16); set(M.mesh.instanceColor, 3); set(M.iP, 4); set(M.iP2, 4); set(M.iA, 4); set(M.iD, 1);
+  set(M.mesh.instanceMatrix, 16); set(M.mesh.instanceColor, 3); set(M.iP, 4); set(M.iP2, 4); set(M.iA, 4); set(M.iL, 4);
   M.mesh.count = M.count; M.mesh.visible = M.count > 0;
   M.r0 = Infinity; M.r1 = -1;
 }
@@ -2712,7 +3016,7 @@ function rebuildTile(T) {
   for (let gi = 0; gi < NG; gi++) {
     const M = T.meshes[gi]; if (!M) continue;
     M.own.fill(null, M.count);
-    for (const a of [M.mesh.instanceMatrix, M.mesh.instanceColor, M.iP, M.iP2, M.iA, M.iD]) { a.updateRange.offset = 0; a.updateRange.count = -1; a.needsUpdate = true; }
+    for (const a of [M.mesh.instanceMatrix, M.mesh.instanceColor, M.iP, M.iP2, M.iA, M.iL]) { a.updateRange.offset = 0; a.updateRange.count = -1; a.needsUpdate = true; }
     M.mesh.count = M.count; M.mesh.visible = M.count > 0; M.r0 = Infinity; M.r1 = -1;
   }
 }
@@ -2731,11 +3035,21 @@ function appendRec(T, rec) {
   if (!T.hasY) { T.cy = rec.y || 0; T.hasY = true; for (const M of T.meshes) if (M) M.geo.boundingSphere.center.y = T.cy; }
   return true;
 }
-function writeDie(T, rec) {
+// rewrite iLife (die / year / cap / skeleton end) over the record's slots; a stale record → tile rebuild
+function writeLife(T, rec) {
   if (rec._gen !== T.gen || !rec._parts) { T.full = true; return; }
-  const P = rec._parts, slots = rec._slots;
-  for (let k = 0, o = 0; o < P.length; k++, o += PSTR) { const M = T.meshes[P[o]]; if (!M) { T.full = true; return; } M.iD.array[slots[k]] = rec.die || 0; markRange(M, slots[k]); }
+  const P = rec._parts, slots = rec._slots, tmp = _life;
+  lifeOf(rec, tmp, 0);
+  const stag = rec._stag && rec.die;
+  for (let k = 0, o = 0; o < P.length; k++, o += PSTR) {
+    const M = T.meshes[P[o]]; if (!M) { T.full = true; return; }
+    const a = M.iL.array, i = slots[k] * 4;
+    a[i] = stag ? stagDie(rec, P, k) : tmp[0]; a[i + 1] = tmp[1]; a[i + 2] = tmp[2]; a[i + 3] = tmp[3];
+    markRange(M, slots[k]);
+  }
 }
+const _life = new Float32Array(4);
+function writeDie(T, rec) { writeLife(T, rec); }
 
 // ---- smoke --------------------------------------------------------------------------------------------------
 const SMOKE_PER = 12, SMOKE_MAX = 400;
@@ -2773,7 +3087,7 @@ function rebuildSmoke(cam) {
   const frac = 0.22 + 0.4 * winter + 0.25 * (1 - day);
   const R2 = 1800 * 1800, list = [];
   for (const rec of emitRecs) {
-    if (rec.die || !rec._smoke || !rec._smoke.length) continue;
+    if (rec.die || (rec.prog !== undefined && rec.prog < 1) || !rec._smoke || !rec._smoke.length) continue;   // no smoke from a building site
     const dx0 = rec.x - cam.x, dz0 = rec.z - cam.z; if (dx0 * dx0 + dz0 * dz0 > R2 * 1.1) continue;
     const c = Math.cos(rec.rot), s = Math.sin(rec.rot);
     for (let i = 0; i < rec._smoke.length; i++) {
@@ -2828,7 +3142,7 @@ function buildPools(scene) {
 function rebuildPools(cam) {
   const list = [];
   for (const rec of emitRecs) {
-    if (rec.die || !rec._lights || !rec._lights.length) continue;
+    if (rec.die || (rec.prog !== undefined && rec.prog < 1) || !rec._lights || !rec._lights.length) continue;
     const dx0 = rec.x - cam.x, dz0 = rec.z - cam.z; if (dx0 * dx0 + dz0 * dz0 > 2500 * 2500) continue;
     const c = Math.cos(rec.rot), s = Math.sin(rec.rot);
     for (const e of rec._lights) {
@@ -2906,6 +3220,14 @@ const Kit = D.Kit = {
     CU.uSpin.value = (CU.uSpin.value + dt * (0.35 + CU.uWindK.value * 1.3 + (E.weather === 'storm' ? 0.8 : 0))) % 62831.853;
     const t = E.time !== undefined ? E.time : 12;
     CU.uLateC.value = t >= 22 ? D.smooth(22, 23.5, t) : t < 4.5 ? 1 : t < 6 ? 1 - D.smooth(4.5, 6, t) : 0;
+    // Living History: weathering clock and the replay filter (no story → 0 / live, i.e. the legacy look)
+    const S = D.Story;
+    const yr = S && S.started && typeof S.displayTime === 'function' ? +S.displayTime() : 0;
+    CU.uYear.value = isFinite(yr) && yr > 0 ? yr : 0;
+    const vy = S && S.replaying ? S.viewYear : null;
+    CU.uView.value = typeof vy === 'number' && isFinite(vy) ? vy : 1e6;
+    const ag = (TUNE.kit && TUNE.kit.age) || {};
+    CU.uAgeT.value.set(ag.thatch || 35, ag.limewash || 60, ag.stone || 160, ag.lichen || 180); CU.uAgeIvy.value = ag.ivy || 220;
     // finish sinks
     if (sinkQ.length) {
       let j = 0;
@@ -2921,11 +3243,16 @@ const Kit = D.Kit = {
       }
       sinkQ.length = j;
     }
-    // flush tiles: full rebuilds throttled to ≥ 80 ms per tile, appends every frame
-    for (const T of tiles) {
-      if (T.full && Kit.clock - T.last >= 0.08) rebuildTile(T);
-      else for (const M of T.meshes) if (M && M.r1 >= M.r0) flushRange(M);
+    // flush tiles: full rebuilds throttled to ≥ 80 ms per tile and to RB_MS per frame, appends every frame
+    const nT = tiles.length, t0 = nowMs();
+    let rb = 0, last = -1;
+    for (let j = 0; j < nT; j++) {
+      const i = (rbNext + j) % nT, T = tiles[i];
+      if (T.full) {
+        if (Kit.clock - T.last >= 0.08 && (rb === 0 || nowMs() - t0 < RB_MS)) { rebuildTile(T); rb++; last = i; }
+      } else for (const M of T.meshes) if (M && M.r1 >= M.r0) flushRange(M);
     }
+    if (last >= 0) rbNext = (last + 1) % nT;   // next frame starts after the last tile rebuilt
     // smoke and light pools follow the camera
     if (camera) {
       const cp = camera.position;
@@ -2945,7 +3272,7 @@ const Kit = D.Kit = {
     smokeU.uCol.value.setRGB(l * 0.5, l * 0.51, l * 0.55);   // soft blue-grey, never a white ball
     const w = 0.5 + (E.wind !== undefined ? E.wind : 0.5);
     smokeU.uWindS.value.set(0.9 * w, 0.4 * w);
-    smoke.visible = group.visible && smoke.geometry.attributes.position !== undefined;
+    smoke.visible = group.visible && smoke.geometry.attributes.position !== undefined && !(D.Atlas && D.Atlas.k > 0.5);
     pools.visible = group.visible && CU.uNightC.value > 0.02 && pools.count > 0;
     if (ghost && ghost.visible) ghostMat.opacity = 0.5 + 0.12 * Math.sin(Kit.clock * 5);
   },
@@ -2960,7 +3287,7 @@ const Kit = D.Kit = {
       if (!rec.die) live--;
     }
     if (T.recs.has(rec)) {           // re-added while sinking: revive
-      if (rec.die) { rec.die = 0; live++; writeDie(T, rec); emitDirty = true; }
+      if (rec.die) { rec.die = 0; rec._stag = 0; live++; writeDie(T, rec); emitDirty = true; }
       return;
     }
     rec.die = 0; rec._tile = ti; rec._gen = 0;
@@ -2968,16 +3295,18 @@ const Kit = D.Kit = {
     try { ensureParts(rec); if (!appendRec(T, rec)) T.full = true; } catch (e) { console.warn('[kit] add failed', rec.kind, e); T.full = true; }
     if ((rec._smoke && rec._smoke.length) || (rec._lights && rec._lights.length)) { emitRecs.add(rec); emitDirty = true; }
   },
-  remove(rec, sink) {
+  // opts.stagger (s): the sink runs top-first over that long (the scaffolding comes down)
+  remove(rec, sink, opts) {
     if (!inited || !rec || rec._tile === undefined) return;
     const T = tiles[rec._tile];
     if (!T || !T.recs.has(rec)) return;
     if (sink) {
       if (rec.die) return;
       rec.die = Kit.clock > 0 ? Kit.clock : 1e-3;
+      rec._stag = opts && opts.stagger > 0 ? +opts.stagger : 0;
       live--;
       writeDie(T, rec);
-      sinkQ.push({ rec, t: Kit.clock + 0.9, die: rec.die });
+      sinkQ.push({ rec, t: Kit.clock + 0.9 + rec._stag, die: rec.die });
       emitDirty = true;
     } else {
       T.recs.delete(rec);
@@ -3000,12 +3329,41 @@ const Kit = D.Kit = {
     for (const T of tiles) { T.recs.clear(); T.full = false; for (const M of T.meshes) if (M) { M.count = 0; M.mesh.count = 0; M.mesh.visible = false; M.r0 = Infinity; M.r1 = -1; M.own.fill(null); } T.gen = ++GEN; }
     sinkQ.length = 0; emitRecs.clear(); emitDirty = true; live = 0;
   },
+  // ---- Living History --------------------------------------------------------------------------------
+  FRAME_T: 2.2, F,
+  // construction progress: undefined = complete, else 0..1 (fast iLife rewrite; a stale record rebuilds its tile)
+  setBuild(rec, prog) {
+    if (!rec) return;
+    const was = rec.prog;
+    if (prog === undefined || prog === null || !isFinite(prog)) delete rec.prog; else rec.prog = clamp(+prog, 0, 1);
+    const done = p => p === undefined || p >= 1;
+    if (done(was) !== done(rec.prog)) emitDirty = true;   // smoke / light pools skip building sites
+    if (!inited || rec._tile === undefined) return;
+    const T = tiles[rec._tile]; if (!T || !T.recs.has(rec)) return;
+    writeLife(T, rec);
+  },
+  // built year (0 / falsy = unknown); a 0 <-> dated flip re-derives the parts only where the roof colour depends
+  // on it (old thatch), everything else is a fast iLife rewrite
+  setYear(rec, y) {
+    if (!rec) return;
+    const ny = y > 0 && isFinite(y) ? +y : 0, flip = (rec.year > 0) !== (ny > 0);
+    if (ny > 0) rec.year = ny; else delete rec.year;
+    if (!inited || rec._tile === undefined) return;
+    const T = tiles[rec._tile]; if (!T || !T.recs.has(rec)) return;
+    // flip on an old-thatch roof: drop the parts and let the (frame-budgeted) tile rebuild run the recipe, so a
+    // begin-commit prehistory stamp over thousands of records never runs recipes synchronously
+    if (flip && rec._tho !== false) { rec._parts = null; T.full = true; } else writeLife(T, rec);
+  },
+  capFor(rec, prog) { return capFor(rec, prog); },
+  has(rec) { return !!(inited && rec && rec._tile !== undefined && tiles[rec._tile] && tiles[rec._tile].recs.has(rec) && !rec.die); },
+  topOf(rec) { if (!rec) return null; ensureParts(rec); return { top: rec._top, eav: rec._eav, rdg: rec._rdg }; },
   setVisible(v) { if (group) group.visible = !!v; if (smoke) smoke.visible = !!v; if (pools && !v) pools.visible = false; },
   count() { return live; },
   wallRun, pierRun,
   showGhost,
   catalogue() { return CATALOGUE.map(k => ({ kind: k, name: KINDS[k].name, emoji: KINDS[k].emoji })); },
   // internal helpers exposed for debugging / tests
-  _recipe: recipe, _geos: GEO_LIST, _tiles: tiles
+  _recipe: recipe, _geos: GEO_LIST, _tiles: tiles, _mats() { return { mats, dmats }; },
+  _pure: { capKnots, partTops, lifeOf, capFor, CAP_X }
 };
 })();

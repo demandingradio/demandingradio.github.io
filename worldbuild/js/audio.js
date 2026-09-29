@@ -41,6 +41,7 @@ A.init = function () {
     window.addEventListener('pointerdown', start); window.addEventListener('keydown', start);
   }
   D.on('lightning', thunder);
+  D.on('bells', ring);
 };
 function start() {
   ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -65,7 +66,76 @@ function start() {
   osc.start(); lfo.start();
   layers.crickets = { g: cg, target: 0, cur: 0, gainMax: 0.035, lfoG };
   master.gain.linearRampToValueAtTime(0.9, ctx.currentTime + 1.5);
+  // one tenor strike, re-pitched per bell with playbackRate
+  const rs = D.rng ? D.rng(0xbe11) : Math.random, data = bellStrike(ctx.sampleRate, 4, rs);
+  bellBuf = ctx.createBuffer(1, data.length, ctx.sampleRate); bellBuf.getChannelData(0).set(data);
 }
+
+// ---- church bells (Living History): a peal rung when a great work is finished --------------------------------
+// The strike is additive: damped partials of a tuned bell (hum .5, prime 1, minor-third tierce 1.19, quint 1.5,
+// nominal 2, …) with slight detune, the low partials ringing longest, over a 20 ms clapper-noise transient.
+const BELL_P = [0.5, 1, 1.19, 1.5, 2, 2.52, 3, 4.07], BELL_A = [0.45, 0.7, 0.5, 0.3, 0.6, 0.28, 0.22, 0.14], BELL_T = [3.4, 2.4, 1.7, 1.35, 1.1, 0.8, 0.6, 0.42];
+function bellStrike(sr, sec, rnd) {
+  const n = Math.max(1, Math.floor(sr * sec)), out = new Float32Array(n), f0 = 220;
+  for (let k = 0; k < BELL_P.length; k++) {
+    const f = f0 * BELL_P[k] * (1 + (rnd() - 0.5) * 0.006), w = 2 * Math.PI * f / sr;
+    if (f > sr * 0.45) continue;
+    const c = Math.cos(w), s = Math.sin(w), dk = Math.exp(-1 / (BELL_T[k] * sr));
+    let x = Math.cos(rnd() * 6.283), y = Math.sin(rnd() * 6.283), a = BELL_A[k];   // phasor rotation: no per-sample sin/exp
+    for (let i = 0; i < n; i++) { out[i] += a * y; const nx = x * c - y * s; y = x * s + y * c; x = nx; a *= dk; }
+  }
+  const nT = Math.floor(sr * 0.02);
+  for (let i = 0; i < nT && i < n; i++) { const e = 1 - i / nT; out[i] += (rnd() * 2 - 1) * 0.35 * e * e; }
+  const at = Math.floor(sr * 0.004);                                       // 4 ms attack, fade the tail to silence
+  for (let i = 0; i < at && i < n; i++) out[i] *= i / at;
+  const ft = Math.floor(sr * 0.3); for (let i = 0; i < ft && i < n; i++) out[n - 1 - i] *= i / ft;
+  let pk = 0; for (let i = 0; i < n; i++) pk = Math.max(pk, Math.abs(out[i]));
+  if (pk > 0) for (let i = 0; i < n; i++) out[i] *= 0.9 / pk;
+  return out;
+}
+// rounds on eight bells (treble → tenor, a major scale down), .28 s apart with the handstroke gap, three rows,
+// then five slow tolls of the tenor → [[time s, playbackRate], ...]
+const PEAL_R = [2, 15 / 8, 5 / 3, 3 / 2, 4 / 3, 5 / 4, 9 / 8, 1];
+function pealSchedule() {
+  const ev = [], gap = 0.28; let t = 0;
+  for (let row = 0; row < 3; row++) {
+    if (row > 0 && row % 2 === 0) t += gap;                                // handstroke rows open with a one-beat gap
+    for (let b = 0; b < 8; b++) { ev.push([t, PEAL_R[b]]); t += gap; }
+  }
+  t += 1.4;
+  for (let k = 0; k < 5; k++) { ev.push([t, 1]); t += 2.4; }
+  return ev;
+}
+// distance d (m) → lowpass cutoff, gain and air delay
+function strikeParams(d) { return { lp: 900 + 7000 * Math.exp(-d / 3000), gain: Math.max(0.05, 0.35 / (1 + d / 900)), delay: Math.min(d / 343, 4) }; }
+let bellBuf = null;
+const bellCam = { x: 0, y: 0, z: 0, rx: 1, rz: 0 }, peals = [];
+function ring(e) {
+  if (!ctx || !A.on || !bellBuf || !e) return;
+  if (document.hidden || (D.Story && (D.Story.catchingUp || D.Story.replaying))) return;
+  const now = ctx.currentTime;
+  for (let i = peals.length - 1; i >= 0; i--) if (peals[i] < now) peals.splice(i, 1);
+  if (peals.length >= 2) return;                                         // ≤ 2 concurrent peals
+  const gy = D.Terrain && D.Terrain.hAt ? D.Terrain.hAt(e.x, e.z) : 0;
+  const dx = e.x - bellCam.x, dz = e.z - bellCam.z, d = Math.hypot(dx, dz, bellCam.y - gy - 20);
+  const P = strikeParams(d), hl = Math.hypot(dx, dz) || 1;
+  const pan = D.clamp((dx * bellCam.rx + dz * bellCam.rz) / hl, -1, 1) * 0.85;
+  const sched = pealSchedule();
+  let end = now;
+  for (const [t, rate] of sched) {
+    const src = ctx.createBufferSource(); src.buffer = bellBuf; src.playbackRate.value = rate * (1 + (Math.random() - 0.5) * 0.004);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = P.lp;
+    const g = ctx.createGain(); g.gain.value = P.gain * (0.85 + Math.random() * 0.15) * (rate === 1 && t > 6 ? 1.1 : 1);
+    src.connect(lp); lp.connect(g);
+    if (ctx.createStereoPanner) { const sp = ctx.createStereoPanner(); sp.pan.value = pan; g.connect(sp); sp.connect(master); }
+    else g.connect(master);
+    const t0 = now + P.delay + t;
+    src.start(t0); src.stop(t0 + bellBuf.duration / rate + 0.1);
+    end = Math.max(end, t0 + bellBuf.duration / rate);
+  }
+  peals.push(end);
+}
+A._pure = { bellStrike, pealSchedule, strikeParams };
 A.toggle = function (force) {
   const want = force !== undefined ? force : !A.on;
   if (want && !ctx) start();
@@ -133,6 +203,10 @@ function sampleEnv(focus, dist) {
 }
 
 A.update = function (dt, camera, focus, dist) {
+  if (camera && camera.matrixWorld) {                                    // bells pan against the camera's right vector
+    const m = camera.matrixWorld.elements, rl = Math.hypot(m[0], m[2]) || 1;
+    bellCam.x = camera.position.x; bellCam.y = camera.position.y; bellCam.z = camera.position.z; bellCam.rx = m[0] / rl; bellCam.rz = m[2] / rl;
+  }
   if (!ctx || !A.on) return;
   sampleT -= dt;
   if (sampleT <= 0) { sampleT = 0.4; sampleEnv(focus, dist); }

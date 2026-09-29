@@ -179,6 +179,9 @@ function reg(ctx) {
       for (const p of ctx.prev.plots) regAdd(ctx, p);
       for (const s of ctx.prev.specials) if (s.w > 0 && s.d > 0 && s.kind !== 'boat' && s.kind !== 'pond') regAdd(ctx, s);
     }
+    // the player's own (manual) buildings are exact neighbours as well: town.js also stamps them into the
+    // occupancy raster, this closes the sub-2 m gaps (Living History: player work is never built over)
+    if (D.Town && D.Town.forManual) D.Town.forManual(ctx.x0, ctx.z0, ctx.x1, ctx.z1, b => { if (b.w > 0 && b.d > 0) regAdd(ctx, { x: b.x, z: b.z, rot: b.rot || 0, w: b.w + 2, d: b.d + 2 }); });
   }
   return r;
 }

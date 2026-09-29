@@ -30,6 +30,14 @@ function boot() {
   if (D.Roads && D.Roads.init) D.Roads.init(scene);
   if (D.City && D.City.init) D.City.init(scene);
   if (D.Life && D.Life.init) D.Life.init(scene);
+  // Living History: every module is optional; a failing one must not stop the editor booting
+  const opt = (name, fn) => { try { fn(); } catch (e) { console.error('[main] ' + name + '.init failed', e); } };
+  if (D.Story && D.Story.init) opt('Story', () => D.Story.init(scene));
+  if (D.Director && D.Director.init) opt('Director', () => D.Director.init());
+  if (D.Wayfarer && D.Wayfarer.init) opt('Wayfarer', () => D.Wayfarer.init());
+  if (D.Works && D.Works.init) opt('Works', () => D.Works.init(scene));
+  if (D.Realm && D.Realm.init) opt('Realm', () => D.Realm.init(scene));
+  if (D.Atlas && D.Atlas.init) opt('Atlas', () => D.Atlas.init(scene));
   D.Post.init(renderer);
   D.Cam.init(camera, canvas);
   D.Tools.init(canvas);
@@ -66,6 +74,15 @@ function boot() {
     }
   })();
 
+  // Living History frame hooks are optional: a throw is logged and the frame carries on (render, autosave);
+  // a hook that keeps throwing (30 frames in a row) is switched off so one bug cannot freeze the viewport
+  const hookErr = { Atlas: 0, Story: 0 }, hookLogged = { Atlas: 0, Story: 0 };
+  function hookFail(name, e) {
+    ++hookErr[name];
+    if (++hookLogged[name] <= 10) console.error('[main] ' + name + '.update failed', e);
+    if (hookErr[name] === 30) { console.error('[main] ' + name + '.update disabled after repeated errors'); if (D.toast) D.toast(name === 'Story' ? 'History stopped after an error' : 'Atlas stopped after an error', 'warn'); }
+  }
+
   // loop
   let last = performance.now(), fpsT = 0, frames = 0;
   function frame(now) {
@@ -74,11 +91,14 @@ function boot() {
     renderer.info.reset();
     last = now;
     D.Cam.update(dt);
+    if (D.Atlas && D.Atlas.update && hookErr.Atlas < 30) { try { D.Atlas.update(dt, camera); hookErr.Atlas = 0; } catch (e) { hookFail('Atlas', e); } }
     const dist = D.Cam.distance(), focus = D.Cam.focusPoint();
     D.Sky.update(dt, camera, focus, dist);
     D.Terrain.update(dt, camera);
     D.Water.update(dt, camera);
     D.Nature.update(dt, camera);
+    // history runs before Roads/City so they consume this frame's season edits
+    if (D.Story && D.Story.update && hookErr.Story < 30) { try { D.Story.update(dt); hookErr.Story = 0; } catch (e) { hookFail('Story', e); } }
     if (D.Roads && D.Roads.update) D.Roads.update(dt, camera);
     if (D.City && D.City.update) D.City.update(dt, camera);
     if (D.Kit && D.Kit.update) D.Kit.update(dt, camera);

@@ -45,7 +45,10 @@ const IC = {
   film: '<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   gauge: '<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/>',
   trash2: '<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/>',
-  world: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'
+  world: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  story: '<path d="M6 3h12M6 21h12M7 3c0 5 10 6 10 9s-10 4-10 9M17 3c0 5-10 6-10 9s10 4 10 9"/><path d="M10 18.5h4" opacity=".7"/>',
+  away: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
+  atlas: '<path d="M3 6l6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 3.5v14.5M15 6v14.5" opacity=".6"/>'
 };
 const svg = (name, sz) => `<svg viewBox="0 0 24 24" width="${sz || 20}" height="${sz || 20}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[name] || IC.dot}</svg>`;
 D.svg = svg; D.IC = IC;
@@ -83,7 +86,8 @@ UI.init = function () {
   D.on('opts:values', refreshOptionValues);
   D.on('history', refreshHistory);
   D.on('hover', updateStatus);
-  D.on('changed', () => { navDirty = true; });
+  // history seasons redraw the navigator at most every 8 s; player edits as before
+  D.on('changed', what => { if (what === 'story') navStory = true; else navDirty = true; });
   D.on('terrain:h', () => { navDirty = true; });
   D.on('terrain:a', () => { navDirty = true; });
   D.on('world:generated', () => { navDirty = true; refreshWorld(); });
@@ -94,10 +98,12 @@ UI.init = function () {
   D.on('flykeys', refreshFlyKeys);
   D.on('town:changed', () => { refreshWorld(); navDirty = true; });
   D.on('layers', refreshLayers);
+  D.on('atlas:toggle', () => refreshQuick());
   buildOptions();
   refreshHistory();
   document.addEventListener('mousedown', e => { if (!e.target.closest('#dropdown') && !e.target.closest('.menu-btn')) closeMenu(); });
   setInterval(refreshWorld, 3000);
+  D.emit('ui:ready');   // Story and Atlas build their DOM on this
 };
 
 // ---- Menus ------------------------------------------------------------------------------
@@ -152,12 +158,30 @@ function menuDefs() {
       { label: 'Flyover editor', act: () => { UI.enterPhoto(); setTimeout(() => { const f = $('ph-fly'); if (f) f.scrollIntoView(); }, 50); } },
       { label: 'Showcase orbit', checked: !!D.Cam.autoOrbit, act: () => { D.Cam.autoOrbit = D.Cam.autoOrbit ? 0 : 0.06; } }
     ],
+    // with neither story.js nor atlas.js loaded the menubar is exactly v44's (§0.1: no menu of disabled items)
+    ...(D.Story || (D.Atlas && D.Atlas.toggle) ? { History: historyMenu() } : {}),
     Help: [
       { label: 'Quick start', act: () => UI.quickstart(true) },
       { label: 'Keyboard shortcuts', kb: 'F1', act: () => UI.help() },
       { label: 'About Diorama', act: () => UI.help(true) }
     ]
   };
+}
+// Living History menu (every item degrades to disabled when its module is absent)
+function historyMenu() {
+  const St = D.Story, At = D.Atlas;
+  const names = St && St.SPEED_NAMES || ['Paused', 'Slow', 'Normal', 'Fast', 'Rapid'];
+  const items = [
+    { label: St && St.running ? 'Pause history' : 'Play history', kb: 'Shift+P', act: () => St.toggle(), disabled: !St },
+    { sep: 1 }
+  ];
+  for (let i = 1; i < names.length; i++) items.push({ label: names[i] + (St ? ` · ${St.SPEEDS[i]} years a minute` : ''), checked: !!St && St.speedIdx === i, act: () => St.setSpeed(i), disabled: !St, kb: i === 1 ? '`' : '' });
+  items.push({ label: 'Seasons follow the calendar', checked: !!St && St.follow, act: () => { St.follow = !St.follow; }, disabled: !St });
+  items.push({ sep: 1 });
+  items.push({ label: 'Chronicle', kb: 'Shift+C', act: () => St.openChronicle(), disabled: !St });
+  items.push({ label: 'Time-lapse replay…', kb: 'Shift+H', act: () => St.toggleReplay(), disabled: !St || !St.started, checked: !!St && St.replaying });
+  items.push({ label: 'Atlas table', kb: 'Shift+M', act: () => At.toggle(), disabled: !At || !At.toggle, checked: !!At && !!At.on });
+  return items;
 }
 function buildMenus() {
   const nav = $('menus');
@@ -209,14 +233,18 @@ function buildQuick() {
   q.innerHTML = `
     <button class="qbtn" id="q-sound" title="Ambient sound">${svg('mute', 14)}<span>Sound</span></button>
     <button class="qbtn" id="q-quality" title="Graphics quality">${svg('gauge', 14)}<span>High</span></button>
+    <button class="qbtn" id="q-atlas" title="Atlas table (Shift+M)">${svg('atlas', 14)}<span>Atlas</span></button>
     <button class="qbtn" id="q-photo" title="Photo mode">${svg('camera', 14)}<span>Photo</span></button>`;
   $('q-sound').onclick = () => { if (D.Audio) { D.Audio.toggle(); refreshQuick(); } };
   $('q-quality').onclick = () => setQuality(D.Q.high ? 'low' : 'high');
+  $('q-atlas').onclick = () => { if (D.Atlas && D.Atlas.toggle) D.Atlas.toggle(); $('q-atlas').blur(); refreshQuick(); };
   $('q-photo').onclick = () => UI.enterPhoto();
   refreshQuick();
 }
 function refreshQuick() {
   const on = D.Audio && D.Audio.on;
+  const qa = $('q-atlas');
+  if (qa) { qa.hidden = !(D.Atlas && D.Atlas.toggle); qa.classList.toggle('on', !!(D.Atlas && D.Atlas.on)); }
   $('q-sound').classList.toggle('on', !!on);
   $('q-sound').innerHTML = `${svg(on ? 'sound' : 'mute', 14)}<span>Sound</span>`;
   $('q-quality').innerHTML = `${svg('gauge', 14)}<span>${D.Q.high ? 'High' : 'Low'}</span>`;
@@ -341,6 +369,7 @@ function refreshOptionValues() {
 UI.refreshOptions = refreshOptionValues;
 
 // ---- Panels ----------------------------------------------------------------------------------
+// opts: { collapsed, flush, before: '<panel id>' (insert before that panel instead of appending) }
 function panel(id, title, body, opts) {
   opts = opts || {};
   const p = el('div', 'panel' + (opts.collapsed ? ' collapsed' : ''));
@@ -350,9 +379,12 @@ function panel(id, title, body, opts) {
   const b = el('div', 'panel-b' + (opts.flush ? ' flush' : ''));
   if (typeof body === 'string') b.innerHTML = body; else if (body) b.appendChild(body);
   p.appendChild(h); p.appendChild(b);
-  $('panels').appendChild(p);
+  const ref = opts.before ? $('panel-' + opts.before) : null;
+  if (ref) $('panels').insertBefore(p, ref); else $('panels').appendChild(p);
   return { p, h, b, extra: h.querySelector('.ph-extra'), title: h.querySelector('.ptitle') };
 }
+UI.panel = panel;
+UI.el = el;
 let P = {};
 function buildPanels() {
   P.nav = panel('nav', 'Navigator', `<div id="nav-wrap"><canvas id="nav-canvas" width="256" height="256"></canvas><svg id="nav-view" viewBox="0 0 256 256"></svg></div>`);
@@ -369,7 +401,7 @@ function buildPanels() {
 }
 
 // Navigator minimap: the land is drawn inset inside a map frame so the border reads clearly
-let navDirty = true, navTimer = 0;
+let navDirty = true, navTimer = 0, navStory = false, navStoryT = 0;
 const NM = 12, NI = 256 - NM * 2;        // margin and inset size in canvas px
 const toNav = v => NM + v / SIZE * NI;
 function wireNav() {
@@ -460,6 +492,8 @@ function drawNavView() {
 }
 UI.update = function (dt) {
   navTimer -= dt;
+  navStoryT -= dt;
+  if (navStory && navStoryT <= 0) { navStory = false; navStoryT = 8; navDirty = true; }
   if (navDirty && navTimer <= 0 && !D.History.active()) { navDirty = false; navTimer = 1.5; drawNav(); }
   drawNavView();
 };
@@ -476,8 +510,9 @@ function envHTML() {
   <div class="row"><label>Wind</label><input type="range" id="env-wind" min="0" max="1.5" step="0.01"><span class="val" id="env-wind-v"></span></div>`;
 }
 function fmtTime(t) { const h = Math.floor(t), m = Math.floor((t - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; }
+// container: element id or element; items [[value, label, title?]]; returns a refresh function
 function chips(container, items, get, set) {
-  const c = $(container); c.innerHTML = '';
+  const c = typeof container === 'string' ? $(container) : container; c.innerHTML = '';
   items.forEach(([v, lab, title]) => {
     const b = el('span', 'chip', lab); if (title) b.title = title;
     b.onclick = () => { set(v); refresh(); };
@@ -487,6 +522,9 @@ function chips(container, items, get, set) {
   refresh();
   return refresh;
 }
+UI.chips = chips;
+// an explicit Environment season choice wins over "Seasons follow the calendar"
+function pickSeason(v) { if (D.Story) D.Story.follow = false; D.Sky.setSeason(v); }
 let envRefreshers = [];
 function wireEnv() {
   const E = D.Env;
@@ -495,7 +533,7 @@ function wireEnv() {
   t.oninput = () => { E.time = +t.value; $('env-time-v').textContent = fmtTime(E.time); };
   envRefreshers.push(chips('env-speed', [[0, '⏸', 'Paused'], [0.02, '1×', '1 hour per 50 s'], [0.1, '5×'], [0.5, '25×']], () => E.timeSpeed, v => { E.timeSpeed = v; }));
   envRefreshers.push(chips('env-weather', [['clear', '☀ Clear'], ['cloudy', '⛅ Cloudy'], ['rain', '🌧 Rain'], ['storm', '⛈ Storm'], ['fog', '🌫 Fog'], ['snow', '❄ Snow']], () => E.weather, v => D.Sky.setWeather(v)));
-  envRefreshers.push(chips('env-season', [['spring', 'Spring'], ['summer', 'Summer'], ['autumn', 'Autumn'], ['winter', 'Winter']], () => E.season, v => D.Sky.setSeason(v)));
+  envRefreshers.push(chips('env-season', [['spring', 'Spring'], ['summer', 'Summer'], ['autumn', 'Autumn'], ['winter', 'Winter']], () => E.season, v => pickSeason(v)));
   const s = $('env-sea');
   s.oninput = () => { D.Water.setSeaLevel(+s.value); };
   s.onpointerdown = () => { D.History.begin('Sea Level', 'sea'); D.History.touchObj('sea'); };
@@ -565,7 +603,7 @@ function clearLayer(l) {
 }
 
 // History panel
-const HIST_ICONS = { raise: 'raise', smooth: 'smooth', flatten: 'flatten', noise: 'noise', terrace: 'terrace', erode: 'erode', cliff: 'cliff', ramp: 'ramp', stamp: 'stamp', sea: 'sea', lake: 'lake', river: 'river', brush: 'brush', biome: 'biome', tree: 'tree', road: 'road', bulldoze: 'bulldoze', zone: 'zone', density: 'density', prosperity: 'density', building: 'building', paste: 'paste', trash: 'trash' };
+const HIST_ICONS = { raise: 'raise', smooth: 'smooth', flatten: 'flatten', noise: 'noise', terrace: 'terrace', erode: 'erode', cliff: 'cliff', ramp: 'ramp', stamp: 'stamp', sea: 'sea', lake: 'lake', river: 'river', brush: 'brush', biome: 'biome', tree: 'tree', road: 'road', bulldoze: 'bulldoze', zone: 'zone', density: 'density', prosperity: 'density', building: 'building', paste: 'paste', trash: 'trash', story: 'story', away: 'away', atlas: 'atlas' };
 function refreshHistory() {
   const list = $('history-list'); if (!list) return;
   const H = D.History;
@@ -608,7 +646,7 @@ function refreshCatalogue() {
     item('Auto bushes', '🌿', o.species === -2, () => { o.species = -2; });
     const emoji = { oak: '🌳', pine: '🌲', poplar: '🌲', birch: '🌳', spruce: '🌲', palm: '🌴', jungle: '🌳', blossom: '🌸', cactus: '🌵', bush: '🌿', scrub: '🌾', flowers: '🌷', rock: '🪨',
       lantern: '🏮', wattle: '🧺', hedge: '🟩', barrels: '🛢', haystack: '🌾', cart: '🛒', crates: '📦', woodpile: '🪵', stook: '🌾', drystone: '🪨', veg: '🥬', herbs: '🌿',
-      apple: '🍎', pear: '🍐', grave: '🪦', skep: '🐝', netrack: '🎣', waycross: '✝', yew: '🌲', vine: '🍇', torchpost: '🔥' };
+      apple: '🍎', pear: '🍐', grave: '🪦', skep: '🐝', netrack: '🎣', waycross: '✝', yew: '🌲', vine: '🍇', torchpost: '🔥', boundstone: '🪨' };
     D.Nature.SPECIES.forEach((s, i) => item(s.name, emoji[s.id] || '•', o.species === i, () => {
       o.species = i;
       if (s.cat === 'prop' && o.mode === 'scatter') { o.mode = 'line'; D.toast(`${s.name}: Line mode, drag to lay them along your stroke`); }
@@ -760,7 +798,9 @@ UI.help = function (about) {
     <div class="help-h">Edit</div><div class="keys-grid">
       ${k('Ctrl+Z / Ctrl+Y', 'Undo / Redo')}${k('Ctrl+C / X / V', 'Copy / Cut / Paste land')}${k('Ctrl+A / Ctrl+D', 'Select all / Deselect')}${k(', / .', 'Rotate paste')}${k('Del', 'Clear selection')}${k('Tab', 'Hide panels')}${k('Ctrl+S', 'Save now')}${k('Esc', 'Cancel / exit mode')}</div>
     <div class="help-h">Tools</div><div class="keys-grid">${tools}</div>
-    <div class="help-h">Street level</div><div class="keys-grid">${k('W A S D + mouse', 'Walk / drive')}${k('C', 'Switch walk ↔ drive')}${k('Shift', 'Run')}${k('Esc', 'Back to editor')}</div>`}
+    <div class="help-h">Street level</div><div class="keys-grid">${k('W A S D + mouse', 'Walk / drive')}${k('C', 'Switch walk ↔ drive')}${k('Shift', 'Run')}${k('Esc', 'Back to editor')}</div>
+    ${D.Story ? `<div class="help-h">History</div><div class="keys-grid">${k('Shift+P', 'Play / pause history')}${k('`', 'Cycle history speed')}${k('Shift+C', 'Chronicle')}${k('Shift+H', 'Time-lapse replay')}${D.Atlas ? k('Shift+M', 'Atlas table') + k('PgUp / PgDn', 'Turn atlas pages') : ''}${k('Esc', 'Leave replay / atlas')}</div>
+    <p class="muted small">Press ▶ and the land lives on without you: villages spill onto good ground, paths wear into roads, cathedrals climb inside their scaffolding. History never touches what you made, never moves your camera, and Ctrl+Z turns time back. Everything it did is written in the Chronicle.</p>` : ''}`}
   </div><div class="dlg-foot"><button class="btn primary" id="help-close">Close</button></div></div>`;
   h.hidden = false;
   $('help-close').onclick = () => { h.hidden = true; };
@@ -771,6 +811,7 @@ UI.help = function (about) {
 let photoSaved = null;
 UI.enterPhoto = function () {
   if (UI.photo) return;
+  if (D.Atlas && D.Atlas.on && D.Atlas.toggle) D.Atlas.toggle(false);   // photo mode and the Atlas are exclusive
   UI.photo = true;
   photoSaved = Object.assign({}, D.Post.p, { preset: D.Post.preset });
   if (D.Post.preset === 'natural') D.Post.applyPreset('diorama');
@@ -855,7 +896,7 @@ function buildPhotoUI() {
     presets.appendChild(c);
   });
   chips('ph-weather', [['clear', '☀'], ['cloudy', '⛅'], ['rain', '🌧'], ['storm', '⛈'], ['fog', '🌫'], ['snow', '❄']], () => D.Env.weather, v => { D.Sky.setWeather(v); refreshEnvValues(); });
-  chips('ph-season', [['spring', 'Spring'], ['summer', 'Summer'], ['autumn', 'Autumn'], ['winter', 'Winter']], () => D.Env.season, v => { D.Sky.setSeason(v); refreshEnvValues(); });
+  chips('ph-season', [['spring', 'Spring'], ['summer', 'Summer'], ['autumn', 'Autumn'], ['winter', 'Winter']], () => D.Env.season, v => { pickSeason(v); refreshEnvValues(); });
   $('ph-x').onclick = UI.exitPhoto;
   $('ph-min').onclick = UI.togglePhotoPanel;
   $('ph-cap').onclick = () => { $('photoui').hidden = true; setTimeout(() => { D.Post.capture(1); setTimeout(() => { if (UI.photo) $('photoui').hidden = false; }, 300); }, 50); };

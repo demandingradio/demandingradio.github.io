@@ -215,6 +215,17 @@ Post.render = function (renderer, scene, camera, time) {
   c.uExposure.value = P.exposure; c.uContrast.value = P.contrast; c.uSat.value = P.saturation;
   c.uTemp.value = P.temp; c.uTint.value = P.tint; c.uLift.value = P.lift; c.uSplit.value = P.split;
   c.uGrain.value = P.grain; c.uVig.value = P.vignette; c.uChroma.value = P.chroma; c.uTime.value = time;
+  // Atlas table: a calm, neutral print. Tame bloom, flat saturation/contrast, a faint warm lift, a little
+  // more vignette. P (the user's grade) is never written; tilt-shift stays theirs.
+  const ak = D.AU ? D.AU.uAtlas.value : 0;
+  if (ak > 0.001) {
+    const L = (a, b) => a + (b - a) * ak;
+    c.uBloom.value *= 1 - 0.8 * ak;
+    c.uSat.value = L(P.saturation, 1); c.uContrast.value = L(P.contrast, 1);
+    c.uLift.value = L(P.lift, 0.03); c.uTemp.value = L(P.temp, 0.03); c.uTint.value = L(P.tint, 0);
+    c.uGrain.value = L(P.grain, 0.015); c.uVig.value = L(P.vignette, Math.max(P.vignette, 0.22) + 0.14);
+    c.uChroma.value = L(P.chroma, 0); if (ak > 0.5) c.uSplit.value = 0;
+  }
   c.uLetter.value = P.letterbox; c.uUseDof.value = useDof ? 1 : 0;
   c.uTiltSat.value = P.tiltOn ? 0.12 : 0;
   renderer.setRenderTarget(null);

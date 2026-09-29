@@ -57,6 +57,8 @@ const SPECIES = [
   { id: 'yew', name: 'Yew', cat: 'tree', cols: [0x1f3a22, 0x24402a, 0x2b4a2c], canopy: 1, h: 10 },
   { id: 'vine', name: 'Vine row', cat: 'prop', cols: [0x5e8a36, 0x6a943c, 0x54803a], canopy: 1, h: 1.6, line: 2, noScale: true },
   { id: 'torchpost', name: 'Torch post', cat: 'prop', cols: [0x5a4430], canopy: 0, h: 3, line: 14, noScale: true },
+  // 34: Living History (realm boundary stones; also placeable by hand). Append only, never earlier.
+  { id: 'boundstone', name: 'Boundary stone', cat: 'prop', cols: [0x9a948a, 0x8e887e, 0xa29c90], canopy: 0, h: 1.1, line: 60, noScale: true },
 ];
 const SP_INDEX = {}; SPECIES.forEach((s, i) => SP_INDEX[s.id] = i);
 const DECID = new Set(['oak', 'poplar', 'birch']);
@@ -103,6 +105,21 @@ function removeAt(ci, k) {
   c.n--; c.grid = null;
 }
 Nature.count = function () { let n = 0; for (const c of chunks) n += c.n; return n; };
+// Forest cover 0..1 around x,z within r metres, read from the derived canopy density grid (W.forest) on
+// at most ~9 x 9 samples. Cheap and read-only (the history director uses it to keep out of the woods).
+Nature.cover = function (x, z, r) {
+  r = Math.max(0, r || 0);
+  const F = W.forest, st = Math.max(1, Math.ceil(r / CELL / 4));
+  const ci = Math.round(x / CELL), cj = Math.round(z / CELL), R = Math.ceil(r / CELL), R2 = (r / CELL) * (r / CELL);
+  let s = 0, n = 0;
+  for (let dj = -R; dj <= R; dj += st) for (let di = -R; di <= R; di += st) {
+    if (di * di + dj * dj > R2 + 0.5) continue;
+    const i = ci + di, j = cj + dj;
+    if (i < 0 || j < 0 || i > N || j > N) continue;
+    s += Math.min(1, F[j * VN + i] / 200); n++;
+  }
+  return n ? s / n : 0;
+};
 Nature.clearAll = function () { for (const c of chunks) { c.n = 0; c.grid = null; } dirtyRender = true; for (let i = 0; i < chunks.length; i++) dirtyForest.add(i); };
 
 // bucket grid for spacing queries (16 m buckets)
@@ -595,6 +612,18 @@ function speciesGeo(id, lod) {
       for (let k = 0; k < 3; k++) { const a = k * 2.1 + 0.3; parts.push(blob(0.2, 0, Math.cos(a) * 0.22, 0.07, Math.sin(a) * 0.22, 1, 0.6, 1, 0x8a857c, 5, 340 + k)); }
       break;
     }
+    case 'boundstone': { // three-sided boundary stone: a prism with a weathered cap and a mark cut in each face
+      const R = 0.3, H = 0.9, CUT = 0x4e4a44;
+      if (lod) { parts.push(cyl(R, R * 1.05, 1.05, 3, 0, WHITE, 4)); break; }
+      parts.push(speckle(cyl(R, R * 1.06, H, 3, 0, WHITE, 4), 0.16, 351), speckle(cone(R * 1.02, 0.2, 3, H, 0xe8e4dc, 4), 0.16, 352));
+      // prism faces sit between the corners, at angle PI/3 + k*2PI/3 and distance R/2 from the axis
+      for (let k = 0; k < 3; k++) {
+        const a = Math.PI / 3 + k * Math.PI * 2 / 3, r = R * 0.52 + 0.004;
+        const v = box(0.045, 0.34, 0.012, 0, 0.36, 0, CUT, 0), hb = box(0.2, 0.045, 0.012, 0, 0.58, 0, CUT, 0);
+        for (const g of k === 1 ? [v] : [v, hb]) { g.rotateY(a); g.translate(Math.sin(a) * r, 0, Math.cos(a) * r); parts.push(g); }
+      }
+      break;
+    }
     default:
       parts.push(box(0.5, 0.5, 0.5, 0, 0, 0, 0xff00ff, 0));
   }
@@ -608,13 +637,16 @@ function speciesGeo(id, lod) {
 const NU = { uTime: { value: 0 }, uWind: { value: 0.5 }, uNight: { value: 0 } };
 function makeMat(far) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
+  const AT = !!(D.AU && D.GLSL_ATLAS);   // Atlas hook: plaster per fragment at the instance's own xz (a plain varying, constant per instance;
+  // never `flat`: ANGLE on D3D11 emulates GL provoking-vertex flat varyings at a large per-instance cost, which doubled the tree pass)
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = NU.uTime; sh.uniforms.uWind = NU.uWind; sh.uniforms.uNight = NU.uNight;
     sh.uniforms.uSeason = D.TU.uSeason; sh.uniforms.uSnow = D.TU.uSnow;
+    if (AT) Object.assign(sh.uniforms, D.AU);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
-attribute float tint; uniform float uTime, uWind, uSnow; uniform vec4 uSeason; varying float vGlow;`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+attribute float tint; uniform float uTime, uWind, uSnow; uniform vec4 uSeason; varying float vGlow;${AT ? '\nvarying vec2 vAtXZ;' : ''}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>${AT ? '\nvAtXZ = instanceMatrix[3].xz;' : ''}
 float tt = tint;
 bool nCanopy = (tt > 1.5 && tt < 3.5) || (tt > 6.5 && tt < 7.5);
 if (nCanopy) { float bare = uSeason.w; transformed.xz *= mix(1.0, 0.28, bare); transformed.y *= mix(1.0, 0.9, bare); }
@@ -652,12 +684,14 @@ if ((tint > 0.5 && tint < 4.5) || (tint > 8.5 && tint < 9.5)) {
 float snowK = uSnow * smoothstep(0.25, 0.75, normal.y) * max(step(0.5, tint) * step(tint, 5.5), step(6.5, tint));
 vColor = mix(vColor, vec3(0.86, 0.88, 0.92), clamp(snowK * 1.2, 0.0, 1.0));`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform float uNight; varying float vGlow;`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vGlow * (0.3 + uNight * 6.0);`);
+      .replace('#include <common>', `#include <common>\nuniform float uNight; varying float vGlow;${AT ? '\nvarying vec2 vAtXZ;\n' + D.GLSL_ATLAS : ''}`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vGlow * (0.3 + uNight * 6.0)${AT ? ' * (1.0 - at_k(vAtXZ))' : ''};`);
+    if (AT) sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+if (uAtlas > 0.001) diffuseColor.rgb = at_surfaceLin(diffuseColor.rgb, vAtXZ, 0.0);`);
     if (sh.vertexShader.indexOf('nCanopy') < 0 || sh.vertexShader.indexOf('vGlow = step') < 0 || sh.fragmentShader.indexOf('vGlow *') < 0 && sh.fragmentShader.indexOf('* vGlow') < 0)
       console.warn('Nature: shader injection did not apply');
   };
-  m.customProgramCacheKey = () => 'dio-nature-2';
+  m.customProgramCacheKey = () => 'dio-nature-3';
   return m;
 }
 

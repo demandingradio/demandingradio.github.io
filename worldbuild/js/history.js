@@ -3,18 +3,22 @@
    32x32 tiles the first time a stroke touches them (copy-on-write), so a stroke only
    costs memory for the area it actually changed. Object layers (roads, rivers...)
    register save/load functions; chunked instance stores (trees, buildings) snapshot
-   per 1 km chunk. */
+   per 1 km chunk.
+   Entries opened with a `merge` key (Living History seasons) fold into the previous entry
+   when it is the top of the stack with the same key, so a run of seasons is ONE undo step
+   ("History 1142–1150"). Any player entry in between breaks the run. */
 (function () {
 'use strict';
 const D = window.D;
 const TS = 32;
+const RUN_YEARS = 10, RUN_BYTES = 64e6;   // merged run caps (away:* runs have no span cap)
 
 const H = D.History = {
   entries: [],
   pos: 0,
   cur: null,
   arrays: {},   // name -> { get data(), ch, res, onRestore(i0,j0,i1,j1) }
-  objs: {},     // name -> { save(), load(state) }
+  objs: {},     // name -> { save(), load(state), bytes?(state) }
   stores: {},   // name -> store with snapChunk(ci), loadChunk(ci, snap)
   bytes: 0,
   MAX_ENTRIES: 80,
@@ -24,9 +28,15 @@ const H = D.History = {
   regObj(name, def) { this.objs[name] = def; },
   regStore(name, store) { this.stores[name] = store; },
 
-  begin(label, icon) {
+  // opts = { merge?:string, y?:int, relabel?:(y0,y1)=>string }
+  begin(label, icon, opts) {
     if (this.cur) this.end();
     this.cur = { label, icon: icon || 'dot', tiles: new Map(), objs: {}, chunks: new Map(), bytes: 0, time: Date.now() };
+    if (opts) {
+      if (opts.merge) this.cur.merge = opts.merge;
+      if (opts.y !== undefined) this.cur.y = this.cur.y0 = this.cur.y1 = opts.y;
+      if (opts.relabel) this.cur.relabel = opts.relabel;
+    }
     return this.cur;
   },
 
@@ -54,7 +64,9 @@ const H = D.History = {
   touchObj(name) {
     const e = this.cur; if (!e || e.objs[name]) return;
     const O = this.objs[name]; if (!O) return;
-    e.objs[name] = { before: O.save(), after: null };
+    const before = O.save();
+    e.objs[name] = { before, after: null };
+    e.bytes += objBytes(O, before);
   },
 
   touchChunk(name, ci) {
@@ -78,6 +90,7 @@ const H = D.History = {
     });
     for (const n in e.objs) {
       const o = e.objs[n]; o.after = this.objs[n].save();
+      e.bytes += objBytes(this.objs[n], o.after);
       changed = true; // object layers are only touched right before a real edit
     }
     e.chunks.forEach(c => {
@@ -86,24 +99,59 @@ const H = D.History = {
       changed = true;
     });
     if (!changed) { D.emit('history'); return null; }
+    // merge fold: a season run joins the entry on top of the stack (no redo branch, same key, caps)
+    const prev = this.entries[this.pos - 1];
+    if (e.merge && prev && prev.merge === e.merge && this.pos === this.entries.length && canJoin(prev, e)) {
+      const b0 = prev.bytes; fold(prev, e); this.bytes += prev.bytes - b0; this.trim();
+      D.emit('history'); D.emit('changed', 'story'); return prev;
+    }
+    if (e.y !== undefined) e.y0 = e.y1 = e.y;
     // drop redo branch
     for (let k = this.pos; k < this.entries.length; k++) this.bytes -= this.entries[k].bytes;
     this.entries.length = this.pos;
     this.entries.push(e);
     this.pos++;
     this.bytes += e.bytes;
-    while (this.entries.length > this.MAX_ENTRIES || (this.bytes > this.MAX_BYTES && this.entries.length > 1)) {
-      const old = this.entries.shift(); this.bytes -= old.bytes; this.pos--;
-    }
+    this.trim();
     D.emit('history');
-    D.emit('changed');
+    if (e.merge) D.emit('changed', 'story'); else D.emit('changed');
     return e;
+  },
+
+  // drop the open entry without restoring anything (a season that changed nothing)
+  abort() { this.cur = null; },
+
+  // does the open entry hold a real change besides object layer `skip`? (Story: a season whose part
+  // edited the world but forgot ctx.mark() must still be recorded, never aborted)
+  changedBeyond(skip) {
+    const e = this.cur; if (!e) return false;
+    if (e.chunks.size) return true;
+    for (const n in e.objs) if (n !== skip) return true;
+    let ch = false;
+    e.tiles.forEach(t => { if (!ch && !sameArr(t.before, copyTile(this.arrays[t.name], t.ti, t.tj))) ch = true; });
+    return ch;
   },
 
   cancel() { // discard the open entry, restoring what it touched
     const e = this.cur; if (!e) return;
     this.cur = null;
     apply(e, 'before');
+  },
+
+  // forget the undone steps (truncate the redo branch)
+  dropRedo() {
+    if (this.cur) this.end();
+    if (this.pos >= this.entries.length) return;
+    for (let k = this.pos; k < this.entries.length; k++) this.bytes -= this.entries[k].bytes;
+    this.entries.length = this.pos;
+    D.emit('history');
+  },
+
+  trim() {
+    while (this.entries.length > this.MAX_ENTRIES || (this.bytes > this.MAX_BYTES && this.entries.length > 1)) {
+      const old = this.entries.shift(); this.bytes -= old.bytes; this.pos--;
+    }
+    if (this.pos < 0) this.pos = 0;
   },
 
   undo() {
@@ -135,6 +183,30 @@ const H = D.History = {
   clear() { this.entries = []; this.pos = 0; this.cur = null; this.bytes = 0; D.emit('history'); }
 };
 
+function canJoin(p, e) {
+  return (e.merge.startsWith('away') || (e.y !== undefined && p.y0 !== undefined && e.y - p.y0 < RUN_YEARS)) && p.bytes + e.bytes <= RUN_BYTES;
+}
+// fold entry e (applied after p, nothing in between) into p: p keeps its 'before', takes e's 'after'
+function fold(p, e) {
+  e.tiles.forEach((t, k) => {
+    const q = p.tiles.get(k);
+    if (q) { p.bytes += t.after.byteLength - q.after.byteLength; q.after = t.after; }
+    else { p.tiles.set(k, t); p.bytes += t.before.byteLength + t.after.byteLength; }
+  });
+  e.chunks.forEach((c, k) => {
+    const q = p.chunks.get(k);
+    if (q) { p.bytes += snapBytes(c.after) - snapBytes(q.after); q.after = c.after; }
+    else { p.chunks.set(k, c); p.bytes += snapBytes(c.before) + snapBytes(c.after); }
+  });
+  for (const n in e.objs) {
+    const O = H.objs[n], q = p.objs[n], o = e.objs[n];
+    if (q) { p.bytes += objBytes(O, o.after) - objBytes(O, q.after); q.after = o.after; }
+    else { p.objs[n] = o; p.bytes += objBytes(O, o.before) + objBytes(O, o.after); }
+  }
+  if (e.y !== undefined) p.y1 = e.y;
+  p.label = p.relabel ? p.relabel(p.y0, p.y1) : e.label; p.time = e.time;
+}
+
 function copyTile(A, ti, tj) {
   const R = A.res, ch = A.ch, data = A.data;
   const i0 = ti * TS, j0 = tj * TS;
@@ -164,6 +236,11 @@ function snapBytes(s) {
   if (Array.isArray(s)) return s.length * 96;
   return 64;
 }
+// optional per-object size estimate so object snapshots count toward MAX_BYTES
+function objBytes(O, state) {
+  if (!O || !O.bytes) return 0;
+  try { const b = +O.bytes(state); return b > 0 ? b : 0; } catch (err) { return 0; }
+}
 
 function apply(e, which) {
   // grid tiles, grouped per layer so each layer gets one dirty rect callback
@@ -178,6 +255,6 @@ function apply(e, which) {
   for (const n in rects) { const r = rects[n]; H.arrays[n].onRestore(r[0], r[1], r[2], r[3]); }
   e.chunks.forEach(c => H.stores[c.name].loadChunk(c.ci, c[which]));
   for (const n in e.objs) H.objs[n].load(e.objs[n][which]);
-  D.emit('restored', e);
+  D.emit('restored', e, which);
 }
 })();

@@ -45,6 +45,21 @@ D.hashStr = function (s) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 };
+// Variadic uint32 hash of numbers / strings. EXACT copy of town.js hash32 so outputs match.
+D.hash32 = function () {
+  let h = 0x811c9dc5 ^ arguments.length;
+  for (let a = 0; a < arguments.length; a++) {
+    let v = arguments[a];
+    if (typeof v === 'string') v = D.hashStr(v);
+    else if (typeof v !== 'number' || !isFinite(v)) v = 0x9e37;
+    else v = (v | 0) ^ ((v / 4294967296) | 0);
+    h = Math.imul(h ^ v, 0x9E3779B1); h ^= h >>> 15; h = Math.imul(h, 0x85EBCA77); h ^= h >>> 13;
+  }
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d); h ^= h >>> 15;
+  return h >>> 0;
+};
+// Tuning knobs: each module merges its own defaults into D.TUNE.<module> in its own file.
+D.TUNE = D.TUNE || {};
 // Integer hash -> [0,1)
 D.hash2 = function (x, y) {
   let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;

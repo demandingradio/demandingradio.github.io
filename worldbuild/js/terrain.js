@@ -64,6 +64,28 @@ function dummyTex(rgba, linear) {
   t.generateMipmaps = false; t.flipY = false; t.needsUpdate = true;
   return t;
 }
+T.dummyTex = dummyTex;
+
+// ---- Atlas uniforms (spec 3.12): ONE shared set, passed by reference into every atlas-aware material
+// (terrain, water, nature here; kit and roads merge it into their own). atlas.js writes .value only.
+// uAtlas is the global drain 0..1: at 0 every hook is skipped (`if (uAtlas > .001)`), so without atlas.js
+// nothing changes.
+const AU = D.AU = {
+  uAtlas: { value: 0 },
+  uAtFocus: { value: new THREE.Vector4(8192, 8192, 0, 0) },   // xy wave origin (world xz), z wave radius (m), w 0 drain in / 1 bloom out
+  uAtMapA: { value: dummyTex([255, 255, 255, 255], true) },   // page canvases (world xz / SIZE); white = untinted chalk
+  uAtMapB: { value: dummyTex([255, 255, 255, 255], true) },
+  uAtMapG: { value: dummyTex([255, 255, 255, 255], true) },
+  uAtSlide: { value: new THREE.Vector4(1, 0, -1, 0) },        // xy sweep dir (world), z progress 0..1 (< 0 = no slide)
+  uAtGlass: { value: new THREE.Vector4(0, 0, 0, 0) },         // gl_FragCoord centre xy, z radius (device px), w 0 off / 1 living / 2 page
+  uAtId: { value: dummyTex([0, 0, 0, 0], false) },            // N x N greedy colour indices: r shire, g honour, b manor, a parish
+  uAtSelTex: { value: dummyTex([0, 0, 0, 0], false) },        // N x N selection mask (r)
+  uAtSel: { value: new THREE.Vector4(0, 0, 0, 0) },           // plot spotlight x, z, r, on
+  uAtInk: { value: new THREE.Vector4(1, 0, 0, 0) },           // x realm ink strength, y selection on, z clock (s), w id texture valid
+  uAtPage: { value: new THREE.Vector4(0, 0, 0, 0) },          // x page A index, y page B index, z glass page index, w page tint strength
+  uAtYear: { value: new THREE.Vector4(0, 0, 0, 0) }           // x oldest year, y newest year, z display year (growth-ring bands)
+};
+Object.assign(TU, AU);
 
 // ---- Shared border GLSL (terrain fragment + water) ------------------------------
 D.GLSL_EDGE = `
@@ -113,6 +135,138 @@ vec3 edgeApply(vec3 col, vec2 xz, float sd, float px, float pxR, float night, fl
   emis = (keysB*(1.0 - kk)*vec3(1.0,.74,.42)*0.22*night*uEdgeCfg.w + hot*pr*cover*0.9) * vis * dry;
   return col;
 }
+`;
+
+// ---- Shared Atlas GLSL (spec 3.12 / 5.11): uniforms + at_-prefixed helpers only (never redefines d_*).
+// Inject after GLSL_EDGE; pair with Object.assign(uniforms, D.AU). Every helper is exact identity while
+// uAtlas == 0, and callers gate the expensive ones with `if (uAtlas > .001)`.
+D.GLSL_ATLAS = `
+uniform float uAtlas; uniform vec4 uAtFocus; uniform sampler2D uAtMapA; uniform sampler2D uAtMapB; uniform sampler2D uAtMapG;
+uniform vec4 uAtSlide; uniform vec4 uAtGlass; uniform sampler2D uAtId; uniform sampler2D uAtSelTex; uniform vec4 uAtSel;
+uniform vec4 uAtInk; uniform vec4 uAtPage; uniform vec4 uAtYear;
+float at_h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float at_vn(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(at_h12(i), at_h12(i + vec2(1.0, 0.0)), u.x), mix(at_h12(i + vec2(0.0, 1.0)), at_h12(i + vec2(1.0, 1.0)), u.x), u.y); }
+// 1 on the map, fading to 0 within 60 m outside the neatline
+float at_inMap(vec2 xz){ vec2 q = abs(xz - 8192.0) - 8192.0; return 1.0 - smoothstep(0.0, 60.0, length(max(q, vec2(0.0)))); }
+// looking glass: 1 inside the circle (device pixels, the same circle as the DOM brass ring)
+float at_glass(){ if (uAtGlass.w < 0.5) return 0.0; return 1.0 - smoothstep(uAtGlass.z - 1.0, uAtGlass.z + 0.5, length(gl_FragCoord.xy - uAtGlass.xy)); }
+float at_live(){ return (uAtGlass.w > 0.5 && uAtGlass.w < 1.5) ? at_glass() : 0.0; }
+// noisy distance from the wave origin (shared by the drain and its glowing front)
+float at_waveD(vec2 xz){ return length(xz - uAtFocus.xy) + (at_vn(xz * 0.004) - 0.5) * 480.0 + (at_vn(xz * 0.03) - 0.5) * 70.0; }
+// the drain: 0 = living world, 1 = plaster. Beyond the map it follows uAtlas uniformly.
+float at_k(vec2 xz){
+  if (uAtlas < 0.001) return 0.0;
+  float k = 1.0;
+  if (uAtlas < 0.999) {
+    float beyond = smoothstep(uAtFocus.z - 220.0, uAtFocus.z + 220.0, at_waveD(xz));
+    k = mix(uAtlas, uAtFocus.w < 0.5 ? 1.0 - beyond : beyond, at_inMap(xz));
+  }
+  return k * (1.0 - at_live());
+}
+// page slide: page B sweeps over A along uAtSlide.xy; 1 where B has arrived
+float at_slideS(vec2 xz){ return dot(xz / 16384.0 - 0.5, uAtSlide.xy) - mix(-0.75, 0.75, uAtSlide.z); }
+float at_slideB(vec2 xz){ return uAtSlide.z < 0.0 ? 0.0 : step(at_slideS(xz), 0.0); }
+float at_seam(vec2 xz){ if (uAtSlide.z < 0.0) return 0.0; float s = at_slideS(xz); return exp(-abs(s) * 700.0) * (s < 0.0 ? 1.0 : 0.45); }
+vec3 at_pageCol(vec2 xz){
+  vec2 uv = clamp(xz / 16384.0, 0.0, 1.0);
+  vec3 c = texture(uAtMapA, uv).rgb;
+  if (uAtSlide.z >= 0.0) c = mix(c, texture(uAtMapB, uv).rgb, at_slideB(xz));
+  if (uAtGlass.w > 1.5) c = mix(c, texture(uAtMapG, uv).rgb, at_glass());
+  return mix(vec3(1.0), c, at_inMap(xz));
+}
+// how much of page idx shows at xz (after the slide and the glass)
+float at_pageW(vec2 xz, float idx){
+  float w = abs(uAtPage.x - idx) < 0.5 ? 1.0 : 0.0;
+  if (uAtSlide.z >= 0.0) w = mix(w, abs(uAtPage.y - idx) < 0.5 ? 1.0 : 0.0, at_slideB(xz));
+  if (uAtGlass.w > 1.5) w = mix(w, abs(uAtPage.z - idx) < 0.5 ? 1.0 : 0.0, at_glass());
+  return w;
+}
+// growth-ring century band (sRGB): oldest sepia -> ochre -> rose -> newest pale gold; 0 = unknown grey (mirrors atlas.js)
+vec3 at_ring(float y){
+  if (y < 0.5) return vec3(.62, .61, .59);
+  float c0 = floor(uAtYear.x / 100.0), c1 = max(floor(uAtYear.y / 100.0), c0 + 1.0);
+  float t = clamp((floor(y / 100.0) - c0) / (c1 - c0), 0.0, 1.0);
+  vec3 a = vec3(.50, .36, .24), b = vec3(.80, .60, .28), c = vec3(.82, .55, .52), d = vec3(.96, .89, .62);
+  return t < 0.3334 ? mix(a, b, t * 3.0) : t < 0.6667 ? mix(b, c, t * 3.0 - 1.0) : mix(c, d, t * 3.0 - 2.0);
+}
+// chalk plaster tinted by the projected page (sRGB); a dark table beyond the neatline
+vec3 at_plaster(vec2 xz){
+  float gr = 0.955 + 0.045 * at_vn(xz * 0.7) + 0.03 * (at_h12(floor(xz * 3.0)) - 0.5);
+  vec3 p = vec3(.86, .84, .80) * gr * mix(vec3(1.0), at_pageCol(xz), uAtPage.w > 0.01 ? uAtPage.w : 0.55);   // w: per-page tint strength
+  p += vec3(1.0, .93, .78) * at_seam(xz) * 0.35;
+  vec3 table = vec3(.30, .24, .19) * (0.92 + 0.08 * at_vn(vec2(xz.x * 0.003, xz.y * 0.04)));
+  return mix(table, p, at_inMap(xz));
+}
+vec3 at_surfaceK(vec3 c, vec2 xz, float k){ return k < 0.001 ? c : mix(c, at_plaster(xz), k); }
+vec3 at_surface(vec3 c, vec2 xz){ return at_surfaceK(c, xz, at_k(xz)); }
+// linear-space variant for models (kit, nature, water); year > 0 tints by growth ring on that page
+vec3 at_surfaceLin(vec3 c, vec2 xz, float year){
+  float k = at_k(xz);
+  if (k < 0.001) return c;
+  float l = dot(pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)), vec3(.3, .5, .2));
+  vec3 p = at_plaster(xz) * (0.84 + 0.28 * l);             // a whisper of the model's own light and dark
+  float rw = year > 0.5 ? at_pageW(xz, 1.0) : 0.0;
+  if (rw > 0.0) p = mix(p, at_ring(year) * (0.86 + 0.2 * l), rw * 0.8);
+  return mix(c, pow(p, vec3(2.2)), k);
+}
+// emissive (sRGB-ish): the slide's projector-gate seam and the drain front
+vec3 at_emis(vec2 xz, float ny){
+  if (uAtlas < 0.001) return vec3(0.0);
+  vec3 e = vec3(1.0, .88, .62) * at_seam(xz) * 0.6 * clamp(ny, 0.3, 1.0) * at_k(xz);   // the seam lives on the plaster only (not across still-living ground mid-drain)
+  if (uAtlas < 0.999) e += vec3(1.0, .80, .50) * exp(-abs(at_waveD(xz) - uAtFocus.z) / 60.0) * 0.25 * at_inMap(xz);
+  return e * (1.0 - at_live());
+}
+vec4 at_fetch(ivec2 p){ return floor(texelFetch(uAtId, clamp(p, ivec2(0), ivec2(1023)), 0) * 255.0 + 0.5); }
+float at_selM(ivec2 p){ return texelFetch(uAtSelTex, clamp(p, ivec2(0), ivec2(1023)), 0).r; }
+// realm lines, coverage per level (shire, honour, manor, parish): the 2x2 "same as nearest" isoline with an
+// analytic gradient, so borders stay crisp at any zoom without fwidth. tp = parish tangent (for dashes).
+vec4 at_lines(vec2 xz, float gpx, out vec2 tp){
+  vec2 c = xz / 16.0 - 0.5, i0 = floor(c), f = c - i0; ivec2 p = ivec2(i0);
+  vec4 A = at_fetch(p), B = at_fetch(p + ivec2(1, 0)), C = at_fetch(p + ivec2(0, 1)), E = at_fetch(p + ivec2(1, 1));
+  vec4 Nn = f.x < 0.5 ? (f.y < 0.5 ? A : C) : (f.y < 0.5 ? B : E);
+  vec4 wa = vec4(equal(A, Nn)), wb = vec4(equal(B, Nn)), wc = vec4(equal(C, Nn)), we = vec4(equal(E, Nn));
+  vec4 v = mix(mix(wa, wb, f.x), mix(wc, we, f.x), f.y);
+  vec4 gx = mix(wb - wa, we - wc, f.y), gy = mix(wc - wa, we - wb, f.x);
+  vec4 dist = (v - 0.5) / max(sqrt(gx * gx + gy * gy), vec4(1e-3)) * 16.0;
+  vec4 wpx = vec4(2.5, 1.8 * (1.0 - smoothstep(8.0, 14.0, gpx)), 1.0 - smoothstep(3.0, 6.0, gpx), 0.8 * (1.0 - smoothstep(3.0, 5.0, gpx)));
+  tp = vec2(-gy.w, gx.w);
+  vec4 cov = vec4(1.0) - smoothstep(vec4(0.0), max(wpx * gpx, vec4(1e-4)), abs(dist));
+  return cov * step(vec4(0.001), wpx) * vec4(lessThan(v, vec4(0.999)));
+}
+vec3 at_inkK(vec3 c0, vec2 xz, float gpx, float gEdge, float k){
+  if (k < 0.001) return c0;
+  vec3 c = c0, ink = vec3(.17, .12, .08), hot = vec3(.78, .30, .10);
+  gpx = max(gpx, 1e-3);
+  float pulse = 0.65 + 0.35 * sin(uAtInk.z * 3.0);
+  if (uAtInk.w > 0.5 && uAtInk.x > 0.001) {
+    vec2 tp; vec4 L = at_lines(xz, gpx, tp) * uAtInk.x;
+    float tl = length(tp);
+    float u = fract(tl > 1e-3 ? dot(xz, tp / tl) / (gpx * 16.0) : 0.0);
+    L.w *= step(u, 0.55) + step(0.7, u) * step(u, 0.8);     // dash-dot
+    c = mix(c, vec3(.40, .34, .50), L.w * 0.8);             // parish
+    c = mix(c, vec3(.38, .27, .18), L.z * 0.75);            // manor
+    c = mix(c, vec3(.56, .17, .12), L.y * 0.85);            // honour
+    c = mix(c, ink, L.x * 0.95);                            // shire
+  }
+  c = mix(c, ink, clamp(gEdge, 0.0, 1.0) * (1.0 - smoothstep(0.6, 1.2, gpx)) * 0.35);   // parcels & fields
+  if (uAtInk.y > 0.5) {                                     // exact selection mask: warm wash + pulsing outline
+    vec2 sc = xz / 16.0 - 0.5, s0 = floor(sc), sf = sc - s0; ivec2 sp = ivec2(s0);
+    float a = at_selM(sp), b = at_selM(sp + ivec2(1, 0)), cc = at_selM(sp + ivec2(0, 1)), e = at_selM(sp + ivec2(1, 1));
+    float v = mix(mix(a, b, sf.x), mix(cc, e, sf.x), sf.y);
+    float sgx = mix(b - a, e - cc, sf.y), sgy = mix(cc - a, e - b, sf.x);
+    float sdm = (v - 0.5) / max(length(vec2(sgx, sgy)), 1e-3) * 16.0;
+    c = mix(c, c * vec3(1.06, .98, .84) + vec3(.06, .035, 0.0), step(0.0, sdm) * 0.55);
+    c = mix(c, hot, (1.0 - smoothstep(0.0, 2.2 * gpx, abs(sdm))) * pulse);
+  }
+  if (uAtSel.w > 0.5) {                                     // plot spotlight
+    float d = length(xz - uAtSel.xy);
+    c = mix(c, c * vec3(1.08, 1.0, .86) + vec3(.05, .03, 0.0), (1.0 - smoothstep(uAtSel.z - gpx, uAtSel.z + gpx, d)) * 0.5);
+    c = mix(c, hot, (1.0 - smoothstep(0.0, 2.0 * gpx, abs(d - uAtSel.z))) * pulse);
+  }
+  return mix(c0, c, k);
+}
+vec3 at_ink(vec3 c, vec2 xz, float gpx, float gEdge){ return at_inkK(c, xz, gpx, gEdge, at_k(xz)); }
 `;
 
 // ---- Shared LOD index buffers ----------------------------------------------
@@ -174,6 +328,7 @@ void rockField(vec3 p, vec3 n, vec3 nF, float dist, float gpx){
   T_nW = normalize(nb - (g - dot(g, nb) * nb));
 }
 ${D.GLSL_EDGE}
+${D.GLSL_ATLAS}
 vec3 seas(vec3 sp, vec3 su, vec3 au, vec3 wi){ return sp*uSeason.x + su*uSeason.y + au*uSeason.z + wi*uSeason.w; }
 
 vec3 biomeCol(int bi, vec3 p, float hs, float slope, float n1, float nn, float nm, out float rough){
@@ -453,9 +608,15 @@ void terrainShade(inout vec3 outCol){
   T_crag = 0.5; T_ledge = 0.0; T_bed = 0.5; T_nW = n; T_bumpOn = 0.0;
   if (slope > 0.1 && dist < 6500.0 && hs > -2.0) { rockField(p, n, nF, dist, gp3); T_bumpOn = smoothstep(0.1, 0.2, slope); T_nW = normalize(mix(n, T_nW, T_bumpOn)); }
   if (T_steep > 0.0) { n3 = mix(n3, T_crag, T_steep); nn = mix(nn, T_crag, T_steep * 0.8); }   // no vertical smear from plan-view noise
-  vec4 bw = vBiome / max(vBiome.x + vBiome.y + vBiome.z + vBiome.w, 0.001);
+  // settlement ground detail lookup (hoisted: the Atlas reads it even where the living ground is skipped)
+  float gsd = 99.0; vec4 gn = vec4(0.0); float gLane = 0.0;
+  bool gHave = gdFetch(xz, gsd, gn);
   vec3 col = vec3(0.0);
-  float rough = 0.0, rr;
+  float rough = 0.0;
+  // the living ground; skipped under full Atlas plaster (except inside a "living world" looking glass)
+  if (uAtlas < 0.999 || at_live() > 0.0) {
+  vec4 bw = vBiome / max(vBiome.x + vBiome.y + vBiome.z + vBiome.w, 0.001);
+  float rr;
   if (bw.x > 0.004) { col += bw.x * biomeCol(0, p, hs, slope, n1, nn, nm, rr); rough += bw.x * rr; }
   if (bw.y > 0.004) { col += bw.y * biomeCol(1, p, hs, slope, n1, nn, nm, rr); rough += bw.y * rr; }
   if (bw.z > 0.004) { col += bw.z * biomeCol(2, p, hs, slope, n1, nn, nm, rr); rough += bw.z * rr; }
@@ -489,8 +650,6 @@ void terrainShade(inout vec3 outCol){
   if (B.w > 0.01) col = mix(col, flowers(xz, col, fadeFine), smoothstep(0.35, 0.65, B.w + jit * 0.5));
 
   // settlement ground detail: lanes, squares, yards, fields (always on, independent of the overlay)
-  float gsd = 99.0; vec4 gn = vec4(0.0); float gLane = 0.0;
-  bool gHave = gdFetch(xz, gsd, gn);
   if (gHave) {
     float ac = gn.b;
     if (ac > 0.5) col = mix(col, areaColor(ac, gn.a, xz, col, gpx), 0.92);
@@ -517,9 +676,27 @@ void terrainShade(inout vec3 outCol){
   // drifting cloud shadows
   float cs = d_fbm((xz + uWind * uTime * 9.0) * 0.00032);
   col *= 1.0 - smoothstep(0.50, 0.72, cs) * uCloud * 0.38;
+  } else { col = vec3(0.8); rough = 0.95; }
+
+  vec3 emis = vec3(0.0);
+  // ---- the Atlas table: plaster, relief contours, realm ink (under the neatline and every editor overlay) ----
+  if (uAtlas > 0.001) {
+    float gEdge = (fwidth(gn.a) + fwidth(gn.b)) * float(gHave);   // uniform branch: derivatives are safe here
+    float cwY = max(fwidth(p.y), 1e-4);
+    float ak = at_k(xz);
+    col = at_surfaceK(col, xz, ak);
+    float rw = at_pageW(xz, 4.0) * ak;                            // RELIEF page: contour ink (10 m / 50 m)
+    if (rw > 0.001) {
+      float r1 = 1.0 - min(abs(fract(p.y / 10.0 - 0.5) - 0.5) / (cwY / 10.0), 1.0);
+      float r2 = 1.0 - min(abs(fract(p.y / 50.0 - 0.5) - 0.5) / (cwY / 50.0), 1.0);
+      col = mix(col, vec3(.36, .24, .14), (r1 * 0.3 * (1.0 - smoothstep(2000.0, 6000.0, dist)) + r2 * 0.6) * rw);
+    }
+    col = at_inkK(col, xz, gpx, gEdge, ak);
+    emis += at_emis(xz, n.y);
+    rough = mix(rough, 0.95, ak);
+  }
 
   // ---- the border: cartographer's neatline + engraved outside (replaces the old outer mute) ----
-  vec3 emis = vec3(0.0);
   float eBand; vec3 eEmis;
   float dry = smoothstep(-1.0, 0.0, p.y - uSea);
   col = edgeApply(col, xz, sd, epx, epr, uNight, dry, eBand, eEmis);

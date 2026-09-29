@@ -155,6 +155,7 @@ W.zone = new Uint8Array(N * N * 4); // r type · g slot · b prosperity · a epo
 
 const Town = D.Town = { chunks: [], list: new Map(), navVersion: 0, speed: 1, nextUid: 1, nextJob: 1, zoneTex: null, selected: 0 };
 D.City = Town;
+Town.histPace = 1;                  // reveal-speed multiplier set by story.js while history runs (Living History §3.1)
 for (let i = 0; i < NCH * NCH; i++) Town.chunks.push([]);
 const chunks = Town.chunks, list = Town.list;
 
@@ -467,9 +468,36 @@ function copyRec(S) {
   const o = Object.assign({}, S);
   o.tw = Object.assign({}, S.tw);
   o.pending = S.pending ? Object.assign({}, S.pending) : null;
+  if (S.ey) o.ey = S.ey.slice();
+  if (S.plock) o.plock = Object.assign({}, S.plock);
   return o;
 }
+// ---- Living History record fields (spec §3.5): by 'p'|'h', fy founded year, ey[epoch] = year the epoch began,
+// grow (history may extend it), plock {wealth, walls} (tweaks the player set). All optional: absent = unknown/player.
+// (the begin commit runs with started still false: its foundings are dated too)
+function yearNow() { const St = D.Story; return St && (St.started || St.committing === true) && typeof St.time === 'function' ? +St.time() || 0 : 0; }
+Town.yearNow = yearNow;
+function stampEy(S, ep, y) { const e = S.ey || (S.ey = []); for (let i = e.length; i < ep; i++) e[i] = 0; e[ep] = y; }
+const minNZ = (a, b) => (a > 0 && b > 0) ? Math.min(a, b) : (a > 0 ? a : b > 0 ? b : 0);
+function mergeYears(K, O) { // a player zone merge: the keeper takes the earliest known dates (approximate, §3.5)
+  K.fy = minNZ(K.fy | 0, O.fy | 0);
+  const a = K.ey || [], b = O.ey || [], n = Math.max(a.length, b.length);
+  if (!n) return;
+  const out = []; for (let i = 0; i < n; i++) out[i] = minNZ(+a[i] || 0, +b[i] || 0);
+  K.ey = out;
+}
+// a new pending job for S. A pending expand that has not run yet keeps its (older) epoch so its cells are still
+// planned (Ctx marks cells with alpha ≥ epoch as new), and a queued great-work request rides along on whatever
+// job replaces it.
+function nextPending(S, kind) {
+  const old = S.pending, p = { kind, jobId: Town.nextJob++, epoch: S.epochs };
+  if (old && kind === 'expand' && (old.kind === 'expand' || old.kind === 'work') && old.epoch > 0) p.epoch = Math.min(old.epoch, S.epochs);
+  if (old && old.work) { p.work = old.work; p.wid = old.wid; if (old.cellsEp) p.cellsEp = old.cellsEp; }
+  return p;
+}
 const needReconcile = new Set();        // sids restored by history
+const restampQ = new Set();             // sids whose shown records need their built year re-derived (undo of a stamp)
+let histVer = 1;                        // bumped on every record change: Town.hist.list() cache key
 const needRefilter = new Set();         // sids whose visibility inputs changed
 let needRefilterAll = false, refilterInstant = false;
 const redecorateQ = new Set();          // sids to redecorate (wave)
@@ -486,7 +514,7 @@ function twFrom(o) {
   t.walls = t.walls === 'palisade' || t.walls === 'stone' ? t.walls : 'none';
   return t;
 }
-function emitChanged() { townChangedT = 0; D.emit('town:changed'); }
+function emitChanged() { townChangedT = 0; histVer++; D.emit('town:changed'); }
 let townChangedT = 0, townChangedPending = false;
 
 // =====================================================================================================
@@ -550,6 +578,7 @@ function addManual(rec) {
   chunks[ci].push(rec);
   try { K().add(rec); } catch (e) { console.warn('[town] Kit.add failed', e); }
   navRecDirty = true;
+  manualChanged(rec);
   return rec;
 }
 function removeManual(rec, sink) {
@@ -559,7 +588,44 @@ function removeManual(rec, sink) {
   if (i >= 0) a.splice(i, 1);
   try { K().remove(rec, sink !== false); } catch (e) { }
   navRecDirty = true;
+  manualChanged(rec);
 }
+// ---- manual (player-placed) buildings: a lazily rebuilt per-chunk index. Settlement content never overlaps them:
+// planners stamp them as BUILDING and visibleItem hides older plan items they overlap (Living History I2).
+let manualVer = 1, manualIdxVer = 0;
+const manualIdx = new Map();              // chunk -> [manual recs]
+function manualChanged(rec) {
+  manualVer++;
+  if (rec) { const r = Math.hypot(rec.w || 8, rec.d || 8) / 2 + 4, bb = [rec.x - r, rec.z - r, rec.x + r, rec.z + r]; list.forEach(S => { if (bbHit(sidWorldBB(S.id, 20), bb)) needRefilter.add(S.id); }); }
+}
+function manualIndex() {
+  if (manualIdxVer === manualVer) return manualIdx;
+  manualIdx.clear();
+  for (let ci = 0; ci < chunks.length; ci++) { const a = chunks[ci]; for (let q = 0; q < a.length; q++) if (!a[q].sid) { let m = manualIdx.get(ci); if (!m) manualIdx.set(ci, m = []); m.push(a[q]); } }
+  manualIdxVer = manualVer;
+  return manualIdx;
+}
+function forManual(x0, z0, x1, z1, fn) {
+  const M = manualIndex(); if (!M.size) return;
+  const c0 = chunkOf(x0 - 60, z0 - 60), c1 = chunkOf(x1 + 60, z1 + 60);
+  for (let cz = Math.floor(c0 / NCH); cz <= Math.floor(c1 / NCH); cz++) for (let cx = c0 % NCH; cx <= c1 % NCH; cx++) {
+    const a = M.get(cz * NCH + cx); if (!a) continue;
+    for (let k = 0; k < a.length; k++) { const b = a[k]; if (b.x >= x0 - 60 && b.x <= x1 + 60 && b.z >= z0 - 60 && b.z <= z1 + 60) if (fn(b) === false) return; }
+  }
+}
+// does a settlement building overlap a player's manual building?
+function manualSuppressed(rec) {
+  if (!manualIndex().size) return false;
+  const r = Math.hypot(rec.w || 6, rec.d || 6) / 2;
+  let hit = false;
+  forManual(rec.x - r, rec.z - r, rec.x + r, rec.z + r, m => {
+    if (kmeta(m.kind).collide === false) return;
+    if (Math.hypot(m.x - rec.x, m.z - rec.z) > r + Math.hypot(m.w || 6, m.d || 6) / 2) return;
+    if (obbOverlap(rec, m, -0.2)) { hit = true; return false; }
+  });
+  return hit;
+}
+Town.forManual = forManual;
 const cityStore = {
   snapChunk: ci => chunks[ci].filter(b => !b.sid),
   loadChunk(ci, s) {
@@ -569,22 +635,26 @@ const cityStore = {
     for (const b of cur) { if (b.sid) continue; if (want.has(b)) have.add(b); else drop.push(b); }
     const k = K();
     for (const b of drop) { try { k.remove(b, false); } catch (e) { } }
-    const next = cur.filter(b => b.sid);
+    const next = cur.filter(b => b.sid), added = [];
     for (const b of snap) {
       if (have.has(b)) { next.push(b); continue; }
       const c = cleanCopy(b); c.born = kclock() - 10; seat(c);
-      next.push(c);
+      next.push(c); added.push(c);
       try { k.add(c); } catch (e) { }
     }
     chunks[ci] = next;
     navRecDirty = true;
+    // undo / redo of player buildings: settlement houses they hid (or now overlap) are re-filtered
+    for (const b of drop) manualChanged(b);
+    for (const b of added) manualChanged(b);
+    manualVer++;
   }
 };
 const townStore = {
   snapChunk: id => copyRec(list.get(id)) || null,
   loadChunk(id, s) {
     if (s) list.set(id, copyRec(s)); else list.delete(id);
-    needReconcile.add(id);
+    needReconcile.add(id); restampQ.add(id); histVer++;
     if (s && s.pending) instantJobs.add(s.pending.jobId);
   }
 };
@@ -592,8 +662,15 @@ const townStore = {
 // =====================================================================================================
 // Names (§5.12)
 // =====================================================================================================
-const PREFIX = ['Ash', 'Thorn', 'Brad', 'Wick', 'Oak', 'Stan', 'Mel', 'Ald', 'Crow', 'Wend', 'Hart', 'Ley', 'Bram', 'Fern', 'Kings', 'Sut', 'Wes', 'Nor', 'Hol', 'Mar', 'Brook', 'Lang', 'Whit', 'Red'];
-const SUFFIX = ['ton', 'by', 'ham', 'ley', 'thorpe'];
+// (append only: names are saved, so growing the pools never renames an existing place)
+const PREFIX = ['Ash', 'Thorn', 'Brad', 'Wick', 'Oak', 'Stan', 'Mel', 'Ald', 'Crow', 'Wend', 'Hart', 'Ley', 'Bram', 'Fern', 'Kings', 'Sut', 'Wes', 'Nor', 'Hol', 'Mar', 'Brook', 'Lang', 'Whit', 'Red',
+  'Elm', 'Hazel', 'Ship', 'Wool', 'Stock', 'Barn', 'Chad', 'Dun', 'Eg', 'Fal', 'Gold', 'Hamp', 'Ick', 'Kel', 'Lid', 'Mid', 'New', 'Ot', 'Pen', 'Rad', 'Salt', 'Tad', 'Up', 'Wal', 'Win', 'Yar',
+  'Ab', 'Bur', 'Cal', 'Ched', 'Dray', 'Ever', 'Fox', 'Gat', 'Hen', 'Kirk', 'Lox', 'Mere', 'Ny', 'Pid', 'Rook', 'Sand', 'Thack', 'Wan'];
+const SUFFIX = ['ton', 'by', 'ham', 'ley', 'thorpe', 'stead', 'worth', 'wick', 'field', 'combe', 'hurst', 'den', 'stow', 'cote'];
+const SAINTS = ['Mary', 'Michael', 'Peter', 'Paul', 'Andrew', 'John', 'James', 'Thomas', 'Bartholomew', 'Matthew', 'Luke', 'Mark', 'Stephen', 'Lawrence', 'Nicholas', 'Martin', 'George',
+  'Giles', 'Leonard', 'Botolph', 'Cuthbert', 'Aidan', 'Oswald', 'Chad', 'Wilfrid', 'Hilda', 'Etheldreda', 'Swithun', 'Edmund', 'Alban', 'Augustine', 'Benedict', 'Bride', 'Dunstan',
+  'Guthlac', 'Werburgh', 'Frideswide', 'Neot', 'Petroc', 'Helen'];
+const NAME_PRE = ['Great ', 'Little ', 'Market ', 'Kings '];
 function nameTaken(n, exceptSid) { for (const [sid, S] of list) if (sid !== exceptSid && S.name === n) return true; return false; }
 function joinName(p, s) {
   if (p.endsWith('s') && s[0] === 's') s = s.slice(1);
@@ -622,7 +699,13 @@ function makeName(type, cells, walls, seed, exceptSid) {
     else if (type === 1 && walls !== 'none' && r() < 0.6) s = 'bury';
     let n = joinName(p, s);
     if (type === 3) n = joinName(p, SUFFIX[Math.floor(r() * 3)]) + ' Castle';
+    else if (type === 4 && r() < 0.5) n = 'St ' + SAINTS[Math.floor(r() * SAINTS.length)] + "'s " + (r() < 0.5 ? 'Priory' : 'Abbey');
     if (tries > 40) n += [' Parva', ' Magna', ' St Mary', ' Green', ' End'][tries % 5];
+    if (!nameTaken(n, exceptSid)) return n;
+  }
+  // before numbering: Great / Little / Market / Kings ‹name›
+  for (let tries = 0; tries < 40; tries++) {
+    const n = NAME_PRE[tries % 4] + joinName(PREFIX[Math.floor(r() * PREFIX.length)], SUFFIX[Math.floor(r() * SUFFIX.length)]) + (type === 3 ? ' Castle' : '');
     if (!nameTaken(n, exceptSid)) return n;
   }
   return 'Settlement ' + (Town.nextUid);
@@ -686,6 +769,7 @@ function mergePlans(A, B) {
   let wallO = -1;
   all.forEach((x, idx) => {
     const e = Object.assign({}, x.e, { o: idx });
+    delete e.nE;                          // phase anchors are in the old o scale: re-anchor to the merged plan
     out[x.kind].push(e);
     if (x.src === 0 && A.wallO >= 0 && wallO < 0 && x.o >= A.wallO) wallO = idx;
   });
@@ -740,7 +824,8 @@ function resolveStroke(st, o) {
       const uid = Town.nextUid++;
       const seed = hash32(W.seed || 1, comp[0], uid);
       const S = { id: slot, uid, type: T, seed, name: '', tw: twFrom(o), epochs: 1, razed: [], plan: null,
-        pending: { kind: 'found', jobId: Town.nextJob++, epoch: 1 }, pin: null };
+        pending: { kind: 'found', jobId: Town.nextJob++, epoch: 1 }, pin: null, by: 'p', fy: 0, ey: [], grow: true, plock: {} };
+      const yN = yearNow(); if (yN > 0) { S.fy = Math.floor(yN); stampEy(S, 1, yN); }
       S.name = makeName(T, comp, S.tw.walls, seed, slot);
       list.set(slot, S);
       for (const k of fresh) { Z[k * 4 + 1] = slot; Z[k * 4 + 3] = 1; }
@@ -762,14 +847,16 @@ function resolveStroke(st, o) {
       }
       keeper.plan = mergePlans(keeper.plan, O.plan);
       keeper.razed = keeper.razed.concat(O.razed || []);
+      mergeYears(keeper, O);
       transferLive(O.id, keeper.id);
       list.delete(O.id);
       needReconcile.add(O.id);
     }
     keeper.epochs = Math.min(254, keeper.epochs + 1);
     for (const k of fresh) { Z[k * 4 + 1] = keeper.id; Z[k * 4 + 3] = keeper.epochs; }
+    { const yN = yearNow(); if (yN > 0) stampEy(keeper, keeper.epochs, yN); }
     const wasFound = keeper.pending && keeper.pending.kind === 'found', wasReplan = keeper.pending && keeper.pending.kind === 'replan';
-    keeper.pending = { kind: (!keeper.plan || wasFound) ? 'found' : wasReplan ? 'replan' : 'expand', jobId: Town.nextJob++, epoch: keeper.epochs };
+    keeper.pending = nextPending(keeper, (!keeper.plan || wasFound) ? 'found' : wasReplan ? 'replan' : 'expand');
     needReconcile.add(keeper.id); needRefilter.add(keeper.id);
     made++;
   }
@@ -873,6 +960,12 @@ function traceMaskLoops(mask, w, h, ox, oz, step) {
   cs.sort((a, b) => b.area - a.area);
   return cs.map(c => c.pts);
 }
+// element key prefix per job. Expands carry the job id too: epochs cap at 254, so the epoch alone repeats
+// on long-lived towns (Living History I4). Old plans keep their old keys.
+function jobPrefix(uid, job) {
+  return job.kind === 'expand' ? uid + ':x' + job.epoch + '.' + job.jobId + ':' : job.kind === 'work' ? uid + ':w' + job.jobId + ':'
+    : job.kind === 'infill' ? uid + ':i' + job.jobId + ':' : uid + ':';
+}
 const AREA_CODE = { square: OCC.SQUARE, 1: OCC.YARD, 2: OCC.YARD, 3: OCC.SQUARE, 4: OCC.PRECINCT, 15: OCC.WALL, 16: OCC.PRECINCT };
 const GENERIC_SPECIAL = { curtain: 1, precinct: 1, pierline: 1 };
 class Ctx {
@@ -880,11 +973,12 @@ class Ctx {
     this.S = S; this.job = job; this.kind = job.kind; this.epoch = job.epoch;
     this.type = S.type; this.sid = S.id; this.uid = S.uid; this.seed = S.seed >>> 0;
     this.tw = Object.freeze(twFrom(S.tw));
-    this.prev = (job.kind === 'expand' || job.kind === 'infill') ? S.plan : null;
+    this.prev = (job.kind === 'expand' || job.kind === 'infill' || job.kind === 'work') ? S.plan : null;
     this.OCC = OCC; this.ALLOW = ALLOW; this.geo = geo;
     this.lanes = []; this.plots = []; this.specials = []; this.areas = [];
     this.o = 0; this.cnt = { L: 0, P: 0, S: 0, A: 0 };
-    this.prefix = job.kind === 'expand' ? S.uid + ':x' + job.epoch + ':' : job.kind === 'infill' ? S.uid + ':i' + job.jobId + ':' : S.uid + ':';
+    this.prefix = jobPrefix(S.uid, job);
+    this._keepGW = [];
     this.wallO = -1; this.origin = null; this.style = null; this.msgs = []; this.neighbours = [];
     this._deadline = Infinity; this.empty = false; this._lastAnchor = -1;
     this._noise = D.makeNoise(hash32(this.seed, 'noise') & 0x7fffffff);
@@ -908,7 +1002,7 @@ class Ctx {
     const ci0 = bb.i0[sid], cj0 = bb.j0[sid], ci1 = bb.i1[sid], cj1 = bb.j1[sid];
     this.ci0 = ci0; this.cj0 = cj0; this.cw = ci1 - ci0 + 1; this.chh = cj1 - cj0 + 1;
     const hm = this.hm = new Uint8Array(this.cw * this.chh), cells = [];
-    const expand = this.kind === 'expand';
+    const expand = this.kind === 'expand' || (this.kind === 'work' && this.job.cellsEp > 0);
     let sx = 0, sz = 0;
     for (let j = cj0; j <= cj1; j++) for (let i = ci0; i <= ci1; i++) {
       const k = j * N + i; if (Z[k * 4 + 1] !== sid) continue;
@@ -990,6 +1084,10 @@ class Ctx {
       if (D.Roads.nodes) D.Roads.nodes.forEach(n => { if (n.x >= x0 && n.x <= x1 && n.z >= z0 && n.z <= z1) nodes.push({ id: n.id, x: n.x, z: n.z, deg: (n.segs || []).length }); });
       nodes.sort((a, b) => a.id - b.id); this.roadNodes = nodes;
     }
+    // the player's own buildings are never built over (Living History I2)
+    forManual(x0, z0, x1, z1, b => { this.stampRect(b.x, b.z, b.rot, b.w + 2, b.d + 2, OCC.BUILDING, 2); });
+    // a replan keeps its great works (same key, same footprint): they are re-appended by finish()
+    if (!this.prev && this.S.plan && this.S.plan.specials) for (const sp of this.S.plan.specials) if (sp.kind === 'greatwork') { this.stampRect(sp.x, sp.z, sp.rot || 0, sp.w, sp.d, OCC.BUILDING, 3); this._keepGW.push(sp); }
     if (this.overBudget()) yield;
     // neighbours
     const ids = Array.from(list.keys()).sort((a, b) => a - b);
@@ -1039,12 +1137,30 @@ class Ctx {
   }
   finish() {
     const c = this.centroid || { x: 0, z: 0 };
-    return {
+    // great works survive a replan with the same key (their record, scaffolding and progress stay attached)
+    const gwid = e => e.kind === 'greatwork' && e.extra ? e.extra.wid | 0 : 0;
+    for (const sp0 of this._keepGW) if (!this.specials.some(e => gwid(e) && gwid(e) === gwid(sp0))) {
+      let sp = sp0;
+      // (legacy: a kept work whose key a new element now uses gets its own key; Works tracks it by wid)
+      if (this.specials.some(e => e.key === sp.key) || this.lanes.some(e => e.key === sp.key)) sp = Object.assign({}, sp, { key: this.uid + ':wk' + gwid(sp) + ':S0' });
+      let cell = sp.cell; if (!(cell >= 0) || W.zone[cell * 4 + 1] !== this.sid) { cell = this.anchorCell(sp.x, sp.z); if (cell < 0) cell = cellK(sp.x, sp.z); }
+      this.specials.push(Object.assign({}, sp, { o: this.o++, cell, ep: this.epoch }));
+    }
+    // phase anchors: every element remembers the plan size it was planned under, so later expands (which grow
+    // P.n) do not shift its phase-upgrade orders (o2 / oS in decorate). Older elements get prev.n.
+    const n = this.o, pn = this.prev ? (this.prev.n || 0) : 0;
+    const anchor = arr => { for (let i = 0; i < arr.length; i++) { const e = arr[i]; if (e.nE !== undefined) continue; if (e.o >= pn) e.nE = n; else arr[i] = Object.assign({}, e, { nE: pn }); } return arr; };
+    // director expands keep the wall where it was (the new streets become a faubourg); player expands move it
+    // (only a wall that exists: an unwalled place, or a plan too small for a wall, keeps planning its wallO normally)
+    const wallO = this.prev && this.job.src === 'dir' && !this.job.rewall && this.prev.wallO >= 0 && this.tw.walls !== 'none' ? this.prev.wallO : this.wallO;
+    const P = {
       v: 1, pv: PLAN_VER, uid: this.uid, type: this.type, style: this.style || { region: 0, gableBias: 0.5, churchStyle: 0, roofPitch: 50, wanderMul: 1, frontMul: 1 },
       origin: this.origin || { x: c.x, z: c.z, kind: 'none' },
-      lanes: this.lanes, plots: this.plots, specials: this.specials, areas: this.areas,
-      wallO: this.wallO, n: this.o
+      lanes: anchor(this.lanes), plots: anchor(this.plots), specials: anchor(this.specials), areas: anchor(this.areas),
+      wallO, n
     };
+    if (this._workFail) P.extra = { workFail: this._workFail };
+    return P;
   }
   // ---- H mask ---------------------------------------------------------------------------------------
   _hmAt(x, z) { if (!this.hm) return 0; const ci = Math.floor(x / CELL) - this.ci0, cj = Math.floor(z / CELL) - this.cj0; return ci >= 0 && cj >= 0 && ci < this.cw && cj < this.chh ? this.hm[cj * this.cw + ci] : 0; }
@@ -1313,7 +1429,7 @@ class Ctx {
     return e.key;
   }
   special(sp) {
-    const e = { key: this.prefix + 'S' + (this.cnt.S++), kind: sp.kind, x: sp.x, z: sp.z, rot: sp.rot || 0, w: sp.w || 0, d: sp.d || 0, h: sp.h || 0, var: sp.var || 0, extra: sp.extra || null, o: this.o++, ep: this.epoch };
+    const e = { key: sp.key || this.prefix + 'S' + (this.cnt.S++), kind: sp.kind, x: sp.x, z: sp.z, rot: sp.rot || 0, w: sp.w || 0, d: sp.d || 0, h: sp.h || 0, var: sp.var || 0, extra: sp.extra || null, o: this.o++, ep: this.epoch };
     if (GENERIC_SPECIAL[sp.kind] && sp.extra) {
       const L = toF32(sp.extra.loop || sp.extra.pts || []);
       if ((e.x === undefined || e.x === 0) && L.length >= 2) { const c = sp.kind === 'pierline' ? [L[0], L[1]] : polyCentroid(L); e.x = c[0]; e.z = c[1]; }
@@ -2494,16 +2610,70 @@ function* planJob(Ssnap, job, holder) {
     yield* ctx._init();
     if (!ctx.empty) {
       ctx._rollStyle();
-      const fn = plannerFor(Ssnap.type);
-      if (!fn) ctx.toast(`${(TYPES[Ssnap.type] || {}).name || 'This zone'}: coming soon. The zone is kept and will build once it is ready.`);
-      else {
-        const it = fn(ctx);
-        if (it && typeof it.next === 'function') { const r = yield* it; if (r && r.lanes && r.plots) return r; }
-        else if (it && it.lanes && it.plots) return it;
+      if (job.kind !== 'work') {        // a 'work' job only adds a great work to the frozen plan
+        const fn = plannerFor(Ssnap.type);
+        if (!fn) ctx.toast(`${(TYPES[Ssnap.type] || {}).name || 'This zone'}: coming soon. The zone is kept and will build once it is ready.`);
+        else {
+          const it = fn(ctx);
+          if (it && typeof it.next === 'function') { const r = yield* it; if (r && r.lanes && r.plots && !job.work) return r; }
+          else if (it && it.lanes && it.plots && !job.work) return it;
+        }
       }
+      if (job.work) yield* planGreatWork(ctx);
     }
   } catch (e) { console.error('[town] planner failed for', Ssnap.name, e); }
   return ctx.finish();
+}
+// ---- great-work job (Living History §3.8): reserve a real cathedral footprint (+3 m margin) near the church,
+// then the origin, then the cells claimed for it, then anywhere in the town. Emits the 'greatwork' special
+// (o = P.n), a cathedral close (green) and a short lane to the west door. On failure the plan is returned
+// unchanged with extra.workFail = wid (Town.hist.workSite then reports false).
+function* planGreatWork(ctx) {
+  const job = ctx.job, wid = job.wid | 0, work = job.work || 'cathedral';
+  if (!wid || ctx.specials.some(s => s.kind === 'greatwork' && s.extra && s.extra.wid === wid)) return;
+  const r = ctx.rng('gw', wid);
+  const W0 = 26 + 14 * r(), D0 = 60 + 30 * r();
+  const sizes = [[W0, D0], [Math.max(26, W0 * 0.85), Math.max(60, D0 * 0.8)], [26, 60]];
+  const rots = [PI / 2, PI / 2 + 12 * DEG, PI / 2 - 12 * DEG];      // east-oriented: local +z = world +x
+  const claimEp = job.cellsEp | 0, Z = W.zone;
+  const phases = [];
+  const ring = (cx, cz, r0, r1, step) => { const out = []; for (let d = r0; d <= r1; d += step) for (let a = 0; a < 12; a++) out.push([cx + Math.cos(a * PI / 6) * d, cz + Math.sin(a * PI / 6) * d]); return out; };
+  for (const s of ctx.specials) if (s.extra && s.extra.ms === 'church') phases.push(ring(s.x, s.z, 45, 150, 21));
+  const o = ctx.origin || ctx.centroid;
+  if (o) phases.push(ring(o.x, o.z, 30, 230, 25));
+  const claimed = [], all = [];
+  ctx.forCells((k, x, z) => { if (claimEp > 0 && Z[k * 4 + 1] === ctx.sid && Z[k * 4 + 3] >= claimEp) claimed.push([x, z]); });
+  const step = Math.max(1, Math.floor(ctx.cells.length / 500));
+  for (let i = 0; i < ctx.cells.length; i += step) all.push(ctx.cellCenter(ctx.cells[i]));
+  phases.splice(0, 0, claimed);     // claimed cells were requested for exactly this: try them first
+  phases.push(all);
+  let got = null, tests = 0;
+  for (const [w, d] of sizes) {
+    for (const ph of phases) {
+      for (const p of ph) {
+        for (const rot of rots) {
+          if (ctx.fits(p[0], p[1], rot, w + 6, d + 6, { pad: 0, allow: ALLOW.FV, inside: 'H', maxSpread: 8 })) { got = { x: p[0], z: p[1], rot, w, d }; break; }
+        }
+        if (got) break;
+        if ((++tests & 15) === 0) yield* ctx.yieldIfOverBudget();
+      }
+      if (got) break;
+    }
+    if (got) break;
+  }
+  if (!got) { ctx._workFail = wid; return; }
+  const { x, z, rot, w, d } = got;
+  const green = rectPoly(x, z, rot, w + 14, d + 14), greenOK = ctx.testPoly(green, ALLOW.FVL);
+  ctx.stampRect(x, z, rot, w + 6, d + 6, OCC.BUILDING, 0);
+  // its own key whatever job sited it (a work carried onto a replan / found must not share the plain uid: prefix
+  // with a later reroll's specials; for a 'work' job this equals the prefix + 'S0' it always had)
+  ctx.special({ kind: 'greatwork', key: ctx.uid + ':w' + ctx.job.jobId + ':S0', x, z, rot, w, d, extra: { work, wid, w, d } });
+  if (greenOK) ctx.area({ cls: 3, poly: green, noStamp: true });
+  // a short close lane from the west door to the nearest village lane
+  const c = Math.cos(rot), s = Math.sin(rot), fx = x - (d / 2 + 5) * s, fz = z - (d / 2 + 5) * c;
+  let bp = null, bd = 120 * 120;
+  for (const L of ctx.lanes) { if (L.rank > 1) continue; const p = L.pts; for (let q = 0; q + 1 < p.length; q += 2) { const dd = D.dist2(p[q], p[q + 1], fx, fz); if (dd < bd) { bd = dd; bp = [p[q], p[q + 1]]; } } }
+  if (bp && bd > 36 && ctx.testPolyline([fx, fz, bp[0], bp[1]], 2, LANE_OK)) ctx.lane({ pts: [fx, fz, bp[0], bp[1]], rank: 1, w: 4.5, surf: 2 });
 }
 
 const jobs = new Map();          // sid -> {sid, jobId, kind, it, holder, instant}
@@ -2528,7 +2698,7 @@ function startJobs() {
 }
 function runJobs() {
   if (!jobs.size) return;
-  const budget = anyFinishing() ? 8 : 3, t0 = now(), end = t0 + budget;
+  const budget = catchUp ? 12 : anyFinishing() ? 8 : 3, t0 = now(), end = t0 + budget;
   const arr = Array.from(jobs.values());
   let guard = 0;
   while (arr.length && now() < end && guard++ < 200) {
@@ -2572,9 +2742,11 @@ const planIds = new WeakMap(); let planIdN = 1;
 const wallCache = new WeakMap();
 function planId(P) { let i = planIds.get(P); if (!i) planIds.set(P, i = planIdN++); return i; }
 let roadVer = 0;           // bumped on road edits: walls take their gates from manual roads
+const roadVerS = new Int32Array(256);   // per settlement: only towns within 200 m of an edited road re-decorate their walls
+function worksVer(uid) { try { return D.Works && D.Works.ver ? D.Works.ver(uid) | 0 : 0; } catch (e) { return 0; } }
 function decoKey(S) {
   const t = S.tw;
-  return planId(S.plan) + '|' + t.wealth.toFixed(3) + '|' + t.walls + '|' + t.gardens.toFixed(3) + '|' + t.dens.toFixed(3) + '|' + bVersion[S.id] + '|' + (t.walls !== 'none' ? roadVer : 0) + '|' + (D.Nature && D.Nature.SP_INDEX ? 1 : 0);
+  return planId(S.plan) + '|' + t.wealth.toFixed(3) + '|' + t.walls + '|' + t.gardens.toFixed(3) + '|' + t.dens.toFixed(3) + '|' + bVersion[S.id] + '|' + (t.walls !== 'none' ? roadVerS[S.id] : 0) + '|' + (D.Nature && D.Nature.SP_INDEX ? 1 : 0) + '|' + worksVer(S.uid);
 }
 function getDeco(S, L) {
   const k = decoKey(S);
@@ -2588,7 +2760,7 @@ const tierOf = w => w < 0.34 ? 0 : w < 0.67 ? 1 : 2;
 function sigOf(it) {
   if (it._sig) return it._sig;
   let s;
-  if (it.t === 'bld') { const r = it.rec; s = 'B|' + r.kind + '|' + (+r.w).toFixed(1) + '|' + (+r.d).toFixed(1) + '|' + (r.floors || 0) + '|' + tierOf(r.wealth || 0) + '|' + r.x.toFixed(1) + '|' + r.z.toFixed(1) + '|' + (+r.rot).toFixed(2) + '|' + (r.var || 0) + '|' + (r.h || 0).toFixed(1); }
+  if (it.t === 'bld') { const r = it.rec; s = 'B|' + r.kind + '|' + (+r.w).toFixed(1) + '|' + (+r.d).toFixed(1) + '|' + (r.floors || 0) + '|' + tierOf(r.wealth || 0) + '|' + r.x.toFixed(1) + '|' + r.z.toFixed(1) + '|' + (+r.rot).toFixed(2) + '|' + (r.var || 0) + '|' + (r.h || 0).toFixed(1) + (r.gw ? '|gw' + r.gw : ''); }  // gw: a great work taking over a same-shaped special (forced keep on a stone keep) must still swap in
   else if (it.t === 'lane') s = 'L|' + it.w + '|' + it.surf + '|' + it.pts.length + '|' + it.pts[0].toFixed(1) + '|' + it.pts[1].toFixed(1);
   else if (it.t === 'area') s = 'A|' + it.cls + '|' + it.poly.length + '|' + (+it.ang).toFixed(2) + '|' + it.poly[0].toFixed(1) + '|' + it.poly[1].toFixed(1);
   else s = 'P|' + it.arr.length + '|' + (it.arr.length ? it.arr[0].toFixed(1) : 0);
@@ -2608,6 +2780,7 @@ function decorate(S) {
   const add = it => { it.q = q++; items.push(it); return it; };
   const n = Math.max(1, P.n);
   const houseCount = P.plots.reduce((a, p) => a + (p.role === 'house' ? 1 : 0), 0);
+  const hasGW = P.specials.some(s => s.kind === 'greatwork' && s.extra && s.extra.work !== 'keep');
   const cellFor = (x, z, fb) => { const k = cellK(x, z); return W.zone[k * 4 + 1] === S.id ? k : fb; };
   const bldItem = (key, pk, o, cell, rec, extra) => {
     const r2 = Math.hypot(rec.w || 6, rec.d || 6) / 2 + 3;
@@ -2629,7 +2802,7 @@ function decorate(S) {
   // ---- village wall (computed first: pomerium & faubourg need it) -------------------------------------
   let wall = null;
   if (P.type === 1 && tw.walls !== 'none' && P.wallO >= 0) {
-    const wk = tw.walls + '|' + roadVer + '|' + S.id, wc = wallCache.get(P);
+    const wk = tw.walls + '|' + roadVerS[S.id] + '|' + S.id, wc = wallCache.get(P);
     if (wc && wc.k === wk) wall = wc.wall;
     else { try { wall = villageWall(S, P, tw); } catch (e) { console.warn('[town] wall failed', e); wall = null; } wallCache.set(P, { k: wk, wall }); }
   }
@@ -2738,7 +2911,7 @@ function decorate(S) {
       return it;
     };
     if (p.role === 'house' && wl > 0.55 && r() < 0.4) {
-      const o2 = p.o + 0.6 * (n - p.o);
+      const o2 = p.o + 0.6 * ((p.nE !== undefined ? p.nE : n) - p.o);
       mk(Math.max(0, wl - 0.35), ':v1', p.o, o2); mk(wl, ':v2', o2);
     } else mk(wl, '', p.o);
     // yard + garden ground, props
@@ -2827,15 +3000,23 @@ function decorate(S) {
       recs.forEach((rec, i) => { if (!rec.seed) rec.seed = hash32(S.seed, sp.key, i); bldItem(sp.key + ':k' + i, sp.key, sp.o + 0.9 * (i + 1) / (recs.length + 1), cellFor(pts[0], pts[1], sp.cell), rec, { pier: 1, supp: false }); });
       continue;
     }
+    if (sp.kind === 'greatwork') { // a great work (Living History §3.8): the building itself; works.js drives its climb
+      const gw = ex.wid | 0, wkind = ex.work === 'keep' ? 'keep' : 'cathedral';
+      const rec = kdesign(wkind, sp.x, sp.z, sp.rot || 0, { w: ex.w || sp.w, d: ex.d || sp.d, wealth: Math.max(wl, 0.6), age: r(), density: tw.dens, region, seed: hash32(S.seed, sp.key), var: 0, orient: 'east', gw });
+      rec.gw = gw;
+      bldItem(sp.key, sp.key, sp.o, sp.cell, rec, { sp: 1, gw });
+      continue;
+    }
     const isChurch = ex.ms === 'church' && (sp.kind === 'church' || sp.kind === 'chapel');
     if (isChurch) {
       const H = houseCount;
-      let cls = sp.kind === 'chapel' || H < 25 ? 'chapel' : H < 90 ? 'church' : (H >= 300 && tw.wealth > 0.7) ? 'cathedral' : 'church';
+      // a work cathedral (a great work) replaces the legacy "big rich town upgrades its church" rule
+      let cls = sp.kind === 'chapel' || H < 25 ? 'chapel' : H < 90 ? 'church' : (H >= 300 && tw.wealth > 0.7 && !hasGW) ? 'cathedral' : 'church';
       const vr = H < 90 ? (style.churchStyle || 0) % 2 : 2;
       const des = (kind, w, d, suffix) => kdesign(kind, sp.x, sp.z, sp.rot, { w, d, wealth: wl, age: r(), density: tw.dens, region, seed: hash32(S.seed, sp.key, suffix), var: kind === 'church' ? vr : sp.var, orient: 'east' });
       if (cls === 'chapel') bldItem(sp.key, sp.key, sp.o, sp.cell, des('chapel', Math.min(9, sp.w), Math.min(16, sp.d), ''), { sp: 1 });
       else {
-        const oS = sp.o + 0.45 * (n - sp.o);
+        const oS = sp.o + 0.45 * ((sp.nE !== undefined ? sp.nE : n) - sp.o);
         const a = bldItem(sp.key + ':v1', sp.key, sp.o, sp.cell, des('chapel', Math.min(9, sp.w), Math.min(16, sp.d), ':v1'), { sp: 1 }); a.endO = oS;
         bldItem(sp.key + ':v2', sp.key, oS, sp.cell, des(cls, sp.w, sp.d, ':v2'), { sp: 1 });
       }
@@ -2850,12 +3031,16 @@ function decorate(S) {
       if (kw < 0.35 && spKind === 'keep') { spKind = 'motte'; opts.h = 8 + 4 * h01(S.seed, sp.key, 'mh'); opts.var = 0; }
       else if (kw >= 0.35 && spKind === 'motte') { spKind = 'keep'; opts.w = opts.d = Math.min(sp.w || 18, 15 + 6 * kw); delete opts.h; }
       if (spKind === 'keep') opts.var = kw >= 0.7 ? 1 : 0;
+      // a stone-keep great work (works.js) replaces the motte whatever the wealth; decoKey carries Works.ver
+      let wk = null; try { wk = D.Works && D.Works.workAt ? D.Works.workAt(uid, 'keep') : null; } catch (e) { wk = null; }
+      if (wk) { if (spKind === 'motte') { opts.w = opts.d = Math.min(sp.w || 18, 15 + 6 * Math.max(kw, 0.35)); delete opts.h; } spKind = 'keep'; opts.var = wk.var | 0; opts.gw = wk.wid; }
     }
     if (ex.water) opts.water = ex.water;
     if (ex.orient) opts.orient = ex.orient;
     if (ex.floors) opts.floors = ex.floors;
     if (ex.trade) opts.trade = ex.trade;
     const rec = kdesign(spKind, sp.x, sp.z, sp.rot || 0, opts);
+    if (opts.gw) rec.gw = opts.gw;
     bldItem(sp.key, sp.key, sp.o, sp.cell, rec, { sp: 1, supp: sp.kind === 'bridge' ? false : undefined });
     // small props beside some specials
     const pr = new Props(sp.key), c = Math.cos(sp.rot || 0), s = Math.sin(sp.rot || 0);
@@ -3105,9 +3290,51 @@ function visibleItem(S, it, rz) {
   const k = it.cell * 4, Z = W.zone;
   if (Z[k] !== S.type || Z[k + 1] !== S.id) return false;
   if (rz.has(it.pk)) return false;
-  if (it.t === 'bld' && it.supp !== false && roadSuppressed(it.rec)) return false;
+  if (it.t === 'bld') {
+    if (it.supp !== false && roadSuppressed(it.rec)) return false;
+    if (manualSuppressed(it.rec)) return false;               // never over a player's own building (I2)
+  }
   if (it.t === 'props' && it.pbox && roadSuppressed(it.pbox)) return false;
+  // time-lapse replay: ground items (lanes, areas, props) after the view year are hidden. Buildings stay:
+  // Kit's uView uniform sinks them on the GPU at no CPU cost.
+  if (viewY !== undefined && it.t !== 'bld' && ((S.fy | 0) > viewY || itemYear(S, it) > viewY)) return false;
   return true;
+}
+// ---- built years (Living History §3.5) -----------------------------------------------------------------
+// pure: the year of an item in epoch a, spread over up to 2 years in growth order (o) across the epoch's o-range
+function itemYearOf(ey, fy, a, o, er) {
+  const ye = a >= 1 && a <= 254 && ey ? +ey[a] || 0 : 0;
+  let y = ye || (fy | 0);
+  if (y && ye && er) {
+    const span = clamp(((+ey[a + 1] || 0) || y + 2) - y, 0, 2);
+    y += span * clamp((o - er[0]) / (er[1] - er[0] + 1), 0, 1);
+  }
+  return y;
+}
+// o-range of the deco items anchored in each epoch (lazy, cached on the deco; refreshed when the zone changes)
+function epochRange(dc, a) {
+  if (!dc._er || dc._erV !== zoneVer) {
+    const m = new Map(), Z = W.zone;
+    for (const it of dc.items) { const e = Z[it.cell * 4 + 3], r = m.get(e); if (!r) m.set(e, [it.o, it.o]); else { if (it.o < r[0]) r[0] = it.o; if (it.o > r[1]) r[1] = it.o; } }
+    dc._er = m; dc._erV = zoneVer;
+  }
+  return dc._er.get(a) || null;
+}
+function itemYear(S, it) {
+  if (!(S.fy > 0) && !(S.ey && S.ey.length)) return 0;
+  const a = W.zone[it.cell * 4 + 3], L = lives.get(S.id);
+  return itemYearOf(S.ey, S.fy, a, it.o, L && L.deco ? epochRange(L.deco, a) : null);
+}
+// town ticker toasts while history runs: only the selected place or places near the camera, never while catching up
+function tickerOk(S) {
+  const St = D.Story; if (!St) return true;
+  if (St.catchingUp) return false;
+  if (!(St.running && typeof St.ypm === 'function' && St.ypm() > 0)) return true;
+  if (S.id === Town.selected) return true;
+  let f = null; try { f = D.Cam && D.Cam.focusPoint ? D.Cam.focusPoint() : null; } catch (e) { f = null; }
+  if (!f) return false;
+  const o = originOf(S);
+  return Math.hypot(o.x - f.x, o.z - f.z) <= 2500;
 }
 let remSink = [], remNow = [];
 function flushRemovals() { if (remSink.length) { liveRemove(remSink, true); remSink = []; } if (remNow.length) { liveRemove(remNow, false); remNow = []; } }
@@ -3120,6 +3347,11 @@ function showItem(S, L, it, born, animated) {
     const rec = Object.assign({}, it.rec);
     seat(rec);
     rec.born = born; rec.sid = S.id; rec.key = it.key; rec.auto = true; rec.id = nextBid++;
+    const yr = itemYear(S, it); if (yr > 0) rec.year = yr;
+    // skeleton stage: an animated house reveal stands as a bare frame first (Kit reads _fe; never saved)
+    // only while the chronicle is actually running: a paused/unstarted world keeps the v44 wave look (no bare frames)
+    if (animated && HOUSE_KINDS[rec.kind] && D.Story && D.Story.started && D.Story.running && typeof D.Story.frameSeconds === 'function') rec._fe = born + D.Story.frameSeconds();
+    if (rec.gw && D.Works && D.Works.progOf) { try { rec.prog = D.Works.progOf(rec.gw); } catch (er) { } }
     liveAdd(rec); e.recs = [rec];
     hideStampRec(rec); hideTouch(it.bb);
     if (it.wall && L.deco && L.deco.wall && !L.wallShown) { L.wallShown = true; markTilesFor(L); }
@@ -3128,7 +3360,7 @@ function showItem(S, L, it, born, animated) {
       if (rec.kind === 'chapel' || (rec.kind === 'church' && it.key.endsWith(':v1'))) msg = null;
       if (it.wallStart && it.wall) msg = it.wall === 'stone' ? 'walled itself in stone' : 'raised a palisade';
       if (rec.kind === 'pier' && !it.wallStart && L.ticks.has('pier')) msg = null;
-      if (msg && !L.ticks.has(msg)) { L.ticks.add(msg); ticker(S.name + ' ' + msg); if (rec.kind === 'pier') L.ticks.add('pier'); }
+      if (msg && !L.ticks.has(msg)) { L.ticks.add(msg); if (tickerOk(S)) ticker(S.name + ' ' + msg); if (rec.kind === 'pier') L.ticks.add('pier'); }
     }
     navRecDirty = true;
   } else if (it.t === 'lane' || it.t === 'area') {
@@ -3172,7 +3404,7 @@ function transferLive(fromSid, toSid) {
   lives.delete(fromSid);
 }
 function speedMul(L) {
-  let m = Town.speed * L.speed;
+  let m = Town.speed * L.speed * (Town.histPace > 0 ? Town.histPace : 1);
   if (L.ff) m *= 1 + 39 * clamp((now() - L.ff) / 600, 0, 1);
   return m;
 }
@@ -3257,6 +3489,32 @@ function refilter(sid, instant) {
   }
   hideRebuildRect(L.bb);
   L.propsDirty = true;
+}
+// ---- time-lapse replay filter (Living History §3.6): view-only, never touches saved state -----------------
+let viewY;                                 // undefined = live
+const viewSig = new Map();                 // sid -> signature of its visible-epoch set at viewY
+let viewDirty = false, viewT = 0;
+function viewSigOf(S, Y) {
+  if ((S.fy | 0) > Y) return 'x';
+  const ey = S.ey; if (!ey || !ey.length) return '';
+  let s = '';
+  for (let e = 1; e < ey.length; e++) { const y = +ey[e] || 0; if (!y) continue; const span = clamp(((+ey[e + 1] || 0) || y + 2) - y, 0.25, 2); s += Math.round(clamp((Y - y) / span, -0.1, 1) * 8) + ','; }
+  return s;
+}
+Town.setViewYear = function (y) {
+  const v = (y === undefined || y === null || !isFinite(y)) ? undefined : +y;
+  if (v === viewY) return;
+  viewY = v;
+  if (v === undefined) { viewSig.clear(); viewDirty = false; needRefilterAll = true; refilterInstant = true; navDirty = true; return; }
+  viewDirty = true;
+};
+Town.viewYear = () => viewY;
+function viewFlush() {                     // ≤ 4 Hz: refilter (instantly) only settlements whose visible set changed
+  if (!viewDirty || now() - viewT < 250) return;
+  viewDirty = false; viewT = now();
+  const ids = Array.from(list.keys()).sort((a, b) => a - b);
+  for (const sid of ids) { const S = list.get(sid), sg = viewSigOf(S, viewY); if (viewSig.get(sid) === sg) continue; viewSig.set(sid, sg); refilter(sid, true); }
+  navDirty = true;
 }
 function doSwaps(S, L, key) {
   const olds = L.swaps.get(key); if (!olds) return;
@@ -3592,6 +3850,38 @@ function hideStampItem(it, clip) {
     }
   }
 }
+// history-built roads (seg.by === 1) never clear plants: the trees under their corridor are only hidden, so
+// removing the road brings them back (Living History I2). Stamped on every rebuild of the rect.
+function hideStampDirRoads(clip) {
+  const R = D.Roads; if (!R || !R.segs || !R.segs.size || !R.segSamples) return;
+  R.segs.forEach(seg => {
+    if (seg.by !== 1) return;
+    let S2; try { S2 = R.segSamples(seg); } catch (e) { return; }
+    if (!S2 || !(S2.n >= 2)) return;
+    const T = (R.TYPES && R.TYPES[seg.type]) || { w: 4 }, hw = (T.w || 4) / 2 + 1.5, n = S2.n, X = S2.x, Zs = S2.z;
+    const [x0, z0, x1, z1] = samplesBB(S2);
+    if (x1 + hw < clip[0] || x0 - hw > clip[2] || z1 + hw < clip[1] || z0 - hw > clip[3]) return;
+    for (let s = 0; s < n - 1; s++) {
+      const ax = X[s], az = Zs[s], bx = X[s + 1], bz = Zs[s + 1];
+      for (let j = Math.floor((Math.min(az, bz) - hw) / 4); j <= Math.floor((Math.max(az, bz) + hw) / 4); j++) for (let i = Math.floor((Math.min(ax, bx) - hw) / 4); i <= Math.floor((Math.max(ax, bx) + hw) / 4); i++)
+        if (i * 4 >= clip[0] && i * 4 < clip[2] && j * 4 >= clip[1] && j * 4 < clip[3] && segDist2((i + 0.5) * 4, (j + 0.5) * 4, ax, az, bx, bz) <= (hw + 2) * (hw + 2)) hset(i, j);
+    }
+  });
+}
+const sbbCache = new WeakMap();      // road samples object -> bbox (samples are replaced when a seg's geometry changes)
+function samplesBB(S2) {
+  let b = sbbCache.get(S2);
+  if (!b) { b = [1e9, 1e9, -1e9, -1e9]; for (let q = 0; q < S2.n; q++) { const x = S2.x[q], z = S2.z[q]; if (x < b[0]) b[0] = x; if (x > b[2]) b[2] = x; if (z < b[1]) b[1] = z; if (z > b[3]) b[3] = z; } sbbCache.set(S2, b); }
+  return b;
+}
+// union bbox of all history-built roads (so a wholesale road reload re-derives exactly the corridors that changed)
+let dirRoadBB = null;
+function dirRoadsBB() {
+  const R = D.Roads; let u = null; if (!R || !R.segs || !R.segSamples) return null;
+  R.segs.forEach(seg => { if (seg.by !== 1) return; let S2; try { S2 = R.segSamples(seg); } catch (e) { return; } if (S2 && S2.n) u = growRect(u, samplesBB(S2)); });
+  return u ? [u[0] - 12, u[1] - 12, u[2] + 12, u[3] + 12] : null;
+}
+Town.hideRoadRect = function (bb) { if (bb && bb.length >= 4) { hideRebuildRect([bb[0] - 4, bb[1] - 4, bb[2] + 4, bb[3] + 4]); hideT = Math.min(hideT, 0.05); } };
 function spanHas(xs, x) { for (let q = 0; q + 1 < xs.length; q += 2) if (x >= xs[q] && x <= xs[q + 1]) return true; return false; }
 function hideFlush(dt) {
   hideT -= dt;
@@ -3605,6 +3895,7 @@ function hideFlush(dt) {
       if (!L.bb || !bbHit(L.bb, clip)) return;
       L.shown.forEach(e => { const it = e.item; if (!it.bb || !bbHit(it.bb, clip)) return; if (it.t === 'bld') { for (const rec of e.recs || []) hideStampRec(rec, clip); } else hideStampItem(it, clip); });
     });
+    hideStampDirRoads(clip);
     hideDirty = growRect(hideDirty, r);
   }
   if (hideDirty && D.Nature && D.Nature.markHideDirty) { const r = hideDirty; D.Nature.markHideDirty(r[0], r[1], r[2], r[3]); }
@@ -3837,6 +4128,7 @@ D.toolDefs.push({
     const meta = kmeta(b.kind);
     D.History.begin('Place ' + (meta.name || b.kind), 'building');
     const rec = cleanCopy(b); rec.id = nextBid++; rec.born = kclock();
+    { const y = yearNow(); if (y > 0) rec.year = y; }       // built year (saved with the manual record)
     addManual(rec);
     if (D.Nature && D.Nature.clearWhere) D.Nature.clearWhere(b.x - b.w - 4, b.z - b.d - 4, b.x + b.w + 4, b.z + b.d + 4, (x, z) => pointInB(b, x, z, 3));
     D.History.end();
@@ -3887,7 +4179,12 @@ const CSS = `
   text-shadow:0 1px 1px rgba(0,0,0,.7);will-change:transform,opacity}
 #town-labels .tl:hover{background:rgba(40,34,22,.85);border-color:rgba(224,184,90,.8)}
 #town-labels .tl.sel{border-color:#ffd77a;box-shadow:0 0 0 1px rgba(255,215,122,.4)}
-#town-labels .tl em{font-style:normal;font-weight:400;opacity:.75}`;
+#town-labels .tl em{font-style:normal;font-weight:400;opacity:.75}
+#town-labels .tl.fresh::after{content:'';position:absolute;left:12%;right:12%;bottom:2px;height:1px;background:#e0b85a;transform-origin:0 50%;animation:tl-quill 1.8s ease-out both}
+@keyframes tl-quill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+#town-inspector .ti-hist{color:var(--text2,#9fa2a8);font-size:11px;margin:-4px 0 8px;font-style:italic}
+#town-inspector .ti-hist:empty{display:none}
+#town-inspector .ti-row label.ti-chk{justify-content:flex-start;gap:6px;align-items:center;cursor:pointer;color:var(--text,#d6d7da)}`;
 function ensureCss() { if (document.getElementById('town-css')) return; const st = document.createElement('style'); st.id = 'town-css'; st.textContent = CSS; document.head.appendChild(st); }
 function vpEl() { return document.getElementById('viewport') || document.body; }
 function morph(S) {
@@ -3926,7 +4223,22 @@ Town.select = function (sid) {
   insEl.style.display = '';
   insSig = ''; refreshInspector(true);
 };
-function insSignature(S) { return [S.id, S.uid, S.name, S.type, JSON.stringify(S.tw), S.pending ? S.pending.jobId : 0, planId(S.plan || {})].join('|'); }
+function insSignature(S) { return [S.id, S.uid, S.name, S.type, JSON.stringify(S.tw), S.pending ? S.pending.jobId : 0, planId(S.plan || {}), S.grow !== false, S.fy | 0, S.by || 'p'].join('|'); }
+// the inspector's history lines: founding, lordship (realm.js), great works in progress (works.js)
+function histLines(S) {
+  const out = [];
+  if (S.fy > 0) out.push(`Founded ${S.fy | 0}${S.by === 'h' ? ' · by history' : ''}`);
+  const o = originOf(S);
+  try { if (D.Realm && D.Realm.describe) { const t = D.Realm.describe(o.x, o.z); if (t) out.push(String(t)); } } catch (e) { }
+  try {
+    if (D.Works && D.Works.list) for (const w of D.Works.list() || []) {
+      if (!w || w.uid !== S.uid || w.done) continue;
+      const p = D.Works.progOf ? D.Works.progOf(w.wid) : undefined;
+      out.push(`${w.kind === 'keep' ? 'Stone keep' : w.kind === 'bridge' ? 'Stone bridge' : 'Cathedral'} · ${Math.round(clamp(p === undefined ? 1 : p, 0, 1) * 100)}% · begun ${Math.floor(w.y0 || 0)}`);
+    }
+  } catch (e) { }
+  return out.map(escapeHtml).join('<br>');
+}
 const SLIDERS = [['dens', 'Density', 'Re-plans streets'], ['wealth', 'Wealth', 'Renovates houses'], ['layout', 'Layout', 'Re-plans streets'], ['squares', 'Squares', 'Re-plans streets'], ['greens', 'Greens', 'Re-plans streets'], ['gardens', 'Gardens', 'Re-plans streets']];
 function refreshInspector(force) {
   if (!insEl || !Town.selected) return;
@@ -3940,11 +4252,13 @@ function refreshInspector(force) {
     const fmt = (k, v) => k === 'layout' ? (v < 0.34 ? 'Winding' : v < 0.67 ? 'Mixed' : 'Planned') : pct(v);
     insEl.innerHTML = `<div class="ti-head"><div class="ti-ico" style="background:${t.col}">${t.emoji}</div><input class="ti-name" maxlength="40" spellcheck="false"><span class="ti-x" title="Close">×</span></div>
       <div class="ti-sub"></div>
+      <div class="ti-hist"></div>
       <div class="ti-stats"><div>Buildings <b class="ti-b">0</b></div><div>People <b class="ti-p">0</b></div></div>
       <div class="ti-bar"><i></i></div>
       ${SLIDERS.map(([k, lab, cap]) => `<div class="ti-row"><label>${lab}<span data-v="${k}">${fmt(k, S.tw[k])}</span></label><input type="range" min="0" max="1" step="0.01" data-k="${k}" value="${S.tw[k]}"><div class="ti-cap">${cap}</div></div>`).join('')}
       <div class="ti-row"><label>Walls</label><div class="ti-seg ti-walls">${[['none', 'None'], ['palisade', 'Palisade'], ['stone', 'Stone']].map(([v, l]) => `<button data-w="${v}" class="${S.tw.walls === v ? 'on' : ''}">${l}</button>`).join('')}</div><div class="ti-cap">Rebuilds walls</div></div>
       <div class="ti-row"><label>Growth speed</label><div class="ti-seg ti-speed">${[[0, '⏸'], [0.5, '½'], [1, '1'], [2, '2'], [4, '4']].map(([v, l]) => `<button data-s="${v}" class="${spd === v ? 'on' : ''}">${l}</button>`).join('')}<button data-fin="1" title="Finish now (Shift: instantly)">⏭</button></div></div>
+      ${D.Story || D.Director ? `<div class="ti-row"><label class="ti-chk" title="History may extend this place, wall it and make it richer (it never removes anything)"><input type="checkbox" class="ti-grow"${S.grow !== false ? ' checked' : ''}> Let history grow this place</label></div>` : ''}
       <div class="ti-btns"><button data-a="reroll" title="New seed, re-plan">🎲 Reroll</button><button data-a="regrow" title="Re-plan with the same seed and watch it grow again">↻ Regrow</button><button data-a="demolish" class="danger" title="Remove this settlement and its zone">🗑 Demolish</button></div>`;
     const nm = insEl.querySelector('.ti-name'); nm.value = S.name;
     nm.addEventListener('change', () => renameSettlement(S.id, nm.value));
@@ -3961,10 +4275,12 @@ function refreshInspector(force) {
       L2.speed = +b.dataset.s; insEl.querySelectorAll('.ti-speed button[data-s]').forEach(x => x.classList.toggle('on', +x.dataset.s === L2.speed));
     });
     insEl.querySelectorAll('.ti-btns button').forEach(b => b.onclick = () => settlementAction(S.id, b.dataset.a));
+    const gr = insEl.querySelector('.ti-grow'); if (gr) gr.addEventListener('change', () => { applyGrow(S.id, gr.checked); gr.blur(); });
   }
   const pr = progressOf(S), st = statsOf(S);
   const sub = insEl.querySelector('.ti-sub'); const txt = `${(TYPES[S.type] || {}).name || ''} · ${morph(S)}${pr.txt ? ' · ' + pr.txt : ''}`;
   if (sub.textContent !== txt) sub.textContent = txt;
+  const hl = insEl.querySelector('.ti-hist'); if (hl) { const h = histLines(S); if (hl._h !== h) { hl.innerHTML = h; hl._h = h; } }
   insEl.querySelector('.ti-b').textContent = st.b.toLocaleString();
   insEl.querySelector('.ti-p').textContent = st.pop.toLocaleString();
   insEl.querySelector('.ti-bar i').style.width = Math.round(pr.p * 100) + '%';
@@ -3974,8 +4290,16 @@ function applyTweak(sid, k, v, label) {
   D.History.begin(`${S.name}: ${label} ${typeof v === 'number' ? Math.round(v * 100) + '%' : v}`, 'zone');
   D.History.touchChunk('town', S.id);
   S.tw = Object.assign({}, S.tw, { [k]: v });
-  if (k === 'wealth' || k === 'walls') redecorateQ.add(S.id);
-  else S.pending = { kind: S.plan ? 'replan' : 'found', jobId: Town.nextJob++, epoch: S.epochs };
+  if (k === 'wealth' || k === 'walls') { redecorateQ.add(S.id); S.plock = Object.assign({}, S.plock, { [k]: 1 }); }   // history never overrides it
+  else S.pending = nextPending(S, S.plan ? 'replan' : 'found');
+  D.History.end();
+  emitChanged();
+}
+function applyGrow(sid, on) {
+  const S = list.get(sid); if (!S || (S.grow !== false) === on) return;
+  D.History.begin(`${S.name}: ${on ? 'Let history grow it' : 'History leaves it be'}`, 'zone');
+  D.History.touchChunk('town', S.id);
+  S.grow = on;
   D.History.end();
   emitChanged();
 }
@@ -3991,7 +4315,7 @@ function settlementAction(sid, a) {
     D.History.begin(`${S.name}: ${a === 'reroll' ? 'Reroll' : 'Regrow'}`, 'zone');
     D.History.touchChunk('town', sid);
     if (a === 'reroll') S.seed = hash32(S.seed, 'reroll', Town.nextJob);
-    S.pending = { kind: S.plan ? 'replan' : 'found', jobId: Town.nextJob++, epoch: S.epochs };
+    S.pending = nextPending(S, S.plan ? 'replan' : 'found');
     D.History.end();
     if (a === 'regrow') regrowSids.add(sid);
     emitChanged();
@@ -4016,6 +4340,7 @@ function updateLabels() {
   const arr = [];
   list.forEach(S => {
     if (!S.plan && D.History.active()) return; // planless origins need a zone scan: skip them mid-stroke
+    if (viewY !== undefined && (S.fy | 0) > viewY) return;   // replay: not founded yet
     const o = originOf(S); const y = D.Terrain.hAt(o.x, o.z) + 22;
     const d = Math.hypot(cam.position.x - o.x, cam.position.y - y, cam.position.z - o.z);
     if (d < 4200) arr.push([d, S, o, y]);
@@ -4028,13 +4353,16 @@ function updateLabels() {
     if (v3.z > 1 || v3.z < -1 || Math.abs(v3.x) > 1.2 || Math.abs(v3.y) > 1.2) continue;
     keep.add(S.id);
     let el = labelEls.get(S.id);
-    if (!el) { el = document.createElement('div'); el.className = 'tl'; el.dataset.sid = S.id; el.addEventListener('click', ev => { ev.stopPropagation(); Town.select(+el.dataset.sid); }); el.addEventListener('pointerdown', ev => ev.stopPropagation()); labelsEl.appendChild(el); labelEls.set(S.id, el); }
+    if (!el) { el = document.createElement('div'); el.className = 'tl tl-label'; el.dataset.sid = S.id; el.addEventListener('click', ev => { ev.stopPropagation(); Town.select(+el.dataset.sid); }); el.addEventListener('pointerdown', ev => ev.stopPropagation()); labelsEl.appendChild(el); labelEls.set(S.id, el); }
     const pr = progressOf(S);
     const html = `${escapeHtml(S.name)} <em>· ${morph(S)}${pr.growing && pr.p > 0 && pr.p < 1 ? ' · ' + Math.round(pr.p * 100) + '%' : pr.txt === 'planning…' ? ' · planning' : ''}</em>`;
     if (el._h !== html) { el.innerHTML = html; el._h = html; }
     el.style.transform = `translate(${((v3.x + 1) / 2 * W2).toFixed(1)}px, ${((1 - v3.y) / 2 * H2).toFixed(1)}px) translate(-50%, -100%)`;
     el.style.opacity = (1 - D.smooth(3000, 4200, d)).toFixed(3);
     el.classList.toggle('sel', S.id === Town.selected);
+    // Atlas restyles labels by type (atlas.js CSS); 'fresh' = founded in the last 2 game years (quill underline)
+    const ty = (TYPES[S.type] || TYPES[1]).short; if (el.dataset.type !== ty) el.dataset.type = ty;
+    const yN = yearNow(); el.classList.toggle('fresh', S.fy > 0 && yN > 0 && yN - S.fy < 2 && yN >= S.fy && viewY === undefined);
     el.style.display = '';
   }
   labelEls.forEach((el, sid) => { if (!keep.has(sid)) { if (!list.has(sid)) { el.remove(); labelEls.delete(sid); } else el.style.display = 'none'; } });
@@ -4045,6 +4373,8 @@ function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;
 // Public API: counts, collision, bulldoze, copy & paste, navigator (§3.5, §5.9)
 // =====================================================================================================
 Town.count = () => chunks.reduce((s, a) => s + a.length, 0);
+// player-placed (manual, sid-less) records: story.js guardSnap uses it for the I2 "history never touches manual" check
+Town.manualCount = () => { let n = 0; for (let ci = 0; ci < chunks.length; ci++) { const a = chunks[ci]; for (let q = 0; q < a.length; q++) if (!a[q].sid) n++; } return n; };
 Town.population = () => { let p = 0; chunks.forEach(a => a.forEach(r => { p += popOf(r); })); return p; };
 Town.zoneAt = (x, z) => W.zone[cellK(x, z) * 4];
 Town.buildingAt = function (x, z) { let hit = null; forNear(x - 5, z - 5, x + 5, z + 5, b => { if (pointInB(b, x, z)) { hit = b; return false; } }); return hit; };
@@ -4147,6 +4477,7 @@ Town.drawNav = function (ctx, S) {
   });
   const cols = {};
   chunks.forEach(a => a.forEach(b => {
+    if (viewY !== undefined && b.year > viewY) return;       // replay: not built yet
     const S2 = b.sid ? list.get(b.sid) : null;
     const t = S2 ? S2.type : 0;
     ctx.fillStyle = cols[t] || (cols[t] = t ? TYPES[t].col : '#f0e6d2');
@@ -4155,16 +4486,341 @@ Town.drawNav = function (ctx, S) {
   }));
   ctx.font = '600 10px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   list.forEach(S2 => {
+    if (viewY !== undefined && (S2.fy | 0) > viewY) return;
     const o = originOf(S2), x = o.x * k, y = o.z * k - 4;
     ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillText(S2.name, x + 0.8, y + 0.8);
     ctx.fillStyle = S2.id === Town.selected ? '#ffd77a' : '#fff4dc'; ctx.fillText(S2.name, x, y);
   });
   ctx.restore();
 };
-Town._debug = { march, chamfer, traceMaskLoops, crestSnap, dpSimplify, chaikin, planJob: (S, job) => { const h = { deadline: Infinity, ctx: null }, it = planJob(copyRec(S), job, h); let r; do { r = it.next(); } while (!r.done); return { plan: r.value, ctx: h.ctx }; }, decorate, lives, AT, jobs };
+Town._debug = { march, chamfer, traceMaskLoops, crestSnap, dpSimplify, chaikin, planJob: (S, job) => { const h = { deadline: Infinity, ctx: null }, it = planJob(copyRec(S), job, h); let r; do { r = it.next(); } while (!r.done); return { plan: r.value, ctx: h.ctx }; }, decorate, lives, AT, jobs, needRefilter };
 Town.finishAll = function (instant) {
   lives.forEach(L => finishLive(L, instant));
   finishBoostT = now() + 8000;
+};
+
+// =====================================================================================================
+// History hooks (Living History spec §5.5): read-only queries for story/director/wayfarer/works/realm, and
+// commit-only mutators. Mutators refuse (0/false + a warning) unless D.Story is committing inside its open
+// History entry (I1); they validate everything first and never throw after their first write.
+// =====================================================================================================
+let catchUp = false;
+function committing(fn) {
+  const St = D.Story;
+  if (St && St.committing === true && D.History.active()) return true;
+  console.warn('[town] Town.hist.' + fn + ' called outside a history commit: ignored');
+  return false;
+}
+Town.zoneVersion = () => zoneVer;
+Town.originOf = function (sid) { const S = list.get(sid); if (!S) return null; const o = originOf(S); return { x: o.x, z: o.z }; };
+// I3: may history claim this 16 m cell for a settlement of `type` (sid 0 = a new one)?
+function canClaim(k, type, sid) {
+  if (!(k >= 0 && k < N * N)) return false;
+  const Z = W.zone, o = k * 4;
+  if (Z[o] !== 0 || Z[o + 1] !== 0) return false;
+  const i = k % N, j = (k / N) | 0;
+  if (i < 1 || j < 1 || i > N - 2 || j > N - 2) return false;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {      // gap rule: zones never auto-merge
+    if (!di && !dj) continue;
+    const q = ((j + dj) * N + i + di) * 4, g = Z[q + 1];
+    if (g && g !== sid && Z[q] === type) return false;
+  }
+  const T = D.Terrain; if (!T || !T.hAt) return false;
+  const x = (i + 0.5) * CELL, z = (j + 0.5) * CELL;
+  if (T.isWet(x, z)) return false;
+  // average slope of the four 8 m quadrants
+  const h = [];
+  for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) h.push(T.hAt(x + a * 8, z + b * 8));
+  let s = 0;
+  for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const p = b * 3 + a, gx = ((h[p + 1] - h[p]) + (h[p + 4] - h[p + 3])) / 16, gz = ((h[p + 3] - h[p]) + (h[p + 4] - h[p + 1])) / 16;
+    s += Math.hypot(gx, gz);
+  }
+  if (s / 4 > 0.35) return false;
+  let man = false;
+  const cellB = { x, z, rot: 0, w: CELL, d: CELL };
+  forManual(x - 8, z - 8, x + 8, z + 8, m => { if (Math.abs(m.x - x) > 60 || Math.abs(m.z - z) > 60) return; if (obbOverlap(cellB, m, 0.5)) { man = true; return false; } });
+  return !man;
+}
+// per-plan derived facts (plans are immutable once attached, so a WeakMap by plan is exact)
+const planFacts = new WeakMap();
+function factsOf(P) {
+  let f = planFacts.get(P); if (f) return f;
+  let houses = 0, ms = 0, keepSp = null, gw = false;
+  for (const p of P.plots) if (p.role === 'house') houses++;
+  for (const s of P.specials) {
+    const ex = s.extra || {};
+    if (ex.ms === 'church') ms |= ex.tag === 'church2' ? 64 : 1;
+    if (s.kind === 'tavern') ms |= 2;
+    if (s.kind === 'smithy') ms |= 4;
+    if (s.kind === 'watermill' || s.kind === 'windmill') ms |= 8;
+    if (s.kind === 'markethall' || ex.tithe) ms |= 16;
+    if (s.kind === 'hall' && ex.ms === 'guild') ms |= 32;
+    if (s.kind === 'greatwork') { ms |= 256; gw = true; }
+    if ((s.kind === 'keep' || s.kind === 'motte') && P.origin && Math.hypot(s.x - P.origin.x, s.z - P.origin.z) < 1) keepSp = s;
+  }
+  if (P.origin && P.origin.kind === 'market') ms |= 16;
+  // cells the plan actually uses (coverage = how full the zone is)
+  const cov = new Set(), add = (x, z) => cov.add(cellK(x, z));
+  for (const p of P.plots) { const c = Math.cos(p.rot), s = Math.sin(p.rot), dep = p.d + (p.yardD || 0); for (let lz = -p.d / 2; lz <= -p.d / 2 + dep; lz += 8) for (let lx = -p.w / 2; lx <= p.w / 2; lx += 8) add(p.x + lx * c + lz * s, p.z - lx * s + lz * c); }
+  for (const s of P.specials) { if (!(s.w > 0)) { add(s.x, s.z); continue; } const c = Math.cos(s.rot || 0), sn = Math.sin(s.rot || 0); for (let lz = -s.d / 2; lz <= s.d / 2; lz += 8) for (let lx = -s.w / 2; lx <= s.w / 2; lx += 8) add(s.x + lx * c + lz * sn, s.z - lx * sn + lz * c); }
+  for (const A of P.areas) { const b = bboxOf(A.poly, 0); for (let z = b[1] + 4; z < b[3]; z += 12) for (let x = b[0] + 4; x < b[2]; x += 12) if (pip(A.poly, x, z)) add(x, z); }
+  for (const L of P.lanes) for (let q = 0; q + 1 < L.pts.length; q += 2) add(L.pts[q], L.pts[q + 1]);
+  f = { houses, ms, keepSp, gw, cov };
+  planFacts.set(P, f);
+  return f;
+}
+function morphOf(S, houses) {
+  switch (S.type) {
+    case 1: { const town = houses >= 60 || (houses >= 35 && S.tw.dens > 0.55); return (S.tw.walls !== 'none' && town ? 'walled ' : '') + (houses < 10 ? 'hamlet' : town ? 'town' : 'village'); }
+    case 2: return 'farmland';
+    case 3: return 'castle';
+    case 4: return morph(S);
+    case 5: return houses > 30 ? 'port' : 'harbour';
+  }
+  return 'settlement';
+}
+function capOf(S, ha) {
+  const d = S.tw.dens;
+  if (S.type === 1) return Math.max(6, Math.min(3000, Math.round(ha * (8 + 28 * d))));
+  if (S.type === 5) return Math.max(6, Math.round(ha * (4 + 10 * d)));
+  if (S.type === 3) return clamp(Math.round(ha * (2 + 6 * d)), 4, 60);
+  return 0;                                  // farmland, monastery: coverage alone says how full they are
+}
+let hlCache = null, hlKey = '';
+function histList() {
+  const key = zoneVer + '|' + histVer;
+  if (hlCache && hlKey === key) return hlCache;
+  const bb = allBBs(), Z = W.zone, out = [];
+  for (const sid of Array.from(list.keys()).sort((a, b) => a - b)) {
+    const S = list.get(sid), P = S.plan, cells = bb.mc[sid], ha = cells * CELL * CELL / 1e4;
+    const f = P ? factsOf(P) : null;
+    let covered = 0;
+    if (f) f.cov.forEach(k => { if (Z[k * 4 + 1] === sid && Z[k * 4] === S.type) covered++; });
+    const houses = f ? f.houses : 0, cap = capOf(S, ha), coverage = cells ? Math.min(1, covered / cells) : 0;
+    const full = clamp(Math.max(coverage, cap > 0 ? houses / cap : 0), 0, 1);
+    let keep = null;
+    if (S.type === 3 && f && f.keepSp) { let wk = null; try { wk = D.Works && D.Works.workAt ? D.Works.workAt(S.uid, 'keep') : null; } catch (e) { } keep = wk ? 'keep' : S.tw.wealth < 0.35 ? 'motte' : S.tw.wealth < 0.7 ? 'keep' : 'round'; }
+    let ms = f ? f.ms : 0;
+    if (f && S.type === 1 && (ms & 1) && houses >= 300 && S.tw.wealth > 0.7 && !f.gw) ms |= 128;
+    const o = originOf(S), wb = sidWorldBB(sid, 0);
+    // share of houses outside a stone wall (for the director's "rewall")
+    let wallOut = 0;
+    const L = lives.get(sid);
+    if (S.tw.walls !== 'none' && L && L.deco && L.deco.wall && P) { let hn = 0, out2 = 0; for (const p of P.plots) if (p.role === 'house') { hn++; if (!L.deco.wall.inside(p.x, p.z)) out2++; } wallOut = hn ? out2 / hn : 0; }
+    out.push(Object.freeze({ sid, uid: S.uid, type: S.type, name: S.name, by: S.by === 'h' ? 'h' : 'p', grow: S.grow !== false, fy: S.fy | 0, epochs: S.epochs | 0,
+      pending: !!S.pending, cells, ha, houses, cap, full, wealth: S.tw.wealth, walls: S.tw.walls, dens: S.tw.dens, plock: Object.assign({}, S.plock),
+      x: o.x, z: o.z, bb: wb || [o.x, o.z, o.x, o.z], ms, morph: morphOf(S, houses), keep, hasWork: !!(f && f.gw) || keep === 'keep' && !!(D.Works && D.Works.workAt && D.Works.workAt(S.uid, 'keep')) || !!(S.pending && S.pending.work),
+      wallOut, wallable: !!(P && P.wallO >= 0), ey: (S.ey || []).slice() }));
+  }
+  hlCache = Object.freeze(out); hlKey = key;
+  return hlCache;
+}
+function restampYears(sid) {
+  const S = list.get(sid), L = lives.get(sid); if (!S || !L) return 0;
+  const Kt = D.Kit; let n = 0;
+  L.shown.forEach(e => {
+    if (!e.recs) return;
+    const y = itemYear(S, e.item);
+    for (const rec of e.recs) {
+      if ((rec.year || 0) === y) continue;
+      try { if (Kt && Kt.setYear) Kt.setYear(rec, y); } catch (er) { }
+      if (y > 0) rec.year = y; else delete rec.year;
+      n++;
+    }
+  });
+  return n;
+}
+function claimCells(S, cells, ep) {       // cells already validated; inside the open entry
+  let i0 = N, j0 = N, i1 = -1, j1 = -1;
+  for (const k of cells) { const i = k % N, j = (k / N) | 0; if (i < i0) i0 = i; if (i > i1) i1 = i; if (j < j0) j0 = j; if (j > j1) j1 = j; }
+  if (i1 < 0) return;
+  D.History.touch('zone', i0, j0, i1, j1);
+  const Z = W.zone;
+  for (const k of cells) { Z[k * 4] = S.type; Z[k * 4 + 1] = S.id; Z[k * 4 + 3] = ep; }
+  zoneRect(i0, j0, i1, j1);
+}
+Town.hist = {
+  list: histList,
+  info(sid) { for (const e of histList()) if (e.sid === sid) return e; return null; },
+  byUid(uid) { for (const [sid, S] of list) if (S.uid === uid) return sid; return 0; },
+  busy() { let n = 0; list.forEach(S => { if (S.pending) n++; }); return n; },
+  canClaim,
+  // where lanes leave the zone (road goals for wayfarer): [{x, z, dx, dz}] (unit outward direction)
+  gates(sid) {
+    const S = list.get(sid); if (!S || !S.plan) return [];
+    const Z = W.zone, inZ = (x, z) => { const k = cellK(x, z) * 4; return Z[k + 1] === sid && Z[k] === S.type; };
+    const out = [], push = (x, z, dx, dz) => { const l = Math.hypot(dx, dz) || 1; if (out.some(g => Math.hypot(g.x - x, g.z - z) < 60)) return; out.push({ x, z, dx: dx / l, dz: dz / l }); };
+    const L = lives.get(sid);
+    if (L && L.deco && L.deco.wall) for (const g of L.deco.wall.gates) { const o = originOf(S); push(g.x, g.z, g.x - o.x, g.z - o.z); }
+    for (const Ln of S.plan.lanes) {
+      if (Ln.rank > 1) continue;
+      const p = Ln.pts;
+      for (let q = 2; q + 1 < p.length; q += 2) { const a = inZ(p[q - 2], p[q - 1]), b = inZ(p[q], p[q + 1]); if (a && !b) push(p[q - 2], p[q - 1], p[q] - p[q - 2], p[q + 1] - p[q - 1]); else if (!a && b) push(p[q], p[q + 1], p[q - 2] - p[q], p[q - 1] - p[q + 1]); }
+      if (Ln.tip && p.length >= 4) { const n = p.length; push(p[n - 2], p[n - 1], p[n - 2] - p[n - 4], p[n - 1] - p[n - 3]); }
+    }
+    if (!out.length) { const o = originOf(S); out.push({ x: o.x, z: o.z, dx: 1, dz: 0 }); }
+    return out;
+  },
+  // the high street: the longest rank-0 lane (its steps joined), or null
+  mainStreet(sid) {
+    const S = list.get(sid); if (!S || !S.plan) return null;
+    const groups = new Map();
+    for (const Ln of S.plan.lanes) { if (Ln.rank !== 0) continue; const base = Ln.key.slice(0, Ln.key.lastIndexOf('.')); let g = groups.get(base); if (!g) groups.set(base, g = []); g.push(Ln); }
+    let best = null, bl = 0;
+    Array.from(groups.keys()).sort().forEach(b => {
+      const st = groups.get(b).sort((x, y) => (+x.key.slice(x.key.lastIndexOf('.') + 1) || 0) - (+y.key.slice(y.key.lastIndexOf('.') + 1) || 0));
+      const pts = []; for (const Ln of st) for (let q = pts.length ? 2 : 0; q < Ln.pts.length; q++) pts.push(Ln.pts[q]);
+      const len = polyLen(pts); if (len > bl) { bl = len; best = pts; }
+    });
+    return best && best.length >= 4 ? Float32Array.from(best) : null;
+  },
+  workSite(uid, wid) {
+    const sid = Town.hist.byUid(uid); if (!sid) return false;
+    const S = list.get(sid);
+    if (S.plan) for (const sp of S.plan.specials) if (sp.kind === 'greatwork' && sp.extra && sp.extra.wid === wid) return { key: sp.key, x: sp.x, z: sp.z, rot: sp.rot || 0, w: sp.w, d: sp.d, y: D.Terrain ? D.Terrain.hAt(sp.x, sp.z) : 0 };
+    if (S.pending && S.pending.wid === wid) return null;
+    return false;
+  },
+  forWork(uid, wid, fn) {
+    const sid = Town.hist.byUid(uid), L = sid ? lives.get(sid) : null; if (!L) return;
+    L.shown.forEach(e => { if (e.recs) for (const r of e.recs) if (r.gw === wid) fn(r); });
+  },
+  fillYearGrid(out) {
+    out.fill(0);
+    const bb = allBBs(), Z = W.zone;
+    list.forEach((S, sid) => {
+      if (!bb.hc[sid]) return;
+      const ey = S.ey || [], fy = S.fy | 0;
+      if (!fy && !ey.length) return;
+      for (let j = bb.j0[sid]; j <= bb.j1[sid]; j++) for (let i = bb.i0[sid]; i <= bb.i1[sid]; i++) {
+        const k = j * N + i; if (Z[k * 4 + 1] !== sid || !Z[k * 4]) continue;
+        const a = Z[k * 4 + 3], y = (a >= 1 && a <= 254 && +ey[a]) || fy;
+        if (y > 0) out[k] = Math.min(65535, Math.round(y));
+      }
+    });
+    return out;
+  },
+  restampYears,
+  setCatchUp(on) { catchUp = !!on; },
+  // ---- commit-only mutators ------------------------------------------------------------------------------
+  found(type, cells, o) {
+    o = o || {};
+    if (!committing('found')) return 0;
+    if (!(type >= 1 && type <= 5) || !cells || cells.length < 10) return 0;
+    for (let q = 0; q < cells.length; q++) if (!canClaim(cells[q], type, 0)) return 0;
+    const slot = freeSlot(); if (!slot) return 0;
+    D.History.touchChunk('town', slot);
+    const uid = Town.nextUid++, seed = hash32(W.seed || 1, cells[0], uid), y = yearNow();
+    const S = { id: slot, uid, type, seed, name: '', tw: twFrom(o.tw), epochs: 1, razed: [], plan: null,
+      pending: { kind: 'found', jobId: Town.nextJob++, epoch: 1, src: 'dir' }, pin: o.pin ? [+o.pin[0], +o.pin[1]] : null,
+      by: 'h', fy: Math.floor(y), ey: [], grow: true, plock: {} };
+    if (y > 0) stampEy(S, 1, y);
+    S.name = makeName(type, cells, S.tw.walls, seed, slot);
+    list.set(slot, S);
+    claimCells(S, cells, 1);
+    if (o.instant || catchUp) instantJobs.add(S.pending.jobId);
+    needReconcile.add(slot);
+    emitChanged();
+    return slot;
+  },
+  extend(sid, cells, o) {
+    o = o || {};
+    if (!committing('extend')) return 0;
+    const S = list.get(sid); if (!S || !cells || !cells.length) return 0;
+    if (S.pending && (S.pending.kind === 'work' || S.pending.work)) return 0;   // a great work is being sited: wait
+    const acc = [];
+    for (let q = 0; q < cells.length; q++) if (canClaim(cells[q], S.type, sid)) acc.push(cells[q]);
+    if (!acc.length) return 0;
+    D.History.touchChunk('town', sid);
+    const ep = Math.min(254, (S.epochs | 0) + 1), y = yearNow();
+    S.epochs = ep;
+    if (y > 0) stampEy(S, ep, y);
+    claimCells(S, acc, ep);
+    const old = S.pending, kind = !S.plan || (old && old.kind === 'found') ? 'found' : old && old.kind === 'replan' ? 'replan' : 'expand';
+    const p = nextPending(S, kind);
+    if (!old || old.src === 'dir') { p.src = 'dir'; if (o.rewall || (old && old.rewall)) p.rewall = 1; }
+    S.pending = p;
+    if (o.instant || catchUp) instantJobs.add(p.jobId);
+    needReconcile.add(sid); needRefilter.add(sid);
+    emitChanged();
+    return acc.length;
+  },
+  setTweakQuiet(sid, k, v) {
+    if (!committing('setTweakQuiet')) return false;
+    const S = list.get(sid); if (!S || (k !== 'wealth' && k !== 'walls')) return false;
+    if (S.plock && S.plock[k]) return false;
+    if (k === 'walls' && v !== 'none' && v !== 'palisade' && v !== 'stone') return false;
+    // a wall is only drawn when the plan has a wall order (>= 12 houses): never log a wall nobody can see
+    if (k === 'walls' && v !== 'none' && S.tw.walls === 'none' && !(S.plan && S.plan.wallO >= 0)) return false;
+    if (k === 'wealth') v = clamp(+v || 0, 0, 1);
+    if (S.tw[k] === v) return false;
+    D.History.touchChunk('town', sid);
+    S.tw = Object.assign({}, S.tw, { [k]: v });
+    redecorateQ.add(sid);
+    emitChanged();
+    return true;
+  },
+  requestWork(sid, o) {
+    o = o || {};
+    if (!committing('requestWork')) return 0;
+    const S = list.get(sid), wid = o.wid | 0;
+    if (!S || !S.plan || !wid || S.pending) return 0;
+    if (S.plan.specials.some(sp => sp.kind === 'greatwork' && sp.extra && sp.extra.wid === wid)) return 0;
+    const acc = [];
+    if (o.cells) for (let q = 0; q < o.cells.length; q++) if (canClaim(o.cells[q], S.type, sid)) acc.push(o.cells[q]);
+    D.History.touchChunk('town', sid);
+    const p = { kind: 'work', jobId: Town.nextJob++, epoch: S.epochs, work: o.work || 'cathedral', wid, src: 'dir' };
+    if (acc.length >= 8) {
+      const ep = Math.min(254, (S.epochs | 0) + 1), y = yearNow();
+      S.epochs = ep; if (y > 0) stampEy(S, ep, y);
+      claimCells(S, acc, ep);
+      p.epoch = ep; p.cellsEp = ep;
+    }
+    S.pending = p;
+    if (o.instant || catchUp) instantJobs.add(p.jobId);
+    needReconcile.add(sid); needRefilter.add(sid);
+    emitChanged();
+    return p.jobId;
+  },
+  stampPrehistory(y0) {
+    if (!committing('stampPrehistory')) return 0;
+    y0 = +y0 || 1086;
+    let n = 0;
+    for (const sid of Array.from(list.keys()).sort((a, b) => a - b)) {
+      const S = list.get(sid); if ((S.fy | 0) > 0) continue;
+      D.History.touchChunk('town', sid);
+      const fy = y0 - 20 - (hash32(S.uid, 'pre') % 120), E = Math.max(1, S.epochs | 0), ey = [0];
+      for (let e = 1; e <= E; e++) ey[e] = E > 1 ? fy + (y0 - 2 - fy) * (e - 1) / (E - 1) : fy;
+      S.fy = fy; S.ey = ey;
+      restampYears(sid);
+      n++;
+    }
+    if (n) emitChanged();
+    return n;
+  },
+  redecorate(uid) { const sid = Town.hist.byUid(uid); if (sid) { redecorateQ.add(sid); histVer++; } },
+  // cheap change counter (zone + records): lets the director skip rebuilding list() on frames where nothing moved
+  ver() { return zoneVer + '.' + histVer; }
+};
+// the plot a settlement building stands on (Atlas "plot" ring): {sid, uid, key, role, poly} | null
+Town.plotOf = function (rec) {
+  if (!rec || !rec.sid) return null;
+  const S = list.get(rec.sid), L = lives.get(rec.sid); if (!S || !S.plan) return null;
+  const it = L && L.deco ? L.deco.byKey.get(rec.key) : null, pk = it ? it.pk : baseKey(rec.key);
+  for (const p of S.plan.plots) if (p.key === pk) {
+    const s = Math.sin(p.rot), c = Math.cos(p.rot), dep = p.d + (p.yardD || 0), off = dep / 2 - p.d / 2;
+    return { sid: S.id, uid: S.uid, key: p.key, role: p.role, poly: rectPoly(p.x + s * off, p.z + c * off, p.rot, Math.max(p.frontW || p.w, p.w), dep) };
+  }
+  for (const sp of S.plan.specials) if (sp.key === pk) return { sid: S.id, uid: S.uid, key: sp.key, role: sp.kind, poly: sp.w > 0 && sp.d > 0 ? rectPoly(sp.x, sp.z, sp.rot || 0, sp.w, sp.d) : null };
+  return { sid: S.id, uid: S.uid, key: pk, role: 'other', poly: null };
+};
+// pure helpers for dev/tests/director.test.js
+Town._pure = { itemYearOf, jobPrefix, makeName, canClaim, viewSigOf, mergeYears, nextPending };
+Town._dev = {
+  // browser check: settlement buildings shown on top of a player's manual building (should be [])
+  manualOverlaps() { const out = []; lives.forEach(L => L.shown.forEach(e => { if (e.recs) for (const r of e.recs) if (manualSuppressed(r)) out.push(r.key); })); return out; },
+  keyDupes(sid) { const L = lives.get(sid), S = list.get(sid); if (!S || !S.plan) return []; const seen = new Set(), d = []; for (const a of [S.plan.lanes, S.plan.plots, S.plan.specials, S.plan.areas]) for (const e of a) { if (seen.has(e.key)) d.push(e.key); seen.add(e.key); } void L; return d; }
 };
 
 // =====================================================================================================
@@ -4177,8 +4833,8 @@ function wipeLive() {
   lives.clear(); jobs.clear();
   atlasReset(); if (AT.data) { AT.tex.needsUpdate = true; }
   hideBits.fill(0); hideDirty = [0, 0, SIZE, SIZE]; hideRebuild = null; hideT = 0;
-  needReconcile.clear(); needRefilter.clear(); redecorateQ.clear(); redecorateInstant.clear(); restoredSids.clear();
-  navDirty = true; navRecDirty = true; tickQ.length = 0;
+  needReconcile.clear(); needRefilter.clear(); redecorateQ.clear(); redecorateInstant.clear(); restoredSids.clear(); restampQ.clear();
+  navDirty = true; navRecDirty = true; tickQ.length = 0; manualVer++; histVer++;
 }
 function sanitizeZone() {
   const Z = W.zone;
@@ -4206,6 +4862,7 @@ Town.clearAll = function () {
     for (const b of man) { try { K().remove(b, true); } catch (e) { } }
     chunks[i] = chunks[i].filter(b => b.sid);
   }
+  manualVer++;
   for (const sid of Array.from(list.keys()).sort((a, b) => a - b)) { D.History.touchChunk('town', sid); list.delete(sid); needReconcile.add(sid); }
   D.History.touch('zone', 0, 0, N - 1, N - 1);
   W.zone.fill(0);
@@ -4222,7 +4879,8 @@ Town.serialize = function () {
   const settlements = Array.from(list.keys()).sort((a, b) => a - b).map(sid => {
     const S = list.get(sid);
     return { id: S.id, uid: S.uid, type: S.type, seed: S.seed, name: S.name, tw: Object.assign({}, S.tw), epochs: S.epochs, razed: (S.razed || []).slice(),
-      plan: S.plan ? packVal(S.plan) : null, pending: S.pending ? Object.assign({}, S.pending) : null, pin: S.pin ? S.pin.slice() : null };
+      plan: S.plan ? packVal(S.plan) : null, pending: S.pending ? Object.assign({}, S.pending) : null, pin: S.pin ? S.pin.slice() : null,
+      by: S.by === 'h' ? 'h' : 'p', fy: S.fy | 0, ey: (S.ey || []).map(v => +v || 0), grow: S.grow !== false, plock: Object.assign({}, S.plock) };
   });
   return { v: 2, nextUid: Town.nextUid, nextJob: Town.nextJob, manual, settlements };
 };
@@ -4241,10 +4899,16 @@ Town.deserialize = function (d) {
       chunks[chunkOf(rec.x, rec.z)].push(rec);
       try { K().add(rec); } catch (e) { }
     }
+    manualVer++;
     for (const s of d.settlements || []) {
       if (!s || !s.id || s.id > 255) continue;
       const S = { id: s.id, uid: s.uid || Town.nextUid++, type: s.type || 1, seed: s.seed >>> 0, name: s.name || 'Settlement', tw: twFrom(s.tw), epochs: s.epochs || 1,
-        razed: Array.isArray(s.razed) ? s.razed.slice() : [], plan: s.plan ? unpackVal(s.plan) : null, pending: s.pending ? Object.assign({}, s.pending) : null, pin: s.pin || null };
+        razed: Array.isArray(s.razed) ? s.razed.slice() : [], plan: s.plan ? unpackVal(s.plan) : null, pending: s.pending ? Object.assign({}, s.pending) : null, pin: s.pin || null,
+        // Living History fields (absent in older saves: player-made, date unknown)
+        by: s.by === 'h' ? 'h' : 'p', fy: s.fy | 0, ey: Array.isArray(s.ey) ? s.ey.map(v => +v || 0) : [], grow: s.grow !== false,
+        plock: {} };
+      if (s.plock && s.plock.wealth) S.plock.wealth = 1;
+      if (s.plock && s.plock.walls) S.plock.walls = 1;
       Town.nextUid = Math.max(Town.nextUid, S.uid + 1);
       if (S.pending) { Town.nextJob = Math.max(Town.nextJob, (S.pending.jobId | 0) + 1); instantJobs.add(S.pending.jobId); }
       list.set(S.id, S);
@@ -4261,6 +4925,8 @@ Town.deserialize = function (d) {
     }
   });
   list.forEach((S, sid) => { if (S.plan) reconcile(sid, 'instant'); });
+  // wipeLive dropped the plant-hide corridors of history roads (Roads load first): re-derive them all
+  dirRoadBB = dirRoadsBB(); if (dirRoadBB) hideRebuildRect(dirRoadBB);
   navRecDirty = true;
   emitChanged();
 };
@@ -4290,16 +4956,37 @@ Town.init = function (scene) {
   D.History.regStore('town', townStore);
   D.on('roads:changed', segs => {
     roadVer++;
-    if (!segs) { needRefilterAll = true; return; }
-    if (!segs.length) return;
+    if (!segs) {
+      needRefilterAll = true;
+      for (let s = 0; s < 256; s++) roadVerS[s]++;
+      // a wholesale reload (load / undo): re-derive the plant hide mask under old and new history roads
+      const u = dirRoadsBB(); if (u || dirRoadBB) { hideRebuildRect(growRect(u ? u.slice() : null, dirRoadBB)); dirRoadBB = u; }
+      return;
+    }
+    if (!segs.length) {
+      // Clear Roads (the network is now empty): every walled town's gates go, whatever was near it
+      if (D.Roads && D.Roads.segs && !D.Roads.segs.size) list.forEach(S => { roadVerS[S.id]++; if (S.tw.walls !== 'none') { needRefilter.add(S.id); redecorateQ.add(S.id); } });
+      return;
+    }
+    let dirBB = null;
+    for (const sg of segs) if (sg && sg.by === 1) dirBB = growRect(dirBB, segBB(sg));
+    if (dirBB) { hideRebuildRect(dirBB); dirRoadBB = growRect(dirRoadBB, dirBB); }
     list.forEach(S => {
-      const bb = sidWorldBB(S.id, 30); if (!bb) return;
+      const bw = sidWorldBB(S.id, 200); if (!bw) return;
+      const bb = sidWorldBB(S.id, 30);
+      let near = false;
       for (const sg of segs) {
-        const sb = segBB(sg); if (!bbHit(bb, sb)) continue;
+        const sb = segBB(sg); if (!bbHit(bw, sb)) continue;
+        if (!near) { near = true; roadVerS[S.id]++; }
+        if (!bbHit(bb, sb)) continue;
         needRefilter.add(S.id);
         if (S.tw.walls !== 'none' && S.type === 1) redecorateQ.add(S.id);
-        // infill: a new road through a village's current cells re-buds along it (only inside an open entry)
-        if (D.History.active() && S.type === 1 && S.plan && (!S.pending) && segCrossesM(sg, S)) {
+        // infill: a new road through a village's current cells re-buds along it (only inside an open entry;
+        // never for places the player told history not to grow, and a history road (by 1) never replans a
+        // player-painted village (E5) - look on for a player seg in the same batch; director-founded places
+        // still infill along history roads)
+        if (sg.by === 1 && S.by !== 'h') continue;
+        if (D.History.active() && S.type === 1 && S.plan && (!S.pending) && S.grow !== false && segCrossesM(sg, S)) {
           D.History.touchChunk('town', S.id);
           S.pending = { kind: 'infill', jobId: Town.nextJob++, epoch: S.epochs };
         }
@@ -4307,7 +4994,22 @@ Town.init = function (scene) {
       }
     });
   });
-  D.on('roads:removed', bb => { roadVer++; list.forEach(S => { const b = sidWorldBB(S.id, 30); if (b && bb && bbHit(b, bb)) { needRefilter.add(S.id); if (S.tw.walls !== 'none') redecorateQ.add(S.id); } }); });
+  D.on('roads:removed', bb => {
+    roadVer++;
+    if (bb) hideRebuildRect(bb);          // trees hidden under a removed history road come back
+    else {                                // Clear Roads (no bbox): every former history corridor, every town
+      if (dirRoadBB) hideRebuildRect(dirRoadBB);
+      dirRoadBB = dirRoadsBB();
+      list.forEach(S => { roadVerS[S.id]++; needRefilter.add(S.id); if (S.tw.walls !== 'none') redecorateQ.add(S.id); });
+      return;
+    }
+    list.forEach(S => {
+      const bw = sidWorldBB(S.id, 200); if (bw && bb && bbHit(bw, bb)) roadVerS[S.id]++;
+      const b = sidWorldBB(S.id, 30); if (b && bb && bbHit(b, bb)) { needRefilter.add(S.id); if (S.tw.walls !== 'none') redecorateQ.add(S.id); }
+    });
+  });
+  D.on('story:view', y => Town.setViewYear(y === null ? undefined : y));
+  D.on('story:restored', () => { list.forEach((S, sid) => restampQ.add(sid)); });
   D.on('terrain:h', (i0, j0, i1, j1) => { // core's D.emit forwards only 3 payload args: j1 may be missing
     if (!(j1 >= 0)) j1 = N;
     // coalesce into one union rect: a sculpt stroke emits this every frame and the queue is only
@@ -4369,6 +5071,8 @@ Town.update = function (dt, camera) {
     if (redecorateQ.size) { for (const sid of Array.from(redecorateQ).sort((a, b) => a - b)) if (list.has(sid)) reconcile(sid, 'wave'); redecorateQ.clear(); }
     if (needRefilterAll) { needRefilterAll = false; list.forEach((S, sid) => refilter(sid, refilterInstant)); needRefilter.clear(); refilterInstant = false; }
     if (needRefilter.size) { for (const sid of Array.from(needRefilter).sort((a, b) => a - b)) refilter(sid, false); needRefilter.clear(); }
+    if (restampQ.size) { for (const sid of Array.from(restampQ).sort((a, b) => a - b)) if (list.has(sid)) restampYears(sid); restampQ.clear(); }
+    if (viewY !== undefined) viewFlush();
     startJobs();
   }
   runJobs();
