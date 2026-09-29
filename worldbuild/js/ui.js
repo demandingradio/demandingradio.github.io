@@ -128,6 +128,7 @@ function menuDefs() {
       { label: 'Select all', kb: 'Ctrl+A', act: () => { D.Tools.select('select'); D.Tools.setSelection({ x0: 0, z0: 0, x1: SIZE, z1: SIZE }); } },
       { label: 'Deselect', kb: 'Ctrl+D', act: () => D.Tools.setSelection(null), disabled: !D.Tools.selection },
       { label: 'Flatten selection', act: () => D.Tools.flattenSelection(), disabled: !D.Tools.selection },
+      { label: D.Tools.selection ? 'Weather peaks in selection' : 'Weather mountain peaks', act: () => D.Tools.weatherPeaks() },
       { label: 'Clear trees & buildings in selection', kb: 'Del', act: () => D.Tools.clearSelection(), disabled: !D.Tools.selection }
     ],
     View: [

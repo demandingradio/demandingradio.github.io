@@ -143,6 +143,36 @@ uniform float uSelSettle; uniform float uGOn; uniform sampler2D uGIdx; uniform s
 varying vec3 vWP; varying vec3 vWN; varying vec4 vBiome; varying vec4 vPaintA; varying vec4 vPaintB; varying vec4 vExtra;
 float T_rough; vec3 T_emis;
 ${D.GLSL_NOISE}
+// ---- rock: shared state for biomeCol + 3D value noise with analytic gradient (3D, so nothing smears down cliff faces)
+float T_cav; float T_crag; float T_ledge; float T_bed; float T_steep; vec3 T_nW; float T_bumpOn; float T_fine;
+float d_hash13(vec3 p3){ p3 = fract(p3 * .1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
+vec4 d_noised3(vec3 x){
+  vec3 i = floor(x), f = fract(x);
+  vec3 u = f * f * (3.0 - 2.0 * f), du = 6.0 * f * (1.0 - f);
+  float a = d_hash13(i), b = d_hash13(i + vec3(1.0, 0.0, 0.0)), c = d_hash13(i + vec3(0.0, 1.0, 0.0)), d = d_hash13(i + vec3(1.0, 1.0, 0.0));
+  float e = d_hash13(i + vec3(0.0, 0.0, 1.0)), f1 = d_hash13(i + vec3(1.0, 0.0, 1.0)), g = d_hash13(i + vec3(0.0, 1.0, 1.0)), h = d_hash13(i + vec3(1.0, 1.0, 1.0));
+  float k1 = b - a, k2 = c - a, k3 = e - a, k4 = a - b - c + d, k5 = a - c - e + g, k6 = a - b - e + f1, k7 = -a + b + c - d + e - f1 - g + h;
+  return vec4(a + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y + k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z,
+              du * vec3(k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z, k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x, k3 + k6 * u.x + k5 * u.y + k7 * u.x * u.y));
+}
+// Rock, low-poly style: steep ground is shaded per triangle (the real 16 m facets of the land, so crags follow
+// the true shape), each facet a slightly different tone; a broad 70 m swell and soft dipping strata beds add
+// variety. nF is the flat triangle normal (derivatives are taken by the caller at top level).
+void rockField(vec3 p, vec3 n, vec3 nF, float dist, float gpx){
+  float wB = smoothstep(4.0, 9.0, 70.0 / gpx);
+  vec4 o1 = d_noised3(p / 70.0 + vec3(3.1, 0.0, 7.7));
+  float facet = d_hash13(floor(nF * 23.0 + 0.5));
+  T_crag = o1.x * 0.6 + facet * 0.4;
+  float wq = (p.y + p.x * 0.11 + p.z * 0.06) / 16.0 + o1.x * 0.9;
+  float bi = floor(wq);
+  float th = 0.55 + 0.45 * d_hash12(vec2(bi, 7.0));
+  T_ledge = smoothstep(th - 0.12, th, fract(wq)) * (1.0 - smoothstep(th, th + 0.1, fract(wq))) * wB * T_steep;
+  T_bed = d_hash12(vec2(bi, 2.0));
+  float fk = smoothstep(0.14, 0.34, 1.0 - n.y);
+  vec3 nb = normalize(mix(n, nF, fk));
+  vec3 g = 0.18 * o1.yzw * 1.2 * wB * (1.0 - smoothstep(2500.0, 6500.0, dist));
+  T_nW = normalize(nb - (g - dot(g, nb) * nb));
+}
 ${D.GLSL_EDGE}
 vec3 seas(vec3 sp, vec3 su, vec3 au, vec3 wi){ return sp*uSeason.x + su*uSeason.y + au*uSeason.z + wi*uSeason.w; }
 
@@ -155,14 +185,14 @@ vec3 biomeCol(int bi, vec3 p, float hs, float slope, float n1, float nn, float n
                  mix(vec3(.47,.47,.26), vec3(.62,.53,.30), n1), mix(vec3(.44,.45,.35), vec3(.52,.50,.40), n1));
     grass = mix(grass, grass * vec3(1.12, 1.02, 0.78), smoothstep(0.55, 0.85, nm) * 0.5);
     grass = mix(grass, vec3(.56,.58,.36), smoothstep(350.0, 700.0, hs) * 0.6);
-    rock = mix(vec3(.37,.35,.32), vec3(.48,.45,.41), nn);
+    rock = mix(vec3(.33,.315,.29), vec3(.44,.415,.38), nn);
     sand = vec3(.85,.79,.61); sea = vec3(.60,.56,.44);
     snowline = 950.0 + n1 * 140.0 - uSeason.w * 450.0;
   } else if (bi == 1) { // alpine
     grass = seas(mix(vec3(.34,.52,.26), vec3(.46,.60,.30), n1), mix(vec3(.28,.45,.22), vec3(.40,.54,.27), n1),
                  mix(vec3(.52,.48,.27), vec3(.60,.53,.30), n1), mix(vec3(.40,.43,.34), vec3(.48,.49,.40), n1));
     grass = mix(grass, vec3(.44,.50,.30), smoothstep(200.0, 520.0, hs) * 0.45);
-    rock = mix(vec3(.50,.52,.55), vec3(.60,.61,.63), nn);
+    rock = mix(vec3(.40,.415,.44), vec3(.52,.53,.55), nn);
     sand = vec3(.62,.61,.58); sea = vec3(.45,.46,.44);
     snowline = 600.0 + n1 * 140.0 - uSeason.w * 300.0;
     rockT = 0.25;
@@ -179,7 +209,7 @@ vec3 biomeCol(int bi, vec3 p, float hs, float slope, float n1, float nn, float n
   } else {              // tropical
     grass = seas(mix(vec3(.27,.52,.21), vec3(.37,.58,.25), n1), mix(vec3(.24,.48,.19), vec3(.34,.55,.23), n1),
                  mix(vec3(.36,.56,.22), vec3(.46,.60,.25), n1), mix(vec3(.32,.52,.23), vec3(.42,.56,.28), n1));
-    rock = mix(vec3(.28,.26,.25), vec3(.38,.35,.33), nn);
+    rock = mix(vec3(.26,.245,.23), vec3(.35,.33,.31), nn);
     sand = vec3(.95,.91,.78); sea = vec3(.80,.78,.66);
     snowline = 3200.0;
     beach += 2.0;
@@ -189,12 +219,28 @@ vec3 biomeCol(int bi, vec3 p, float hs, float slope, float n1, float nn, float n
   float b = 1.0 - smoothstep(beach - 0.5, beach + 0.5, hs);
   c = mix(c, sand, b);
   c = mix(c, sea, smoothstep(0.0, -4.0, hs));
-  // cliffs
-  float r = smoothstep(rockT - 0.05, rockT + 0.05, slope + (nn - 0.5) * 0.07);
-  c = mix(c, rock, r);
-  rough = mix(rough, 0.85, r);
+  // cliffs: crags stand out on ridges, gullies hold scree and grass; a scree skirt blends the two
+  float cavK = clamp(T_cav / 14.0, -1.0, 1.0);
+  float rs = slope + (T_crag - 0.5) * 0.16 + cavK * 0.05 + (nn - 0.5) * 0.04;
+  float r = smoothstep(rockT - 0.035, rockT + 0.035, rs);
+  float scree = smoothstep(rockT - 0.13, rockT - 0.03, rs) * (1.0 - r);
+  vec3 rk = rock * (0.8 + 0.36 * T_crag);                                            // facet-to-facet tone
+  rk *= mix(1.0, 0.88 + 0.24 * T_bed, 0.6 + 0.4 * T_steep);                          // alternating beds
+  rk = mix(rk, rk * vec3(1.05, 0.98, 0.9), step(0.7, T_bed) * 0.5 * float(bi != 1));   // the odd warm, iron-stained bed
+  rk = mix(rk, rk * vec3(0.84, 0.86, 0.9), T_ledge * 0.35);                          // shadowed bedding plane under each ledge
+  rk *= 1.0 - 0.28 * clamp(-cavK, 0.0, 1.0);                                          // gullies darker
+  rk = mix(rk, rk * vec3(1.06, 1.03, 0.96) + vec3(0.03, 0.03, 0.02), clamp(cavK, 0.0, 1.0) * 0.5); // weathered crests
+  float lich = smoothstep(0.58, 0.8, d_vnoise(p.xz * 0.045 + p.y * 0.035)) * (1.0 - T_steep * 0.7);
+  rk = mix(rk, rk * vec3(0.92, 1.0, 0.74), lich * 0.45 * float(bi != 2));
+  float streak = smoothstep(0.55, 0.9, d_vnoise(vec2((p.x + p.z) * 0.11, p.y * 0.008))) * T_steep * (0.4 + 0.6 * T_fine);
+  rk *= 1.0 - streak * 0.22;                                                          // rain streaks down the faces
+  vec3 grav = mix(rock * 1.12, mix(c, rock, 0.55), 0.35) * (0.93 + mix(0.07, 0.28 * d_hash12(floor(p.xz * 0.9)), T_fine));
+  c = mix(c, grav, scree * 0.85);
+  c = mix(c, rk, r);
+  rough = mix(rough, 0.85, max(r, scree));
   // snow caps
-  float s = smoothstep(snowline - 40.0, snowline + 40.0, hs + (nn - 0.5) * 60.0) * (1.0 - smoothstep(0.45, 0.62, slope));
+  float slopeB = 1.0 - T_nW.y;
+  float s = smoothstep(snowline - 40.0, snowline + 40.0, hs + (nn - 0.5) * 60.0) * (1.0 - smoothstep(0.4, 0.6, mix(slope, slopeB, 0.7)));
   c = mix(c, snow, s);
   rough = mix(rough, 0.6, s);
   return c;
@@ -296,9 +342,9 @@ vec3 laneColor(float cls, vec2 xz, float sd, float gpx, vec3 nrm){
     vec2 q = xz / vec2(1.1, 0.8); q.x += floor(q.y) * 0.5;
     vec2 f = fract(q), id = floor(q);
     float e = min(min(f.x, 1.0 - f.x) * 1.1, min(f.y, 1.0 - f.y) * 0.8);
-    vec3 sc = vec3(.58,.55,.49) * (0.86 + 0.24 * d_hash12(id)) * (0.95 + 0.1 * d_vnoise(xz * 3.0));
-    c = mix(vec3(.30,.28,.25) * (1.0 - uWet * 0.3), sc, smoothstep(0.015, 0.05, e));
-    c = mix(vec3(.54,.51,.46), c, fade);
+    vec3 sc = vec3(.50,.47,.42) * (0.86 + 0.24 * d_hash12(id)) * (0.95 + 0.1 * d_vnoise(xz * 3.0));
+    c = mix(vec3(.28,.26,.23) * (1.0 - uWet * 0.3), sc, smoothstep(0.015, 0.05, e));
+    c = mix(vec3(.45,.42,.37), c, fade);
   } else if (cls < 4.5) {          // gravel
     float h1 = d_hash12(floor(xz * 7.0)), h2 = d_hash12(floor(xz * 13.0) + 5.0);
     c = vec3(.55,.51,.44) * (0.85 + 0.25 * nv);
@@ -396,6 +442,17 @@ void terrainShade(inout vec3 outCol){
   float n3 = d_vnoise(xz * 0.31);
   float nn = mix(0.5, n2 * 0.65 + n3 * 0.35, 0.3 + 0.7 * fadeMid);
   float nm = d_vnoise(xz * 0.11);
+  vec3 dpx = dFdx(p), dpy = dFdy(p);
+  float gp3 = max(length(dpx), length(dpy));               // true footprint (xz alone under-reads on cliff faces)
+  vec3 crF = cross(dpx, dpy); float lF = length(crF);
+  vec3 nF = lF > 1e-9 ? crF / lF : n; if (dot(nF, n) < 0.0) nF = -nF;
+  nF = normalize(mix(n, nF, smoothstep(0.55, 0.85, dot(nF, n))));   // quads straddling a silhouette read garbage: fall back
+  T_fine = fadeFine;
+  T_cav = (vExtra.y * 255.0 - 128.0) / 3.0;
+  T_steep = smoothstep(0.35, 0.75, slope);
+  T_crag = 0.5; T_ledge = 0.0; T_bed = 0.5; T_nW = n; T_bumpOn = 0.0;
+  if (slope > 0.1 && dist < 6500.0 && hs > -2.0) { rockField(p, n, nF, dist, gp3); T_bumpOn = smoothstep(0.1, 0.2, slope); T_nW = normalize(mix(n, T_nW, T_bumpOn)); }
+  if (T_steep > 0.0) { n3 = mix(n3, T_crag, T_steep); nn = mix(nn, T_crag, T_steep * 0.8); }   // no vertical smear from plan-view noise
   vec4 bw = vBiome / max(vBiome.x + vBiome.y + vBiome.z + vBiome.w, 0.001);
   vec3 col = vec3(0.0);
   float rough = 0.0, rr;
@@ -405,6 +462,7 @@ void terrainShade(inout vec3 outCol){
   if (bw.w > 0.004) { col += bw.w * biomeCol(3, p, hs, slope, n1, nn, nm, rr); rough += bw.w * rr; }
   // micro variation
   col *= 0.90 + 0.2 * mix(0.5, n3, fadeMid);
+  col *= 0.9 + 0.1 * smoothstep(-18.0, 6.0, T_cav);
 
   // forest floor / far canopy tint
   float fo = vExtra.x;
@@ -570,6 +628,8 @@ vBiome = biome; vPaintA = paintA; vPaintB = paintB; vExtra = extra;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + TERRAIN_FRAG_HEAD)
       .replace('#include <color_fragment>', `vec3 tcol; terrainShade(tcol); diffuseColor.rgb = tcol;`)
+      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+if (T_bumpOn > 0.0) normal = normalize((viewMatrix * vec4(T_nW, 0.0)).xyz);`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = T_rough;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += pow(T_emis, vec3(2.2)) * 2.0;`);
   };
@@ -637,13 +697,28 @@ function fillHeights(ch) {
       nor[k * 3] = nx * inv; nor[k * 3 + 1] = c2 * inv; nor[k * 3 + 2] = nz * inv;
     }
   }
+  // cavity: height against the ring averages 32 m and 80 m out (+ ridge, - gully), 3 per metre around 128
+  const ex = ch.geo.attributes.extra.array;
+  const hc = (i, j) => h[Math.min(N, Math.max(0, j)) * VN + Math.min(N, Math.max(0, i))];
+  for (let j = 0; j < CV; j++) {
+    const gj = j0 + j;
+    for (let i = 0; i < CV; i++) {
+      const gi = i0 + i, y = h[gj * VN + gi];
+      const a2 = (hc(gi - 2, gj) + hc(gi + 2, gj) + hc(gi, gj - 2) + hc(gi, gj + 2) + hc(gi - 1, gj - 1) + hc(gi + 1, gj + 1) + hc(gi - 1, gj + 1) + hc(gi + 1, gj - 1)) * 0.125;
+      const a5 = (hc(gi - 5, gj) + hc(gi + 5, gj) + hc(gi, gj - 5) + hc(gi, gj + 5) + hc(gi - 4, gj - 4) + hc(gi + 4, gj + 4) + hc(gi - 4, gj + 4) + hc(gi + 4, gj - 4)) * 0.125;
+      const cav = (y - a2) * 0.65 + (y - a5) * 0.35;
+      ex[(j * CV + i) * 4 + 1] = Math.max(0, Math.min(255, Math.round(128 + cav * 3)));
+    }
+  }
   for (let e = 0; e < 4; e++) for (let k = 0; k < CV; k++) {
     const [i, j] = skirtSrc(e, k); const src = j * CV + i, dst = GRIDV + e * CV + k;
+    ex[dst * 4 + 1] = ex[src * 4 + 1];
     pos[dst * 3 + 1] = pos[src * 3 + 1] - SKIRT;
     nor[dst * 3] = nor[src * 3]; nor[dst * 3 + 1] = nor[src * 3 + 1]; nor[dst * 3 + 2] = nor[src * 3 + 2];
   }
   ch.geo.attributes.position.needsUpdate = true;
   ch.geo.attributes.normal.needsUpdate = true;
+  ch.geo.attributes.extra.needsUpdate = true;
   ch.minY = mn; ch.maxY = mx;
   ch.geo.boundingBox.min.set(0, mn - SKIRT, 0); ch.geo.boundingBox.max.set(CHS, mx, CHS);
   ch.geo.boundingBox.getBoundingSphere(ch.geo.boundingSphere);
@@ -712,9 +787,9 @@ T.recalcRange = function () {
 // Mark a vertex rect as changed. heights=true -> geometry + height texture.
 T.markH = function (i0, j0, i1, j1, fromUndo) {
   i0 = Math.max(0, i0 | 0); j0 = Math.max(0, j0 | 0); i1 = Math.min(N, Math.ceil(i1)); j1 = Math.min(N, Math.ceil(j1));
-  // normals reach one vertex further
-  const ci0 = Math.max(0, Math.floor((i0 - 1) / CHUNK)), ci1 = Math.min(NCH - 1, Math.floor((i1 + 1) / CHUNK));
-  const cj0 = Math.max(0, Math.floor((j0 - 1) / CHUNK)), cj1 = Math.min(NCH - 1, Math.floor((j1 + 1) / CHUNK));
+  // normals reach one vertex further, the cavity term (extra.y) five
+  const ci0 = Math.max(0, Math.floor((i0 - 5) / CHUNK)), ci1 = Math.min(NCH - 1, Math.floor((i1 + 5) / CHUNK));
+  const cj0 = Math.max(0, Math.floor((j0 - 5) / CHUNK)), cj1 = Math.min(NCH - 1, Math.floor((j1 + 5) / CHUNK));
   for (let cj = cj0; cj <= cj1; cj++) for (let ci = ci0; ci <= ci1; ci++) T.dirtyH.add(cj * NCH + ci);
   const r = T.hTexRect;
   if (!r) T.hTexRect = [i0, j0, i1, j1];
@@ -1068,7 +1143,7 @@ function buildRing() {
     const n = new THREE.Vector3(hOut(x - e, z) - hOut(x + e, z), 2 * e, hOut(x, z - e) - hOut(x, z + e)).normalize();
     pos.push(x, y, z); nor.push(n.x, n.y, n.z);
     bio.push(clim === 0 ? 255 : 0, clim === 1 ? 255 : 0, clim === 2 ? 255 : 0, clim === 3 ? 255 : 0);
-    ex.push(0, 0, 0, 255);
+    ex.push(0, 128, 0, 255);
     return (map[key] = pos.length / 3 - 1);
   };
   for (let j = 0; j < R - 1; j++) for (let i = 0; i < R - 1; i++) {

@@ -31,7 +31,8 @@ const AN = { none: 0, sail: 1, wheel: 2, wave: 3, flicker: 4, bob: 5, swing: 6 }
 
 // ---- palettes (sRGB hex; tiers P / M / R) -------------------------------------------------
 const PAL = {
-  daub: [[0xc9bc9c, 0xbfb08e, 0xd2c4a0, 0xb8aa8a], [0xe6dcc4, 0xece2cb, 0xdfcfa8, 0xd8c498], [0xf3eee2, 0xefe0bc, 0xe9cf9c, 0xdcb8a4, 0xcfd4c8]],
+  daub: [[0xc9bc9c, 0xbfb08e, 0xd2c4a0, 0xb8aa8a, 0xc4b08a], [0xe6dcc4, 0xece2cb, 0xdfcfa8, 0xd8c498, 0xe2c98f, 0xdcc0a6, 0xd6cdb0],
+    [0xf3eee2, 0xefe0bc, 0xe9cf9c, 0xdcb8a4, 0xcfd4c8, 0xe7bfa6, 0xe3cd86, 0xc8d0d2, 0xeadcc0, 0xd9aa8c]],
   hanseRender: [0xe9cf9c, 0xdcb8a4, 0xf3eee2, 0xc98a6a, 0xd8c498],
   rubble: [0x9a9284, 0x8c8578, 0xa39884, 0x7f7a70],
   rubbleHoney: [0xb5a27a, 0xa8946c, 0xbfa981],
@@ -44,7 +45,7 @@ const PAL = {
   log: [0x6a5238, 0x5c4630, 0x7a6044],
   thatch: [0xc8a45e, 0xbf9a56], thatchOld: [0xa08a5c, 0x8e7c58], reed: [0xb89c62, 0xae9058],
   turf: [0x5a6a38, 0x66703e],
-  tile: [[0xa5553b, 0x9a4b35, 0xb56a47], [0xa5553b, 0x9a4b35, 0xb56a47], [0x8c4a3a, 0xa86a50, 0xa5553b]],
+  tile: [[0xa5553b, 0x9a4b35, 0xb56a47, 0x8e5a40], [0xa5553b, 0x9a4b35, 0xb56a47, 0xbf7a4e, 0x8a4c38, 0x9c6446], [0x8c4a3a, 0xa86a50, 0xa5553b, 0x7c4636, 0xb4704c]],
   slate: [[0x565b63], [0x565b63], [0x4a4e57, 0x3f444d, 0x4c4a52]],
   shingle: [0x7c5c3e, 0x8a6a4a, 0x6c5a4a],
   lead: [0x7c8086, 0x8a8e92],
@@ -1096,20 +1097,26 @@ float d_vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f
   return mix(mix(d_hash12(i), d_hash12(i+vec2(1.0,0.0)), u.x), mix(d_hash12(i+vec2(0.0,1.0)), d_hash12(i+vec2(1.0,1.0)), u.x), u.y); }
 float d_fbm(vec2 p){ float s = 0.0, a = 0.5; for (int k = 0; k < 4; k++){ s += a * d_vnoise(p); p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5; } return s; }`;
 
+// Thin roof verges, fascias and wall-tops are near edge-on slivers from a distance; with MSAA the fragment
+// runs at the pixel centre outside such a triangle and extrapolated varyings blow up to Inf → NaN pixels
+// that bloom smears into white blobs. Centroid sampling keeps interpolation inside the triangle; the clamps
+// below are a belt-and-braces guard.
+function cen(src) { return D.renderer && D.renderer.capabilities && D.renderer.capabilities.isWebGL2 ? src.replace(/\bvarying\b/g, 'centroid varying') : src; }
+const SAFE_COL = 'diffuseColor.rgb = clamp(diffuseColor.rgb, 0.0, 1.5);';
 function makeMaterials() {
   const wall = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
   wall.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, CU);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + WALL_VDECL)
+      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(WALL_VDECL))
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n// kit-wall')
       .replace('#include <begin_vertex>', '#include <begin_vertex>' + WALL_SHAPE + WALL_VOUT)
       .replace('#include <project_vertex>', '#include <project_vertex>' + GROW)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + FRAG_HELP + wallFDecl() + FACADE)
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = facade(diffuseColor.rgb);')
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = K_ro;')
+      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + FRAG_HELP + cen(wallFDecl()) + FACADE)
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = facade(diffuseColor.rgb);' + SAFE_COL)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(K_ro, 0.3, 1.0); K_em = clamp(K_em, 0.0, 8.0);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em * uNightC * 1.6;');
     checkShader(sh, 'kit-wall', ['vKU =', 'wpA.y', '// kit-wall', '// kit-wpos'], ['facade(diffuseColor', 'roughnessFactor = K_ro', 'K_em * uNightC']);
   };
@@ -1119,15 +1126,15 @@ function makeMaterials() {
   roof.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, CU);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + ROOF_VDECL)
+      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(ROOF_VDECL))
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>' + ROOF_NORMAL)
       .replace('#include <begin_vertex>', '#include <begin_vertex>' + ROOF_BEGIN)
       .replace('#include <project_vertex>', '#include <project_vertex>' + GROW)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + FRAG_HELP + ROOF_FDECL)
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = roofCol(diffuseColor.rgb);')
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = K_ro;')
+      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + FRAG_HELP + cen(ROOF_FDECL))
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = roofCol(diffuseColor.rgb);' + SAFE_COL)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(K_ro, 0.3, 1.0); K_em = clamp(K_em, 0.0, 8.0);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em;');
     checkShader(sh, 'kit-roof', ['roofShape(transformed', 'wpA.y', 'objectNormal = normalize', '// kit-wpos'], ['roofCol(diffuseColor', 'roughnessFactor = K_ro']);
   };
@@ -1137,15 +1144,15 @@ function makeMaterials() {
   plainM.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, CU);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + PLAIN_VDECL)
+      .replace('#include <common>', '#include <common>' + GLSL_U + GLSL_IA + cen(PLAIN_VDECL))
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = kAnim(objectNormal, 1.0);')
       .replace('#include <begin_vertex>', '#include <begin_vertex>' + PLAIN_BEGIN)
       .replace('#include <project_vertex>', '#include <project_vertex>' + GROW)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>' + WPOS);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + PLAIN_FDECL)
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = plainCol(diffuseColor.rgb);')
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = K_ro;')
+      .replace('#include <common>', '#include <common>' + GLSL_U + NOISE() + cen(PLAIN_FDECL))
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = plainCol(diffuseColor.rgb);' + SAFE_COL)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(K_ro, 0.3, 1.0); K_em = clamp(K_em, 0.0, 8.0);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += K_em * (0.3 + uNightC * 3.0);');
     checkShader(sh, 'kit-plain', ['kAnim(objectNormal', 'vKF = transformed', 'wpA.y', '// kit-wpos'], ['plainCol(diffuseColor', 'roughnessFactor = K_ro']);
   };
@@ -1208,6 +1215,7 @@ const KINDS = {
   barn: KD('Barn', '🐄', 'farm', true, [14, 24], [8, 12], { wr: [0.1, 0.9] }),
   granary: KD('Granary', '🌽', 'farm', true, [4, 6], [3.5, 5], { wr: [0.2, 0.9] }),
   stable: KD('Stable', '🐎', 'farm', true, [10, 16], [5, 7], { wr: [0.2, 0.9] }),
+  shed: KD('Outbuilding', '🛖', 'farm', true, [3, 6], [2.5, 4.6], { wr: [0, 1] }),
   well: KD('Well', '🪣', 'civic', true, [3, 3.4], [3, 3.4]),
   marketcross: KD('Market cross', '✝', 'civic', true, [3.4, 4.2], [3.4, 4.2]),
   markethall: KD('Market hall', '🏬', 'civic', true, [10, 18], [7, 10], { wr: [0.45, 1] }),
@@ -1242,7 +1250,7 @@ const KINDS = {
   tent: KD('Tent', '⛺', 'misc', true, [4, 6], [4, 6]),
   beacontower: KD('Beacon tower', '🔥', 'misc', true, [6, 8], [6, 8])
 };
-const CATALOGUE = ['cottage', 'longhouse', 'timberhouse', 'stonehouse', 'townhouse', 'shop', 'tavern', 'smithy', 'farmhouse', 'barn', 'granary', 'stable',
+const CATALOGUE = ['cottage', 'longhouse', 'timberhouse', 'stonehouse', 'townhouse', 'shop', 'tavern', 'smithy', 'farmhouse', 'barn', 'granary', 'stable', 'shed',
   'well', 'marketcross', 'markethall', 'stall', 'chapel', 'church', 'cathedral', 'hall', 'windmill', 'watermill', 'keep', 'motte', 'tower', 'watchtower',
   'tent', 'shrine', 'beacontower'];
 const TRADES = ['baker', 'butcher', 'cooper', 'weaver', 'cobbler', 'potter', 'smith'];
@@ -1267,6 +1275,10 @@ function defaultMat(kind, wl, reg, r) {
   switch (kind) {
     case 'cottage': case 'longhouse': wall = kind === 'longhouse' && r() < 0.4 ? WS.log : pWall(); roof = pRoof(); break;
     case 'fishhut': wall = WS.plank; roof = pRoof(); break;
+    case 'shed':
+      wall = pickW(r(), reg === 1 || reg === 2 ? [[WS.rubble, 0.45], [WS.plank, 0.35], [WS.wattle, 0.2]] : [[WS.plank, 0.45], [WS.wattle, 0.35], [WS.rubble, 0.2]]);
+      roof = t === 0 || r() < 0.35 ? (reg === 2 && r() < 0.5 ? RS.turf : RS.thatch) : pickW(r(), reg === 2 ? [[RS.slate, 0.7], [RS.shingle, 0.3]] : reg === 1 ? [[RS.stone, 0.6], [RS.tile, 0.4]] : [[RS.tile, 0.55], [RS.shingle, 0.45]]);
+      break;
     case 'timberhouse': case 'shop': case 'tavern': wall = t === 2 && (reg === 3 || reg === 4) && r() < 0.35 ? WS.render : WS.timber; roof = tierRoof(); break;
     case 'stonehouse': wall = reg === 4 && t === 2 ? WS.ashlar : WS.rubble; roof = t === 0 ? pRoof() : pickW(r(), reg === 1 ? [[RS.stone, 0.8], [RS.tile, 0.2]] : [[RS.slate, 0.5], [RS.stone, 0.25], [RS.tile, 0.25]]); break;
     case 'townhouse': wall = reg === 4 ? (r() < 0.5 ? WS.render : WS.ashlar) : (r() < 0.65 ? WS.timber : WS.render); roof = reg === 2 ? RS.slate : RS.tile; break;
@@ -1787,6 +1799,37 @@ RC.stable = (P, rec, L) => {
   });
   P.dl = 2;
   P.vc('trough', (r() - 0.5) * W * 0.4, 0, -Dd / 2 - 0.3, 1.7, 0.55, 0.5, 0, null);
+};
+// back-yard outbuilding: 0 lean-to shed, 1 small gabled workshop / brewhouse, 2 open cart shed, 3 pigsty with pen.
+// Local −z faces the house (the yard); the back (+z) sits on the plot's rear line.
+RC.shed = (P, rec, L) => {
+  const r = L.r, W = rec.w, Dd = rec.d, v = (rec.var | 0) & 3;
+  P.dl = 0;
+  if (v === 0) {
+    leanTo(P, L, { cx: 0, cz: 0, along: W, depth: Dd, dir: 'f', hLow: 1.85 + r() * 0.2, hHigh: 2.6 + r() * 0.3, st: L.ws, col: L.wc, rs: L.rs, rc: L.rc, fl: F.DOOR_F | F.NOWIN });
+    P.dl = 1.4;
+    if (r() < 0.5) P.box(W / 2 - 0.5, 0, -Dd / 2 - 0.25, 0.8, 0.9, 0.5, L.tc, PS.boards);            // a crate or two by the door
+  } else if (v === 1) {
+    house(P, L, {
+      cx: 0, cz: 0, w: W, d: Dd, storeys: [{ h: 2.1 + r() * 0.3, st: L.ws, col: L.wc, fl: F.DOOR_F | (r() < 0.5 ? F.NOWIN : 0) }], alongZ: W < Dd, rs: L.rs, rc: L.rc,
+      pitch: clamp(L.pitch, 42, 55), hc: 0, ov: 0.3, ovE: 0.2, thatch: L.thatch, party: 0, lit: 0.08,
+      chim: r() < 0.3 ? [{ mode: 'ridge', t: r() < 0.5 ? -0.8 : 0.8 }] : []
+    });
+  } else if (v === 2) {
+    P.body(0, Dd / 2 - 0.15, W, 0.3, null, 2.9, L.ws, L.wc, { fl: F.NOWIN });                      // back wall
+    leanTo(P, L, { cx: 0, cz: 0, along: W, depth: Dd, dir: 'f', hLow: 2.2, hHigh: 3.0, posts: true, rs: L.rs, rc: L.rc });
+    P.dl = 1.2;
+    P.vc('trough', (r() - 0.5) * W * 0.4, 0, Dd / 2 - 0.9, 1.6, 0.5, 0.5, 0, null);
+  } else {
+    const hut = Math.min(2.2, Dd * 0.45), pen = Dd - hut, stone = L.stoneC;
+    leanTo(P, L, { cx: 0, cz: Dd / 2 - hut / 2, along: W, depth: hut, dir: 'f', hLow: 1.3, hHigh: 1.8, st: WS.rubble, col: stone, rs: L.rs, rc: L.rc, fl: F.NOWIN });
+    P.dl = 0.6;
+    const zc = -Dd / 2 + pen / 2, th = 0.35, hh = 0.95;
+    P.body(0, -Dd / 2 + th / 2, W, th, null, hh, WS.rubble, stone, { fl: F.NOWIN });
+    for (const sx of [-1, 1]) P.body(sx * (W / 2 - th / 2), zc, th, pen, null, hh, WS.rubble, stone, { fl: F.NOWIN });
+    P.dl = 1.2;
+    P.vc('trough', W * 0.2, 0, zc, 1.2, 0.4, 0.45, HALF_PI, null);
+  }
 };
 function wellParts(P, cx, cz, s, L) {
   const stone = L ? L.stoneC : lin(COL.stone);
@@ -2718,7 +2761,8 @@ function buildSmoke(scene) {
     fragmentShader: `uniform vec3 uCol; varying float vA; varying float vK;
       void main(){ vec2 c = gl_PointCoord - 0.5; float d = dot(c, c); if (d > 0.25) discard;
         vec3 col = (vK > 1.5 && vK < 2.5) ? uCol * 0.45 : uCol;
-        gl_FragColor = vec4(col, vA * 0.32 * (1.0 - d * 4.0)); }`
+        float g = exp(-d * 9.0);
+        gl_FragColor = vec4(col, vA * 0.26 * g); }`
   });
   smoke = new THREE.Points(new THREE.BufferGeometry(), mat);
   smoke.frustumCulled = false; smoke.renderOrder = 3;
@@ -2726,7 +2770,7 @@ function buildSmoke(scene) {
 }
 function rebuildSmoke(cam) {
   const winter = D.TU && D.TU.uSeason ? D.TU.uSeason.value.w : 0, day = D.Env ? D.Env.day : 1;
-  const frac = 0.35 + 0.35 * winter + 0.25 * (1 - day);
+  const frac = 0.22 + 0.4 * winter + 0.25 * (1 - day);
   const R2 = 1800 * 1800, list = [];
   for (const rec of emitRecs) {
     if (rec.die || !rec._smoke || !rec._smoke.length) continue;
@@ -2898,7 +2942,7 @@ const Kit = D.Kit = {
     }
     smokeU.uT.value = Kit.clock;
     const l = 0.3 + 0.6 * (E.day !== undefined ? E.day : 1);
-    smokeU.uCol.value.setRGB(l * 0.85, l * 0.85, l * 0.88);
+    smokeU.uCol.value.setRGB(l * 0.5, l * 0.51, l * 0.55);   // soft blue-grey, never a white ball
     const w = 0.5 + (E.wind !== undefined ? E.wind : 0.5);
     smokeU.uWindS.value.set(0.9 * w, 0.4 * w);
     smoke.visible = group.visible && smoke.geometry.attributes.position !== undefined;

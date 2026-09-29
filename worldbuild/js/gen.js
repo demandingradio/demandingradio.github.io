@@ -157,6 +157,11 @@ Gen.generate = async function (opts, progress) {
   if (opts.erosion && opts.style !== 'flat') {
     await Gen.erode(h, opts.style === 'mesas' ? 70000 : 150000, seed, (p) => progress('Eroding valleys', 0.22 + p * 0.45));
   }
+  if (opts.style !== 'flat') {
+    // thermal weathering: needle peaks slump into buttressed ridges and scree; mesas keep their cliffs
+    const mesa = opts.style === 'mesas';
+    await Gen.thermal(h, mesa ? 12 : 36, seed, mesa ? 1.7 : 0.95, mesa ? 3.2 : 1.5, (p) => progress('Weathering peaks', 0.62 + p * 0.06));
+  }
   progress('Laying down biomes', 0.68); await tick();
   Gen.fillBiomes(clim, seed);
   W.paint.fill(0);
@@ -268,6 +273,49 @@ Gen.erodeSync = function (h, drops, rnd, region, strength) {
     }
   }
   return [bx0 - 3, bz0 - 3, bx1 + 3, bz1 + 3];
+};
+
+// ---- Thermal weathering ------------------------------------------------------------------------------
+// Anything steeper than a (noisy) talus slope sheds material downhill to its 8 neighbours. The talus varies
+// between tanLo and tanHi with a mid-scale noise so some crags and cliff bands survive.
+function talusMap(seed, tanLo, tanHi) {
+  const nz = D.makeNoise((seed | 0) + 313);
+  const tal = new Float32Array(VN * VN);
+  for (let j = 0; j < VN; j++) for (let i = 0; i < VN; i++) {
+    const t = D.clamp(nz.fbm(i / N * 22, j / N * 22, 3) * 0.9 + 0.5, 0, 1);
+    tal[j * VN + i] = CELL * D.lerp(tanLo, tanHi, t * t);
+  }
+  return tal;
+}
+const TNB = [-1, 1, -VN, VN, -VN - 1, -VN + 1, VN - 1, VN + 1], TNF = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
+function thermalPass(h, tal, back, r) {
+  const ex = new Float32Array(8);
+  const i0 = Math.max(1, r[0]), j0 = Math.max(1, r[1]), i1 = Math.min(N - 1, r[2]), j1 = Math.min(N - 1, r[3]);
+  for (let jj = j0; jj <= j1; jj++) {
+    const j = back ? j1 + j0 - jj : jj;
+    for (let ii = i0; ii <= i1; ii++) {
+      const i = back ? i1 + i0 - ii : ii, k = j * VN + i, y = h[k], T = tal[k];
+      let tot = 0, dmax = 0;
+      for (let q = 0; q < 8; q++) { const e = y - h[k + TNB[q]] - T * TNF[q]; ex[q] = e; if (e > 0) { tot += e; if (e > dmax) dmax = e; } }
+      if (tot <= 0) continue;
+      const move = dmax * 0.42;
+      h[k] -= move;
+      for (let q = 0; q < 8; q++) if (ex[q] > 0) h[k + TNB[q]] += move * ex[q] / tot;
+    }
+  }
+}
+Gen.thermal = async function (h, iters, seed, tanLo, tanHi, progress) {
+  const tal = talusMap(seed, tanLo, tanHi), all = [1, 1, N - 1, N - 1];
+  for (let it = 0; it < iters; it++) {
+    thermalPass(h, tal, it & 1, all);
+    if (progress) progress((it + 1) / iters);
+    if ((it & 3) === 3) await tick();
+  }
+};
+// synchronous, optionally limited to a vertex rect [i0, j0, i1, j1] (the Edit menu's "Weather peaks")
+Gen.thermalSync = function (h, iters, seed, tanLo, tanHi, rect) {
+  const tal = talusMap(seed, tanLo, tanHi), r = rect || [1, 1, N - 1, N - 1];
+  for (let it = 0; it < iters; it++) thermalPass(h, tal, it & 1, r);
 };
 
 Gen.erode = async function (h, drops, seed, progress) {

@@ -478,6 +478,7 @@ const bVersion = new Int32Array(256);
 const LRU = new Map();                   // jobId -> Plan (≤ 32)
 const instantJobs = new Set();           // jobIds whose reveal must be instant (undo/redo/load)
 function lruSet(id, P) { LRU.delete(id); LRU.set(id, P); while (LRU.size > 32) LRU.delete(LRU.keys().next().value); }
+const PLAN_VER = 4;                      // 4: terraced cores, tighter + deeper plots, denser lanes, closes (village/town planner)
 const TW_DEFAULT = { dens: 0.5, wealth: 0.45, walls: 'none', layout: 0.2, squares: 0.4, greens: 0.5, gardens: 0.6 };
 function twFrom(o) {
   const t = {};
@@ -1039,7 +1040,7 @@ class Ctx {
   finish() {
     const c = this.centroid || { x: 0, z: 0 };
     return {
-      v: 1, uid: this.uid, type: this.type, style: this.style || { region: 0, gableBias: 0.5, churchStyle: 0, roofPitch: 50, wanderMul: 1, frontMul: 1 },
+      v: 1, pv: PLAN_VER, uid: this.uid, type: this.type, style: this.style || { region: 0, gableBias: 0.5, churchStyle: 0, roofPitch: 50, wanderMul: 1, frontMul: 1 },
       origin: this.origin || { x: c.x, z: c.z, kind: 'none' },
       lanes: this.lanes, plots: this.plots, specials: this.specials, areas: this.areas,
       wallO: this.wallO, n: this.o
@@ -1346,7 +1347,7 @@ function* planVillage(ctx) {
   if (ctx.empty) return;
   const tw = ctx.tw, dens = tw.dens, densP = 0.6 + 0.8 * dens, layout = tw.layout, style = ctx.style;
   const planned = layout > 0.6, prev = ctx.prev, infill = ctx.kind === 'infill', expand = ctx.kind === 'expand';
-  const plotCap = Math.max(6, Math.min(3000, Math.round(ctx.areaHa * (5 + 20 * dens))));
+  const plotCap = Math.max(6, Math.min(3000, Math.round(ctx.areaHa * (8 + 28 * dens))));
   const maxG = [0.10, 0.14, 0.20, 0.22];
   const WANDER = (38 * Math.pow(1 - layout, 1.5) + 2) * DEG * style.wanderMul;
   const turnW = lerp(0.6, 3.0, layout);
@@ -1483,7 +1484,7 @@ function* planVillage(ctx) {
     const w = rank === 0 ? 6 + 2 * dens + (townSized ? 2 : 0) : rank === 1 ? 4 + r() : 2.5 + r() * 0.5;
     const a = {
       lin, lane: ctx.newLaneKey(), si: 0, rank, w, x, z, sx: x, sz: z, th, th0: th, e: energy, e0: energy, s: 0, nd: nd || 0,
-      buf: [x, z], pending: [], sinceBr: 0, brSpace: planned ? 55 + 30 * (1 - dens) : 18 + r() * 30, brSide: r() < 0.5 ? 1 : -1,
+      buf: [x, z], pending: [], sinceBr: 0, brSpace: planned ? 48 + 26 * (1 - dens) : 16 + r() * 26, brSide: r() < 0.5 ? 1 : -1,
       goal: goal || null, goalW: goal ? 2.0 : 0.6, goalContinue: false, wantsLoop: r() > 0.25, r, bridges: 0, alive: true
     };
     const p0 = { x, z, lin, tx: Math.cos(th), tz: Math.sin(th), nd: a.nd, rank, w, lane: a.lane };
@@ -1552,7 +1553,7 @@ function* planVillage(ctx) {
   }
   function maybeBranch(a) {
     if (a.rank >= 2 || agentsMade >= MAX_AGENTS || a.sinceBr < a.brSpace || houses >= plotCap) return;
-    const p = planned ? 1 : [0.16, 0.12][a.rank] * densP;
+    const p = planned ? 1 : [0.21, 0.18][a.rank] * densP;
     if (a.r() >= p) return;
     let side;
     if (planned) side = a.brSide = -a.brSide;
@@ -1565,7 +1566,7 @@ function* planVillage(ctx) {
     const dirs = [a.th, a.th + PI, th];
     if (planned && a.r() < 0.25 + 0.5 * dens && agentsMade < MAX_AGENTS) { const th2 = snapGrid(a.th - side * ang); newAgent(a.x, a.z, th2, rank, en, a.lin, null, a.nd); dirs.push(th2); }
     addJunction(a.x, a.z, a.rank, rank, dirs, a.nd);
-    a.sinceBr = 0; a.brSpace = planned ? 55 + 30 * (1 - dens) : 20 + a.r() * 40;
+    a.sinceBr = 0; a.brSpace = planned ? 48 + 26 * (1 - dens) : 16 + a.r() * 32;
   }
   function stepAgent(a) {
     if (a.e <= 0) return die(a, true);
@@ -1636,11 +1637,14 @@ function* planVillage(ctx) {
     lanePts.query(x, z, 10, (p, d2) => { if (p.lane !== b.lane) return; if (d2 < bd) { bd = d2; best = p; } });
     return best;
   }
-  function chainBud(b, dist) {
+  function frontFor(town, mid, r) {
+    return (town ? lerp(8.2, 5.2, dens) + r() * 2.6 : mid ? lerp(11.5, 7.5, dens) + r() * 3 : lerp(14.5, 9.5, dens) + r() * 3.5) * style.frontMul;
+  }
+  function chainBud(b, dist, nfw) {
     const tx = b.x + b.tx * dist, tz = b.z + b.tz * dist;
     const q = lanePointNear(b, tx, tz); if (!q) return;
     let dot = (tx - q.x) * q.tx + (tz - q.z) * q.tz;
-    const nb = Object.assign({}, b, { id: budId++, x: q.x + q.tx * dot, z: q.z + q.tz * dot, tx: q.tx, tz: q.tz, nd: b.nd + dist, skip: 0 });
+    const nb = Object.assign({}, b, { id: budId++, x: q.x + q.tx * dot, z: q.z + q.tz * dot, tx: q.tx, tz: q.tz, nd: b.nd + dist, skip: 0, fw: nfw || 0 });
     if (q.tx * b.tx + q.tz * b.tz < 0) { nb.tx = -q.tx; nb.tz = -q.tz; }
     nb.lw = marketLW(nb.x, nb.z, b.w);
     nb.key = b.key + 0.01;
@@ -1653,31 +1657,35 @@ function* planVillage(ctx) {
     ctx.special({ kind, x: cx, z: cz, rot, w, d, extra });
     return true;
   }
+  const bst = { tries: 0, ok: 0, small: 0, out: 0, house: 0, yout: 0, yard: 0, slope: 0, gaveUp: 0 };
   function tryBud(b) {
     if (houses >= plotCap) return;
+    bst.tries++;
     for (let i = 0; i < wants.length; i++) {
       const wn = wants[i];
       if (wn.test(b) && placeFront(b, wn.w, wn.d, 1.2, wn.kind, { ms: wn.ms })) { wants.splice(i, 1); return; }
     }
     const r = ctx.rng('bud', b.id, ctx.epoch);
-    const town = dens > 0.55 && b.nd < 0.45 * R90 && houses > 30;
+    const coreR = R90 * (0.18 + 0.55 * dens), midR = R90 * (0.42 + 0.5 * dens);
+    const town = dens > 0.25 && houses >= 4 && b.rank <= 1 && (b.nd < coreR || (b.nd < midR && nearSquare(b.x, b.z, 26)));
+    const mid = !town && b.nd < midR;
     const nx = -b.tz * b.side, nz = b.tx * b.side, rot = Math.atan2(nx, nz);
-    const fw = (town ? lerp(8, 5, dens) + r() * 2 : lerp(16, 10, dens) + r() * 4) * style.frontMul;
-    const depth0 = (town ? 22 + r() * 18 : 18 + r() * 16) * (0.6 + 0.8 * tw.gardens);
-    const setback = town ? r() * 0.6 : 1.5 + r() * 3.5;
-    const hwid = fw * (town ? 0.96 + r() * 0.04 : 0.62 + r() * 0.18), hdep = 6 + r() * 3.5;
+    const fw = b.fw || frontFor(town, mid, r);
+    const depth0 = (town ? 22 + r() * 18 : 20 + r() * 18) * (0.6 + 0.8 * tw.gardens);
+    const setback = town ? r() * 0.4 : mid ? 0.4 + r() * 1.6 : 1 + r() * 2.8;
+    const hwid = fw * (town ? 0.985 : mid ? 0.78 + r() * 0.16 : 0.6 + r() * 0.22), hdep = town ? 7.5 + r() * 3.5 : 6 + r() * 3.5;
     for (let att = 0; att < 4; att++) {
       const dep = (att & 1) ? depth0 * 0.7 : depth0, turned = att >= 2;
       let w = hwid, d = hdep;
       if (turned) { w = Math.min(hdep, fw * 0.95); d = Math.min(Math.max(hwid, 7.5), dep - setback - 2.5); }
-      const yardD = dep - setback - d; if (yardD < 2.5 || w < 3.5) continue;
+      const yardD = dep - setback - d; if (yardD < 2.5 || w < 3.5) { bst.small++; continue; }
       const off = b.lw + setback + d / 2, cx = b.x + nx * off, cz = b.z + nz * off;
-      if (!ctx.inside(cx, cz) || ctx.isWet(cx, cz)) continue;
-      if (!ctx.testRect(cx, cz, rot, w, d, -0.25, ALLOW.FV)) continue;
+      if (!ctx.inside(cx, cz) || ctx.isWet(cx, cz)) { bst.out++; continue; }
+      if (!ctx.testRect(cx, cz, rot, w, d, -0.25, ALLOW.FV)) { bst.house++; continue; }
       const yo = d / 2 + yardD / 2, yx = cx + nx * yo, yz = cz + nz * yo;
-      if (!ctx.inside(yx, yz) || ctx.isWet(yx, yz)) continue;
-      if (!ctx.testRect(yx, yz, rot, fw, yardD, -0.35, ALLOW.FV)) continue;
-      if (ctx.spread(cx, cz, rot, w, d) > Math.max(3, 0.35 * Math.min(w, d))) continue;
+      if (!ctx.inside(yx, yz) || ctx.isWet(yx, yz)) { bst.yout++; continue; }
+      if (!ctx.testRect(yx, yz, rot, fw, yardD, -0.35, ALLOW.FV)) { bst.yard++; continue; }
+      if (ctx.spread(cx, cz, rot, w, d) > Math.max(3, 0.35 * Math.min(w, d))) { bst.slope++; continue; }
       const cl = ctx.occAt(cx - b.tx * (w / 2 + 2.5), cz - b.tz * (w / 2 + 2.5)), cr = ctx.occAt(cx + b.tx * (w / 2 + 2.5), cz + b.tz * (w / 2 + 2.5));
       const corner = town && (cl === OCC.LANE || cr === OCC.LANE) ? 1 : 0;
       const nsq = nearSquare(cx, cz, 18);
@@ -1685,13 +1693,17 @@ function* planVillage(ctx) {
       const mkt = market && Math.hypot(cx - market.x, cz - market.z) < market.L * 0.6 + 25 ? 1 : 0;
       ctx.plot({ x: cx, z: cz, rot, w, d, yardD, frontW: fw, rank: b.rank, netD: b.nd, wq, role: 'house', corner, town: town ? 1 : 0, mkt });
       houses++;
-      chainBud(b, fw * 0.5 + (town ? lerp(8, 5, dens) + 1 : lerp(16, 10, dens) + 2) * style.frontMul * 0.5 + 0.6);
+      // the next plot's frontage is chosen now so a terrace can abut exactly (party walls)
+      const nfw = frontFor(town, mid, ctx.rng('nfw', b.id, ctx.epoch));
+      chainBud(b, fw * 0.5 + nfw * 0.5 + (town ? 0.12 : mid ? 0.5 + r() * 1.2 : 0.6), nfw);
       milestones();
+      bst.ok++;
       return;
     }
+    bst.gaveUp++;
     if (!b.skip) {
       const q = lanePointNear(b, b.x + b.tx * 4, b.z + b.tz * 4);
-      if (q) { const nb = Object.assign({}, b, { id: budId++, x: b.x + b.tx * 4, z: b.z + b.tz * 4, nd: b.nd + 4, skip: 1 }); nb.key = b.key + 2; buds.push(nb); heap.push(nb.key, nb.id); }
+      if (q) { const nb = Object.assign({}, b, { id: budId++, x: b.x + b.tx * 4, z: b.z + b.tz * 4, nd: b.nd + 4, skip: 1, fw: 0 }); nb.key = b.key + 2; buds.push(nb); heap.push(nb.key, nb.id); }
     }
   }
   // ---- milestone specials ----------------------------------------------------------------------------
@@ -1847,7 +1859,7 @@ function* planVillage(ctx) {
     if (agentsMade >= MAX_AGENTS || reaches >= 150) return false;
     for (let i = reachLog.length - 1; i >= 0; i--) { const a = reachLog[i]; if (a.alive) continue; if (a.s < 18) { badT.push([a.goal0[0], a.goal0[1]]); badS.push([a.sx, a.sz]); } reachLog.splice(i, 1); }
     const cl = coarseLaneDist(24), r = ctx.rng('reach', reaches, ctx.epoch);
-    const gap = 55 + 25 * tw.gardens;
+    const gap = 40 + 22 * tw.gardens;
     const cands = [];
     for (let i = 0; i < ctx.cells.length; i++) {
       const [x, z] = ctx.cellCenter(ctx.cells[i]);
@@ -1886,6 +1898,70 @@ function* planVillage(ctx) {
     reaches += 2; stats.reachFail++; stats.cands = cands.length;
     return false;
   }
+  // ---- closes: leftover land inside the settlement becomes orchards, paddocks, meadows and allotments ------
+  let closes = 0;
+  function fillCloses() {
+    const G = 6, ox = ctx.x0, oz = ctx.z0, gw = Math.ceil((ctx.x1 - ox) / G), gh = Math.ceil((ctx.z1 - oz) / G);
+    if (gw <= 2 || gh <= 2 || gw * gh > 360 * 360) return;
+    const n = gw * gh, m = new Uint8Array(n);
+    const OFF = [[0, 0], [3.5, 0], [-3.5, 0], [0, 3.5], [0, -3.5]];
+    for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+      const x = ox + (i + 0.5) * G, z = oz + (j + 0.5) * G;
+      if (!ctx.inside(x, z) || ctx.isWet(x, z) || ctx.slopeAt(x, z) > 0.22) continue;
+      let ok = true;
+      for (const o of OFF) if (ctx.occAt(x + o[0], z + o[1]) !== OCC.FREE) { ok = false; break; }
+      if (ok) m[j * gw + i] = 1;
+    }
+    // erode one cell (a verge stays along lanes and yards); blobs under ~500 m² stay grass
+    const e = new Uint8Array(n);
+    for (let j = 1; j < gh - 1; j++) for (let i = 1; i < gw - 1; i++) { const k = j * gw + i; e[k] = m[k] && m[k - 1] && m[k + 1] && m[k - gw] && m[k + gw] ? 1 : 0; }
+    const lab = new Int32Array(n), st = [];
+    const r = ctx.rng('closes', ctx.epoch), stoneLand = style.region === 1 || style.region === 2;
+    let nlab = 0;
+    for (let k0 = 0; k0 < n; k0++) {
+      if (!e[k0] || lab[k0]) continue;
+      nlab++; st.length = 0; st.push(k0); lab[k0] = nlab; const cells = [];
+      while (st.length) {
+        const k = st.pop(); cells.push(k); const i = k % gw;
+        if (i > 0 && e[k - 1] && !lab[k - 1]) { lab[k - 1] = nlab; st.push(k - 1); }
+        if (i < gw - 1 && e[k + 1] && !lab[k + 1]) { lab[k + 1] = nlab; st.push(k + 1); }
+        if (k >= gw && e[k - gw] && !lab[k - gw]) { lab[k - gw] = nlab; st.push(k - gw); }
+        if (k + gw < n && e[k + gw] && !lab[k + gw]) { lab[k + gw] = nlab; st.push(k + gw); }
+      }
+      if (cells.length < 14) continue;
+      // parcels of ~1400 m²: nearest of k random seed cells
+      const k = Math.max(1, Math.round(cells.length * G * G / 1400)), seeds = [];
+      for (let q = 0; q < k; q++) { const c = cells[Math.floor(r() * cells.length)]; seeds.push([c % gw, (c / gw) | 0]); }
+      const part = new Int32Array(cells.length);
+      cells.forEach((c, q) => { const ci = c % gw, cj = (c / gw) | 0; let bi = 0, bd = 1e9; seeds.forEach((sd, t) => { const d = (sd[0] - ci) * (sd[0] - ci) + (sd[1] - cj) * (sd[1] - cj); if (d < bd) { bd = d; bi = t; } }); part[q] = bi; });
+      for (let t = 0; t < k; t++) {
+        const pc = cells.filter((c, q) => part[q] === t); if (pc.length < 10) continue;
+        makeClose(pc, m, gw, gh, n, ox, oz, G, r, stoneLand);
+        if (closes >= 80) return;
+      }
+    }
+  }
+  function makeClose(cells, m, gw, gh, n, ox, oz, G, r, stoneLand) {
+    {
+      const bm = new Uint8Array(n);
+      for (const k of cells) bm[k] = 1;
+      const loops = traceMaskLoops(bm, gw, gh, ox, oz, G); if (!loops.length) return;
+      const poly = chaikin(dpSimplify(loops[0], 3, true), 1, true);
+      if (poly.length < 8) return;
+      let cx = 0, cz = 0; for (const k of cells) { cx += ox + (k % gw + 0.5) * G; cz += oz + (((k / gw) | 0) + 0.5) * G; } cx /= cells.length; cz /= cells.length;
+      const near = Math.hypot(cx - origin.x, cz - origin.z) < R90 * 0.6, x = r();
+      const cls = near ? (x < 0.3 ? 2 : x < 0.78 ? 13 : x < 0.93 ? 11 : 12) : (x < 0.45 ? 13 : x < 0.72 ? 11 : x < 0.8 ? 12 : 2);
+      const type = cls === 2 ? 2 : stoneLand && r() < 0.6 ? 1 : r() < 0.7 ? 0 : 2;
+      const edges = [], rp = resample(poly, 3, true), nn = rp.length >> 1;
+      for (let q = 0; q < nn; q++) {
+        const q2 = (q + 1) % nn, dx = rp[q2 * 2] - rp[q * 2], dz = rp[q2 * 2 + 1] - rp[q * 2 + 1];
+        if (dx * dx + dz * dz < 0.25) continue;
+        edges.push((rp[q * 2] + rp[q2 * 2]) / 2, (rp[q * 2 + 1] + rp[q2 * 2 + 1]) / 2, Math.atan2(-dz, dx), type);
+      }
+      ctx.area({ cls, poly, ang: r() * PI, extra: { edges: Float32Array.from(edges) }, noStamp: true });
+      closes++;
+    }
+  }
   function trySpawnHamlet() {
     if (ctx.areaHa < 20 || hamlets >= 4 || agentsMade >= MAX_AGENTS - 3) return false;
     const cl = coarseLaneDist(32);
@@ -1895,7 +1971,7 @@ function* planVillage(ctx) {
       const [x, z] = ctx.cellCenter(ctx.cells[i]);
       const ci = Math.floor((x - ctx.x0) / 32), cj = Math.floor((z - ctx.z0) / 32);
       if (ci < 0 || cj < 0 || ci >= cl.w || cj >= cl.h) continue;
-      const ld = cl.d[cj * cl.w + ci]; if (ld < 260) continue;
+      const ld = cl.d[cj * cl.w + ci]; if (ld < 330) continue;
       if (ctx.sdf(x, z) < 30 || !ctx.inside(x, z) || ctx.isWet(x, z) || ctx.occAt(x, z) !== 0) continue;
       const sc = -ctx.slopeAt(x, z) * 12 + Math.min(ld, 1200) / 800 + ctx.sdf(x, z) / 200 + r() * 0.3;
       if (sc > bs) { bs = sc; best = [x, z]; }
@@ -2065,9 +2141,10 @@ function* planVillage(ctx) {
     yield* ctx.yieldIfOverBudget();
   }
   for (const a of agents) if (a.alive) die(a, true);
-  stats.agents = agentsMade; stats.steps = totalSteps;
+  stats.agents = agentsMade; stats.steps = totalSteps; stats.buds = bst; stats.budsMade = budId;
   milestones(true);
   for (const wn of wants.slice()) searchFront(wn.test, wn.kind, wn.w, wn.d, { ms: wn.ms });
+  if (!infill) { fillCloses(); stats.closes = closes; }
   // walls: order threshold at 65% of the houses
   const hos = ctx.plots.filter(p => p.role === 'house').map(p => p.o).sort((a, b) => a - b);
   ctx.setWallO(hos.length >= 12 ? hos[Math.floor(hos.length * 0.65)] : -1);
@@ -2648,9 +2725,10 @@ function decorate(S) {
     const mk = (w0, suffix, o, endO) => {
       const kind = plotKind(p, w0, r, region);
       let floors = 1, jetty = 0, trade;
-      if (kind === 'timberhouse') { floors = w0 < 0.5 ? (r() < 0.3 ? 2 : 1) : 2; jetty = floors > 1 && p.town ? 1 : 0; }
-      else if (kind === 'townhouse') { floors = 3 + (r() < tw.dens ? 1 : 0); jetty = 1; }
-      else if (kind === 'stonehouse') floors = w0 > 0.7 ? 2 : r() < 0.4 ? 2 : 1;
+      if (kind === 'timberhouse') { floors = p.town ? (r() < 0.3 + 0.3 * tw.dens ? 3 : 2) : w0 < 0.5 ? (r() < 0.35 ? 2 : r() < 0.4 ? 1.5 : 1) : r() < 0.2 ? 1.5 : 2; jetty = floors > 1.5 && (p.town || r() < 0.3) ? 1 : 0; }
+      else if (kind === 'townhouse') { floors = 3 + (r() < tw.dens ? 1 : 0) - (r() < 0.25 ? 1 : 0); jetty = 1; }
+      else if (kind === 'stonehouse') floors = p.town ? 2 + (r() < 0.35 ? 1 : 0) : w0 > 0.7 ? 2 : r() < 0.4 ? 2 : r() < 0.3 ? 1.5 : 1;
+      else if (kind === 'cottage') floors = r() < 0.3 ? 1.5 : 1;
       else if (kind === 'shop') { floors = 2; jetty = 1; trade = TRADES[Math.floor(r() * TRADES.length)]; }
       else if (kind === 'farmhouse') floors = w0 > 0.5 ? 2 : 1;
       else if (kind === 'storehouse') floors = 3;
@@ -2664,16 +2742,27 @@ function decorate(S) {
       mk(Math.max(0, wl - 0.35), ':v1', p.o, o2); mk(wl, ':v2', o2);
     } else mk(wl, '', p.o);
     // yard + garden ground, props
-    const s = Math.sin(p.rot), c = Math.cos(p.rot);
+    const s = Math.sin(p.rot), c = Math.cos(p.rot), s0 = s, c0 = c;
     const pr = new Props(p.key);
     const pbox = { x: p.x, z: p.z, rot: p.rot, w: p.w, d: p.d };
+    let obD = 0;
+    if (p.role === 'house' && p.yardD > 5.5 && p.frontW >= 4.5 && r() < (p.town ? 0.55 : 0.7) * (0.65 + 0.5 * tw.dens)) {
+      const v = p.town ? (r() < 0.6 ? 0 : 1) : (() => { const x = r(); return x < 0.34 ? 0 : x < 0.62 ? 1 : x < 0.8 ? 2 : 3; })();
+      const ow = clamp(p.frontW * (0.42 + r() * 0.3), 3, v === 2 ? 6.5 : 5.5);
+      const od = v === 3 ? clamp(p.yardD * 0.45, 3.6, 5) : clamp(2.6 + r() * 1.8, 2.5, Math.min(4.6, p.yardD - 2.6));
+      const lx = (r() - 0.5) * Math.max(0, p.frontW - ow - 1.2), lz = p.d / 2 + p.yardD - od / 2 - 0.45;
+      const ox = p.x + lx * c0 + lz * s0, oz = p.z - lx * s0 + lz * c0;
+      const rec = kdesign('shed', ox, oz, p.rot, { w: ow, d: od, wealth: clamp(wl * 0.85, 0, 1), age: r(), region, seed: hash32(S.seed, p.key, 'ob'), var: v });
+      bldItem(p.key + ':ob', p.key, p.o + 0.45, p.cell, rec);
+      obD = od + 0.6;
+    }
     if (p.yardD > 2) {
       const yd = Math.min(6, p.yardD * 0.35), yo = p.d / 2 + yd / 2;
       add({ t: 'area', key: p.key + ':y', pk: p.key, o: p.o + 0.3, cell: p.cell, cls: 1, poly: rectPoly(p.x + s * yo, p.z + c * yo, p.rot, p.frontW * 0.9, yd), ang: p.rot, rf: 0, vr: hash32(p.key) & 3, bb: null });
       items[items.length - 1].bb = bboxOf(items[items.length - 1].poly, 1);
       let garden = null;
-      if (tw.gardens > 0.3 && r() < 0.4 && p.yardD - yd > 4) {
-        const gd = Math.min(p.yardD - yd - 1.5, 14), go = p.d / 2 + yd + 0.8 + gd / 2;
+      if (tw.gardens > 0.3 && r() < 0.45 && p.yardD - yd - obD > 4) {
+        const gd = Math.min(p.yardD - yd - 1.5 - obD, 14), go = p.d / 2 + yd + 0.8 + gd / 2;
         garden = { x: p.x + s * go, z: p.z + c * go, rot: p.rot, w: p.frontW * 0.7, d: gd };
         const gp = rectPoly(garden.x, garden.z, garden.rot, garden.w, garden.d);
         add({ t: 'area', key: p.key + ':g', pk: p.key, o: p.o + 0.35, cell: p.cell, cls: 2, poly: gp, ang: p.rot + PI / 2, rf: 0, vr: hash32(p.key, 'g') & 3, bb: bboxOf(gp, 1) });
@@ -2682,11 +2771,22 @@ function decorate(S) {
       }
       const toW = (lx, lz) => [p.x + lx * c + lz * s, p.z - lx * s + lz * c];
       const y0 = p.d / 2, y1 = p.d / 2 + p.yardD;
-      if (!p.town && p.role === 'house' && r() < 0.5) { // wattle hurdles along the side lines
-        for (const sd of [-1, 1]) for (let lz = y0 + 1.5; lz < y1 - 0.5; lz += 3) { const [x, z] = toW(sd * (p.frontW / 2 - 0.3), lz); pr.put('wattle', x, z, lineRot(s, c), 1); }
+      if (p.role === 'house' && p.yardD > 5 && r() < 0.72) { // plot lines: right side + back (the neighbour fences the other side)
+        const stoneL = region === 1 || region === 2;
+        const kf = p.town ? (stoneL && r() < 0.6 ? 'drystone' : 'wattle') : (r() < 0.45 ? 'hedge' : stoneL && r() < 0.5 ? 'drystone' : 'wattle');
+        const hwF = p.frontW / 2 - 0.3, stF = kf === 'hedge' ? 2.4 : 3, scF = kf === 'hedge' ? 1.2 : 1;
+        for (let lz = y0 + 1.5; lz < y1 - 0.5; lz += stF) { const [x, z] = toW(hwF, lz); pr.put(kf, x, z, lineRot(s, c), scF); }
+        if (r() < 0.8) for (let lx = -hwF + 1; lx < hwF; lx += stF) { const [x, z] = toW(lx, y1 - 0.4); pr.put(kf, x, z, lineRot(c, -s), scF); }
+      }
+      // the croft: the rear of a deep plot as paddock, hay meadow or orchard grass
+      const usedY = yd + (garden ? garden.d + 0.8 : 0), rest = p.yardD - usedY - obD - 1;
+      if (p.role === 'house' && rest > 6 && r() < 0.6) {
+        const co = p.d / 2 + usedY + 0.5 + rest / 2, x0 = r(), ccls = x0 < 0.45 ? 11 : x0 < 0.75 ? 12 : 13;
+        const cp = rectPoly(p.x + s * co, p.z + c * co, p.rot, p.frontW * 0.92, rest);
+        add({ t: 'area', key: p.key + ':c', pk: p.key, o: p.o + 0.4, cell: p.cell, cls: ccls, poly: cp, ang: p.rot, rf: 0, vr: hash32(p.key, 'c') & 3, bb: bboxOf(cp, 1) });
       }
       const nt = r() < tw.gardens ? 1 + (r() < 0.4 ? 1 : 0) : 0;
-      for (let i = 0; i < nt; i++) { const [x, z] = toW((r() - 0.5) * (p.frontW - 3), y0 + p.yardD * (0.55 + 0.4 * r())); pr.put(r() < 0.6 ? 'apple' : 'pear', x, z, r() * TAU, 0.8 + r() * 0.3); }
+      for (let i = 0; i < nt; i++) { const yl = Math.max(2, p.yardD - obD); const [x, z] = toW((r() - 0.5) * (p.frontW - 3), y0 + yl * (0.5 + 0.42 * r())); pr.put(r() < 0.6 ? 'apple' : 'pear', x, z, r() * TAU, 0.8 + r() * 0.3); }
       if (r() < 0.6) { const [x, z] = toW((r() < 0.5 ? -1 : 1) * (p.w / 2 - 1), y0 + 1.4); pr.put('woodpile', x, z, lineRot(c, -s), 1); }
       if (p.town && r() < 0.3) { const [x, z] = toW((r() - 0.5) * p.frontW * 0.6, y0 + 2); pr.put(r() < 0.5 ? 'barrels' : 'crates', x, z, r() * TAU, 1); }
     }
@@ -2808,11 +2908,18 @@ function plotKind(p, wl, r, region) {
   if (p.role === 'harbour') return wl > 0.5 && r() < 0.45 ? 'storehouse' : 'fishhut';
   if (p.role === 'cloister') return 'range';
   if (p.role === 'bailey') return wl > 0.5 ? 'stonehouse' : 'timberhouse';
-  if (p.mkt && p.town && r() < 0.3) return 'shop';
-  if (wl < 0.25) return r() < 0.15 ? 'longhouse' : 'cottage';
-  if (wl < 0.5) return 'timberhouse';
-  if (wl < 0.75) return region === 1 || region === 2 ? 'stonehouse' : 'timberhouse';
-  return p.town ? 'townhouse' : 'stonehouse';
+  const x = r(), stoneLand = region === 1 || region === 2;
+  if (p.town) {
+    if (p.mkt && x < 0.35) return 'shop';
+    if (p.rank === 0 && x < 0.14) return 'shop';
+    if (wl < 0.3) return x < 0.72 ? 'timberhouse' : 'cottage';
+    if (wl < 0.62) return x < 0.52 ? 'timberhouse' : x < 0.8 ? 'townhouse' : stoneLand ? 'stonehouse' : 'shop';
+    return x < 0.55 ? 'townhouse' : x < 0.82 ? 'stonehouse' : 'timberhouse';
+  }
+  if (wl < 0.22) return x < 0.18 ? 'longhouse' : 'cottage';
+  if (wl < 0.45) return x < 0.34 ? 'cottage' : x < (stoneLand ? 0.62 : 0.86) ? 'timberhouse' : 'stonehouse';
+  if (wl < 0.7) return x < 0.5 ? (stoneLand ? 'stonehouse' : 'timberhouse') : x < 0.82 ? 'timberhouse' : x < 0.92 ? 'stonehouse' : 'cottage';
+  return x < 0.55 ? 'stonehouse' : 'timberhouse';
 }
 
 // ---- the village wall: raster the core, dilate/erode, trace, crest-snap, gates, pomerium ---------------
@@ -3244,9 +3351,11 @@ function provisional(dt) {
 const GT = 64, PW = 130;                      // 64×64 tiles of 256 m; 130-texel pages
 const AT = { rows: 8, data: null, tex: null, idxData: new Uint8Array(GT * GT * 4), idxTex: null, idxDirty: false,
   pageOfTile: new Int16Array(GT * GT).fill(-1), tileOfPage: new Int16Array(16 * 64).fill(-1), has: new Uint8Array(16 * 64),
-  up: new Set(), rebuild: new Set(), tileSids: new Array(GT * GT).fill(null), full: false, anyPage: false };
+  up: new Set(), rebuild: new Set(), tileSids: new Array(GT * GT).fill(null), full: false, anyPage: false,
+  pend: new Set() };   // pages whose index entry waits for their first upload (else the GPU reads zeros = one big dirt lane)
 function atlasCreate() {
   AT.data = new Uint8Array(16 * PW * PW * AT.rows * 4);
+  for (let o = 0; o < AT.data.length; o += 4) AT.data[o] = 255;      // empty: far from any lane
   AT.tex = new THREE.DataTexture(AT.data, 16 * PW, PW * AT.rows, THREE.RGBAFormat, THREE.UnsignedByteType);
   AT.tex.magFilter = THREE.LinearFilter; AT.tex.minFilter = THREE.LinearFilter; AT.tex.generateMipmaps = false;
   AT.tex.wrapS = AT.tex.wrapT = THREE.ClampToEdgeWrapping; AT.tex.flipY = false; AT.tex.needsUpdate = true;
@@ -3281,14 +3390,20 @@ function allocPage(tile) {
   if (p >= cap) { if (!atlasGrow()) return -1; p = cap; }
   AT.tileOfPage[p] = tile; AT.pageOfTile[tile] = p;
   clearPage(p);
+  AT.pend.add(p); AT.anyPage = true;
+  return p;
+}
+function publishPage(p) {
+  if (!AT.pend.has(p)) return;
+  AT.pend.delete(p);
+  const tile = AT.tileOfPage[p]; if (tile < 0) return;
   const ti = tile % GT, tj = (tile / GT) | 0, o = (tj * GT + ti) * 4;
   AT.idxData[o] = p % 16; AT.idxData[o + 1] = (p / 16) | 0; AT.idxData[o + 2] = 0; AT.idxData[o + 3] = 255;
-  AT.idxDirty = true; AT.anyPage = true;
-  return p;
+  AT.idxDirty = true;
 }
 function freePage(tile) {
   const p = AT.pageOfTile[tile]; if (p < 0) return;
-  AT.pageOfTile[tile] = -1; AT.tileOfPage[p] = -1; AT.has[p] = 0;
+  AT.pageOfTile[tile] = -1; AT.tileOfPage[p] = -1; AT.has[p] = 0; AT.pend.delete(p);
   const ti = tile % GT, tj = (tile / GT) | 0, o = (tj * GT + ti) * 4;
   AT.idxData[o] = AT.idxData[o + 1] = AT.idxData[o + 2] = AT.idxData[o + 3] = 0; AT.idxDirty = true;
   AT.up.delete(p);
@@ -3399,22 +3514,26 @@ function atlasFlush() {
   if (!AT.data) return;
   let n = 0;
   for (const t of Array.from(AT.rebuild)) { AT.rebuild.delete(t); rebuildTile(t); if (++n >= 6) break; }
-  if (AT.idxDirty && AT.idxTex) { AT.idxTex.needsUpdate = true; AT.idxDirty = false; }
-  if (AT.full) { AT.tex.needsUpdate = true; AT.full = false; AT.up.clear(); return; }
-  if (!AT.up.size) return;
   const R = D.renderer;
-  if (!R || AT.tex.version === 0) { AT.tex.needsUpdate = true; AT.up.clear(); return; }
-  let k = 0;
-  for (const p of Array.from(AT.up)) {
-    AT.up.delete(p);
-    D.subUpload(R, AT.tex, (p % 16) * PW, ((p / 16) | 0) * PW, PW, PW);
-    if (++k >= 3) break;
+  if (AT.full || (AT.up.size && (!R || AT.tex.version === 0))) {   // whole-texture upload: every written page goes live
+    AT.tex.needsUpdate = true; AT.full = false;
+    for (const p of Array.from(AT.pend)) if (AT.has[p]) publishPage(p);
+    AT.up.clear();
+  } else if (AT.up.size) {
+    let k = 0;
+    for (const p of Array.from(AT.up)) {
+      AT.up.delete(p);
+      D.subUpload(R, AT.tex, (p % 16) * PW, ((p / 16) | 0) * PW, PW, PW);
+      publishPage(p);
+      if (++k >= 3) break;
+    }
   }
+  if (AT.idxDirty && AT.idxTex) { AT.idxTex.needsUpdate = true; AT.idxDirty = false; }
   AT.anyPage = AT.pageOfTile.some(v => v >= 0);
 }
 function atlasReset() {
   AT.pageOfTile.fill(-1); AT.tileOfPage.fill(-1); AT.has.fill(0); AT.idxData.fill(0); AT.idxDirty = true;
-  AT.up.clear(); AT.rebuild.clear(); AT.tileSids.fill(null); AT.anyPage = false;
+  AT.up.clear(); AT.rebuild.clear(); AT.tileSids.fill(null); AT.anyPage = false; AT.pend.clear();
 }
 
 // =====================================================================================================
@@ -4134,6 +4253,13 @@ Town.deserialize = function (d) {
   sanitizeZone();
   zoneRect(0, 0, N - 1, N - 1);
   if (Town.zoneTex) Town.zoneTex.needsUpdate = true;
+  // villages planned by an older planner re-plan with the same seed (instantly) so they pick up the denser layout
+  list.forEach(S => {
+    if (S.type === 1 && S.plan && !S.pending && (S.plan.pv | 0) < PLAN_VER) {
+      S.pending = { kind: 'replan', jobId: Town.nextJob++, epoch: S.epochs };
+      instantJobs.add(S.pending.jobId);
+    }
+  });
   list.forEach((S, sid) => { if (S.plan) reconcile(sid, 'instant'); });
   navRecDirty = true;
   emitChanged();

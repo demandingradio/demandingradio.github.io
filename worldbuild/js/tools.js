@@ -636,6 +636,22 @@ Tools.flattenSelection = function () {
   D.History.end();
   D.emit('stroke:end');
 };
+// Edit ▸ Weather peaks: needle peaks and blade ridges slump into buttressed ridges and scree slopes
+// (thermal weathering over the selection, or the whole map). Gentle ground is untouched. Undoable.
+Tools.weatherPeaks = function () {
+  const s = Tools.selection;
+  const r = s ? [Math.max(1, Math.floor(s.x0 / CELL)), Math.max(1, Math.floor(s.z0 / CELL)), Math.min(N - 1, Math.ceil(s.x1 / CELL)), Math.min(N - 1, Math.ceil(s.z1 / CELL))] : [1, 1, N - 1, N - 1];
+  D.toast('Weathering the peaks…', '', 1500);
+  setTimeout(() => {
+    D.History.begin('Weather Peaks', 'erode');
+    D.History.touch('h', r[0] - 1, r[1] - 1, r[2] + 1, r[3] + 1);
+    D.Gen.thermalSync(W.h, 24, W.seed || 1, 0.95, 1.5, r);
+    D.Terrain.markH(r[0] - 1, r[1] - 1, r[2] + 1, r[3] + 1);
+    D.History.end();
+    D.emit('stroke:end');
+    D.toast('Peaks weathered. Ctrl+Z to undo.', '', 2500);
+  }, 30);
+};
 Tools.startPaste = function () {
   if (!Tools.clipboard) { D.toast('Nothing copied yet. Select an area and press Ctrl+C.', 'warn'); return; }
   Tools.select('select');

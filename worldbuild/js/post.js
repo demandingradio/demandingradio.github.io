@@ -62,6 +62,8 @@ Post.init = function (renderer) {
       c += texture2D(tSrc, vUv + uTexel * vec2(-1.0, -1.0)).rgb; c += texture2D(tSrc, vUv + uTexel * vec2(1.0, -1.0)).rgb;
       c += texture2D(tSrc, vUv + uTexel * vec2(-1.0, 1.0)).rgb; c += texture2D(tSrc, vUv + uTexel * vec2(1.0, 1.0)).rgb;
       c *= 0.25;
+      if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);   // one bad pixel must never bloom into a white blob
+      c = clamp(c, 0.0, 40.0);
       float l = max(max(c.r, c.g), c.b);
       float k = smoothstep(uThresh, uThresh * 1.8 + 0.2, l);
       gl_FragColor = vec4(min(c * k, vec3(40.0)), 1.0);
