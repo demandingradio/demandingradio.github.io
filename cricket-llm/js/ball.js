@@ -214,7 +214,8 @@
         },
       });
       queue.push({
-        z: cam.depth(pos) - 0.12,
+        // after contact, sort a touch toward the camera so it isn't lost behind the blade
+        z: cam.depth(pos) - (this.mode === 'free' ? 0.12 : 0),
         draw: (ctx) => {
           if (trail && trail.length > 2) {
             ctx.save();
