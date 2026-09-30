@@ -119,11 +119,13 @@
 
     _cache: null,
     _cacheKey: '',
+    scene: 'nets',            // 'nets' (practice) | 'ground' (a match: see ground.js)
 
     // Draw the static background into ctx (cached).
     drawStatic(ctx, cam, dpr) {
       if (cam.w < 2 || cam.h < 2) return;
-      const key = [cam.w, cam.h, dpr, cam.pos.x, cam.pos.y, cam.pos.z, cam.target.x, cam.target.y, cam.target.z, cam.fov].map((n) => (+n).toFixed(3)).join(',');
+      if (this.scene === 'ground' && CLLM.Ground) return this._groundStatic(ctx, cam, dpr);
+      const key = [this.scene === 'ground' ? 1 : 0, cam.w, cam.h, dpr, cam.pos.x, cam.pos.y, cam.pos.z, cam.target.x, cam.target.y, cam.target.z, cam.fov, cam.hfov || 0].map((n) => (+n).toFixed(3)).join(',');
       if (key !== this._cacheKey || !this._cache) {
         if (!this._cache) this._cache = document.createElement('canvas');
         this._cache.width = Math.round(cam.w * dpr);
@@ -134,6 +136,60 @@
         this._cacheKey = key;
       }
       ctx.drawImage(this._cache, 0, 0, cam.w, cam.h);
+    },
+
+    // The ground (a match) is heavier than the nets, and its camera moves:
+    // with your feet (a small dolly along z) and, once the ball is live, by
+    // crop & zoom. So the scenery is rendered once per base spot (slightly
+    // oversized) and re-used: scaled about the vanishing point for the
+    // dolly, cropped for the zoom. The strip itself (near you, where a dolly
+    // shows) is drawn live on top.
+    _groundStatic(ctx, cam, dpr) {
+      const W = cam.w, H = cam.h;
+      // cam.crop: a follow cam is on its fixed pose, even at exactly zoom 1
+      // (a spring settling on kMin must not flip to the dolly/overscan key)
+      const crop = !!cam.crop || (cam.zoom || 1) !== 1 || !!cam.ox || !!cam.oy;
+      const dz = crop ? 0 : (cam.dolly || 0);
+      const m = crop ? 0 : 0.025;                         // overscan so a step back never shows an edge
+      const S = crop ? Math.min(1.6, 2600 / (Math.max(W, H) * dpr)) : 1;
+      const base = this._gBase || (this._gBase = new CLLM.Camera());
+      base.hfov = cam.hfov; base.zoom = 1 / (1 + 2 * m); base.ox = 0; base.oy = 0;
+      base.w = W * (1 + 2 * m); base.h = H * (1 + 2 * m);
+      base.set(V.v(cam.pos.x, cam.pos.y, cam.pos.z - dz), V.v(cam.target.x, cam.target.y, cam.target.z - dz), cam.fov);
+      const key = [W, H, dpr, S, m, base.pos.x, base.pos.y, base.pos.z, base.target.x, base.target.y, base.target.z, cam.fov, cam.hfov || 0].map((n) => (+n).toFixed(3)).join(',');
+      // two slots: the delivery view and the follow view both stay cached
+      const slots = this._gSlots || (this._gSlots = [{ key: '', c: null, used: 0 }, { key: '', c: null, used: 0 }]);
+      let slot = slots.find((s) => s.key === key && s.c);
+      if (!slot) {
+        slot = slots[0].used <= slots[1].used ? slots[0] : slots[1];
+        if (!slot.c) slot.c = document.createElement('canvas');
+        slot.c.width = Math.round(base.w * dpr * S);
+        slot.c.height = Math.round(base.h * dpr * S);
+        const c = slot.c.getContext('2d');
+        c.setTransform(dpr * S, 0, 0, dpr * S, 0, 0);
+        this._farOnly = true;
+        this._render(c, base);
+        this._farOnly = false;
+        slot.key = key;
+      }
+      slot.used = performance.now();
+      this._gc = slot.c;
+      const k = dpr * S;
+      if (crop) {
+        // live pixel (0,0) is base pixel (W/2 - cx/zoom, H/2 - cy/zoom)
+        const z = cam.zoom || 1;
+        // (clamped to the cache: a stale offset after a resize must not show a blank band)
+        const sx = Math.max(0, Math.min(W - W / z, W / 2 - cam.cx / z)), sy = Math.max(0, Math.min(H - H / z, H / 2 - cam.cy / z));
+        ctx.drawImage(this._gc, sx * k, sy * k, (W / z) * k, (H / z) * k, 0, 0, W, H);
+      } else if (Math.abs(dz) > 1e-4) {
+        const f = cam.project(V.add(cam.pos, V.v(0, 0, 2000))) || { x: W / 2, y: H / 2 };
+        const s = 60 / (60 - dz);
+        ctx.save();
+        ctx.translate(f.x, f.y); ctx.scale(s, s); ctx.translate(-f.x, -f.y);
+        ctx.drawImage(this._gc, -m * W, -m * H, base.w, base.h);
+        ctx.restore();
+      } else ctx.drawImage(this._gc, -m * W, -m * H, base.w, base.h);
+      CLLM.Ground.drawNear(ctx, cam);
     },
 
     _render(ctx, cam) {
@@ -179,6 +235,12 @@
       ctx.fillStyle = g;
       ctx.fillRect(0, hy - 1, W, H - hy + 1);
 
+      if (this.scene === 'ground' && CLLM.Ground) {
+        CLLM.Ground.draw(ctx, cam, { strip: !this._farOnly });
+        this._vignette(ctx, W, H);
+        return;
+      }
+
       // Mow stripes (bands parallel to the pitch)
       for (let x = -60; x < 60; x += 5) {
         if (Math.round(x / 5) % 2 === 0) groundRect(ctx, cam, x, x + 5, -400, 40, 'rgba(255,255,255,0.045)');
@@ -204,7 +266,11 @@
       for (const x of NET.X) this._sideNet(ctx, cam, x);
       this._poles(ctx, cam);
 
-      // Slight atmospheric vignette
+      this._vignette(ctx, W, H);
+    },
+
+    // Slight atmospheric vignette
+    _vignette(ctx, W, H) {
       const vg = ctx.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.35, W / 2, H * 0.55, Math.max(W, H) * 0.85);
       vg.addColorStop(0, 'rgba(0,0,0,0)');
       vg.addColorStop(1, 'rgba(20,24,10,0.28)');

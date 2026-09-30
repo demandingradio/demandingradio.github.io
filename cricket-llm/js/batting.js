@@ -198,8 +198,8 @@
       this.stumpsFx = null;
       this.batAnim.reset();
       const spec = this.ai.next(this.hand, this.ramp);
-      // First ever balls: be kind
-      if (this.game.save.data.stats.batBalls < 3 && this.totalBalls < 3 && Math.random() < 0.6) {
+      // First ever balls: be kind (not in a match)
+      if (!this.game.match && this.game.save.data.stats.batBalls < 3 && this.totalBalls < 3 && Math.random() < 0.6) {
         spec.length = this.spin ? M.rand(1.2, 2.2) : M.rand(2.6, 4.2);
         spec.offLine = M.rand(0.05, 0.3); spec.varKey = 'stock'; spec.note = 'loose';
       }
@@ -1001,7 +1001,8 @@
             if ((pad.onPad && now >= this.tAt(pad.padZ)) || now >= this.tAt(0)) this._resolveLeave();
           }
           if (this.ball.pos.z < -2.4 && b.resolved) { this.ball.mode = 'dead'; }
-        } else if (this.ball.mode === 'free') {
+        } else if (this.ball.mode === 'free' && !this.live) {
+          // (in a match, a live ball belongs to the field simulation)
           // Easy levels slow the delivery down; once it's hit, ease the ball
           // back up to real speed so the shot itself isn't floaty.
           const k = b.tHit != null ? M.clamp((now - b.tHit) / 0.15, 0, 1) : 0;

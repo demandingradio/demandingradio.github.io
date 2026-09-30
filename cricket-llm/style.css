@@ -301,3 +301,51 @@ body.touch #callout { top: 34%; }
   #pauseBtn { top: 10px; right: 112px; }
   #muteBtn { top: 52px; right: 112px; }
 }
+
+/* ---------- match ---------- */
+.mode-btn.wide { grid-column: 1 / -1; }
+.card.wide { width: min(900px, 100%); }
+#matchPanel .card { max-height: calc(100vh - 48px); overflow-y: auto; }
+.bowlgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.btn.bowlpick { text-align: left; padding: 10px 12px; }
+.btn.bowlpick small { display: block; font-weight: 400; font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
+.btn.bowlpick.sugg { outline: 2px solid var(--gold); }
+.btn.bowlpick:disabled { opacity: 0.4; cursor: not-allowed; }
+.card-inns { margin: 12px 0; }
+.card-inns h3 { font-family: "Barlow Condensed", sans-serif; font-size: 20px; font-weight: 700; display: flex; justify-content: space-between; gap: 10px; }
+.card-inns h3 span { color: var(--gold); }
+table.sc { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13.5px; }
+table.sc th { text-align: left; font-weight: 600; color: var(--ink-dim); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+table.sc td { padding: 3px 6px; border-bottom: 1px solid rgba(246, 241, 227, 0.06); font-variant-numeric: tabular-nums; }
+table.sc td.how { color: var(--ink-dim); font-size: 12.5px; }
+#scoreboard .meta .sit { color: var(--gold); flex-basis: 100%; }
+#scoreboard .meta .day { flex-basis: 100%; margin-top: -2px; font-size: 11px; letter-spacing: 0.04em; opacity: 0.8; }
+.btn.bowlpick { position: relative; padding-right: 36px; }
+.btn.bowlpick .kn { position: absolute; top: 8px; right: 8px; }
+.btn.bowlpick.picked { background: var(--cream); color: #16261b; }
+.btn.bowlpick.picked small { color: #3b4c40; }
+#matchPanel .lead.keys { margin: 10px 0 0; font-size: 12.5px; }
+#matchPanel kbd {
+  display: inline-block; min-width: 20px; text-align: center;
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 12px; color: var(--ink);
+  background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.22); border-bottom-width: 2px;
+  border-radius: 5px; padding: 0 4px;
+}
+.btn.bowlpick.picked .kn { color: #16261b; border-color: rgba(0, 0, 0, 0.3); background: rgba(0, 0, 0, 0.08); }
+/* pause menu (match): simulate ahead, running assist, declare (with a confirm) */
+.simgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.simgrid .btn { padding: 9px 10px; font-size: 14px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#declareConfirm { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(226, 71, 75, 0.14); border: 1px solid rgba(226, 71, 75, 0.35); }
+#declareConfirm span { font-weight: 700; font-size: 16px; text-align: center; }
+#declareConfirm .confirm-btns { display: flex; gap: 8px; }
+/* running (touch): RUN bottom-right with DIVE beside it (clear of the running strip above), BACK bottom-left in the stance pad's place */
+#touch #runBtns { bottom: 14px; flex-direction: row; align-items: center; }
+#touch #runBtns .tbtn.run { width: 84px; height: 84px; border-radius: 50%; font-size: 21px; background: rgba(95, 210, 138, 0.5); }
+#touch #runBtns .tbtn.run.capped { opacity: 0.55; }
+#touch #runBtns .tbtn.dive { width: 64px; height: 64px; border-radius: 50%; font-size: 17px; background: rgba(242, 193, 78, 0.6); color: #1e1a0a; }
+#touch #runBack { bottom: 14px; }
+#touch #runBack .tbtn { width: 72px; height: 72px; border-radius: 50%; font-size: 18px; background: rgba(226, 71, 75, 0.45); }
+#touch #runBtns .tbtn.down, #touch #runBack .tbtn.down { background: rgba(242, 193, 78, 0.85); color: #1e1a0a; }
+/* the stance pad (left) and the stroke buttons (right) give their slots to BACK / RUN */
+body.running #touch .tgroup[data-mode="bat"] { display: none; }

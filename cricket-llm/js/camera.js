@@ -17,6 +17,12 @@
       this.w = 800; this.h = 600;
       this.near = 0.25;
       this.shake = 0;
+      // Crop & zoom: scaling the focal length and moving the image centre is
+      // exactly cropping a bigger picture from the same spot (used to follow
+      // the ball in a match without re-rendering the scenery).
+      this.zoom = 1; this.ox = 0; this.oy = 0;
+      this.dolly = 0;            // how far the camera has slid along z from its base spot (footwork)
+      this.crop = false;         // this pose is a crop-follow of one fixed spot (World: re-use, no dolly)
       this._basis();
     }
 
@@ -24,7 +30,13 @@
 
     set(pos, target, fov) {
       this.pos = pos; this.target = target;
+      this.crop = false;         // a new pose ends any crop-follow (MatchCam sets it again after)
       if (fov) this.fov = fov;
+      this._basis();
+    }
+
+    setView(zoom, ox, oy) {
+      this.zoom = zoom || 1; this.ox = ox || 0; this.oy = oy || 0;
       this._basis();
     }
 
@@ -45,7 +57,8 @@
         if (aspect < 1.25) fov = this.fov * Math.min(1.9, 1.25 / aspect);
         this.focal = (this.h / 2) / Math.tan((fov * Math.PI) / 360);
       }
-      this.cx = this.w / 2; this.cy = this.h / 2;
+      this.focal *= this.zoom || 1;
+      this.cx = this.w / 2 + (this.ox || 0); this.cy = this.h / 2 + (this.oy || 0);
     }
 
     // Camera-space depth of a world point (metres along the view direction).

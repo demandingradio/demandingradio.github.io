@@ -123,6 +123,7 @@
     queue(queue, cam, shadows) {
       const J = this.J;
       if (!J) return;
+      if (this.cull && offscreen(cam, J.pel)) return;
       const k = this.kit;
       const a = this.alpha;
       const isBat = this.kind === 'batter';
@@ -189,6 +190,25 @@
       }
     }
   }
+
+  // Is a figure (judged by its pelvis) certainly out of the picture? Its
+  // pelvis is more than 60 px, and more than 2.2 m at its own scale (a dive,
+  // an arm, a long shadow), outside the viewport, so nothing pops at the
+  // edge; or it is wholly behind the camera. A figure straddling the near
+  // plane is always drawn (its limbs clip themselves).
+  function offscreen(cam, p) {
+    const d = cam.depth(p);
+    if (d < cam.near - 2.2) return true;
+    if (d < cam.near + 0.05) return false;
+    const q = cam.project(p);
+    if (!q) return false;
+    const m = Math.max(60, 2.2 * q.s);
+    return q.x < -m || q.x > cam.w + m || q.y < -m || q.y > cam.h + m;
+  }
+
+  // Opt-in culling (a match's fielders and umpires set fig.cull = true):
+  // queue() skips a figure that is well off screen. Nets figures never set it.
+  Figure.prototype.cull = false;
 
   // Keep the hand on the end of the solved forearm (IK may clamp reach).
   function reach(sho, elb, target, fore) {

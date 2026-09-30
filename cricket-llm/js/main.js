@@ -11,14 +11,41 @@
   const game = new Game($('game'));
   window.__cllm = game;                         // console debugging
   const S = game.save.data.settings;
+  const { Match, MatchFlow } = CLLM;
+  MatchFlow.init(game);
+  game.onMenu = () => { setTouchMode(null); show('title'); };
 
   let lastSetup = null;                         // 'bat' | 'bowl'
 
+  // Match mode is for testers until CFG.MATCH.PUBLIC: ?match=1 (remembered on this device)
+  const matchFlag = game.ui.matchFlag ? game.ui.matchFlag() : !!(CFG.MATCH && CFG.MATCH.PUBLIC);
+  $('goMatch').classList.toggle('hidden', !matchFlag);
+
   function show(id) {
-    for (const s of ['title', 'setupBat', 'setupBowl', 'pause']) $(s).classList.toggle('hidden', s !== id);
+    for (const s of ['title', 'setupBat', 'setupBowl', 'setupMatch', 'pause']) $(s).classList.toggle('hidden', s !== id);
     $('back').classList.toggle('hidden', id == null);
     document.body.classList.toggle('in-menu', !!id);
-    if (id === 'title') renderBests();
+    if (id === 'title') { renderBests(); renderContinue(); }
+  }
+
+  // A match in progress (saved after every ball)
+  function renderContinue() {
+    let m = null, sub = '';
+    if (matchFlag) {
+      try {
+        m = Match.load();
+        if (m) sub = `${m.F.name} · ${m.teams.you.name} v ${m.teams.opp.name} · ${m.teams[m.inn.bat].name} ${m.scoreLine()} · ${m.situation()}`;
+      } catch (e) { m = null; }         // a save we can't read: no card rather than a broken menu
+    }
+    $('goContinue').classList.toggle('hidden', !m);
+    if (m) $('continueSub').textContent = sub;
+  }
+
+  // Running assist: 'default' is decided when the match starts (touch: your partner runs)
+  function resolveAssist(v) {
+    if (v === 'manual' || v === 'auto') return v;
+    const D = (CFG.MATCH && CFG.MATCH.ASSIST_DEFAULT) || { desktop: 'manual', touch: 'auto' };
+    return game.input.touch ? D.touch : D.desktop;
   }
 
   function renderBests() {
@@ -37,8 +64,15 @@
     $('titleBests').innerHTML = parts.map((p) => `<span>${p}</span>`).join('');
   }
 
+  // The match lengths say what they are (from the formats themselves)
+  document.querySelectorAll('.seg[data-key="mFormat"] button').forEach((b) => {
+    const F = Match.FORMATS && Match.FORMATS[b.dataset.v], sm = b.querySelector('small');
+    if (F && F.blurb && sm) sm.textContent = F.blurb;
+  });
+
   // Segmented option buttons bound to settings
-  document.querySelectorAll('.seg').forEach((seg) => {
+  const segSyncs = [];
+  document.querySelectorAll('.seg[data-key]').forEach((seg) => {
     const key = seg.dataset.key;
     const sync = () => {
       seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === S[key]));
@@ -47,20 +81,59 @@
         $('howtoPhys').classList.toggle('hidden', S.batControls !== 'physical');
         $('howtoClassic').classList.toggle('hidden', S.batControls === 'physical');
       }
+      if (key === 'runAssist' && $('assistBlurb')) {
+        const a = resolveAssist(S.runAssist), def = S.runAssist !== 'manual' && S.runAssist !== 'auto';
+        $('assistBlurb').textContent = (def ? (game.input.touch ? 'On a touch screen: ' : 'On a keyboard: ') : '') + (a === 'auto'
+          ? 'your partner calls and runs; press RUN or BACK (W / S) and you take over for the rest of that ball.'
+          : 'you call every run (W run · S back · Space dive); your partner still shouts behind square.');
+      }
     };
+    segSyncs.push(sync);
     seg.addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
       S[key] = b.dataset.v;
       game.save.write();
       Audio.unlock(); Audio.ui();
-      sync();
+      syncSegs();                               // (the Bat and Match setups share some settings)
     });
     sync();
   });
+  const syncSegs = () => segSyncs.forEach((f) => f());
 
   $('goBat').addEventListener('click', () => { Audio.unlock(); Audio.ui(); show('setupBat'); });
   $('goBowl').addEventListener('click', () => { Audio.unlock(); Audio.ui(); show('setupBowl'); });
+  $('goMatch').addEventListener('click', () => {
+    Audio.unlock(); Audio.ui();
+    syncSegs();                                 // ('default' reads differently once a finger has touched)
+    show('setupMatch');
+  });
+  $('goContinue').addEventListener('click', () => {
+    Audio.unlock(); Audio.ui();
+    const m = Match.load();
+    if (!m) { renderContinue(); return; }
+    lastSetup = 'match';
+    show(null);
+    MatchFlow.begin(m);
+    setTouchMode(game.mode);
+  });
+  $('startMatch').addEventListener('click', () => {
+    Audio.unlock();
+    show(null);
+    document.body.classList.add('in-menu');
+    CLLM.World.scene = 'ground';                   // the toss happens out in the middle
+    game.ui.toss(null, (youBatFirst) => {
+      const assist = resolveAssist(S.runAssist);
+      const m = new Match({ format: S.mFormat, level: S.mLevel, hand: S.hand, controls: S.batControls, assist, youBatFirst });
+      lastSetup = 'match';
+      MatchFlow.begin(m);
+      setTouchMode(game.mode);
+    });
+  });
+  // the match switches between batting and bowling on its own
+  const baseStartBat = game.startMatchBatting.bind(game), baseStartBowl = game.startMatchBowling.bind(game);
+  game.startMatchBatting = (o) => { baseStartBat(o); setTouchMode('bat'); };
+  game.startMatchBowling = (o) => { baseStartBowl(o); setTouchMode('bowl'); };
   document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => { Audio.ui(); show('title'); }));
 
   function startBat() {
@@ -89,7 +162,26 @@
     $('batWeight').value = Math.max(0, WS.indexOf(+S.batWeight || 0));
     $('batPower').value = S.batPower || CFG.PHYS.BASE.power;
     showBatTune();
-    $('camBtn').classList.toggle('hidden', game.mode !== 'bat' || !!(game.session && game.session.physical));
+    $('camBtn').classList.toggle('hidden', game.mode !== 'bat' || !!(game.session && game.session.physical) || !!game.match);
+    const m = game.match, inMatch = !!m;
+    document.querySelectorAll('.match-only').forEach((b) => b.classList.toggle('hidden', !inMatch));
+    $('declareConfirm').classList.add('hidden');
+    if (inMatch) {
+      // declaring and simulating happen at a dead ball: not with one in flight,
+      // nor while an innings / the match is being handed over (its card is due or up)
+      const s = game.session, b = s && s.b;
+      const inFlight = !!(b && b.phase === 'flight');
+      const handOff = !s || !!s.parked || !!s.pendingFlow || !!s.pendingOver || !!m.followOnPending || !$('matchPanel').classList.contains('hidden') ||
+        !!(b && b.phase === 'done' && s.lastEv && (s.lastEv.inningsEnd || s.lastEv.matchEnd)) ||
+        (s instanceof CLLM.MatchBatting) !== m.youBatting || (s.innN != null && s.innN !== m.innings.length);
+      const busy = inFlight || handOff;
+      $('declareBtn').classList.toggle('hidden', !(m.youBatting && m.F.budget && !m.result));
+      $('declareBtn').disabled = busy;
+      document.querySelectorAll('#pause [data-sim]').forEach((el) => { el.disabled = busy || !!m.result; });
+      $('simNote').classList.toggle('hidden', !inFlight);
+      syncPauseAssist();
+    }
+    $('restart').classList.toggle('hidden', inMatch);
     show('pause');
   };
   game.onResumeKey = () => resume();
@@ -100,7 +192,66 @@
   $('muteBtn').textContent = S.muted ? '🔇' : '🔊';
   $('camBtn').addEventListener('click', () => { game.toggleCam(); });
   $('restart').addEventListener('click', () => { if (lastSetup === 'bowl') startBowl(); else startBat(); });
-  $('toMenu').addEventListener('click', () => { game.quitToMenu(); setTouchMode(null); show('title'); });
+
+  // The scorecard (Tab, or the pause menu). From the pause menu, Back returns
+  // there; from play (Tab), straight back to the game.
+  game.openScorecard = () => {
+    const m = game.match;
+    if (!m || !game.mode || !game.ui.scorecard) return false;
+    if (!$('matchPanel').classList.contains('hidden')) return false;     // a picker / break card is up
+    const fromPause = game.paused;
+    if (!fromPause) game.pause();
+    $('pause').classList.add('hidden');
+    game.ui.scorecard(m, () => { if (fromPause) show('pause'); else resume(); });
+    return true;
+  };
+  $('scoreBtn').addEventListener('click', () => game.openScorecard());
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || !game.match || !game.mode) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    // not while you're running: that ball has your full attention
+    const s = game.session;
+    if (!game.paused && s && s.live && s.fs && !s.fs.result) return;
+    game.openScorecard();
+  });
+
+  // Declare: always asks first
+  $('declareBtn').addEventListener('click', () => {
+    const m = game.match;
+    if (!m) return;
+    $('declareQ').textContent = `Declare at ${m.inn.runs}/${m.inn.wkts}?`;
+    $('declareBtn').classList.add('hidden');
+    $('declareConfirm').classList.remove('hidden');
+  });
+  $('declareNo').addEventListener('click', () => { $('declareConfirm').classList.add('hidden'); $('declareBtn').classList.remove('hidden'); });
+  $('declareYes').addEventListener('click', () => {
+    $('declareConfirm').classList.add('hidden');
+    if (!game.match) return;
+    show(null); game.resume(); MatchFlow.declare();
+  });
+  // Simulate to: the end of the over / the next wicket / the session / the innings
+  document.querySelectorAll('#pause [data-sim]').forEach((b) => b.addEventListener('click', () => {
+    if (!game.match || b.disabled) return;
+    show(null); game.resume(); MatchFlow.simTo(b.dataset.sim);
+  }));
+  // Running assist, mid-match (from the next ball)
+  function syncPauseAssist() {
+    const v = game.match && game.match.assist ? game.match.assist : resolveAssist(S.runAssist);
+    document.querySelectorAll('#pauseAssist button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+  }
+  $('pauseAssist').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const v = b.dataset.v;
+    S.runAssist = v;
+    game.save.write();
+    if (game.match) { game.match.assist = v; if (game.match.save) game.match.save(); }
+    if (game.session && 'assist' in game.session) game.session.assist = v;
+    Audio.ui();
+    syncPauseAssist(); syncSegs();
+  });
+  $('toMenu').addEventListener('click', () => { if (game.ui.closePanel) game.ui.closePanel(); game.quitToMenu(); setTouchMode(null); show('title'); });
   // Physical bat tuning (applies live)
   function showBatTune() {
     $('batLimitVal').textContent = game.ui.tuneText('batLimit', +S.batLimit || 0, true);
@@ -127,12 +278,14 @@
 
   // Touch buttons inject timed actions
   function setTouchMode(mode) {
-    document.querySelectorAll('#touch .tgroup').forEach((g) => {
+    // (RUN / BACK aren't a mode's buttons: UI.runHud shows them while you can run)
+    // the live session's controls (a saved match keeps its own; in the nets they're the setting)
+    const phys = mode === 'bat' && !!(game.session && game.session.physical);
+    document.querySelectorAll('#touch .tgroup[data-mode]').forEach((g) => {
       // physical bat: you swipe to hit, so only the FRONT/BACK/DANCE group stays
-      const hideForPhys = mode === 'bat' && S.batControls === 'physical' && g.classList.contains('right');
+      const hideForPhys = phys && g.classList.contains('right');
       g.classList.toggle('hidden', g.dataset.mode !== mode || hideForPhys);
     });
-    const phys = mode === 'bat' && S.batControls === 'physical';
     document.querySelectorAll('#touch .phys-only').forEach((b) => b.classList.toggle('hidden', !phys));
     document.querySelectorAll('#touch .classic-only').forEach((b) => b.classList.toggle('hidden', phys));
   }

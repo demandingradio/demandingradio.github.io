@@ -572,7 +572,7 @@
         }
         if ((b.hitDone || now > b.tRelease + BallPhys.timeAtZ(b.plan, 0) + 0.1) && !b.finished) this._finish();
       }
-      if ((b.phase === 'flight' || b.phase === 'result') && this.ball.mode === 'free') this.ball.update(dt);
+      if ((b.phase === 'flight' || b.phase === 'result') && this.ball.mode === 'free' && !this.live) this.ball.update(dt);
       if (b.phase === 'result' && now > b.tResult + 2.6) this._toPlan(0);
       if (this.stumpsFx) this._updStumps(dt);
       this.batAnim.pose(now, V.v(-0.4 * (this.batter.mirror ? -1 : 1), 1.6, 19));
@@ -699,10 +699,10 @@
       this.pitchMap.push({ off: b.plan.offLine, len: b.plan.lengthM, out: o.out, runs: o.runs });
       if (this.pitchMap.length > 12) this.pitchMap.shift();
       this.lastPitch = { off: b.plan.offLine, len: b.plan.lengthM };
-      // best spell
+      // best spell (net sessions only)
       const key = this.type;
       const best = this.game.save.best('bowl', this.diffKey, key, this.hand);
-      if (sp.wkts > best.wkts || (sp.wkts === best.wkts && sp.wkts > 0 && sp.runs < best.runs)) {
+      if (!this.matchMode && (sp.wkts > best.wkts || (sp.wkts === best.wkts && sp.wkts > 0 && sp.runs < best.runs))) {
         this.game.save.setBest('bowl', this.diffKey, key, this.hand, { wkts: sp.wkts, runs: sp.runs, balls: sp.balls });
       }
       this.game.save.write();

@@ -56,7 +56,7 @@
 
       // Shadows: draw opaque into a layer, then composite once so overlaps
       // don't double-darken.
-      if (shadows.length) {
+      if (shadows.length && this.shadowCanvas.width > 0 && this.shadowCanvas.height > 0) {   // (a hidden, zero-size window has nothing to draw into)
         const s = this.sctx;
         s.setTransform(1, 0, 0, 1, 0, 0);
         s.clearRect(0, 0, this.shadowCanvas.width, this.shadowCanvas.height);

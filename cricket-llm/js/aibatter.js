@@ -108,13 +108,15 @@
       let [attackBase, Mz] = ZT[zone];
       if (spin && (zone === 'good' || zone === 'full')) attackBase += 0.15;   // batters take spin on
       const A = M.clamp(0.7 + 0.08 * this.P + 0.3 * this.C - 0.25 * this.bflag, 0.2, 1.5);
-      let pAttack = Math.min(0.97, attackBase * A + (linedUp ? 0.1 : 0));
+      // a match sets the tempo (1 in the nets): block it out .. go for it
+      const tempo = this.tempo || 1;
+      let pAttack = Math.min(0.97, attackBase * A * tempo + (linedUp ? 0.1 : 0));
       if (d.freeHit) pAttack = 1;
       // would it hit (as he sees it)?
       const wouldHitHat = Math.abs(d.xStumps - (read ? 0 : (d.mPitch - mPitchHat) * pf)) < (spin ? 0.35 : 0.23) && d.zStumps < 0.83;
       let shot;
       if (Math.random() < pAttack) {
-        let pLoft = M.clamp(0.1 + 0.04 * this.P + 0.25 * this.C, 0, 0.6);
+        let pLoft = M.clamp((0.1 + 0.04 * this.P + 0.25 * this.C) * Math.sqrt(tempo), 0, 0.6);
         if (zone === 'toss' || zone === 'hv' || zone === 'longhop') pLoft = Math.min(0.7, pLoft * 1.5);
         if (d.freeHit) pLoft = 0.8;
         shot = Math.random() < pLoft ? 'loft' : 'hit';

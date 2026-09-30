@@ -132,5 +132,70 @@
     },
   };
 
-  CLLM.CFG = { DIFFS, BAT, BOWL, AIBAT, PHYS };
+  // ---- MATCH MODE ---------------------------------------------------------------------------------
+  // Real-world sources: BBL GPS (fielders 8.0 m/s, batters in pads 6.8), Houghton 2010 (single 3.11 s),
+  // run-2 norms (6.10 s), Freeston/Djanis (throws 85-95 km/h accurate, 115-130 max), Davis 2008-16
+  // (75% catches held; keeper 85, slip 71), ICC/MCC laws. Physics numbers were measured in the real Ball
+  // integrator (Deno), not an analytic model.
+  const MATCH = {
+    PUBLIC: true,                  // MATCH card for everyone (false: testers only, via ?match=1, remembered)
+    FIELD_SKILL: { club: 0.45, grade: 0.62, state: 0.76, test: 0.90 },
+    CAPS: { you: '#1f4d2c', opp: '#6b1422' },
+    LINGER: 0.8,                   // s from dead ball to the next ball (skippable after 0.3 s)
+    RUN_LOCK: 0.12,                // s after contact before a running key counts
+    FF: 3, FF_AFTER: 1.5,          // fast-forward x3 while the ball is merely being returned
+    LIVE_MISSES: true,             // unhit balls go live (byes / leg-byes); false = dead in the gloves
+    WIDE: { off: 1.3, leg: 1.0 },  // m off middle at the popping crease, and no shot offered (Tests)
+    STEP: 1 / 120,                 // FieldSim fixed step
+    OUTFIELD: { rollDecel: 1.05, rollLin: 0, bounceK: 0.42, keep: 0.8, keepK: 0.035, keepMin: 0.75, keepMax: 0.97 },
+    FIELD: {
+      vmax: 7.8, accel: 6.5,                        // x(0.94 + 0.12*skill); keeper below
+      react: 0.27, reactClose: 0.15, reactKeeper: 0.12,   // ring react x(1.15 - 0.3*skill)
+      reach: 1.0, diveReach: 2.4, diveT: 0.35, catchH: 2.3, jumpH: 2.75,
+      pickT: 0.36, pickRunT: 0.28, diveGetUp: 1.0,  // + throwT*0.62 to release: 0.57-0.65 s total
+      throwT: 0.46, throwV: 25.5, lobV: 17,         // throwV: estimate only; real speed below
+      throwMin: 22, throwPerM: 0.2, throwMax: 33,   // hard throw = clamp(22 + 0.2 d, 22, 33) * (0.94 + 0.1 skill)
+      keeperV: 6.4, keeperAccel: 7,
+      breakT: 0.2, fumbleKeeper: 0.03,              // taking a throw; x2 for non-keepers
+      keeperTakeBack: 0.03, keeperTakeUp: 0.06,     // unhit delivery, x(1.3 - 0.6 skill)
+      fumbleV0: 13, fumbleK: 0.011, fumbleHighK: 1.3,   // ground ball: max(0, K(v - V0)) x(1.3 - 0.6 skill)
+      aimSD: 0.026,                                 // rad, x(1.25 - 0.5 skill), x1.5 on the move, x0.6 lobs; both axes
+      directClose: 9, directMax: 20, deepNoShy: 30, // shy rules (m)
+      walkIn: 3.0, sticky: 0.25, planEvery: 0.25, horizon: 7.5,
+      catchBase: 0.95,
+      kPos: { keeper: 1.12, slip: 0.90, close: 0.90, bowler: 0.80, ring: 1.08, deep: 1.06 },   // calibrated in the fieldOnly bot (Davis rates)
+      kSpeedV0: 20, kSpeedK: 0.015, kSpeedMin: 0.6,
+      kHigh: 0.8, kLow: 0.85, kRun: 0.88, kDive: 0.55, kSkier: 0.92,
+    },
+    RUN: {
+      vmax: 7.0, accel: 7.0, decel: 16, turnPause: 0.06,   // measured: 1 = 2.93 s, 2 = 6.10, 3 = 9.28 from first step
+      stretch: 1.3, carry: 0.35, stretchNear: 2.6,          // bat tip ahead of the body (m); auto-ground within 2.6 m
+      startDelay: 0.35,                                     // AI striker: contact -> first step
+      playerStartMin: 0.30, playerStartLag: 0.12,           // player: max(press, contact + 0.30) + 0.12
+      backUp: 1.2,
+      diveReach: 1.0, diveT: 0.35, diveDown: 0.8, diveMax: 3.5,
+      queueMax: 1,                                          // runs queued beyond the one in progress
+    },
+    AI_RUN: {
+      look: 0.35, lookSkill: 0.20,                          // first decision at 0.35 + 0.2(1 - skill) s
+      base: 0.34, aggK: 0.30, skillK: 0.12,                 // margin wanted = base - aggK*agg - skillK*skill + noise
+      noise: 0.16, behindK: 1.5,                            // noise SD x(1.2 - skill); x1.5 when the non-striker calls
+      easy: 1.2, heldClose: 30, strikerEnd: 0.15,
+      sendBack: -0.25, sendBackFrac: 0.45, recheck: 0.1,
+    },
+    CAM: {
+      hold: 0.30, noCutTravel: 12, noCutCall: 0.5,
+      bat:  { pos: [0, 42, -96], tgt: [0, 0, 4],  fov: 54, hfov: 65 },   // whole rope in frame at 16:9, 16:10, 4:3, 19.5:9 (and portrait)
+      bowl: { pos: [0, 46, 116], tgt: [0, 0, 16], fov: 54, hfov: 64 },   // clears the scoreboard (17 m) at z = 93
+      kMin: 1, kMax: 2.6, kStart: 1.6, omega: 4, fit: 0.7,
+      wBall: 0.5, wChaser: 0.25, wPitch: 0.25,
+    },
+    STRIP: { green: 0.6, red: 0.2, closeS: 0.12, closeCm: 25, flash: 0.6 },
+    TELL: { club: 'contact', grade: 'chaser', state: 'throw', test: 'never' },
+    ASSIST_DEFAULT: { desktop: 'manual', touch: 'auto' },
+    RPO: { club: 3.9, grade: 3.6, state: 3.5, test: 3.4 },        // AI planning only
+    BPW: { club: 32, grade: 40, state: 46, test: 52 },            // balls per wicket, AI planning only
+  };
+
+  CLLM.CFG = { DIFFS, BAT, BOWL, AIBAT, PHYS, MATCH };
 })();

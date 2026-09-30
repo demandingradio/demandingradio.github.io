@@ -29,7 +29,13 @@
       Input.attach(canvas);
       UI.init(this);
       Audio.setMuted(!!this.save.data.settings.muted);
-      window.addEventListener('resize', () => { this.renderer.resize(); this._setCamera(); });
+      window.addEventListener('resize', () => {
+        this.renderer.resize();
+        // a match's follow cam re-fits its crop now (it only updates while unpaused)
+        const s = this.session;
+        if (s && s.camOverride && s.camOverride() && s.liveCam) s.liveCam.update(0);
+        this._setCamera();
+      });
       document.addEventListener('visibilitychange', () => { if (document.hidden && this.mode && !this.paused) this.pause(); });
       this._setCamera();
       requestAnimationFrame((t) => this._loop(t));
@@ -38,8 +44,10 @@
     // ---- camera -------------------------------------------------------------
     _setCamera() {
       const s = this.session;
+      if (s && s.camOverride && s.camOverride()) return;      // a match's live camera is following the ball
       const h = s && s.h ? s.h : 1;
       this.cam.hfov = null;
+      this.cam.zoom = 1; this.cam.ox = 0; this.cam.oy = 0; this.cam.dolly = 0;
       if (this.mode === 'bowl') {
         this.cam.set(V.v(0.55, 4.0, 40.5), V.v(-0.05, 0.6, 4), 14.5);
       } else if (this.mode === 'bat' && s && s.physical) {
@@ -50,6 +58,7 @@
         this.cam.hfov = 40;
         const dz = s.phys ? s.phys.camShift : 0;
         if (s.phys) s.phys.camApplied = dz;
+        this.cam.dolly = dz;
         this.cam.set(V.v(0.25 * h, 1.5, -1.7 + dz), V.v(-0.05 * h, 0.1, 10 + dz), 48);
       } else if (this.mode === 'bat' && this.camMode === 'eye') {
         this.cam.set(V.v(0.1 * h, 1.58, 0.55), V.v(-0.05 * h, 0.95, 13), 46);
@@ -71,6 +80,8 @@
 
     // ---- sessions -----------------------------------------------------------
     startBatting(opts) {
+      CLLM.World.scene = 'nets';
+      this.match = null;
       this.mode = 'bat';
       this.session = new CLLM.BattingSession(this, opts);
       this._setCamera();
@@ -83,6 +94,8 @@
     }
 
     startBowling(opts) {
+      CLLM.World.scene = 'nets';
+      this.match = null;
       this.mode = 'bowl';
       this.session = new CLLM.BowlingSession(this, opts);
       this._setCamera();
@@ -93,8 +106,36 @@
       Input.clear();
     }
 
+    // A match: the same batting / bowling, on a ground with a field
+    startMatchBatting(opts) {
+      if (this.session && this.session.live && this.session._liveEnd) this.session._liveEnd();   // (never left running from the last one)
+      CLLM.World.scene = 'ground';
+      this.mode = 'bat';
+      this.session = new CLLM.MatchBatting(this, opts);
+      this._setCamera();
+      this.ui.showHud('bat', true);
+      this.ui.tips('bat');
+      this.paused = false;
+      Input.clear();
+    }
+
+    startMatchBowling(opts) {
+      if (this.session && this.session.live && this.session._liveEnd) this.session._liveEnd();
+      CLLM.World.scene = 'ground';
+      this.mode = 'bowl';
+      this.session = new CLLM.MatchBowling(this, opts);
+      this._setCamera();
+      this.ui.showHud('bowl', true);
+      this.session.refreshHud();
+      this.paused = false;
+      Input.clear();
+    }
+
     quitToMenu() {
       if (this.session && this.session.onPause) this.session.onPause();
+      if (this.session && this.session._liveEnd && this.session.live) this.session._liveEnd();
+      CLLM.World.scene = 'nets';
+      this.match = null;
       this.mode = null;
       this.session = null;
       this.paused = false;
@@ -193,6 +234,7 @@
       scene.overlay = (ctx, cam) => {
         if (this.mode === 'bat' && this.session) this.ui.drawBatOverlay(ctx, this.session, cam);
         if (this.mode === 'bowl' && this.session) this.session.drawOverlay(ctx, cam);
+        if (this.match && this.session) this.ui.drawMatchOverlay(ctx, this.session, cam);
       };
       this.renderer.frame(scene);
       if (this.session) this.ui.drawField();

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -19,7 +19,7 @@
     <div class="card">
       <div class="logo">
         <h1>CRICKET <span>LLM</span></h1>
-        <p>Net session</p>
+        <p>Nets &amp; Test matches</p>
       </div>
       <div class="modes">
         <button class="mode-btn" id="goBat">
@@ -31,6 +31,16 @@
           <span class="emoji">🔴</span>
           <div class="big">BOWL</div>
           <div class="sub">Pace, off spin or leg spin. Hit your marks in the run-up, land the release, set the batter up.</div>
+        </button>
+        <button class="mode-btn wide hidden" id="goContinue">
+          <span class="emoji">▶</span>
+          <div class="big">CONTINUE MATCH</div>
+          <div class="sub" id="continueSub"></div>
+        </button>
+        <button class="mode-btn wide hidden" id="goMatch">
+          <span class="emoji">🏟️</span>
+          <div class="big">MATCH</div>
+          <div class="sub">A Test on a real ground. Bat and run between the wickets, bowl your overs, and eleven fielders chase everything.</div>
         </button>
       </div>
       <div class="bests" id="titleBests"></div>
@@ -131,10 +141,83 @@
     </div>
   </div>
 
+  <!-- ============ MATCH SETUP ============ -->
+  <div class="screen hidden" id="setupMatch">
+    <div class="card setup">
+      <h2>Test match</h2>
+      <p class="lead">Your XI against an LLM XI on a proper ground. You bat (and run) for your side and bowl every over you want to; the fielding is all AI. The match saves after every ball.</p>
+      <div class="row"><label>Length</label>
+        <div class="seg" data-key="mFormat">
+          <button data-v="lite">Lite Test<small>3 wickets an innings · 5 days of 27 overs</small></button>
+          <button data-v="half">Half Test<small>5 wickets an innings · 5 days of 45 overs</small></button>
+          <button data-v="full">Full Test<small>10 wickets an innings · 5 days of 90 overs</small></button>
+        </div>
+      </div>
+      <div class="row"><label>Opposition</label>
+        <div class="seg" data-key="mLevel">
+          <button data-v="club">Club</button>
+          <button data-v="grade">Grade</button>
+          <button data-v="state">State</button>
+          <button data-v="test">Test</button>
+        </div>
+      </div>
+      <div class="row"><label>You bat</label>
+        <div class="seg" data-key="hand">
+          <button data-v="R">Right-handed</button>
+          <button data-v="L">Left-handed</button>
+        </div>
+      </div>
+      <div class="row"><label>Batting controls</label>
+        <div class="seg" data-key="batControls">
+          <button data-v="physical">Physical bat</button>
+          <button data-v="classic">Classic</button>
+        </div>
+      </div>
+      <div class="row"><label>Running between the wickets</label>
+        <div class="seg" data-key="runAssist">
+          <button data-v="default">Default<small>keyboard: you call · touch: partner</small></button>
+          <button data-v="manual">You call<small>W run · S back · Space dive</small></button>
+          <button data-v="auto">Partner runs<small>RUN / BACK take over</small></button>
+        </div>
+        <div class="lead" id="assistBlurb" style="margin:6px 0 0"></div>
+      </div>
+      <div class="howto">
+        <b>Running:</b> once it's off the bat (or past it) the ball is live and the field chases it. <kbd>W</kbd> / <kbd>↑</kbd> = <b>run</b>: the first press sends you both, each press after that calls one more (one ahead at most). <kbd>S</kbd> / <kbd>↓</kbd> = <b>get back</b>: cancels the extra one, or turns you both round from anywhere. <kbd>Space</kbd> = <b>dive</b>, only with a throw coming in and you within a few metres of the crease. The mouse is your bat: it never runs. Touch: <b>RUN</b> / <b>BACK</b>, and <b>DIVE</b> when it's on. The bat is grounded for you as you arrive.<br>
+        <b>Calls:</b> you call in front of square; behind square your partner shouts <b>YES / NO / WAIT / THERE'S TWO</b>. The strip at the bottom shows you both on the pitch; at Club, Grade and State it turns amber / red when a run-out is on (sooner at the easier levels), at Test it's your eyes and his shouts.<br>
+        <b>Bowling:</b> each over you choose who bowls (<kbd>1</kbd>–<kbd>5</kbd> then <kbd>Enter</kbd>; no one bowls two in a row), or <kbd>S</kbd> lets the AI bowl it.<br>
+        <b>Between balls:</b> <kbd>Tab</kbd> shows the scorecard, <kbd>Esc</kbd> the pause menu: declare, simulate ahead, change the running.
+      </div>
+      <div class="actions">
+        <button class="btn" data-back>Back</button>
+        <button class="btn primary" id="startMatch">To the middle</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MATCH PANELS (toss, bowler, innings break, result) ============ -->
+  <div class="screen hidden" id="matchPanel"><div class="card setup"></div></div>
+
   <!-- ============ PAUSE ============ -->
   <div class="screen hidden" id="pause">
     <div class="card setup" style="max-width:460px">
       <h2>Drinks break</h2>
+      <div class="match-only hidden" id="pauseMatch">
+        <div class="row"><label>Simulate to</label>
+          <div class="simgrid">
+            <button class="btn" data-sim="over">End of the over</button>
+            <button class="btn" data-sim="wicket">Next wicket</button>
+            <button class="btn" data-sim="session">End of the session</button>
+            <button class="btn" data-sim="innings">End of the innings</button>
+          </div>
+          <div class="lead hidden" id="simNote" style="margin:6px 0 0">There's a ball in play: resume, and declare or simulate once it's dead.</div>
+        </div>
+        <div class="row"><label>Running between the wickets (from the next ball)</label>
+          <div class="seg" id="pauseAssist">
+            <button data-v="manual">You call<small>W run · S back · Space dive</small></button>
+            <button data-v="auto">Partner runs<small>RUN / BACK take over</small></button>
+          </div>
+        </div>
+      </div>
       <div class="row"><label>Timing calibration (if your clicks or swings feel consistently early or late)</label>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" id="calib" min="-80" max="80" step="5" style="flex:1">
@@ -164,6 +247,12 @@
       <div class="actions" style="flex-direction:column">
         <button class="btn primary" id="resume">Resume</button>
         <button class="btn" id="camBtn">Switch camera (C)</button>
+        <button class="btn match-only hidden" id="scoreBtn">Scorecard (Tab)</button>
+        <button class="btn match-only hidden" id="declareBtn">Declare</button>
+        <div class="confirm hidden" id="declareConfirm">
+          <span id="declareQ">Declare?</span>
+          <div class="confirm-btns"><button class="btn primary" id="declareYes">Yes, declare</button><button class="btn" id="declareNo">No</button></div>
+        </div>
         <button class="btn" id="restart">Restart session</button>
         <button class="btn" id="toMenu">Main menu</button>
         <a class="btn" href="../index.html" style="text-align:center;text-decoration:none">Back to the desktop</a>
@@ -201,31 +290,46 @@
       <button class="tbtn big" data-act="hit">HIT</button>
       <button class="tbtn small" data-act="loft">LOFT</button>
     </div>
+    <!-- running (match): shown by UI.runHud while the ball's live and yours to call -->
+    <div class="tgroup right hidden" id="runBtns">
+      <button class="tbtn dive hidden" data-act="dive">DIVE</button>
+      <button class="tbtn run" data-act="runyes">RUN</button>
+    </div>
+    <div class="tgroup left hidden" id="runBack">
+      <button class="tbtn runno" data-act="runno">BACK</button>
+    </div>
     <div class="tgroup right" data-mode="bowl">
       <button class="tbtn big" data-act="bowl">BOWL</button>
     </div>
   </div>
 
   <script src="js/math.js?v=1"></script>
-  <script src="js/camera.js?v=2"></script>
-  <script src="js/world.js?v=1"></script>
-  <script src="js/figure.js?v=4"></script>
+  <script src="js/camera.js?v=4"></script>
+  <script src="js/world.js?v=5"></script>
+  <script src="js/ground.js?v=2"></script>
+  <script src="js/figure.js?v=5"></script>
   <script src="js/bowlanim.js?v=1"></script>
   <script src="js/batanim.js?v=1"></script>
-  <script src="js/ball.js?v=2"></script>
-  <script src="js/render.js?v=1"></script>
+  <script src="js/fielderanim.js?v=2"></script>
+  <script src="js/ball.js?v=4"></script>
+  <script src="js/render.js?v=2"></script>
   <script src="js/field.js?v=1"></script>
+  <script src="js/fieldsim.js?v=4"></script>
+  <script src="js/matchcam.js?v=2"></script>
+  <script src="js/match.js?v=3"></script>
   <script src="js/deliveries.js?v=2"></script>
-  <script src="js/config.js?v=6"></script>
+  <script src="js/config.js?v=9"></script>
   <script src="js/input.js?v=4"></script>
   <script src="js/audio.js?v=3"></script>
-  <script src="js/save.js?v=5"></script>
-  <script src="js/ui.js?v=6"></script>
+  <script src="js/save.js?v=7"></script>
+  <script src="js/ui.js?v=7"></script>
   <script src="js/physbat.js?v=4"></script>
-  <script src="js/batting.js?v=6"></script>
-  <script src="js/aibatter.js?v=1"></script>
-  <script src="js/bowling.js?v=2"></script>
-  <script src="js/game.js?v=4"></script>
-  <script src="js/main.js?v=5"></script>
+  <script src="js/batting.js?v=8"></script>
+  <script src="js/aibatter.js?v=2"></script>
+  <script src="js/bowling.js?v=4"></script>
+  <script src="js/matchplay.js?v=4"></script>
+  <script src="js/matchui.js?v=3"></script>
+  <script src="js/game.js?v=7"></script>
+  <script src="js/main.js?v=10"></script>
 </body>
 </html>

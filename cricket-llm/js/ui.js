@@ -26,9 +26,10 @@
       this.fieldDpr = dpr;
     },
 
-    showHud(mode) {
+    showHud(mode, match) {
       document.body.dataset.mode = mode || '';
       this.shotAnim = null;
+      $('fieldLabel').textContent = match ? 'the field' : 'the imaginary field';     // (a match's mini-map is the real one)
       for (const id of ['scoreboard', 'field', 'coach', 'bowlerTag', 'controlsHint', 'pauseBtn', 'muteBtn']) $(id).classList.toggle('hidden', !mode);
       $('callout').classList.toggle('hidden', !mode);
       this.clearCallout();

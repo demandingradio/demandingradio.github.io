@@ -99,6 +99,9 @@
   class Ball {
     constructor() {
       this.onEvent = null;      // wiring, survives reset()
+      // Open ground (a match): no nets, and the ball runs on across a real
+      // outfield. Set by the match; survives reset(). null = the nets.
+      this.open = null;         // CFG.MATCH.OUTFIELD: { rollDecel (m/s^2), rollLin (1/s), bounceK, keep | keepK, keepMin, keepMax }
       this.reset();
     }
 
@@ -130,6 +133,8 @@
       this.vel = V.copy(vel);
       this.spin = spin || 0;
       this.netHit = false;
+      this.landed = false;      // has it touched the ground since it was hit/thrown?
+      this.tFree = 0;           // seconds of free flight
     }
 
     update(dt) {
@@ -143,8 +148,10 @@
         this.pos = posAt(this.d, this.t);
       } else if (this.mode === 'free') {
         const N = World.NET;
+        const O = this.open;
         const steps = 4;
         const h = dt / steps;
+        this.tFree += dt;
         for (let i = 0; i < steps; i++) {
           const v = this.vel;
           const sp = V.len(v);
@@ -156,13 +163,30 @@
             this.pos.y = R;
             if (this.vel.y < 0) {
               const hard = -this.vel.y;
-              this.vel.y = hard > 1.2 ? hard * 0.42 : 0;
-              this.vel.x *= 0.8; this.vel.z *= 0.8;
+              this.vel.y = hard > 1.2 ? hard * (O ? O.bounceK : 0.42) : 0;
+              // a real bounce loses some pace; on a ground, just settling
+              // onto the grass (rolling) doesn't
+              // (a ground: the harder it lands, the more it skids and loses)
+              if (!O || hard > 0.8) {
+                const keep = !O ? 0.8 : O.keepK != null ? M.clamp(1 - O.keepK * hard, O.keepMin || 0.75, O.keepMax || 0.97) : O.keep;
+                this.vel.x *= keep; this.vel.z *= keep;
+              }
+              if (!this.landed) { this.landed = true; if (this.onEvent) this.onEvent('land', V.copy(this.pos), hard); }
               if (hard > 1.5 && this.onEvent) this.onEvent('ground', this.pos, hard);
             }
-            // rolling friction
-            this.vel.x *= 1 - 1.2 * h; this.vel.z *= 1 - 1.2 * h;
+            if (O) {
+              // across the outfield: grass friction (constant) + a little that grows with speed
+              const hs = Math.hypot(this.vel.x, this.vel.z);
+              if (hs > 1e-6) {
+                const k = Math.max(0, hs - (O.rollDecel + O.rollLin * hs) * h) / hs;
+                this.vel.x *= k; this.vel.z *= k;
+              }
+            } else {
+              // rolling friction
+              this.vel.x *= 1 - 1.2 * h; this.vel.z *= 1 - 1.2 * h;
+            }
           }
+          if (O) continue;          // no nets on a ground
           // Nets: side nets, back net, (open roof). Nets absorb most energy.
           const inNetZ = this.pos.z > N.BACK_Z && this.pos.z < N.FRONT_Z;
           if (inNetZ && this.pos.x > N.X[2] - R) { this._net('x', N.X[2] - R); }

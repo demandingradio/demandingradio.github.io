@@ -9,7 +9,7 @@
   const KEY = 'cricketllm.v1';
 
   const DEFAULT = () => ({
-    settings: { hand: 'R', bowler: 'pace', diff: 'club', batControls: 'physical', bowlType: 'pace', batterHand: 'R', batterDiff: 'grade', calib: 0, batLimit: 0, batWeight: 20, batPower: 0.82, tuneV: 2, muted: false, cam: 'broadcast', seenBat: false, seenBowl: false },
+    settings: { hand: 'R', bowler: 'pace', diff: 'club', batControls: 'physical', bowlType: 'pace', batterHand: 'R', batterDiff: 'grade', calib: 0, batLimit: 0, batWeight: 20, batPower: 0.82, tuneV: 2, mFormat: 'lite', mLevel: 'grade', runAssist: 'default', muted: false, cam: 'broadcast', seenBat: false, seenBowl: false },
     best: { bat: {}, bowl: {} },
     stats: { batBalls: 0, batRuns: 0, batOuts: 0, fours: 0, sixes: 0, bowlBalls: 0, bowlWkts: 0, bowlRuns: 0, topSpeed: 0 },
   });
@@ -34,6 +34,11 @@
           // New standard bat (2026-09-30): swing power x0.82, heaviest bat weight
           const st = this.data.settings;
           if (!(d.settings && d.settings.tuneV >= 2)) { st.batPower = 0.82; st.batWeight = 20; st.tuneV = 2; }
+          // Match settings: old length names, and "no choice yet" = the default for the device
+          st.mFormat = { quick: 'lite', short: 'half', test: 'full' }[st.mFormat] || st.mFormat;
+          if (['lite', 'half', 'full'].indexOf(st.mFormat) < 0) st.mFormat = 'lite';
+          if (['club', 'grade', 'state', 'test'].indexOf(st.mLevel) < 0) st.mLevel = 'grade';
+          if (['default', 'manual', 'auto'].indexOf(st.runAssist) < 0) st.runAssist = 'default';
         }
       } catch (e) { /* no storage */ }
       return this;
