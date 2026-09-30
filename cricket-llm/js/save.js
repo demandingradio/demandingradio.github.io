@@ -9,7 +9,7 @@
   const KEY = 'cricketllm.v1';
 
   const DEFAULT = () => ({
-    settings: { hand: 'R', bowler: 'pace', diff: 'club', batControls: 'physical', bowlType: 'pace', batterHand: 'R', batterDiff: 'grade', calib: 0, batLimit: 0, batWeight: 0, batPower: 1, muted: false, cam: 'broadcast', seenBat: false, seenBowl: false },
+    settings: { hand: 'R', bowler: 'pace', diff: 'club', batControls: 'physical', bowlType: 'pace', batterHand: 'R', batterDiff: 'grade', calib: 0, batLimit: 0, batWeight: 20, batPower: 0.82, tuneV: 2, muted: false, cam: 'broadcast', seenBat: false, seenBowl: false },
     best: { bat: {}, bowl: {} },
     stats: { batBalls: 0, batRuns: 0, batOuts: 0, fours: 0, sixes: 0, bowlBalls: 0, bowlWkts: 0, bowlRuns: 0, topSpeed: 0 },
   });
@@ -31,6 +31,9 @@
           // Never let a bad value (NaN/null) poison the lifetime stats
           for (const k in this.data.stats) if (!Number.isFinite(this.data.stats[k])) this.data.stats[k] = 0;
           if (!Number.isFinite(this.data.settings.calib)) this.data.settings.calib = 0;
+          // New standard bat (2026-09-30): swing power x0.82, heaviest bat weight
+          const st = this.data.settings;
+          if (!(d.settings && d.settings.tuneV >= 2)) { st.batPower = 0.82; st.batWeight = 20; st.tuneV = 2; }
         }
       } catch (e) { /* no storage */ }
       return this;

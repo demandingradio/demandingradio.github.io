@@ -218,6 +218,20 @@
       const rel = this.bowlAnim.releasePoint();
       const D = this.diff;
       const spec = b.spec;
+      // Committed your feet before it was bowled? The bowler may have seen it
+      // and changed the length: go back early and get a full one, stride
+      // early and get it short.
+      if (this.physical && Math.abs(this.phys.feet) >= CFG.PHYS.COMMIT_EARLY && Math.random() < (D.physReadFeet || 0)) {
+        const back = this.phys.feet < 0, L = spec.length;
+        // already the ball that punishes it? keep it (never soften a planned bouncer / yorker)
+        const already = this.spin ? (back ? L < 2.6 : L >= 5.3) : (back ? L < 3.4 : L >= 8.6);
+        if (!already) {
+          spec.length = this.spin ? (back ? M.rand(1.0, 2.6) : M.rand(5.3, 6.6)) : (back ? M.rand(1.0, 3.4) : M.rand(8.6, 10.6));
+          if (spec.varKey === (back ? 'bouncer' : 'yorker')) spec.varKey = 'stock';
+          b.readFeet = back ? 'back' : 'front';
+          this.game.ui.toast(back ? 'The bowler saw you go back early — pitched it up' : 'The bowler saw you stride early — banged it in');
+        }
+      }
       const plan = Deliveries.build({
         type: this.type, varKey: spec.varKey, length: spec.length, offLine: spec.offLine,
         hand: this.hand, speedKmh: spec.speedKmh, quality: spec.quality * D.move, release: rel,
@@ -301,7 +315,7 @@
     _tune(key, dir) {
       const S = this.game.save.data.settings;
       const steps = key === 'batLimit' ? CFG.PHYS.LIMIT_STEPS : CFG.PHYS.WEIGHT_STEPS;
-      let i = steps.indexOf(+S[key] || 0);
+      let i = steps.indexOf(S[key] == null ? CFG.PHYS.BASE[key === 'batLimit' ? 'limit' : 'weight'] : +S[key] || 0);
       if (i < 0) i = 0;
       i = M.clamp(i + dir, 0, steps.length - 1);
       S[key] = steps[i];
@@ -316,8 +330,6 @@
       const fwd = I.down('w') || I.down('arrowup') || !!held.front;
       const back = I.down('s') || I.down('arrowdown') || !!held.back;
       let target = I.pad && I.pad.active ? I.pad.feet : fwd && !back ? 1 : back && !fwd ? -1 : null;
-      // before it's bowled you can only press (a trigger movement), not commit
-      if (target != null && b.phase === 'runup') target = M.clamp(target, -CFG.PHYS.TRIGGER_MAX, CFG.PHYS.TRIGGER_MAX);
       // ... and a stride can never take you past the ball
       const canFwd = (p) => !(b.phase === 'flight' && b.plan) || now + 0.12 < this.tAt(ph.planeFor(p));
       const locked = !!b.physPending || !!b.resolved || !!b.danced || b.phase === 'done';
@@ -354,6 +366,7 @@
       if (!b.danced) { b.feetP = pJ; b.foot = pJ > 0.4 ? 'front' : pJ < -0.4 ? 'back' : null; }
       const r = this.phys.resolve(P.tX);
       b.res = r; b.resolved = true;
+      this.phys.startFollow(this.phys.lastPose);        // swing on through
       this._bestOK();                                   // note the swing power this stroke was played at
       // after the verdict, the swing meter shows the verdict's cap (if any)
       b.physCap = r.physInfo && r.physInfo.capped ? r.physInfo.cap : null;
@@ -375,7 +388,7 @@
 
     // Best scores only count if the whole innings was at standard swing power
     _bestOK() {
-      if (this.physical && Math.abs(this.phys.power() - 1) >= 1e-6) this.boosted = true;
+      if (this.physical && this.phys.power() > CFG.PHYS.BASE.power + 1e-6) this.boosted = true;
       return !this.boosted;
     }
 
@@ -984,10 +997,14 @@
         if (b.resolved && b.phase === 'flight' && this._resultReady(now)) this._finishBall();
       }
       if (this.stumpsFx) updateStumpsFx(this.stumpsFx, dt);
-      this.batAnim.pose(now, V.v(-0.4 * (this.batter.mirror ? -1 : 1), 1.6, 19));
+      // Physical bat: the body follows YOUR bat and feet (legs, pads, arms and
+      // gloves visible; torso faint and head hidden so they don't block the view)
+      if (this.physical && this.phys.pose) this.phys.poseBatter(this.batter, b.phase === 'flight' && b.plan ? this.ball.pos : null, b);
+      else this.batAnim.pose(now, V.v(-0.4 * (this.batter.mirror ? -1 : 1), 1.6, 19));
       // Batter's-eye camera: ghost the body so it doesn't block the view
       const eye = this.game.camMode === 'eye';
-      this.batter.alpha = this.physical ? 0.07 : eye ? 0.12 : 1;
+      this.batter.alpha = this.physical ? 0.5 : eye ? 0.12 : 1;
+      this.batter.partAlpha = this.physical ? CFG.PHYS.BODY_ALPHA : null;
       this.batter.batAlpha = eye ? 0.95 : 0;
       if (b.phase === 'done' && now >= b.tEnd) this._nextBall();
     }
@@ -1012,9 +1029,17 @@
       if (r.playedOn) { vel.x = -pos.x * 2; vel.z = -3; vel.y = -0.5; }
       this.ball.free(pos, vel, 0);
       this.ball.update(Math.max(0, this.game.clock - b.tHit) * (b.tsc || 1));   // catch up the frame overshoot
-      const q = r.label === 'MIDDLED' ? 1 : r.label === 'TIMED' ? 0.6 : 0.2;
-      Audio.bat(q, r.label === 'EDGED' ? 'edge' : r.kindRes === 'block' ? 'defend' : 'middle');
-      if (r.label === 'MIDDLED') { this.game.hitStop(0.06, 0.45, 0.35); this.game.cam.shake = 0.25; }
+      const sw = (r.physInfo && r.physInfo.sweet) || 0;
+      const q = r.phys ? Math.max(r.label === 'TIMED' ? 0.5 : 0.2, sw) : r.label === 'MIDDLED' ? 1 : r.label === 'TIMED' ? 0.6 : 0.2;
+      Audio.bat(q, r.label === 'EDGED' || r.label === 'GLOVED' ? 'edge' : r.kindRes === 'block' ? 'defend' : 'middle');
+      if (r.phys) {
+        // off the sweet spot: a crack, a longer freeze, a jolt through the screen
+        if (r.label === 'MIDDLED') {
+          Audio.sweet(sw);
+          this.game.hitStop(0.05 + 0.07 * sw, 0.3 + 0.25 * sw, 0.35);
+          this.game.cam.shake = 0.2 + 0.45 * sw;
+        }
+      } else if (r.label === 'MIDDLED') { this.game.hitStop(0.06, 0.45, 0.35); this.game.cam.shake = 0.25; }
       if (r.playedOn) this._breakStumps(pos.x);
       this.game.ui.fieldShot(r.proj || this.field.last, true);
     }

@@ -84,6 +84,15 @@
       if (q > 0.85) this._tone(t + 0.004, 'sine', 2600, 2200, 0.08, 0.12);
     },
 
+    // Right out of the middle: a bright, ringing crack on top of the knock
+    sweet(s) {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime, k = Math.max(0, Math.min(1, s));
+      this._noise(t, 0.03, 'highpass', 2600, 1, 0.5 * k, 0.03);
+      this._tone(t, 'sine', 1900 + 700 * k, 1500, 0.22 * k, 0.16 + 0.1 * k);
+      this._tone(t + 0.01, 'triangle', 3100, 2600, 0.1 * k, 0.12);
+    },
+
     pad() {
       if (!this.ctx) return;
       const t = this.ctx.currentTime;

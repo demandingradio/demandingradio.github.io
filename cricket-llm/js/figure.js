@@ -127,7 +127,8 @@
       const a = this.alpha;
       const isBat = this.kind === 'batter';
       const prims = [];
-      const tube = (p0, p1, w, col, shade) => prims.push({ t: 'tube', p0, p1, w, col, shade });
+      let part = 'legs';
+      const tube = (p0, p1, w, col, shade) => prims.push({ t: 'tube', p0, p1, w, col, shade, part });
       // Legs
       tube(J.lHip, J.lKnee, 0.15, k.pants, k.pantsShade);
       tube(J.rHip, J.rKnee, 0.15, k.pants, k.pantsShade);
@@ -141,22 +142,25 @@
       tube(J.lAnk, J.lToe, 0.095, k.shoes, '#9a9a94');
       tube(J.rAnk, J.rToe, 0.095, k.shoes, '#9a9a94');
       // Torso: pelvis block + chest block
-      prims.push({ t: 'torso', pts: [J.lHip, J.rHip, J.rSho, J.lSho], col: k.shirt, shade: k.shirtShade });
+      part = 'torso';
+      prims.push({ t: 'torso', pts: [J.lHip, J.rHip, J.rSho, J.lSho], col: k.shirt, shade: k.shirtShade, part });
       tube(J.chest, J.neck, 0.11, k.skin, k.skinShade);
       // Arms
+      part = 'arms';
       tube(J.lSho, J.lElb, 0.105, k.sleeve, k.shirtShade);
       tube(J.rSho, J.rElb, 0.105, k.sleeve, k.shirtShade);
       tube(J.lElb, J.lHand, 0.085, k.skin, k.skinShade);
       tube(J.rElb, J.rHand, 0.085, k.skin, k.skinShade);
       if (isBat && k.gloves) {
-        prims.push({ t: 'ball', p: J.lHand, r: 0.058, col: k.gloves, shade: k.glovesTrim });
-        prims.push({ t: 'ball', p: J.rHand, r: 0.058, col: k.gloves, shade: k.glovesTrim });
+        prims.push({ t: 'ball', p: J.lHand, r: 0.058, col: k.gloves, shade: k.glovesTrim, part });
+        prims.push({ t: 'ball', p: J.rHand, r: 0.058, col: k.gloves, shade: k.glovesTrim, part });
       } else {
         prims.push({ t: 'ball', p: J.lHand, r: 0.045, col: k.skin, shade: k.skinShade });
         prims.push({ t: 'ball', p: J.rHand, r: 0.045, col: k.skin, shade: k.skinShade });
       }
       // Head (skipped when ghosted, e.g. in the batter's-eye camera)
-      if (a >= 0.2) prims.push({ t: 'head', p: J.head, r: RIG.HEAD_R, fig: this });
+      const PA = this.partAlpha;
+      if ((PA ? PA.head : a) >= 0.2) prims.push({ t: 'head', p: J.head, r: RIG.HEAD_R, fig: this, part: 'head' });
       // Bat
       if (this.bat && !this.hideBat) prims.push({ t: 'bat', g: this.batGeom() });
       // Ball in hand
@@ -179,7 +183,8 @@
         else if (pr.t === 'torso') d = cam.depth(V.lerp(V.lerp(pr.pts[0], pr.pts[1], 0.5), V.lerp(pr.pts[2], pr.pts[3], 0.5), 0.5)) + 0.02;
         else if (pr.t === 'bat') d = cam.depth(V.lerp(pr.g.top, pr.g.toe, 0.5));
         else d = cam.depth(pr.p);
-        const pa = pr.t === 'bat' ? Math.max(a, this.batAlpha || 0) : a;
+        const pa = pr.t === 'bat' ? Math.max(a, this.batAlpha || 0) : PA && pr.part ? PA[pr.part] : a;
+        if (pa <= 0.01) continue;
         queue.push({ z: d, draw: (ctx) => drawPrim(ctx, cam, pr, pa) });
       }
     }

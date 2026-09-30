@@ -26,6 +26,8 @@
   const { V, M, BallPhys, Field, World, Figure, CFG } = CLLM;
   const smooth = (x) => { const t = M.clamp(x, 0, 1); return t * t * (3 - 2 * t); };
   const approach = (v, to, step) => (v < to ? Math.min(to, v + step) : Math.max(to, v - step));
+  // rotate v about unit axis a by ang (Rodrigues)
+  const rotAxis = (v, a, ang) => { const c = Math.cos(ang), s = Math.sin(ang); return V.add(V.add(V.mul(v, c), V.mul(V.cross(a, v), s)), V.mul(a, V.dot(a, v) * (1 - c))); };
   const D2R = Math.PI / 180;
   const R = World.PITCH.BALL_R;
 
@@ -62,6 +64,10 @@
       this.feet = 0;          // -1 right back .. 0 stance .. +1 full stride forward
       this.camShift = 0;      // the camera moves with your feet
       this.crossOn = false;   // cross-bat hold, as last reported
+      this.dpose = null;      // the bat as DRAWN (adds the follow-through; never used to judge)
+      this.trail = [];        // recent drawn blade ends, for the swing trail
+      this.ft = null;         // follow-through after the ball is played
+      this.flash = null;      // contact burst (bigger on the sweet spot)
       this.resetTrack();
     }
 
@@ -78,7 +84,7 @@
     stepFeet(dt, target, locked, canFwd) {
       if (!locked && target != null) {
         let p = this.feet + (target - this.feet) * (1 - Math.exp(-CFG.PHYS.FEET_RATE * dt));
-        if (Math.abs(target - p) < 0.004) p = target;
+        if (Math.abs(target - p) < 0.02) p = target;                 // settle all the way
         if (p > this.feet && canFwd && !canFwd(p)) p = this.feet;
         this.feet = M.clamp(p, -1, 1);
         this.plane = this.planeFor(this.feet);
@@ -139,9 +145,9 @@
     // Bat speed limit (m/s on the plane); 0 = off
     speedLimit() { const v = +this._set().batLimit || 0; return v > 0 ? v : 0; }
     // Bat weight: the bat follows your hand on a spring (rad/s); 0 = off
-    weight() { const v = +this._set().batWeight || 0; return v > 0 ? v : 0; }
+    weight() { const S = this._set(); const v = S.batWeight == null ? CFG.PHYS.BASE.weight : +S.batWeight || 0; return v > 0 ? v : 0; }
     // Swing power multiplier
-    power() { return M.clamp(+this._set().batPower || 1, 0.4, 2.5); }
+    power() { const S = this._set(); return M.clamp(S.batPower == null ? CFG.PHYS.BASE.power : +S.batPower || CFG.PHYS.BASE.power, 0.4, 2.5); }
 
     // ---- reach: where a batter can actually put the bat -------------------------
     // c = how far the bat has turned cross (0 straight .. 1 horizontal),
@@ -407,7 +413,7 @@
       const yawMax = M.lerp(50, 65, k);                       // a cross bat can go further round (cut, pull)
       const yaw = M.clamp((sx / (spReal + 1e-6)) * u * 55, -yawMax, yawMax) * D2R;
       // hands slightly ahead of the blade: the face looks a touch down unless you swing up
-      const pitch = (M.clamp((sy / (spReal + 1e-6)) * u * 50, -10, 45) - 5 - (batSpeed < 2.2 ? 14 : 0)) * D2R;
+      const pitch = (M.clamp((sy / (spReal + 1e-6)) * u * 30, -10, 26) - 5 - (batSpeed < 2.2 ? 14 : 0)) * D2R;
       const fwd = V.v(0, 0, 1);
       let n = V.norm(V.add(V.add(V.mul(fwd, Math.cos(yaw) * Math.cos(pitch)), V.mul(rH, Math.sin(yaw) * Math.cos(pitch))), V.v(0, Math.sin(pitch), 0)));
       // A straight bat: nearly upright, leaning only a little toward where
@@ -427,11 +433,12 @@
         const dirX = V.norm(V.v(d0.x * cs + d0.z * sn, d0.y, -d0.x * sn + d0.z * cs));
         dir = V.norm(V.add(V.mul(dir, 1 - k), V.mul(dirX, k)));
       }
-      // keep the face square to the blade
-      n = V.sub(n, V.mul(dir, V.dot(n, dir)));
-      if (V.len(n) < 1e-3) n = V.v(0, 0, 1);
-      n = V.norm(n);
       if (n.z < 0.15) n = V.norm(V.v(n.x, n.y, 0.15));
+      // The blade tilts with the face the swipe asks for: lofting brings the
+      // toe through (face open, ball up), a chop leans it back (face shut),
+      // so the face you swing is the face you hit with.
+      const dq = V.sub(dir, V.mul(n, V.dot(dir, n)));
+      if (V.len(dq) > 1e-3) dir = V.norm(dq);
       const grip = V.sub(S, V.mul(dir, BLADE.GRIP));
       const H = grip;
       let w = V.cross(dir, n);
@@ -454,11 +461,93 @@
       // the swing meter shows the swing you'd make now (capped if cramped)
       const cap = b && b.physCap != null ? b.physCap : PHYS.MAX_BAT;
       this.speedNow = M.lerp(this.speedNow, Math.min(cap, this.pose.batSpeed), 0.5);
+      // ---- display only (the verdict never reads this) --------------------
+      // After the ball is played, the blade whips on through around your
+      // hands (the follow-through), then eases back to where you're holding it.
+      let dp = this.pose, ftSp = 0;
+      const ft = this.ft;
+      if (ft) {
+        const age = (real - ft.t0) / 1000, OUT = 0.24, BACK = 0.42;
+        const k = age < OUT ? M.easeOut(age / OUT) : age < OUT + BACK ? 1 - M.easeInOut((age - OUT) / BACK) : 0;
+        if (k > 0) {
+          const a = V.cross(this.pose.dir, ft.through);            // always carry the toe toward the swing
+          dp = this._turnPose(this.pose, V.len(a) > 0.05 ? V.norm(a) : ft.axis, ft.ang * k);
+          ftSp = ft.sp * (age < OUT ? 1 : 0.4);
+        }
+        else this.ft = null;
+      }
+      this.dpose = dp;
+      // swing trail: where the blade has just been
+      this.trail.push({ s: real, top: V.sub(dp.grip, V.mul(dp.dir, 0.15)), toe: V.add(dp.grip, V.mul(dp.dir, 0.71)), sp: Math.max(this.speedNow, ftSp) });
+      while (this.trail.length > 2 && this.trail[0].s < real - 140) this.trail.shift();
       // where you're pointing vs where the bat is (reach edge / bat lag)
       const tg = this.tgtRaw, Rb = this.reach(st.c, st.p);
       this.reachNow = Rb;
       this.pinned = !!tg && (tg.x < Rb.xLo - 0.03 || tg.x > Rb.xHi + 0.03 || tg.y < Rb.yLo - 0.03 || tg.y > Rb.yHi + 0.03);
       this.lagging = !!tg && Math.hypot(tg.x - st.S.x, tg.y - st.S.y) > 0.03;
+    }
+
+    // A pose turned about the hands (for drawing the follow-through)
+    _turnPose(p, axis, ang) {
+      const dir = V.norm(rotAxis(p.dir, axis, ang)), n = V.norm(rotAxis(p.n, axis, ang));
+      let w = V.cross(dir, n);
+      w = V.len(w) < 1e-3 ? p.w : V.norm(w);
+      return Object.assign({}, p, { dir, n, w, S: V.add(p.grip, V.mul(dir, BLADE.GRIP)) });
+    }
+
+    // The ball has been played (hit or missed): swing on through. The blade
+    // turns about the hands toward where you were swinging and on toward
+    // the bowler, further the harder you swung.
+    startFollow(pose) {
+      if (!pose || !(pose.batSpeed >= 5)) return;
+      const v = pose.vReal, sp = Math.hypot(v.x, v.y) || 1;
+      const through = V.norm(V.add(V.v(v.x / sp * 0.55, v.y / sp * 0.55, 0), V.v(0, 0.12, 0.85)));
+      let axis = V.cross(pose.dir, through);
+      if (V.len(axis) < 0.05) return;
+      axis = V.norm(axis);
+      this.ft = { t0: performance.now(), axis, through, ang: M.clamp(pose.batSpeed / 22, 0.35, 1) * 1.95, sp: pose.batSpeed };
+    }
+
+    // ---- the batter's body follows YOUR bat and feet ----------------------------
+    // Hands on the handle of the bat you're holding, feet where you've put
+    // them, body leaning out to reach the bat and opening up as you swing
+    // through. (Canonical right-hander frame; Figure mirrors left-handers.)
+    poseBatter(fig, lookAt, b) {
+      const F = CLLM.BatterAnim.FEET, h = this.h;
+      const dp = this.dpose || this.pose;
+      if (!dp) return null;
+      const toC = (p) => V.v(p.x * h, p.y, p.z);
+      const mix = (A, Z, u) => ({ pel: V.lerp(A.pel, Z.pel, u), lF: V.lerp(A.lF, Z.lF, u), rF: V.lerp(A.rF, Z.rF, u), face: M.lerp(A.face, Z.face, u), chest: M.lerp(A.chest, Z.chest, u), lean: V.lerp(A.lean, Z.lean, u) });
+      let fe;
+      if (b && b.danced) {
+        const P = CFG.BAT.PLANES, f0 = this.feet, z0 = this.planeFor(f0);
+        const from = f0 >= 0 ? mix(F.stance, F.front, f0) : mix(F.stance, F.back, -f0);
+        fe = mix(from, F.dance, M.clamp((this.plane - z0) / (P.dance - z0), 0, 1));
+      } else fe = this.feet >= 0 ? mix(F.stance, F.front, this.feet) : mix(F.stance, F.back, -this.feet);
+      const gripC = toC(dp.grip), dirC = toC(dp.dir), faceC = toC(dp.n);
+      const topHand = V.sub(gripC, V.mul(dirC, 0.07)), botHand = V.add(gripC, V.mul(dirC, 0.05));
+      // lean out toward the hands when the bat is a stretch away
+      const chest0 = V.add(fe.pel, V.add(V.v(0, 0.46, 0), fe.lean));
+      const toHands = V.sub(V.lerp(topHand, botHand, 0.5), chest0);
+      const extra = Math.max(0, V.len(toHands) - 0.5);
+      let reachLean = extra > 0 ? V.mul(V.norm(toHands), Math.min(0.5, extra)) : V.v();
+      reachLean = V.v(reachLean.x, reachLean.y * 0.35, reachLean.z);
+      // open the chest as the hands come through to the leg side (canonical +x)
+      const open = M.clamp((gripC.x - 0.02) / 0.5, 0, 1) * 0.95;
+      const chest = fe.chest - open;
+      const face = fe.face - open * 0.35;
+      return fig.solve({
+        pelvis: V.add(fe.pel, V.mul(reachLean, 0.3)),
+        facing: { x: Math.cos(face), z: Math.sin(face) },
+        chestFacing: { x: Math.cos(chest), z: Math.sin(chest) },
+        lean: V.add(fe.lean, reachLean),
+        lookAt: lookAt ? toC(lookAt) : V.v(-0.4, 1.6, 19),
+        lFoot: fe.lF, rFoot: fe.rF,
+        lToe: V.norm(V.v(-1, 0, 0.45)), rToe: V.norm(V.v(-1, 0, -0.1)),
+        lHand: topHand, rHand: botHand,
+        lElbowPole: V.v(-0.3, -0.4, 1), rElbowPole: V.v(0.2, -1, -0.3),
+        bat: { grip: gripC, dir: dirC, face: faceC },
+      });
     }
 
     // Display + input lag (ms). The frame showing the ball reaching you
@@ -523,6 +612,7 @@
       const at = this.trkAt(tSee);
       const Sx = at ? V.v(at.x, at.y, this.plane) : null;
       const pose = Sx ? this.poseFrom(Sx, this.swingAt(tSee), b.tsc, this.strokeLen(tSee - 130, tSee + 30), at.c) : this.pose;
+      this.lastPose = pose;
       const r = {
         phys: true, cls: 0, e: null, kind: 'phys', foot: b.foot || 'stance', notes: [], why: [], a: 0,
         fam: { key: 'phys', name: 'Your shot' }, runs: 0, out: false, contact: false, plane: this.plane,
@@ -660,25 +750,34 @@
       let vOut = V.add(V.mul(nEff, vnOut), V.add(vbatT, V.mul(vrT, 1 - grip)));
       // never through the bat
       if (V.dot(vOut, nEff) < 0.5) vOut = V.add(vOut, V.mul(nEff, 0.5 - V.dot(vOut, nEff)));
+      // THE SWEET SPOT: right in the middle of the blade (along and across)
+      // and on time, the bat gives the ball everything - up to +50% off the bat.
+      const edge = betaEdge > 15 * D2R;
+      const tAbs = Math.abs(tErr || 0);
+      const sweet = edge || gloved || soft ? 0
+        : (1 - M.clamp((dMid - 0.015) / 0.10, 0, 1)) * (1 - M.clamp((Math.abs(across) - 0.01) / 0.03, 0, 1)) * (1 - M.clamp((tAbs - 6) / 18, 0, 1));
+      const drive = M.clamp((pose.batSpeed - 2.2) / 3.8, 0, 1);          // a push isn't a swing: little extra
+      const boost = CFG.PHYS.SWEET_BOOST * Math.pow(sweet, 1.5) * drive;
+      if (boost > 0.001) vOut = V.mul(vOut, 1 + boost);
       const speed = V.len(vOut);
       const horiz = Math.hypot(vOut.x, vOut.z);
       const phi = Math.atan2(vOut.x, vOut.z);
       const loft = Math.atan2(vOut.y, horiz);
-      const edge = betaEdge > 15 * D2R;
       // "Middled" means middle of the bat AND on time: never tell someone
       // they nailed it when the timing was off (the game only bailed them out)
-      const tAbs = Math.abs(tErr || 0);
-      const middled = !gloved && !edge && dMid < 0.09 && pose.batSpeed > 8 && tAbs < 15;
+      const middled = sweet >= 0.45 && pose.batSpeed > 6;
       r.contact = true;
       r.exitVel = vOut; r.exitPhi = phi; r.exitSpeed = speed; r.exitLoft = loft;
       r.physInfo.q = q; r.physInfo.exit = speed; r.physInfo.edge = edge; r.physInfo.launch = loft / D2R;
       r.physInfo.tErr = tErr || 0; r.physInfo.tRot = tRot / D2R; r.physInfo.tAxis = tAxis;
+      r.physInfo.sweet = sweet; r.physInfo.boost = boost;
+      this.flash = { P: B, t0: performance.now(), sweet, gold: middled, edge: edge || gloved };
       // which edge: top/bottom on a cross bat, outside (off side)/inside on a straight one
       const sideV = V.mul(pose.w, Math.sign(across || 1));
       r.physInfo.edgeName = (pose.cross || 0) > 0.5 ? (sideV.y > 0 ? 'top edge' : 'bottom edge') : (sideV.x * -this.h > 0 ? 'outside edge' : 'inside edge');
       r.label = gloved ? 'GLOVED' : edge ? 'EDGED' : soft ? 'BLOCKED' : middled ? 'MIDDLED' : tAbs >= 30 ? 'MISTIMED' : q > 0.15 ? 'TIMED' : 'MISHIT';
       r.cls = r.label === 'MIDDLED' ? 3 : r.label === 'TIMED' || r.label === 'BLOCKED' ? 2 : 1;
-      r.pure = middled && pose.batSpeed > 20;
+      r.pure = sweet >= 0.8 && pose.batSpeed > 12;
       if (soft && !edge) r.kindRes = 'block';
       // ---- where does it go? ---------------------------------------------------
       // back onto the stumps?
@@ -769,9 +868,64 @@
 
     // ---- drawing -----------------------------------------------------------------
     queue(queue, cam) {
-      const p = this.pose;
+      const p = this.dpose || this.pose;
       if (!p) return;
       const s = this.s;
+      // swing trail: the swept blade over the last ~0.1 s, when it's moving fast
+      const tr = this.trail;
+      if (tr.length > 2 && tr[tr.length - 1].sp > 3) {
+        const now = tr[tr.length - 1].s;
+        queue.push({
+          z: cam.depth(p.S) + 0.08,
+          draw: (ctx) => {
+            ctx.save();
+            for (let i = 0; i < tr.length - 1; i++) {
+              const A = tr[i], Z = tr[i + 1];
+              const sp = Math.min(A.sp, Z.sp);
+              if (sp < 3) continue;
+              const pts = [A.top, A.toe, Z.toe, Z.top].map((q) => cam.project(q));
+              if (!pts.every(Boolean)) continue;
+              const age = (now - Z.s) / 140;
+              ctx.fillStyle = `rgba(255,248,225,${(0.3 * (1 - age) * M.clamp((sp - 3) / 9, 0, 1)).toFixed(3)})`;
+              ctx.beginPath(); pts.forEach((q, j) => (j ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill();
+            }
+            ctx.restore();
+          },
+        });
+      }
+      // contact burst: a white ring and rays, big and gold off the sweet spot
+      const fl = this.flash;
+      if (fl) {
+        const age = (performance.now() - fl.t0) / 1000;
+        if (age > 0.45) this.flash = null;
+        else {
+          queue.push({
+            z: cam.depth(fl.P) - 0.3,
+            draw: (ctx) => {
+              const q = cam.project(fl.P);
+              if (!q) return;
+              const big = fl.edge ? 0.4 : 0.6 + fl.sweet;
+              const u = age / 0.45, rad = (12 + 70 * big * M.easeOut(u)) * Math.max(0.6, q.s / 300);
+              ctx.save();
+              ctx.globalAlpha = (1 - u) * (fl.edge ? 0.5 : 0.9);
+              ctx.strokeStyle = fl.gold ? '#ffd76a' : '#ffffff';
+              ctx.lineWidth = 2 + 4 * fl.sweet * (1 - u);
+              ctx.beginPath(); ctx.arc(q.x, q.y, rad, 0, Math.PI * 2); ctx.stroke();
+              if (fl.gold) {
+                for (let i = 0; i < 10; i++) {
+                  const a = i * Math.PI / 5 + 0.3;
+                  const r0 = rad * 0.55, r1 = rad * (1.15 + 0.35 * fl.sweet);
+                  ctx.beginPath(); ctx.moveTo(q.x + Math.cos(a) * r0, q.y + Math.sin(a) * r0); ctx.lineTo(q.x + Math.cos(a) * r1, q.y + Math.sin(a) * r1); ctx.stroke();
+                }
+                ctx.globalAlpha = (1 - u) * 0.35 * fl.sweet;
+                ctx.fillStyle = '#fff2c4';
+                ctx.beginPath(); ctx.arc(q.x, q.y, rad * 0.6, 0, Math.PI * 2); ctx.fill();
+              }
+              ctx.restore();
+            },
+          });
+        }
+      }
       const g = {
         top: V.sub(p.grip, V.mul(p.dir, 0.15)),
         shoulder: V.add(p.grip, V.mul(p.dir, 0.16)),
@@ -792,11 +946,14 @@
             ctx.fillStyle = '#1f5a9e'; ctx.beginPath(); ctx.arc(gl.x, gl.y, r * 1.1, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#f7f7f2'; ctx.beginPath(); ctx.arc(gl.x - r * 0.15, gl.y - r * 0.15, r * 0.85, 0, Math.PI * 2); ctx.fill();
           }
-          // the sweet spot, faintly
+          // the sweet spot: a gold band across the blade
+          const sa = cam.project(V.add(p.S, V.mul(p.w, BLADE.HALF_W * 0.9))), sb = cam.project(V.sub(p.S, V.mul(p.w, BLADE.HALF_W * 0.9)));
           const sw = cam.project(p.S);
-          if (sw) {
-            ctx.strokeStyle = 'rgba(242,193,78,0.55)'; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.arc(sw.x, sw.y, Math.max(3, 0.035 * sw.s), 0, Math.PI * 2); ctx.stroke();
+          if (sa && sb && sw) {
+            ctx.strokeStyle = 'rgba(242,193,78,0.8)'; ctx.lineWidth = Math.max(2, 0.03 * sw.s); ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+            ctx.strokeStyle = 'rgba(242,193,78,0.35)'; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(sw.x, sw.y, Math.max(4, 0.06 * sw.s), 0, Math.PI * 2); ctx.stroke();
           }
           ctx.restore();
         },

@@ -76,7 +76,7 @@
         <b>Hold it still</b> and the ball dies on a dead bat. <b>Swipe through</b> the ball as it arrives to hit it: the faster the swipe, the harder it goes. The swipe's direction steers it: sideways for direction, <b>up</b> to loft it, <b>down</b> to keep it on the ground.<br>
         Timing turns the face: <b>early</b> and it goes up (or gets dragged round), <b>late</b> and it goes into the ground (or squirts the other way). Middle of the bat = sweet; a thick edge squirts square, a thin one carries to the keeper and slips; miss it and it's on to your stumps. To <b>leave</b>, take the bat out of the way.<br>
         <b>Cross bat:</b> hold <kbd>Space</kbd> or the right mouse button (touch: drag the stance pad inward) and the bat turns horizontal: swipe sideways to pull, cut, hook or sweep. A straight bat only reaches about chest height, so the short stuff needs the cross bat (or a duck).<br>
-        <b>Feet:</b> hold <kbd>W</kbd> to stride forward, <kbd>S</kbd> to go back (touch: drag the stance pad up or down). A tap is a small step, a hold a full stride; you can only press before it's bowled. Forward to the full ones, back to the short ones, and against spin go right forward or right back: the right foot lets you swing freely, the wrong one caps your swing.
+        <b>Feet:</b> hold <kbd>W</kbd> to stride forward, <kbd>S</kbd> to go back (touch: drag the stance pad up or down). A tap is a small step, a hold a full stride. You can commit before it's bowled, but from Grade up the bowler may see it: go back early and he'll pitch it up, stride early and he'll bang it in. Forward to the full ones, back to the short ones, and against spin go right forward or right back: the right foot lets you swing freely, the wrong one caps your swing.
       </div>
       <div class="howto" id="howtoClassic">
         <b>1 · READ</b> the bowler's hand (the bubble at release shows the grip) and the flight of the ball. Full or short?<br>
@@ -147,15 +147,15 @@
             <span id="batLimitVal" class="cond" style="min-width:96px;font-size:18px"></span>
           </div>
         </div>
-        <div class="row"><label>Bat weight: the bat trails your hand like a heavy bat (<kbd>-</kbd> <kbd>=</kbd> in play)</label>
+        <div class="row"><label>Bat weight: the bat trails your hand like a heavy bat (standard: heaviest; <kbd>-</kbd> <kbd>=</kbd> in play)</label>
           <div style="display:flex;gap:10px;align-items:center">
             <input type="range" id="batWeight" min="0" max="5" step="1" style="flex:1">
             <span id="batWeightVal" class="cond" style="min-width:96px;font-size:18px"></span>
           </div>
         </div>
-        <div class="row"><label>Swing power: how hard a swipe hits (best scores only count at ×1.00)</label>
+        <div class="row"><label>Swing power: how hard a swipe hits (standard ×0.82; best scores only count at ×0.82 or less)</label>
           <div style="display:flex;gap:10px;align-items:center">
-            <input type="range" id="batPower" min="0.6" max="1.6" step="0.05" style="flex:1">
+            <input type="range" id="batPower" min="0.5" max="1.6" step="0.01" style="flex:1">
             <span id="batPowerVal" class="cond" style="min-width:96px;font-size:18px"></span>
           </div>
         </div>
@@ -207,23 +207,23 @@
   <script src="js/math.js?v=1"></script>
   <script src="js/camera.js?v=2"></script>
   <script src="js/world.js?v=1"></script>
-  <script src="js/figure.js?v=3"></script>
+  <script src="js/figure.js?v=4"></script>
   <script src="js/bowlanim.js?v=1"></script>
   <script src="js/batanim.js?v=1"></script>
   <script src="js/ball.js?v=2"></script>
   <script src="js/render.js?v=1"></script>
   <script src="js/field.js?v=1"></script>
   <script src="js/deliveries.js?v=2"></script>
-  <script src="js/config.js?v=4"></script>
+  <script src="js/config.js?v=5"></script>
   <script src="js/input.js?v=4"></script>
-  <script src="js/audio.js?v=2"></script>
-  <script src="js/save.js?v=4"></script>
-  <script src="js/ui.js?v=4"></script>
-  <script src="js/physbat.js?v=2"></script>
-  <script src="js/batting.js?v=4"></script>
+  <script src="js/audio.js?v=3"></script>
+  <script src="js/save.js?v=5"></script>
+  <script src="js/ui.js?v=5"></script>
+  <script src="js/physbat.js?v=3"></script>
+  <script src="js/batting.js?v=5"></script>
   <script src="js/aibatter.js?v=1"></script>
   <script src="js/bowling.js?v=2"></script>
   <script src="js/game.js?v=4"></script>
-  <script src="js/main.js?v=4"></script>
+  <script src="js/main.js?v=5"></script>
 </body>
 </html>

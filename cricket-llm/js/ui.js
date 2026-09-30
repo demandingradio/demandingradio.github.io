@@ -181,7 +181,8 @@
       const hi = crossB ? 'toward the handle' : 'above the middle', lo = crossB ? 'toward the toe' : 'below the middle';
       if (r.label === 'GLOVED') where = 'off your gloves';
       else if (p.edge) where = `off the ${p.edgeName || 'edge'}`;
-      else if (r.label === 'MIDDLED' || Math.abs(p.along) < 0.05) where = 'sweet spot';
+      else if (p.boost >= 0.05) where = r.label === 'MIDDLED' ? `SWEET SPOT · +${Math.round(p.boost * 100)}% off the bat` : `middle of the bat · +${Math.round(p.boost * 100)}%`;
+      else if (r.label === 'MIDDLED' || Math.abs(p.along) < 0.05) where = 'middle of the bat';
       else if (p.along > 0) where = `${crossB ? 'Toward the toe' : 'Toe end'} — ${cm(p.along)} cm ${lo}`;
       else where = `${crossB ? 'Toward the handle' : 'High on the bat'} — ${cm(p.along)} cm ${hi}`;
       chips.push({ t: `${crossB ? 'Cross bat · ' : ''}${r.label} · ${where}`, c: r.label === 'MIDDLED' ? 'good' : /EDGED|MISTIMED|MISHIT|GLOVED/.test(r.label) ? 'bad' : 'meh' });
@@ -375,9 +376,10 @@
       ctx.fillText(`${Math.round(sp)}`, x0 + bw / 2, y0 + bh + 13);
       // tuning in effect (pause menu / hotkeys)
       const S = g.save.data.settings, tags = [];
-      if (+S.batLimit) tags.push(`limit ${S.batLimit}`);
-      if (+S.batWeight) tags.push(this.tuneText('batWeight', +S.batWeight, true));
-      if (Math.abs((+S.batPower || 1) - 1) > 1e-6) tags.push(`power ×${(+S.batPower).toFixed(2)}`);
+      const BASE = CLLM.CFG.PHYS.BASE;
+      if ((+S.batLimit || 0) !== BASE.limit) tags.push(`limit ${S.batLimit || 'off'}`);
+      if ((+S.batWeight || 0) !== BASE.weight) tags.push(`bat ${this.tuneText('batWeight', +S.batWeight || 0, true)}`);
+      if (Math.abs(s.phys.power() - BASE.power) > 1e-6) tags.push(`power ×${s.phys.power().toFixed(2)}`);
       if (tags.length) {
         ctx.font = '600 9px "Barlow", sans-serif'; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(242,193,78,0.85)';
         tags.forEach((tg, i) => ctx.fillText(tg, x0 + bw + 6, y0 + bh + 30 + i * 11));

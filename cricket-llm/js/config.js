@@ -18,7 +18,7 @@
       win: { P: 45, G: 100, E: 165 },
       loose: 0.3, variety: 0.1, setup: 0.0, scatterL: 0.55, scatterX: 0.07, speedMul: 0.93, move: 0.5,
       allow: ['out', 'in', 'bouncer', 'yorker', 'arm', 'googly'],
-      tell: { ms: 450, label: true }, ring: 0.28, trail: true, blind: 0.13, lateTol: 0.035, physAssist: 0.05, physRing: true, physMagnet: 0.35, physTimeAssist: 55, physTimeGain: 0.3,
+      tell: { ms: 450, label: true }, ring: 0.28, trail: true, blind: 0.13, lateTol: 0.035, physAssist: 0.05, physRing: true, physMagnet: 0.35, physTimeAssist: 55, physTimeGain: 0.3, physReadFeet: 0,
       footDeadline: 0.35, earlySet: 0.5,
     },
     grade: {
@@ -27,7 +27,7 @@
       win: { P: 30, G: 66, E: 104 },
       loose: 0.2, variety: 0.28, setup: 0.12, scatterL: 0.5, scatterX: 0.06, speedMul: 1.0, move: 0.88,
       allow: ['out', 'in', 'bouncer', 'yorker', 'slower', 'arm', 'doosra', 'googly', 'top'],
-      tell: { ms: 350, label: true }, ring: 0.42, trail: true, blind: 0.16, lateTol: 0.03, physAssist: 0.02, physRing: 'late', physMagnet: 0.25, physTimeAssist: 28, physTimeGain: 0.55,
+      tell: { ms: 350, label: true }, ring: 0.42, trail: true, blind: 0.16, lateTol: 0.03, physAssist: 0.02, physRing: 'late', physMagnet: 0.25, physTimeAssist: 28, physTimeGain: 0.55, physReadFeet: 0.35,
       footDeadline: 0.3, earlySet: 0.4,
     },
     state: {
@@ -36,7 +36,7 @@
       win: { P: 24, G: 52, E: 88 },
       loose: 0.15, variety: 0.3, setup: 0.14, scatterL: 0.42, scatterX: 0.05, speedMul: 1.04, move: 0.92,
       allow: ['out', 'in', 'bouncer', 'yorker', 'slower', 'cutter', 'arm', 'doosra', 'top', 'googly', 'flipper', 'slider'],
-      tell: { ms: 250, label: false }, ring: null, trail: false, blind: 0.18, lateTol: 0.028, physAssist: 0.006, physRing: false, physMagnet: 0.1, physTimeAssist: 10, physTimeGain: 0.8,
+      tell: { ms: 250, label: false }, ring: null, trail: false, blind: 0.18, lateTol: 0.028, physAssist: 0.006, physRing: false, physMagnet: 0.1, physTimeAssist: 10, physTimeGain: 0.8, physReadFeet: 0.5,
       footDeadline: 0.26, earlySet: 0.34,
     },
     test: {
@@ -45,7 +45,7 @@
       win: { P: 18, G: 40, E: 68 },
       loose: 0.1, variety: 0.4, setup: 0.22, scatterL: 0.36, scatterX: 0.045, speedMul: 1.08, move: 1.0,
       allow: ['out', 'in', 'bouncer', 'yorker', 'slower', 'cutter', 'arm', 'doosra', 'top', 'googly', 'flipper', 'slider'],
-      tell: { ms: 150, label: false }, ring: null, trail: false, blind: 0.2, lateTol: 0.025, physAssist: 0, physRing: false, physMagnet: 0, physTimeAssist: 0, physTimeGain: 1,
+      tell: { ms: 150, label: false }, ring: null, trail: false, blind: 0.2, lateTol: 0.025, physAssist: 0, physRing: false, physMagnet: 0, physTimeAssist: 0, physTimeGain: 1, physReadFeet: 0.6,
       footDeadline: 0.23, earlySet: 0.3,
     },
   };
@@ -101,8 +101,15 @@
     CROSS_IN_MS: 80,       // blade turning horizontal
     CROSS_OUT_MS: 130,     // ... and back upright
     FEET_RATE: 10,         // 1/s: a 0.1 s tap is a short step, a hold a full stride
-    TRIGGER_MAX: 0.35,     // before the ball is bowled you can press, not commit
+    // Committing your feet before it's bowled is allowed, but the bowler may
+    // see it and change the length (chance per level: DIFFS.physReadFeet)
+    COMMIT_EARLY: 0.6,     // |feet| at release that counts as committing
     CAM_FOLLOW: 1,         // the camera comes with your feet (0 = fixed)
+    // The standard bat everyone plays with (pause-menu sliders start here;
+    // best scores only count at this swing power or less)
+    BASE: { power: 0.82, weight: 20, limit: 0 },
+    SWEET_BOOST: 0.5,      // a pure middle adds up to this much exit speed (scaled by sweetness^1.5)
+    BODY_ALPHA: { legs: 0.28, arms: 0.5, torso: 0.07, head: 0 },    // your batter, seen from just behind (ghosted: the ball comes past it)
     LIMIT_STEPS: [0, 20, 15, 12, 9, 7, 5],   // bat speed limit choices (m/s; 0 = off)
     WEIGHT_STEPS: [0, 60, 45, 35, 25, 20],   // bat weight choices (spring rad/s; 0 = off; lower = heavier)
     // Footwork: how good is it to be right back / on the crease / fully

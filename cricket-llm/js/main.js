@@ -87,7 +87,7 @@
     const LS = CFG.PHYS.LIMIT_STEPS, WS = CFG.PHYS.WEIGHT_STEPS;
     $('batLimit').value = Math.max(0, LS.indexOf(+S.batLimit || 0));
     $('batWeight').value = Math.max(0, WS.indexOf(+S.batWeight || 0));
-    $('batPower').value = S.batPower || 1;
+    $('batPower').value = S.batPower || CFG.PHYS.BASE.power;
     showBatTune();
     $('camBtn').classList.toggle('hidden', game.mode !== 'bat' || !!(game.session && game.session.physical));
     show('pause');
@@ -105,7 +105,7 @@
   function showBatTune() {
     $('batLimitVal').textContent = game.ui.tuneText('batLimit', +S.batLimit || 0, true);
     $('batWeightVal').textContent = game.ui.tuneText('batWeight', +S.batWeight || 0, true);
-    $('batPowerVal').textContent = `×${(+(S.batPower || 1)).toFixed(2)}`;
+    $('batPowerVal').textContent = `×${(+(S.batPower || CFG.PHYS.BASE.power)).toFixed(2)}`;
   }
   $('batLimit').addEventListener('input', (e) => {
     S.batLimit = CFG.PHYS.LIMIT_STEPS[parseInt(e.target.value, 10) || 0] || 0;
@@ -116,7 +116,7 @@
     showBatTune(); game.save.write();
   });
   $('batPower').addEventListener('input', (e) => {
-    S.batPower = parseFloat(e.target.value) || 1;
+    S.batPower = parseFloat(e.target.value) || CFG.PHYS.BASE.power;
     showBatTune(); game.save.write();
   });
   $('calib').addEventListener('input', (e) => {
