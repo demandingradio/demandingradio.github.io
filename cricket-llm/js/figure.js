@@ -158,7 +158,7 @@
       // Head (skipped when ghosted, e.g. in the batter's-eye camera)
       if (a >= 0.2) prims.push({ t: 'head', p: J.head, r: RIG.HEAD_R, fig: this });
       // Bat
-      if (this.bat) prims.push({ t: 'bat', g: this.batGeom() });
+      if (this.bat && !this.hideBat) prims.push({ t: 'bat', g: this.batGeom() });
       // Ball in hand
       if (this.ball) prims.push({ t: 'ball', p: this.ball, r: 0.036, col: '#b3202a', shade: '#6d0f16' });
 
@@ -170,7 +170,7 @@
         sh(J.pel, J.chest, 0.34); sh(J.chest, J.head, 0.2);
         sh(J.lSho, J.lElb, 0.1); sh(J.rSho, J.rElb, 0.1);
         sh(J.lElb, J.lHand, 0.09); sh(J.rElb, J.rHand, 0.09);
-        if (this.bat) { const g = this.batGeom(); sh(g.top, g.toe, 0.1); }
+        if (this.bat && !this.hideBat) { const g = this.batGeom(); sh(g.top, g.toe, 0.1); }
       }
 
       for (const pr of prims) {

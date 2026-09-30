@@ -164,6 +164,13 @@
       this.stint = [];                      // boundary angles for the captain rule
       this.b = null;
       this.onScore = null; this.onBall = null; this.onOut = null;
+      // Physical bat: you hold the bat yourself (pointer = sweet spot)
+      this.physical = opts.controls === 'physical';
+      this.bestKey = this.physical ? this.bowlerChoice + '-phys' : this.bowlerChoice;
+      if (this.physical) {
+        this.phys = new CLLM.PhysBat(this);
+        this.batter.hideBat = true;
+      }
       this._newBall(0.8);
     }
 
@@ -182,6 +189,7 @@
         this.game.ui.toast(`New bowler: ${Deliveries.TYPES[this.type].name}`);
       }
       this.ballNo++;
+      if (this.phys) this.phys.setPlane(CFG.BAT.PLANES.stance);
       this.field.last = null;
       this.game.ui.shotAnim = null;
       this.ball.reset();
@@ -237,6 +245,7 @@
       const b = this.b;
       if (!b) return;
       const k = ev.key;
+      if (this.physical) return this._inputPhys(ev, t);
       const inPlay = b.phase === 'runup' || b.phase === 'flight';
       if (ev.type === 'keydown') {
         if (k === 'w' || k === 'arrowup') return this._commit('front', t);
@@ -261,6 +270,21 @@
       }
     }
 
+    // Physical bat: the pointer IS the bat. Keys only move your feet.
+    _inputPhys(ev, t) {
+      const b = this.b, k = ev.key;
+      if (ev.type === 'keydown') {
+        if (k === 'w' || k === 'arrowup') this._commit('front', t);
+        else if (k === 's' || k === 'arrowdown') this._commit('back', t);
+        else if (k === 'e') this._commit('dance', t);
+        else if ((k === 'enter' || k === ' ') && b.phase === 'done') this._skip();
+      } else if (ev.type === 'mousedown' && b.phase === 'done') this._skip();
+      else if (ev.type === 'touchbtn' && ev.phase !== 'up') {
+        if (b.phase === 'done') this._skip();
+        else if (k === 'front' || k === 'back' || k === 'dance') this._commit(k, t);
+      }
+    }
+
     _nudgeAim(dir) {
       this.keyAim = true;
       const flip = this.game.camMode === 'eye' ? -1 : 1;     // keep "left key = hit to screen-left"
@@ -269,6 +293,7 @@
 
     // Mouse / touch aim, world-true, relative to the batter's feet on screen.
     updateAim(mx, my, cam) {
+      if (this.physical) return;
       if (this.b && this.b.ex) return;          // aim locks on execute
       let anchor = cam.project(V.v(0.15 * this.h, 0.0, 1.1));
       // Batter's-eye view: your feet are below the screen, aim from bottom centre
@@ -288,17 +313,19 @@
 
     _commit(foot, t) {
       const b = this.b;
-      if (!b || b.ex || b.phase === 'done') return;
+      if (!b || b.ex || b.physPending || b.phase === 'done') return;
       if (foot === 'dance') {
         if (!this.spin) return;
         if (b.foot && b.foot !== 'front') return;
         if (b.phase === 'flight' && this.simAt(t) > b.plan.T * 0.55) return;  // too late to dance
         b.danced = true; b.foot = 'dance'; b.tFoot = t;
+        if (this.phys && !b.resolved) this.phys.setPlane(CFG.BAT.PLANES.dance);
         this.batAnim.setFoot('dance', this.game.clock);
         return;
       }
       if (b.foot) return;                        // foot locks on first press
       b.foot = foot; b.tFoot = t;
+      if (this.phys && !b.resolved) this.phys.setPlane(CFG.BAT.PLANES[foot]);
       b.footBeforeRelease = b.phase === 'runup';
       this.batAnim.setFoot(foot, this.game.clock);
     }
@@ -796,6 +823,7 @@
       if (!b) return;
       // Bowler
       this.bowlAnim.pose(now);
+      if (this.phys) this.phys.update();
       const d = cam => 0;
       // Fade the bowler when he's right on top of the camera
       const dep = this.game.cam.depth(this.bowler.J.pel);
@@ -808,16 +836,44 @@
       if (b.phase === 'flight' || b.phase === 'done') {
         // Ball: delivery path until contact, then free flight
         if (b.plan && this.ball.mode === 'delivery') {
-          const simT = this.simAt(now);
-          const prevT = this.ball.t;
-          this.ball.update(Math.max(0, simT - prevT));
+          const Pp = b.physPending;
+          if (!(this.physical && Pp && Pp.frozen && !b.resolved)) {    // frozen: hold it ON the crossing
+            const simT = this.simAt(now);
+            const prevT = this.ball.t;
+            this.ball.update(Math.max(0, simT - prevT));
+          }
+          // Physical bat: decide the instant the ball crosses your hitting plane
+          if (this.physical && !b.resolved && !b.physPending && now >= this.tAt(this.phys.plane)) {
+            // The ball has reached your hitting plane. You'll SEE that a
+            // frame or two from now, so the bat is judged then (tJ); freeze
+            // on the crossing until those samples (plus a little
+            // follow-through) are in. Bat nowhere near it = a leave, decide now.
+            const tX = this.tAt(this.phys.plane);
+            const perfX = this.game.perfAt(tX), L = this.phys.latency();
+            b.physPending = { tX, perfX, tJ: perfX + L, rt: this.game.realTime || 0, wait: (L + 60) / 1000 };
+            if (this.phys.shouldFreeze()) {
+              b.physPending.frozen = true;
+              this.game.hitStop(b.physPending.wait + 0.02, 0, 1);
+              const tc = BallPhys.timeAtZ(b.plan, this.phys.plane);
+              this.ball.t = tc; this.ball.pos = BallPhys.posAt(b.plan, tc);
+              if (this.ball.trail.length) this.ball.trail[this.ball.trail.length - 1] = V.copy(this.ball.pos);
+            }
+          }
+          if (this.physical && b.physPending && !b.resolved && (this.game.realTime || 0) >= b.physPending.rt + b.physPending.wait) {
+            const P = b.physPending;
+            this.phys.perfX = P.perfX;
+            const r = this.phys.resolve(P.tX);
+            b.res = r; b.resolved = true;
+            if (r.contact) { b.tHit = P.tX; if (this.game.input.touch && navigator.vibrate) { try { navigator.vibrate(r.label === 'MIDDLED' ? 25 : 12); } catch (e) { /* ignore */ } } }
+            else if (r.kind === 'leave' && !b.leaveAnim) { b.leaveAnim = true; }
+          }
           // Contact visual
           if (b.res && b.res.contact && !b.hitDone && now >= b.tHit) this._doHit();
           // Pad / stumps interactions for unhit balls
           if (b.res && !b.res.contact && !b.hitDone) this._missVisual(now);
           // No swing: shoulder arms just before the ball arrives, and the
           // verdict comes when it reaches the pads (or the stumps).
-          if (!b.resolved && !b.ex) {
+          if (!this.physical && !b.resolved && !b.ex) {
             const fk = b.foot || 'stance';
             const plane = fk === 'dance' ? CFG.BAT.PLANES.dance : CFG.BAT.PLANES[fk];
             if (!b.leaveAnim && now >= this.tAt(plane) - 0.12) {
@@ -827,9 +883,12 @@
             const pad = this._padCheck(fk, false);
             if ((pad.onPad && now >= this.tAt(pad.padZ)) || now >= this.tAt(0)) this._resolveLeave();
           }
-          if (this.ball.pos.z < -2.4) { this.ball.mode = 'dead'; }
+          if (this.ball.pos.z < -2.4 && b.resolved) { this.ball.mode = 'dead'; }
         } else if (this.ball.mode === 'free') {
-          this.ball.update(dt * (b.tsc || 1));
+          // Easy levels slow the delivery down; once it's hit, ease the ball
+          // back up to real speed so the shot itself isn't floaty.
+          const k = b.tHit != null ? M.clamp((now - b.tHit) / 0.15, 0, 1) : 0;
+          this.ball.update(dt * M.lerp(b.tsc || 1, 1, k));
         }
         if (b.resolved && b.phase === 'flight' && this._resultReady(now)) this._finishBall();
       }
@@ -837,7 +896,7 @@
       this.batAnim.pose(now, V.v(-0.4 * (this.batter.mirror ? -1 : 1), 1.6, 19));
       // Batter's-eye camera: ghost the body so it doesn't block the view
       const eye = this.game.camMode === 'eye';
-      this.batter.alpha = eye ? 0.12 : 1;
+      this.batter.alpha = this.physical ? 0.07 : eye ? 0.12 : 1;
       this.batter.batAlpha = eye ? 0.95 : 0;
       if (b.phase === 'done' && now >= b.tEnd) this._nextBall();
     }
@@ -857,7 +916,7 @@
       const d = Field.dir(r.exitPhi);
       const sp = r.exitSpeed || 5;
       const loft = r.exitLoft || 0;
-      const vel = V.v(d.x * sp * Math.cos(loft), Math.max(-2, sp * Math.sin(loft)), d.z * sp * Math.cos(loft));
+      const vel = r.exitVel ? V.copy(r.exitVel) : V.v(d.x * sp * Math.cos(loft), Math.max(-2, sp * Math.sin(loft)), d.z * sp * Math.cos(loft));
       if (r.kindRes === 'block') { vel.x *= 0.6; vel.z = Math.abs(vel.z) * 0.6 + 1.2; vel.y = -0.5; }
       if (r.playedOn) { vel.x = -pos.x * 2; vel.z = -3; vel.y = -0.5; }
       this.ball.free(pos, vel, 0);
@@ -921,9 +980,9 @@
         this.innings.unshift({ runs: score, balls, how: r.how });
         if (this.innings.length > 6) this.innings.pop();
         st.batOuts++;
-        const best = this.game.save.best('bat', this.diff.key, this.bowlerChoice, this.hand);
+        const best = this.game.save.best('bat', this.diff.key, this.bestKey, this.hand);
         const isBest = score > best.runs;
-        if (isBest) this.game.save.setBest('bat', this.diff.key, this.bowlerChoice, this.hand, { runs: score, balls });
+        if (isBest) this.game.save.setBest('bat', this.diff.key, this.bestKey, this.hand, { runs: score, balls });
         r.innings = { runs: score, balls, isBest };
         Audio.groan();
         b.tEnd = b.tDone + CFG.BAT.GAP_AFTER_OUT;
@@ -938,8 +997,8 @@
         tag = r.runs ? String(r.runs) : '·';
         this.recent.push(tag);
         b.tEnd = b.tDone + CFG.BAT.GAP_AFTER + (r.runs >= 4 ? 0.4 : 0);
-        const best = this.game.save.best('bat', this.diff.key, this.bowlerChoice, this.hand);
-        if (this.runs > best.runs) this.game.save.setBest('bat', this.diff.key, this.bowlerChoice, this.hand, { runs: this.runs, balls: this.balls });
+        const best = this.game.save.best('bat', this.diff.key, this.bestKey, this.hand);
+        if (this.runs > best.runs) this.game.save.setBest('bat', this.diff.key, this.bestKey, this.hand, { runs: this.runs, balls: this.balls });
         if (r.runs >= 4 && r.proj) this.stint.push(r.proj.phi);
       }
       if (this.recent.length > 8) this.recent.shift();
@@ -1004,15 +1063,40 @@
       };
     }
 
+    // Assist (Club/Grade): once it has pitched, mark where the ball will
+    // come through your hitting plane.
+    _crossMarker(queue, cam, now) {
+      const b = this.b, D = this.diff;
+      if (!D.physRing || !b.plan || b.phase !== 'flight' || b.resolved) return;
+      const tB = b.tRelease + b.plan.T / b.tsc + (D.physRing === 'late' ? 0.12 : 0);
+      if (now < tB) return;
+      const P = BallPhys.posAt(b.plan, BallPhys.timeAtZ(b.plan, this.phys.plane));
+      const a = M.clamp((now - tB) / 0.12, 0, 1) * (D.physRing === 'late' ? 0.55 : 0.9);
+      queue.push({
+        z: cam.depth(P) + 0.1,
+        draw: (ctx) => {
+          const q = cam.project(P); if (!q) return;
+          const r = Math.max(6, World.PITCH.BALL_R * q.s * 1.6);
+          ctx.save();
+          ctx.globalAlpha = a;
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(q.x - r * 1.6, q.y); ctx.lineTo(q.x - r * 0.6, q.y); ctx.moveTo(q.x + r * 0.6, q.y); ctx.lineTo(q.x + r * 1.6, q.y); ctx.stroke();
+          ctx.restore();
+        },
+      });
+    }
+
     _extra(queue, cam) {
       const b = this.b;
       if (!b) return;
       const now = this.game.clock;
+      if (this.phys) { this.phys.queue(queue, cam); this._crossMarker(queue, cam, now); }
       // Aim arrow on the ground from the batter's feet
       const aimCol = b.ex ? 'rgba(242,193,78,0.25)' : 'rgba(242,193,78,0.7)';
       const d = Field.dir(this.aimPhi);
       const o = V.v(0.12 * this.h, 0.01, 1.3);
-      const len = b.phase === 'done' ? 0 : 2.2;
+      const len = b.phase === 'done' || this.physical ? 0 : 2.2;
       if (len > 0) {
         const tip = V.add(o, V.v(d.x * len, 0, d.z * len));
         queue.push({

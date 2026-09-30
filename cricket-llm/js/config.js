@@ -18,7 +18,7 @@
       win: { P: 45, G: 100, E: 165 },
       loose: 0.3, variety: 0.1, setup: 0.0, scatterL: 0.55, scatterX: 0.07, speedMul: 0.93, move: 0.5,
       allow: ['out', 'in', 'bouncer', 'yorker', 'arm', 'googly'],
-      tell: { ms: 450, label: true }, ring: 0.28, trail: true, blind: 0.13, lateTol: 0.035,
+      tell: { ms: 450, label: true }, ring: 0.28, trail: true, blind: 0.13, lateTol: 0.035, physAssist: 0.05, physRing: true, physMagnet: 0.35, physTimeAssist: 55, physTimeGain: 0.3,
       footDeadline: 0.35, earlySet: 0.5,
     },
     grade: {
@@ -27,7 +27,7 @@
       win: { P: 30, G: 66, E: 104 },
       loose: 0.2, variety: 0.28, setup: 0.12, scatterL: 0.5, scatterX: 0.06, speedMul: 1.0, move: 0.88,
       allow: ['out', 'in', 'bouncer', 'yorker', 'slower', 'arm', 'doosra', 'googly', 'top'],
-      tell: { ms: 350, label: true }, ring: 0.42, trail: true, blind: 0.16, lateTol: 0.03,
+      tell: { ms: 350, label: true }, ring: 0.42, trail: true, blind: 0.16, lateTol: 0.03, physAssist: 0.02, physRing: 'late', physMagnet: 0.25, physTimeAssist: 28, physTimeGain: 0.55,
       footDeadline: 0.3, earlySet: 0.4,
     },
     state: {
@@ -36,7 +36,7 @@
       win: { P: 24, G: 52, E: 88 },
       loose: 0.15, variety: 0.3, setup: 0.14, scatterL: 0.42, scatterX: 0.05, speedMul: 1.04, move: 0.92,
       allow: ['out', 'in', 'bouncer', 'yorker', 'slower', 'cutter', 'arm', 'doosra', 'top', 'googly', 'flipper', 'slider'],
-      tell: { ms: 250, label: false }, ring: null, trail: false, blind: 0.18, lateTol: 0.028,
+      tell: { ms: 250, label: false }, ring: null, trail: false, blind: 0.18, lateTol: 0.028, physAssist: 0.006, physRing: false, physMagnet: 0.1, physTimeAssist: 10, physTimeGain: 0.8,
       footDeadline: 0.26, earlySet: 0.34,
     },
     test: {
@@ -45,7 +45,7 @@
       win: { P: 18, G: 40, E: 68 },
       loose: 0.1, variety: 0.4, setup: 0.22, scatterL: 0.36, scatterX: 0.045, speedMul: 1.08, move: 1.0,
       allow: ['out', 'in', 'bouncer', 'yorker', 'slower', 'cutter', 'arm', 'doosra', 'top', 'googly', 'flipper', 'slider'],
-      tell: { ms: 150, label: false }, ring: null, trail: false, blind: 0.2, lateTol: 0.025,
+      tell: { ms: 150, label: false }, ring: null, trail: false, blind: 0.2, lateTol: 0.025, physAssist: 0, physRing: false, physMagnet: 0, physTimeAssist: 0, physTimeGain: 1,
       footDeadline: 0.23, earlySet: 0.3,
     },
   };

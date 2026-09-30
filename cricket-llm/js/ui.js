@@ -39,7 +39,9 @@
 
     setHint(mode) {
       const el = $('controlsHint');
-      if (mode === 'bat') {
+      if (mode === 'bat' && this.game.session && this.game.session.physical) {
+        el.innerHTML = 'the mouse <b>is the bat</b> · hold still to block<br><b>swipe through</b> the ball to hit · direction steers<br><kbd>W</kbd> step in · <kbd>S</kbd> step back · <kbd>Esc</kbd> pause';
+      } else if (mode === 'bat') {
         el.innerHTML = '<kbd>W</kbd> front foot · <kbd>S</kbd> back foot' + (this.game.session && this.game.session.spin ? ' · <kbd>E</kbd> dance' : '') +
           '<br>aim with the mouse · <b>click</b> hit · <b>right-click</b> loft<br><kbd>Space</kbd> defend · no click = leave · <kbd>Esc</kbd> pause';
       } else if (mode === 'bowl') {
@@ -51,7 +53,10 @@
     tips(mode) {
       const c = $('coach');
       const touch = this.game.input.touch;
-      if (mode === 'bat') {
+      if (mode === 'bat' && this.game.session && this.game.session.physical) {
+        c.innerHTML = `<div><span class="tag">Coach</span>You're holding the bat. ${touch ? 'Your finger' : 'The mouse'} puts it where you want it — get it in the ball's path.</div>` +
+          `<div class="chips"><span class="chip">hold still = block</span><span class="chip">swipe through = hit</span><span class="chip">swipe sideways = steer</span><span class="chip">swipe up = loft · down = along the ground</span><span class="chip">move it away = leave</span><span class="chip">${touch ? 'FRONT / BACK' : 'W / S'} = step in / back</span></div>`;
+      } else if (mode === 'bat') {
         c.innerHTML = `<div><span class="tag">Coach</span>Watch the hand, then the ball. <b>Full</b>? ${touch ? 'FRONT' : '<kbd>W</kbd>'} and drive. <b>Short</b>? ${touch ? 'BACK' : '<kbd>S</kbd>'} and cut or pull.</div>` +
           `<div class="chips"><span class="chip">${touch ? 'drag to aim' : 'aim with the mouse'}</span><span class="chip">${touch ? 'HIT' : 'click'} as it arrives</span><span class="chip">${touch ? 'LOFT' : 'right-click'} to go aerial</span><span class="chip">${touch ? 'BLOCK' : 'Space'} to defend</span><span class="chip">do nothing = leave</span></div>`;
       } else {
@@ -90,7 +95,7 @@
       $('sbTitle').innerHTML = `<span>Net session</span><span>${s.diff.name} · ${s.hand === 'L' ? 'Left' : 'Right'}-hander</span>`;
       $('sbRuns').textContent = s.runs;
       $('sbBalls').textContent = `(${s.balls} ball${s.balls === 1 ? '' : 's'})`;
-      const best = this.game.save.best('bat', s.diff.key, s.bowlerChoice, s.hand);
+      const best = this.game.save.best('bat', s.diff.key, s.bestKey || s.bowlerChoice, s.hand);
       const last = s.innings.slice(0, 4).map((i) => i.runs).join(', ');
       $('sbMeta').innerHTML = `<span>Best <b>${best.runs}</b></span><span>4s <b>${s.fours}</b> · 6s <b>${s.sixes}</b></span>` + (last ? `<span>Last: <b>${last}</b></span>` : '');
       const rec = $('recent');
@@ -123,7 +128,9 @@
       // Coach line
       const chips = [];
       const c = $('coach');
-      if (r.kind === 'leave') {
+      if (r.phys) {
+        this._physChips(r, chips);
+      } else if (r.kind === 'leave') {
         chips.push({ t: 'Left it', c: r.out ? 'bad' : 'good' });
       } else if (r.e != null) {
         const ms = Math.round(r.e);
@@ -131,7 +138,7 @@
         chips.push({ t: `${r.label} · ${tl} ${ms > 0 ? '+' : ''}${ms} ms`, c: r.cls === 3 ? 'good' : r.cls === 2 ? 'meh' : 'bad' });
       }
       const foot = r.foot;
-      if (r.kind !== 'leave') {
+      if (r.kind !== 'leave' && !r.phys) {
         const plan = s.b.plan;
         const lenName = plan.lengthName;
         if (foot === 'stance') chips.push({ t: 'No foot movement (×0.75)', c: 'meh' });
@@ -156,6 +163,39 @@
       this.fieldShot(r.proj || s.field.last, false);
     },
 
+    // Physical bat feedback: where it hit the bat, how fast you swung, where it went
+    _physChips(r, chips) {
+      const p = r.physInfo || {};
+      const cm = (m) => Math.round(Math.abs(m) * 100);
+      if (!r.contact) {
+        if (r.kind === 'leave') chips.push({ t: 'Left it', c: r.out ? 'bad' : 'good' });
+        else chips.push({ t: `Missed — ${p.miss || 'passed the bat'}`, c: 'bad' });
+        if (p.speed != null && r.kind !== 'leave') chips.push({ t: `bat speed ${Math.round(p.speed)} m/s`, c: 'meh' });
+        return;
+      }
+      let where;
+      if (p.edge) where = 'off the edge';
+      else if (r.label === 'MIDDLED' || Math.abs(p.along) < 0.05) where = 'sweet spot';
+      else if (p.along > 0) where = `Toe end — ${cm(p.along)} cm below the middle`;
+      else where = `High on the bat — ${cm(p.along)} cm above the middle`;
+      chips.push({ t: `${r.label} · ${where}`, c: r.label === 'MIDDLED' ? 'good' : r.label === 'EDGED' || r.label === 'MISTIMED' || r.label === 'MISHIT' ? 'bad' : 'meh' });
+      const sp = Math.round(p.speed || 0);
+      chips.push({ t: sp < 3 ? 'still bat (block)' : `bat speed ${sp} m/s`, c: sp >= 18 ? 'good' : sp >= 8 ? 'meh' : '' });
+      if (sp >= 3 && p.tErr != null) {
+        const ms = Math.round(Math.abs(p.tErr)), deg = Math.round(Math.abs(p.tRot || 0));
+        const early = p.tErr < 0;
+        let t;
+        if (ms < 8) t = 'timing: bang on';
+        else if (p.tAxis === 'line') t = `${ms} ms ${early ? 'early' : 'late'} — ${early ? 'dragged it round' : 'pushed it the other way'}${deg >= 3 ? ` ${deg}°` : ''}`;
+        else t = `${ms} ms ${early ? 'early' : 'late'} — face ${early ? 'opened' : 'closed'}${deg >= 3 ? ` ${deg}°` : ''} (${early ? 'lifts it' : 'keeps it down'})`;
+        chips.push({ t, c: ms < 8 ? 'good' : ms < 22 ? 'meh' : 'bad' });
+      }
+      if (p.exit != null) chips.push({ t: `off the bat ${Math.round(p.exit * 3.6)} km/h · ${Math.round(p.launch)}° ${p.launch > 8 ? 'in the air' : p.launch < -3 ? 'into the ground' : 'flat'}`, c: '' });
+      const yaw = Math.round((p.yaw || 0) / (Math.PI / 180));
+      // yaw > 0 = swiped right on screen = toward -x = a right-hander's off side
+      if (Math.abs(yaw) >= 8) chips.push({ t: `face turned ${Math.abs(yaw)}° ${yaw * (this.game.session.h) > 0 ? 'to the off side' : 'to the leg side'}`, c: '' });
+    },
+
     newInnings(s) {
       this.score(s);
       this.toast('New innings — score reset to 0');
@@ -175,7 +215,7 @@
         proj = this.shotAnim.proj;
         shotT = this.shotAnim.animate ? M.clamp((performance.now() - this.shotAnim.t0) / 900, 0, 1) : 1;
       }
-      const showAim = s.aimPhi != null && s.b && s.b.phase !== 'done' && this.game.mode === 'bat';
+      const showAim = !s.physical && s.aimPhi != null && s.b && s.b.phase !== 'done' && this.game.mode === 'bat';
       s.field.draw(this.fieldCtx, 190, 190, { aimPhi: showAim ? (s.b.ex ? s.b.ex.phi : s.aimPhi) : null, shot: s.b && s.b.phase === 'runup' ? null : proj, shotT });
     },
 
@@ -184,6 +224,7 @@
       const b = s.b;
       if (!b) return;
       const g = this.game;
+      if (s.physical) return this._drawPhysOverlay(ctx, s, cam);
       // Tell bubble
       if (b.phase === 'runup' && b.spec) {
         const tleft = b.tRelease - g.clock;
@@ -241,6 +282,57 @@
         }
       }
       this._timingBar(ctx, s);
+    },
+
+    _drawPhysOverlay(ctx, s, cam) {
+      const b = s.b, g = this.game;
+      if (b.phase === 'runup' && b.spec) {
+        const tleft = b.tRelease - g.clock;
+        const tellMs = s.diff.tell.ms / 1000;
+        if (tleft < tellMs && tleft > -0.05) this._tellBubble(ctx, s, cam, 1 - Math.max(0, tleft) / tellMs);
+      }
+      // swing-speed meter: a vertical bar on the right edge
+      const W = cam.w, H = cam.h;
+      let bh = Math.min(260, H * 0.34), y0 = H * 0.52 - bh / 2;
+      const bw = 12, x0 = W - 34;
+      const hint = document.getElementById('controlsHint');
+      const hr = hint ? hint.getBoundingClientRect() : null;
+      if (hr && hr.height > 0 && y0 - 26 < hr.bottom + 6) {      // hint showing: sit under it
+        y0 = hr.bottom + 32;
+        bh = Math.max(90, Math.min(bh, H - 110 - y0));
+      }
+      const max = CLLM.PhysBat.PHYS.MAX_BAT;
+      const sp = s.phys.speedNow;
+      const Y = (v) => y0 + bh - M.clamp(v / max, 0, 1) * bh;
+      ctx.save();
+      ctx.fillStyle = 'rgba(10,20,14,0.65)';
+      ctx.fillRect(x0 - 26, y0 - 26, bw + 34, bh + 44);
+      const zones = [[0, 3, 'rgba(158,197,255,0.45)', 'block'], [3, 10, 'rgba(242,193,78,0.35)', 'push'], [10, 20, 'rgba(242,193,78,0.6)', 'drive'], [20, max, 'rgba(95,210,138,0.7)', 'smash']];
+      ctx.font = '600 9px "Barlow", sans-serif'; ctx.textAlign = 'right';
+      for (const [a, z, col, name] of zones) {
+        ctx.fillStyle = col; ctx.fillRect(x0, Y(z), bw, Y(a) - Y(z));
+        ctx.fillStyle = 'rgba(246,241,227,0.75)'; ctx.fillText(name, x0 - 3, (Y(a) + Y(z)) / 2 + 3);
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x0 - 3, Y(sp) - 2, bw + 6, 4);
+      if (s.phys.ghost && g.clock - s.phys.ghost.t < 2 && b.res && b.res.physInfo) {
+        ctx.fillStyle = '#ff9d6b';
+        ctx.fillRect(x0 - 5, Y(b.res.physInfo.speed || 0) - 1, bw + 10, 2);
+      }
+      ctx.textAlign = 'center'; ctx.font = '700 10px "Barlow", sans-serif'; ctx.fillStyle = 'rgba(246,241,227,0.8)';
+      ctx.fillText('SWING', x0 + bw / 2, y0 - 12);
+      ctx.fillText(`${Math.round(sp)}`, x0 + bw / 2, y0 + bh + 13);
+      ctx.restore();
+      // first-ball hint
+      if (W >= 700 && g.save.data.stats.batBalls < 4 && (b.phase === 'runup' || b.phase === 'flight')) {
+        const txt = g.input.touch ? 'Your finger is the bat: get it in the ball\u2019s path, swipe through to hit' : 'Your mouse is the bat: get it in the ball\u2019s path, swipe through to hit';
+        ctx.save();
+        ctx.font = '700 15px "Barlow", sans-serif'; ctx.textAlign = 'center';
+        const w = ctx.measureText(txt).width + 20;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(W / 2 - w / 2, H * 0.14 - 16, w, 24);
+        ctx.fillStyle = '#f6f1e3'; ctx.fillText(txt, W / 2, H * 0.14 + 1);
+        ctx.restore();
+      }
     },
 
     _shotLabel(s) {

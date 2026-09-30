@@ -26,8 +26,11 @@
     const st = game.save.data.stats;
     const parts = [];
     if (top) {
-      const [diff, bowler, hand] = top.key.split('.');
-      parts.push(`Best innings <b>${top.runs}</b> (${top.balls}b · ${CFG.DIFFS[diff] ? CFG.DIFFS[diff].name : diff} · ${bowler === 'mixed' ? 'mixed' : CLLM.Deliveries.TYPES[bowler] ? CLLM.Deliveries.TYPES[bowler].name.toLowerCase() : bowler})`);
+      const [diff, bk, hand] = top.key.split('.');
+      const phys = bk.endsWith('-phys');
+      const bowler = phys ? bk.slice(0, -5) : bk;
+      const bName = bowler === 'mixed' ? 'mixed' : CLLM.Deliveries.TYPES[bowler] ? CLLM.Deliveries.TYPES[bowler].name.toLowerCase() : bowler;
+      parts.push(`Best innings <b>${top.runs}</b> (${top.balls}b · ${CFG.DIFFS[diff] ? CFG.DIFFS[diff].name : diff} · ${bName}${phys ? ' · physical bat' : ''})`);
     }
     if (st.batBalls) parts.push(`Balls faced <b>${st.batBalls}</b> · runs <b>${st.batRuns}</b> · 4s <b>${st.fours}</b> · 6s <b>${st.sixes}</b>`);
     if (st.bowlBalls) parts.push(`Balls bowled <b>${st.bowlBalls}</b> · wickets <b>${st.bowlWkts}</b>${st.topSpeed ? ` · top speed <b>${Math.round(st.topSpeed)}</b> km/h` : ''}`);
@@ -40,6 +43,10 @@
     const sync = () => {
       seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === S[key]));
       if (key === 'diff') $('diffBlurb').textContent = CFG.DIFFS[S.diff].blurb;
+      if (key === 'batControls') {
+        $('howtoPhys').classList.toggle('hidden', S.batControls !== 'physical');
+        $('howtoClassic').classList.toggle('hidden', S.batControls === 'physical');
+      }
     };
     seg.addEventListener('click', (e) => {
       const b = e.target.closest('button');
@@ -59,7 +66,7 @@
   function startBat() {
     lastSetup = 'bat';
     show(null);
-    game.startBatting({ hand: S.hand, bowler: S.bowler, diff: S.diff });
+    game.startBatting({ hand: S.hand, bowler: S.bowler, diff: S.diff, controls: S.batControls });
     setTouchMode('bat');
   }
   function startBowl() {
@@ -75,7 +82,7 @@
   game.onPause = () => {
     $('calib').value = S.calib || 0;
     $('calibVal').textContent = `${S.calib > 0 ? '+' : ''}${S.calib || 0} ms`;
-    $('camBtn').classList.toggle('hidden', game.mode !== 'bat');
+    $('camBtn').classList.toggle('hidden', game.mode !== 'bat' || !!(game.session && game.session.physical));
     show('pause');
   };
   game.onResumeKey = () => resume();
@@ -95,7 +102,11 @@
 
   // Touch buttons inject timed actions
   function setTouchMode(mode) {
-    document.querySelectorAll('#touch .tgroup').forEach((g) => g.classList.toggle('hidden', g.dataset.mode !== mode));
+    document.querySelectorAll('#touch .tgroup').forEach((g) => {
+      // physical bat: you swipe to hit, so only the FRONT/BACK/DANCE group stays
+      const hideForPhys = mode === 'bat' && S.batControls === 'physical' && g.classList.contains('right');
+      g.classList.toggle('hidden', g.dataset.mode !== mode || hideForPhys);
+    });
   }
   setTouchMode(null);
   document.querySelectorAll('#touch .tbtn').forEach((b) => {

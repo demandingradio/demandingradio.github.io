@@ -37,8 +37,14 @@
       // widening the vertical fov when the aspect gets narrow.
       const aspect = this.w / Math.max(1, this.h);
       let fov = this.fov;
-      if (aspect < 1.25) fov = this.fov * Math.min(1.9, 1.25 / aspect);
-      this.focal = (this.h / 2) / Math.tan((fov * Math.PI) / 360);
+      if (this.hfov) {
+        // Show at least `fov` vertically AND `hfov` horizontally (whichever
+        // needs the wider view): landscape fits the height, a phone the width.
+        this.focal = Math.min((this.h / 2) / Math.tan((this.fov * Math.PI) / 360), (this.w / 2) / Math.tan((this.hfov * Math.PI) / 360));
+      } else {
+        if (aspect < 1.25) fov = this.fov * Math.min(1.9, 1.25 / aspect);
+        this.focal = (this.h / 2) / Math.tan((fov * Math.PI) / 360);
+      }
       this.cx = this.w / 2; this.cy = this.h / 2;
     }
 

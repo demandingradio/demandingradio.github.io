@@ -39,8 +39,16 @@
     _setCamera() {
       const s = this.session;
       const h = s && s.h ? s.h : 1;
+      this.cam.hfov = null;
       if (this.mode === 'bowl') {
         this.cam.set(V.v(0.55, 4.0, 40.5), V.v(-0.05, 0.6, 4), 14.5);
+      } else if (this.mode === 'bat' && s && s.physical) {
+        // Behind the batter, looking down the pitch: the ball comes at you.
+        // Framed so the whole hitting zone (ground to head height) sits well
+        // inside the screen, with room below it for a finger. On a phone,
+        // fit the width instead of widening the view (keeps the ball big).
+        this.cam.hfov = 40;
+        this.cam.set(V.v(0.25 * h, 1.5, -1.7), V.v(-0.05 * h, 0.1, 10), 48);
       } else if (this.mode === 'bat' && this.camMode === 'eye') {
         this.cam.set(V.v(0.1 * h, 1.58, 0.55), V.v(-0.05 * h, 0.95, 13), 46);
       } else {
@@ -51,6 +59,7 @@
 
     toggleCam() {
       if (this.mode !== 'bat') return;
+      if (this.session && this.session.physical) { this.ui.toast('The camera stays behind you with the physical bat'); return; }
       this.camMode = this.camMode === 'eye' ? 'broadcast' : 'eye';
       this.save.data.settings.cam = this.camMode;
       this.save.write();
@@ -104,6 +113,14 @@
       this.lastPerf = performance.now();
     }
 
+    // Game-clock seconds -> performance.now() ms (within the current frame)
+    perfAt(g) {
+      const m = this._map;
+      if (!m) return performance.now();
+      if (m.dt < 1e-6) return m.p1;
+      return m.p0 + ((g - m.g0) / m.dt) * (m.p1 - m.p0);
+    }
+
     // Freeze for `stop` seconds, then run at `scale` speed for `dur` seconds.
     hitStop(stop, dur, scale) {
       this._stop = stop; this._slowT = dur; this._slowScale = scale;
@@ -114,6 +131,7 @@
       requestAnimationFrame((t) => this._loop(t));
       let dtReal = (perf - this.lastPerf) / 1000;
       this.lastPerf = perf;
+      if (dtReal > 0.002 && dtReal < 0.06) this.frameMs = this.frameMs ? this.frameMs + (dtReal * 1000 - this.frameMs) * 0.05 : dtReal * 1000;
       if (dtReal > 0.1) dtReal = 0.1;       // tab hiccups
       if (dtReal < 0) dtReal = 0;
       this._tick(dtReal, perf, this._prevPerf != null ? this._prevPerf : perf - dtReal * 1000);
@@ -138,7 +156,9 @@
       // the clock value that was current when they fired.
       const clockBefore = this.clock;
       const rate = this.paused ? 0 : (this._stop > 0 ? 0 : this._slowT > 0 ? this._slowScale : 1);
-      Input.sync(prevPerf != null ? prevPerf : perf - dtReal * 1000, perf, clockBefore, dtReal * rate);
+      const p0 = prevPerf != null ? prevPerf : perf - dtReal * 1000;
+      Input.sync(p0, perf, clockBefore, dtReal * rate);
+      this._map = { p0, p1: perf, g0: clockBefore, dt: dtReal * rate };
 
       if (!this.paused) {
         // time dilation
@@ -146,6 +166,7 @@
         if (this._stop > 0) { this._stop -= dtReal; rate = 0; }
         else if (this._slowT > 0) { this._slowT -= dtReal; rate = this._slowScale; }
         this.slowmo = rate;
+        this.realTime = (this.realTime || 0) + dtReal;
         const dt = dtReal * rate;
         // Drain input with precise event times (in game-clock seconds)
         const evs = Input.drain();

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -48,6 +48,12 @@
           <button data-v="L">Left-handed</button>
         </div>
       </div>
+      <div class="row"><label>Batting controls</label>
+        <div class="seg" data-key="batControls">
+          <button data-v="physical">Physical bat<small>new · you hold the bat</small></button>
+          <button data-v="classic">Classic<small>feet, aim, click to time</small></button>
+        </div>
+      </div>
       <div class="row"><label>Net bowler</label>
         <div class="seg" data-key="bowler">
           <button data-v="pace">Pace<small>swing, bouncers, yorkers</small></button>
@@ -65,7 +71,12 @@
         </div>
         <div class="lead" id="diffBlurb" style="margin:6px 0 0"></div>
       </div>
-      <div class="howto">
+      <div class="howto" id="howtoPhys">
+        <b>You hold the bat.</b> The camera is behind you and the ball comes at you. Your mouse (or finger) <b>is the bat</b>: move it into the ball's path.<br>
+        <b>Hold it still</b> and the ball dies on a dead bat. <b>Swipe through</b> the ball as it arrives to hit it: the faster the swipe, the harder it goes. The swipe's direction steers it: sideways for direction, <b>up</b> to loft it, <b>down</b> to keep it on the ground.<br>
+        Timing turns the face: <b>early</b> and it goes up (or gets dragged round), <b>late</b> and it goes into the ground (or squirts the other way). Middle of the bat = sweet; a thick edge squirts square, a thin one carries to the keeper and slips; miss it and it's on to your stumps. To <b>leave</b>, take the bat out of the way. <kbd>W</kbd>/<kbd>S</kbd> step you in or back.
+      </div>
+      <div class="howto" id="howtoClassic">
         <b>1 · READ</b> the bowler's hand (the bubble at release shows the grip) and the flight of the ball. Full or short?<br>
         <b>2 · COMMIT</b> your feet: <kbd>W</kbd> front foot, <kbd>S</kbd> back foot. It locks on the first press. Commit early and it's worth more; commit late and you're cramped. Against spin, <kbd>E</kbd> dances down the track.<br>
         <b>3 · EXECUTE</b> aim with the mouse around the batter (move right, hit right). <b>Click</b> to hit along the ground, <b>right-click</b> to go aerial, <kbd>Space</kbd> to defend. <b>Don't click</b> and you leave it.<br>
@@ -121,7 +132,7 @@
   <div class="screen hidden" id="pause">
     <div class="card setup" style="max-width:460px">
       <h2>Drinks break</h2>
-      <div class="row"><label>Timing calibration (if your clicks feel consistently early or late)</label>
+      <div class="row"><label>Timing calibration (if your clicks or swings feel consistently early or late)</label>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" id="calib" min="-80" max="80" step="5" style="flex:1">
           <span id="calibVal" class="cond" style="min-width:60px;font-size:18px"></span>
@@ -171,24 +182,25 @@
   </div>
 
   <script src="js/math.js?v=1"></script>
-  <script src="js/camera.js?v=1"></script>
+  <script src="js/camera.js?v=2"></script>
   <script src="js/world.js?v=1"></script>
-  <script src="js/figure.js?v=1"></script>
+  <script src="js/figure.js?v=3"></script>
   <script src="js/bowlanim.js?v=1"></script>
   <script src="js/batanim.js?v=1"></script>
   <script src="js/ball.js?v=2"></script>
   <script src="js/render.js?v=1"></script>
   <script src="js/field.js?v=1"></script>
   <script src="js/deliveries.js?v=1"></script>
-  <script src="js/config.js?v=1"></script>
-  <script src="js/input.js?v=1"></script>
+  <script src="js/config.js?v=3"></script>
+  <script src="js/input.js?v=3"></script>
   <script src="js/audio.js?v=2"></script>
-  <script src="js/save.js?v=1"></script>
-  <script src="js/ui.js?v=2"></script>
-  <script src="js/batting.js?v=1"></script>
+  <script src="js/save.js?v=3"></script>
+  <script src="js/ui.js?v=3"></script>
+  <script src="js/physbat.js?v=1"></script>
+  <script src="js/batting.js?v=3"></script>
   <script src="js/aibatter.js?v=1"></script>
   <script src="js/bowling.js?v=2"></script>
-  <script src="js/game.js?v=2"></script>
-  <script src="js/main.js?v=1"></script>
+  <script src="js/game.js?v=3"></script>
+  <script src="js/main.js?v=3"></script>
 </body>
 </html>
