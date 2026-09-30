@@ -189,7 +189,7 @@
         this.game.ui.toast(`New bowler: ${Deliveries.TYPES[this.type].name}`);
       }
       this.ballNo++;
-      if (this.phys) this.phys.setPlane(CFG.BAT.PLANES.stance);
+      if (this.phys) this.phys.resetFeet();
       this.field.last = null;
       this.game.ui.shotAnim = null;
       this.ball.reset();
@@ -271,18 +271,112 @@
     }
 
     // Physical bat: the pointer IS the bat. Keys only move your feet.
+    // Physical bat: the pointer IS the bat. Hold W / S to move your feet;
+    // hold Space (or Shift, or the right mouse button) to turn the bat cross.
+    // Holds are read as levels (they can't get stuck), and changes are
+    // stamped with the moment they happened.
+    _crossLevel() {
+      const I = this.game.input;
+      return I.down(' ') || I.down('shift') || I.rmb || !!(I.pad && I.pad.cross) || !!(I.btnHeld && I.btnHeld.cross);
+    }
     _inputPhys(ev, t) {
       const b = this.b, k = ev.key;
-      if (ev.type === 'keydown') {
-        if (k === 'w' || k === 'arrowup') this._commit('front', t);
-        else if (k === 's' || k === 'arrowdown') this._commit('back', t);
-        else if (k === 'e') this._commit('dance', t);
-        else if ((k === 'enter' || k === ' ') && b.phase === 'done') this._skip();
-      } else if (ev.type === 'mousedown' && b.phase === 'done') this._skip();
-      else if (ev.type === 'touchbtn' && ev.phase !== 'up') {
-        if (b.phase === 'done') this._skip();
-        else if (k === 'front' || k === 'back' || k === 'dance') this._commit(k, t);
+      if (((ev.type === 'keydown' || ev.type === 'keyup') && (k === ' ' || k === 'shift')) ||
+          ((ev.type === 'mousedown' || ev.type === 'mouseup') && ev.button === 2) || ev.type === 'pad') {
+        this.phys.noteCross(ev.stamp, this._crossLevel());
       }
+      if (ev.type === 'keydown') {
+        if (k === 'e') this._commit('dance', t);
+        else if ((k === 'enter' || k === ' ') && b.phase === 'done') this._skip();
+        else if (k === '[' || k === ']') this._tune('batLimit', k === ']' ? 1 : -1);
+        else if (k === '-' || k === '=') this._tune('batWeight', k === '=' ? 1 : -1);
+      } else if (ev.type === 'mousedown' && ev.button === 0 && b.phase === 'done') this._skip();
+      else if (ev.type === 'touchbtn' && ev.phase !== 'up') {
+        if (b.phase === 'done' && k !== 'cross') this._skip();
+        else if (k === 'dance') this._commit('dance', t);
+      }
+    }
+
+    // Pause-menu tuning, also on hotkeys so it can be A/B tested between balls
+    _tune(key, dir) {
+      const S = this.game.save.data.settings;
+      const steps = key === 'batLimit' ? CFG.PHYS.LIMIT_STEPS : CFG.PHYS.WEIGHT_STEPS;
+      let i = steps.indexOf(+S[key] || 0);
+      if (i < 0) i = 0;
+      i = M.clamp(i + dir, 0, steps.length - 1);
+      S[key] = steps[i];
+      this.game.save.write();
+      this.game.ui.toast(this.game.ui.tuneText(key, steps[i]));
+    }
+
+    // Feet and bat turn from what's held right now (physical mode)
+    _physControls(dt) {
+      const b = this.b, I = this.game.input, ph = this.phys, now = this.game.clock;
+      const held = I.btnHeld || {};
+      const fwd = I.down('w') || I.down('arrowup') || !!held.front;
+      const back = I.down('s') || I.down('arrowdown') || !!held.back;
+      let target = I.pad && I.pad.active ? I.pad.feet : fwd && !back ? 1 : back && !fwd ? -1 : null;
+      // before it's bowled you can only press (a trigger movement), not commit
+      if (target != null && b.phase === 'runup') target = M.clamp(target, -CFG.PHYS.TRIGGER_MAX, CFG.PHYS.TRIGGER_MAX);
+      // ... and a stride can never take you past the ball
+      const canFwd = (p) => !(b.phase === 'flight' && b.plan) || now + 0.12 < this.tAt(ph.planeFor(p));
+      const locked = !!b.physPending || !!b.resolved || !!b.danced || b.phase === 'done';
+      ph.stepFeet(dt, target, locked, canFwd);
+      if (b.danced && !b.physPending && !b.resolved) {
+        // down the track: glide there like a stride
+        let z = ph.plane + (CFG.BAT.PLANES.dance - ph.plane) * (1 - Math.exp(-CFG.PHYS.FEET_RATE * 0.8 * dt));
+        if (b.plan && b.phase === 'flight' && !(now + 0.12 < this.tAt(z))) z = ph.plane;
+        ph.setPlane(z);
+        ph.camShift = (z - CFG.BAT.PLANES.stance) * CFG.PHYS.CAM_FOLLOW;
+      }
+      if (Math.abs(ph.camShift - (ph.camApplied || 0)) > 1e-5) this.game._setCamera();
+      // cross-bat hold: events stamp it exactly; this catches anything missed
+      const lv = this._crossLevel();
+      if (lv !== ph.crossOn) ph.noteCross(performance.now(), lv);
+      // How freely your feet let you swing at this ball: the swing meter
+      // shows the cap once it has pitched; Club tints your reach by it from
+      // release, Grade once it has pitched.
+      if (b.plan && b.phase === 'flight' && !b.physPending && !b.resolved) {
+        const pitched = this.simAt(now) >= b.plan.T;
+        const ff = ph.footFit(b.plan, ph.feet, { spin: this.spin, cross: ph.crossOn, danced: !!b.danced });
+        b.physFit = ff.fit;
+        b.physCap = pitched ? CLLM.PhysBat.PHYS.MAX_BAT * (0.55 + 0.45 * ff.fit) : null;
+        const R = this.diff.physRing;
+        b.envFit = R === true || (R === 'late' && pitched) ? ff.fit : null;
+      } else if (!b.physPending && !b.resolved) { b.physCap = null; b.envFit = null; }
+    }
+
+    _physResolve() {
+      const b = this.b, P = b.physPending;
+      this.phys.perfX = P.perfX;
+      // your feet where you were judged: a label for the pads, LBW and the bowler's notes
+      const pJ = this.phys.feetAt(P.tJ);
+      if (!b.danced) { b.feetP = pJ; b.foot = pJ > 0.4 ? 'front' : pJ < -0.4 ? 'back' : null; }
+      const r = this.phys.resolve(P.tX);
+      b.res = r; b.resolved = true;
+      this._bestOK();                                   // note the swing power this stroke was played at
+      // after the verdict, the swing meter shows the verdict's cap (if any)
+      b.physCap = r.physInfo && r.physInfo.capped ? r.physInfo.cap : null;
+      this._habit(b.danced ? 'dance' : b.foot || 'stance', r.exitPhi != null ? M.deg(M.wrapAng(r.exitPhi * -this.h)) : 0);
+      if (r.contact) { b.tHit = P.tX; if (this.game.input.touch && navigator.vibrate) { try { navigator.vibrate(r.label === 'MIDDLED' ? 25 : 12); } catch (e) { /* ignore */ } } }
+      else if (r.kind === 'leave' && !b.leaveAnim) { b.leaveAnim = true; }
+    }
+
+    // Pausing mid-verdict: decide it now (the swing is what it was)
+    onPause() {
+      if (!this.physical) return;
+      const b = this.b;
+      if (b && b.physPending && !b.resolved) this._physResolve();
+      this.phys.noteCross(performance.now(), false);
+    }
+    onResume() {
+      if (this.physical) { this.phys.noteCross(performance.now(), this._crossLevel()); this._bestOK(); }
+    }
+
+    // Best scores only count if the whole innings was at standard swing power
+    _bestOK() {
+      if (this.physical && Math.abs(this.phys.power() - 1) >= 1e-6) this.boosted = true;
+      return !this.boosted;
     }
 
     _nudgeAim(dir) {
@@ -319,7 +413,6 @@
         if (b.foot && b.foot !== 'front') return;
         if (b.phase === 'flight' && this.simAt(t) > b.plan.T * 0.55) return;  // too late to dance
         b.danced = true; b.foot = 'dance'; b.tFoot = t;
-        if (this.phys && !b.resolved) this.phys.setPlane(CFG.BAT.PLANES.dance);
         this.batAnim.setFoot('dance', this.game.clock);
         return;
       }
@@ -522,9 +615,14 @@
       // Is the ball intercepted by the pads, and is it LBW?
       const b = this.b, plan = b.plan;
       const P = CFG.BAT.PLANES;
-      const padZ = footKey === 'front' ? 1.95 : footKey === 'back' ? 0.85 : footKey === 'dance' ? 3.3 : 1.3;
+      let padZ = footKey === 'front' ? 1.95 : footKey === 'back' ? 0.85 : footKey === 'dance' ? 3.3 : 1.3;
       // pad box in batter-relative x (+ = off side of middle stump)
-      const box = footKey === 'front' ? [-0.03, 0.1] : footKey === 'back' ? [-0.07, 0.05] : footKey === 'dance' ? [-0.05, 0.07] : [-0.13, 0.0];
+      let box = footKey === 'front' ? [-0.03, 0.1] : footKey === 'back' ? [-0.07, 0.05] : footKey === 'dance' ? [-0.05, 0.07] : [-0.13, 0.0];
+      if (this.physical && b.feetP != null && footKey !== 'dance') {
+        const p = b.feetP, mix = (A, Z, u) => [M.lerp(A[0], Z[0], u), M.lerp(A[1], Z[1], u)];
+        padZ = this.phys.planeFor(p) - 0.05;
+        box = p >= 0 ? mix([-0.13, 0.0], [-0.03, 0.1], p) : mix([-0.13, 0.0], [-0.07, 0.05], -p);
+      }
       const ts = BallPhys.timeAtZ(plan, padZ);
       const pp = BallPhys.posAt(plan, ts);
       const xo = pp.x * -this.h;                 // + off
@@ -823,7 +921,7 @@
       if (!b) return;
       // Bowler
       this.bowlAnim.pose(now);
-      if (this.phys) this.phys.update();
+      if (this.phys) { this._physControls(dt); this.phys.update(); }
       const d = cam => 0;
       // Fade the bowler when he's right on top of the camera
       const dep = this.game.cam.depth(this.bowler.J.pel);
@@ -859,14 +957,7 @@
               if (this.ball.trail.length) this.ball.trail[this.ball.trail.length - 1] = V.copy(this.ball.pos);
             }
           }
-          if (this.physical && b.physPending && !b.resolved && (this.game.realTime || 0) >= b.physPending.rt + b.physPending.wait) {
-            const P = b.physPending;
-            this.phys.perfX = P.perfX;
-            const r = this.phys.resolve(P.tX);
-            b.res = r; b.resolved = true;
-            if (r.contact) { b.tHit = P.tX; if (this.game.input.touch && navigator.vibrate) { try { navigator.vibrate(r.label === 'MIDDLED' ? 25 : 12); } catch (e) { /* ignore */ } } }
-            else if (r.kind === 'leave' && !b.leaveAnim) { b.leaveAnim = true; }
-          }
+          if (this.physical && b.physPending && !b.resolved && (this.game.realTime || 0) >= b.physPending.rt + b.physPending.wait) this._physResolve();
           // Contact visual
           if (b.res && b.res.contact && !b.hitDone && now >= b.tHit) this._doHit();
           // Pad / stumps interactions for unhit balls
@@ -981,7 +1072,7 @@
         if (this.innings.length > 6) this.innings.pop();
         st.batOuts++;
         const best = this.game.save.best('bat', this.diff.key, this.bestKey, this.hand);
-        const isBest = score > best.runs;
+        const isBest = score > best.runs && this._bestOK();
         if (isBest) this.game.save.setBest('bat', this.diff.key, this.bestKey, this.hand, { runs: score, balls });
         r.innings = { runs: score, balls, isBest };
         Audio.groan();
@@ -998,7 +1089,7 @@
         this.recent.push(tag);
         b.tEnd = b.tDone + CFG.BAT.GAP_AFTER + (r.runs >= 4 ? 0.4 : 0);
         const best = this.game.save.best('bat', this.diff.key, this.bestKey, this.hand);
-        if (this.runs > best.runs) this.game.save.setBest('bat', this.diff.key, this.bestKey, this.hand, { runs: this.runs, balls: this.balls });
+        if (this.runs > best.runs && this._bestOK()) this.game.save.setBest('bat', this.diff.key, this.bestKey, this.hand, { runs: this.runs, balls: this.balls });
         if (r.runs >= 4 && r.proj) this.stint.push(r.proj.phi);
       }
       if (this.recent.length > 8) this.recent.shift();
@@ -1009,7 +1100,7 @@
     _nextBall() {
       const b = this.b;
       if (b.res && b.res.out) {
-        this.runs = 0; this.balls = 0; this.fours = 0; this.sixes = 0; this.ramp = 0;
+        this.runs = 0; this.balls = 0; this.fours = 0; this.sixes = 0; this.ramp = 0; this.boosted = false;
         this.game.ui.newInnings(this);
       } else {
         // In-session ramp: survive and the bowler steps it up

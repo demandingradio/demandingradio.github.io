@@ -48,7 +48,9 @@
         // inside the screen, with room below it for a finger. On a phone,
         // fit the width instead of widening the view (keeps the ball big).
         this.cam.hfov = 40;
-        this.cam.set(V.v(0.25 * h, 1.5, -1.7), V.v(-0.05 * h, 0.1, 10), 48);
+        const dz = s.phys ? s.phys.camShift : 0;
+        if (s.phys) s.phys.camApplied = dz;
+        this.cam.set(V.v(0.25 * h, 1.5, -1.7 + dz), V.v(-0.05 * h, 0.1, 10 + dz), 48);
       } else if (this.mode === 'bat' && this.camMode === 'eye') {
         this.cam.set(V.v(0.1 * h, 1.58, 0.55), V.v(-0.05 * h, 0.95, 13), 46);
       } else {
@@ -108,8 +110,8 @@
     }
     resume() {
       this.paused = false;
+      Input.queue = [];
       if (this.session && this.session.onResume) this.session.onResume();
-      Input.clear();
       this.lastPerf = performance.now();
     }
 

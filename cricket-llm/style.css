@@ -240,6 +240,24 @@ body.in-menu canvas#game { cursor: default; }
 #touch .tbtn.small { height: 42px; font-size: 15px; }
 #touch .tbtn.big { width: 110px; height: 84px; font-size: 24px; background: rgba(242, 193, 78, 0.35); }
 #touch .tbtn.down { background: rgba(242, 193, 78, 0.8); color: #1e1a0a; }
+/* Physical bat on touch: one stance pad for the left thumb.
+   Drag up/down = feet forward/back; drag inward = cross bat. */
+#touch .stancepad {
+  position: relative; width: 116px; height: 150px; border-radius: 18px; touch-action: none;
+  border: 2px solid rgba(255,255,255,0.35); background: rgba(10, 20, 14, 0.55);
+  font-family: "Barlow Condensed", sans-serif; font-weight: 800; color: rgba(255,255,255,0.7); font-size: 13px; letter-spacing: 0.05em;
+}
+#touch .stancepad .sp-f { position: absolute; top: 6px; left: 0; right: 0; text-align: center; }
+#touch .stancepad .sp-b { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; }
+#touch .stancepad .sp-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); font-size: 11px; }
+#touch .stancepad .spknob {
+  position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%;
+  background: rgba(242, 193, 78, 0.55); border: 2px solid rgba(255,255,255,0.6); pointer-events: none;
+}
+#touch .stancepad.cross { background: rgba(95, 170, 230, 0.45); }
+@media (max-width: 760px) and (min-height: 521px) {
+  body.touch:has(#stancePad:not(.hidden)) #bowlerTag { left: calc(50% + 28px); }
+}
 body.touch #controlsHint { display: none; }
 body.touch #coach { bottom: auto; top: 118px; }
 

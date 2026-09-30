@@ -84,5 +84,43 @@
     test:  { key: 'test',  name: 'Test',  skill: 0.88 },
   };
 
-  CLLM.CFG = { DIFFS, BAT, BOWL, AIBAT };
+  // ---- Physical bat: reach, cross bat, footwork -------------------------------
+  const PHYS = {
+    BODY_X: 0.2,           // batter's body line (x * h) on the plane
+    // Where the sweet spot can go (m). Going back lifts you, striding forward
+    // lowers you and lets you reach further outside off. A straight bat only
+    // gets to about chest height (the splice above it still makes contact:
+    // that's a fend); the cross bat goes from a knee-down sweep to a hook.
+    REACH: {
+      straight: { lo: { back: 0.10, stance: 0.10, front: 0.10 }, hi: { back: 1.18, stance: 1.05, front: 0.92 } },
+      cross:    { lo: { back: 0.45, stance: 0.28, front: 0.08 }, hi: { back: 1.90, stance: 1.75, front: 1.45 } },
+      off: { back: 0.90, stance: 1.00, front: 1.15 },   // off side of the body line
+      leg: { straight: 0.55, cross: 0.25 },            // leg side (a cross bat can't: the hands are there)
+      give: 0.06,          // soft edge: a few cm of give past the limit
+    },
+    CROSS_IN_MS: 80,       // blade turning horizontal
+    CROSS_OUT_MS: 130,     // ... and back upright
+    FEET_RATE: 10,         // 1/s: a 0.1 s tap is a short step, a hold a full stride
+    TRIGGER_MAX: 0.35,     // before the ball is bowled you can press, not commit
+    CAM_FOLLOW: 1,         // the camera comes with your feet (0 = fixed)
+    LIMIT_STEPS: [0, 20, 15, 12, 9, 7, 5],   // bat speed limit choices (m/s; 0 = off)
+    WEIGHT_STEPS: [0, 60, 45, 35, 25, 20],   // bat weight choices (spring rad/s; 0 = off; lower = heavier)
+    // Footwork: how good is it to be right back / on the crease / fully
+    // forward, by where it pitched (m from your stumps). Coaching truth:
+    // pace - forward to full, back to short, either is OK at good length;
+    // spin - right forward or right back, never stuck on the crease.
+    FIT: {
+      pace: [[0.3, 0.55, 0.90, 1.0], [1.5, 0.45, 0.90, 0.90], [3.0, 0.35, 0.75, 1.0], [5.0, 0.50, 0.80, 1.0],
+             [6.5, 0.85, 0.80, 0.90], [7.8, 0.95, 0.80, 0.80], [9.0, 1.0, 0.75, 0.60], [10.5, 1.0, 0.70, 0.45], [13, 1.0, 0.70, 0.45]],
+      spin: [[0.3, 0.60, 0.85, 1.0], [1.5, 0.40, 0.70, 1.0], [3.0, 0.45, 0.60, 1.0], [4.2, 0.75, 0.50, 0.95],
+             [5.2, 0.95, 0.55, 0.65], [6.2, 1.0, 0.65, 0.45], [9, 1.0, 0.65, 0.45]],
+      shapePace: 0.7,      // a small trigger press earns most of the credit vs pace
+      shapeSpin: 1.6,      // half-forward to spin earns little
+      lateMove: 0.25,      // feet moving this much after your deadline = late
+      late: { pace: 0.85, spinBack: 0.95, spinFwd: 0.8 },
+      floor: 0.25,
+    },
+  };
+
+  CLLM.CFG = { DIFFS, BAT, BOWL, AIBAT, PHYS };
 })();

@@ -9,7 +9,7 @@
   const KEY = 'cricketllm.v1';
 
   const DEFAULT = () => ({
-    settings: { hand: 'R', bowler: 'pace', diff: 'club', batControls: 'physical', bowlType: 'pace', batterHand: 'R', batterDiff: 'grade', calib: 0, muted: false, cam: 'broadcast', seenBat: false, seenBowl: false },
+    settings: { hand: 'R', bowler: 'pace', diff: 'club', batControls: 'physical', bowlType: 'pace', batterHand: 'R', batterDiff: 'grade', calib: 0, batLimit: 0, batWeight: 0, batPower: 1, muted: false, cam: 'broadcast', seenBat: false, seenBowl: false },
     best: { bat: {}, bowl: {} },
     stats: { batBalls: 0, batRuns: 0, batOuts: 0, fours: 0, sixes: 0, bowlBalls: 0, bowlWkts: 0, bowlRuns: 0, topSpeed: 0 },
   });

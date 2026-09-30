@@ -42,7 +42,7 @@
       { key: 'in',      name: 'In-swinger',    swingB: 0.12, grip: 'seam to fine leg', freq: 1 },
       { key: 'cutter',  name: 'Off-cutter',    seam: 0.9, sMul: 0.9, grip: 'fingers across seam', freq: 0.6 },
       { key: 'slower',  name: 'Slower ball',   sMul: 0.78, dip: 1.2, grip: 'knuckles', freq: 0.45 },
-      { key: 'bouncer', name: 'Bouncer',       sMul: 1.03, kMul: 1.08, grip: 'seam upright', length: 'bouncer', freq: 0.7 },
+      { key: 'bouncer', name: 'Bouncer',       sMul: 1.03, kMul: 1.2, grip: 'seam upright', length: 'bouncer', freq: 0.7 },
       { key: 'yorker',  name: 'Yorker',        grip: 'seam upright', length: 'yorker', freq: 0.55 },
     ],
     off: [

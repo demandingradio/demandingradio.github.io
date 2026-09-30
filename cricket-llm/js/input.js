@@ -13,6 +13,9 @@
   const Input = {
     keys: new Set(),
     mouse: { x: 0, y: 0, inside: false, moved: false },
+    rmb: false,              // right mouse button held (cross bat)
+    btnHeld: {},             // on-screen buttons currently held (by action)
+    pad: { active: false, feet: 0, cross: false },   // touch stance pad
     queue: [],               // discrete actions: {type, key, button, stamp, x, y}
     enabled: true,
     touch: false,
@@ -22,10 +25,11 @@
     attach(canvas) {
       const push = (ev) => { if (this.enabled) this.queue.push(ev); };
       window.addEventListener('keydown', (e) => {
-        if (e.repeat) return;
         const k = normKey(e);
-        this.keys.add(k);
+        // (before the repeat check: a held Space must never press a focused button)
         if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'tab'].indexOf(k) >= 0) e.preventDefault();
+        if (e.repeat) return;
+        this.keys.add(k);
         push({ type: 'keydown', key: k, stamp: e.timeStamp, shift: e.shiftKey, ctrl: e.ctrlKey });
       });
       window.addEventListener('keyup', (e) => {
@@ -33,7 +37,16 @@
         this.keys.delete(k);
         push({ type: 'keyup', key: k, stamp: e.timeStamp });
       });
-      window.addEventListener('blur', () => { this.keys.clear(); push({ type: 'blur', stamp: performance.now() }); });
+      window.addEventListener('blur', () => { this.keys.clear(); this.releaseHolds(); push({ type: 'blur', stamp: performance.now() }); });
+      // Right button as a level (read from every mouse pointer event anywhere,
+      // so releasing it over the HUD or outside the canvas can't leave it stuck)
+      if (window.PointerEvent) {
+        const btn = (e) => { if (e.pointerType === 'mouse') this.rmb = !!(e.buttons & 2); };
+        window.addEventListener('pointerdown', btn, true);
+        window.addEventListener('pointermove', btn, true);
+        window.addEventListener('pointerup', btn, true);
+      }
+      window.addEventListener('contextmenu', (e) => { if (!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) e.preventDefault(); });
       canvas.addEventListener('mousemove', (e) => {
         this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true; this.mouse.moved = true;
       });
@@ -69,9 +82,11 @@
       canvas.addEventListener('mouseleave', () => { this.mouse.inside = false; });
       canvas.addEventListener('mousedown', (e) => {
         this.mouse.x = e.clientX; this.mouse.y = e.clientY;
+        if (e.button === 2) this.rmb = true;
         push({ type: 'mousedown', button: e.button, stamp: e.timeStamp, x: e.clientX, y: e.clientY, shift: e.shiftKey });
         e.preventDefault();
       });
+      window.addEventListener('mouseup', (e) => { if (e.button === 2) this.rmb = false; });
       canvas.addEventListener('mouseup', (e) => {
         push({ type: 'mouseup', button: e.button, stamp: e.timeStamp, x: e.clientX, y: e.clientY });
       });
@@ -140,7 +155,8 @@
     },
 
     drain() { const q = this.queue; this.queue = []; return q; },
-    clear() { this.queue = []; this.keys.clear(); },
+    clear() { this.queue = []; this.keys.clear(); this.releaseHolds(); },
+    releaseHolds() { this.rmb = false; this.btnHeld = {}; this.pad = { active: false, feet: this.pad ? this.pad.feet : 0, cross: false }; },
     down(k) { return this.keys.has(k); },
 
     // Tell the input module what the game clock read at a given perf time.

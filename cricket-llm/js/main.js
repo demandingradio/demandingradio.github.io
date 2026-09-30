@@ -82,18 +82,43 @@
   game.onPause = () => {
     $('calib').value = S.calib || 0;
     $('calibVal').textContent = `${S.calib > 0 ? '+' : ''}${S.calib || 0} ms`;
+    const physBat = game.mode === 'bat' && !!(game.session && game.session.physical);
+    $('batTune').classList.toggle('hidden', !physBat);
+    const LS = CFG.PHYS.LIMIT_STEPS, WS = CFG.PHYS.WEIGHT_STEPS;
+    $('batLimit').value = Math.max(0, LS.indexOf(+S.batLimit || 0));
+    $('batWeight').value = Math.max(0, WS.indexOf(+S.batWeight || 0));
+    $('batPower').value = S.batPower || 1;
+    showBatTune();
     $('camBtn').classList.toggle('hidden', game.mode !== 'bat' || !!(game.session && game.session.physical));
     show('pause');
   };
   game.onResumeKey = () => resume();
   function resume() { show(null); game.resume(); }
   $('resume').addEventListener('click', resume);
-  $('pauseBtn').addEventListener('click', () => game.pause());
-  $('muteBtn').addEventListener('click', () => game.toggleMute());
+  $('pauseBtn').addEventListener('click', (e) => { e.currentTarget.blur(); game.pause(); });
+  $('muteBtn').addEventListener('click', (e) => { e.currentTarget.blur(); game.toggleMute(); });
   $('muteBtn').textContent = S.muted ? '🔇' : '🔊';
   $('camBtn').addEventListener('click', () => { game.toggleCam(); });
   $('restart').addEventListener('click', () => { if (lastSetup === 'bowl') startBowl(); else startBat(); });
   $('toMenu').addEventListener('click', () => { game.quitToMenu(); setTouchMode(null); show('title'); });
+  // Physical bat tuning (applies live)
+  function showBatTune() {
+    $('batLimitVal').textContent = game.ui.tuneText('batLimit', +S.batLimit || 0, true);
+    $('batWeightVal').textContent = game.ui.tuneText('batWeight', +S.batWeight || 0, true);
+    $('batPowerVal').textContent = `×${(+(S.batPower || 1)).toFixed(2)}`;
+  }
+  $('batLimit').addEventListener('input', (e) => {
+    S.batLimit = CFG.PHYS.LIMIT_STEPS[parseInt(e.target.value, 10) || 0] || 0;
+    showBatTune(); game.save.write();
+  });
+  $('batWeight').addEventListener('input', (e) => {
+    S.batWeight = CFG.PHYS.WEIGHT_STEPS[parseInt(e.target.value, 10) || 0] || 0;
+    showBatTune(); game.save.write();
+  });
+  $('batPower').addEventListener('input', (e) => {
+    S.batPower = parseFloat(e.target.value) || 1;
+    showBatTune(); game.save.write();
+  });
   $('calib').addEventListener('input', (e) => {
     S.calib = parseInt(e.target.value, 10) || 0;
     $('calibVal').textContent = `${S.calib > 0 ? '+' : ''}${S.calib} ms`;
@@ -107,25 +132,86 @@
       const hideForPhys = mode === 'bat' && S.batControls === 'physical' && g.classList.contains('right');
       g.classList.toggle('hidden', g.dataset.mode !== mode || hideForPhys);
     });
+    const phys = mode === 'bat' && S.batControls === 'physical';
+    document.querySelectorAll('#touch .phys-only').forEach((b) => b.classList.toggle('hidden', !phys));
+    document.querySelectorAll('#touch .classic-only').forEach((b) => b.classList.toggle('hidden', phys));
   }
   setTouchMode(null);
   document.querySelectorAll('#touch .tbtn').forEach((b) => {
     const act = b.dataset.act;
-    b.addEventListener('touchstart', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      Audio.unlock();
+    const down = (e) => {
+      Input.btnHeld[act] = true;
       b.classList.add('down');
       Input.queue.push({ type: 'touchbtn', key: act, stamp: e.timeStamp, phase: 'down' });
-    }, { passive: false });
-    b.addEventListener('touchend', (e) => {
-      e.preventDefault(); e.stopPropagation();
+    };
+    const up = (e) => {
+      if (!Input.btnHeld[act] && !b.classList.contains('down')) return;
+      Input.btnHeld[act] = false;
       b.classList.remove('down');
       Input.queue.push({ type: 'touchbtn', key: act, stamp: e.timeStamp, phase: 'up' });
-    }, { passive: false });
+    };
+    b.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); Audio.unlock(); down(e); }, { passive: false });
+    b.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); up(e); }, { passive: false });
+    b.addEventListener('touchcancel', (e) => { up(e); });
     // Mouse fallback so the buttons work in desktop testing too
-    b.addEventListener('mousedown', (e) => { e.preventDefault(); Input.queue.push({ type: 'touchbtn', key: act, stamp: e.timeStamp, phase: 'down' }); });
-    b.addEventListener('mouseup', (e) => { e.preventDefault(); Input.queue.push({ type: 'touchbtn', key: act, stamp: e.timeStamp, phase: 'up' }); });
+    b.addEventListener('mousedown', (e) => { e.preventDefault(); down(e); });
+    b.addEventListener('mouseup', (e) => { e.preventDefault(); up(e); });
+    b.addEventListener('mouseleave', (e) => { up(e); });
   });
+
+  // Touch stance pad (physical bat): the left thumb drags up for a front-foot
+  // stride, down to go back, and inward to turn the bat cross. Lifting keeps
+  // your feet where they are and straightens the bat.
+  (function stancePad() {
+    const pad = $('stancePad'), knob = pad.querySelector('.spknob');
+    let id = null, ox = 0, oy = 0, crossWas = false, fullWas = false;
+    const buzz = (ms) => { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } };
+    const set = (e, dx, dy) => {
+      const P = Input.pad;
+      P.active = true;
+      P.feet = Math.max(-1, Math.min(1, -dy / 45));
+      P.cross = dx > 25;
+      knob.style.transform = `translate(${Math.max(-40, Math.min(40, dx))}px, ${Math.max(-55, Math.min(55, dy))}px)`;
+      pad.classList.toggle('cross', P.cross);
+      if (P.cross !== crossWas) { crossWas = P.cross; if (P.cross) buzz(8); Input.queue.push({ type: 'pad', stamp: e.timeStamp }); }
+      const full = Math.abs(P.feet) >= 1;
+      if (full && !fullWas) buzz(8);
+      fullWas = full;
+    };
+    pad.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (id !== null) return;
+      Audio.unlock();
+      id = e.pointerId; ox = e.clientX; oy = e.clientY;
+      try { pad.setPointerCapture(id); } catch (err) { /* ignore */ }
+      Input.pad.active = true;
+      // start from where your feet already are
+      const s = game.session;
+      if (s && s.phys) oy += s.phys.feet * 45;
+      set(e, 0, e.clientY - oy);
+    });
+    pad.addEventListener('pointermove', (e) => { if (e.pointerId === id) set(e, e.clientX - ox, e.clientY - oy); });
+    const end = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      Input.pad.active = false; Input.pad.cross = false; crossWas = false;
+      knob.style.transform = '';
+      pad.classList.remove('cross');
+      Input.queue.push({ type: 'pad', stamp: e.timeStamp });
+    };
+    pad.addEventListener('pointerup', end);
+    pad.addEventListener('pointercancel', end);
+    // while the pad isn't held, the knob shows where your feet actually are
+    const idle = () => {
+      if (id === null && !pad.classList.contains('hidden')) {
+        const s = game.session, f = s && s.phys ? s.phys.feet : 0;
+        const t = Math.abs(f) > 0.01 ? `translate(0px, ${(-f * 45).toFixed(1)}px)` : '';
+        if (knob.style.transform !== t) knob.style.transform = t;
+      }
+      requestAnimationFrame(idle);
+    };
+    requestAnimationFrame(idle);
+  })();
 
   show('title');
 })();

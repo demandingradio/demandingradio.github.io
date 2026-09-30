@@ -40,7 +40,7 @@
     setHint(mode) {
       const el = $('controlsHint');
       if (mode === 'bat' && this.game.session && this.game.session.physical) {
-        el.innerHTML = 'the mouse <b>is the bat</b> · hold still to block<br><b>swipe through</b> the ball to hit · direction steers<br><kbd>W</kbd> step in · <kbd>S</kbd> step back · <kbd>Esc</kbd> pause';
+        el.innerHTML = 'the mouse <b>is the bat</b> · hold still to block<br><b>swipe through</b> the ball to hit · direction steers<br>hold <kbd>Space</kbd> (or right-click) = <b>cross bat</b><br>hold <kbd>W</kbd> forward · <kbd>S</kbd> back · <kbd>Esc</kbd> pause';
       } else if (mode === 'bat') {
         el.innerHTML = '<kbd>W</kbd> front foot · <kbd>S</kbd> back foot' + (this.game.session && this.game.session.spin ? ' · <kbd>E</kbd> dance' : '') +
           '<br>aim with the mouse · <b>click</b> hit · <b>right-click</b> loft<br><kbd>Space</kbd> defend · no click = leave · <kbd>Esc</kbd> pause';
@@ -55,7 +55,7 @@
       const touch = this.game.input.touch;
       if (mode === 'bat' && this.game.session && this.game.session.physical) {
         c.innerHTML = `<div><span class="tag">Coach</span>You're holding the bat. ${touch ? 'Your finger' : 'The mouse'} puts it where you want it — get it in the ball's path.</div>` +
-          `<div class="chips"><span class="chip">hold still = block</span><span class="chip">swipe through = hit</span><span class="chip">swipe sideways = steer</span><span class="chip">swipe up = loft · down = along the ground</span><span class="chip">move it away = leave</span><span class="chip">${touch ? 'FRONT / BACK' : 'W / S'} = step in / back</span></div>`;
+          `<div class="chips"><span class="chip">hold still = block</span><span class="chip">swipe through = hit</span><span class="chip">swipe sideways = steer</span><span class="chip">swipe up = loft · down = along the ground</span><span class="chip">move it away = leave</span><span class="chip">${touch ? 'stance pad: drag in' : 'hold Space / right-click'} = cross bat (pull, cut, hook)</span><span class="chip">${touch ? 'stance pad: drag up / down' : 'hold W / S'} = feet: forward to full, back to short</span></div>`;
       } else if (mode === 'bat') {
         c.innerHTML = `<div><span class="tag">Coach</span>Watch the hand, then the ball. <b>Full</b>? ${touch ? 'FRONT' : '<kbd>W</kbd>'} and drive. <b>Short</b>? ${touch ? 'BACK' : '<kbd>S</kbd>'} and cut or pull.</div>` +
           `<div class="chips"><span class="chip">${touch ? 'drag to aim' : 'aim with the mouse'}</span><span class="chip">${touch ? 'HIT' : 'click'} as it arrives</span><span class="chip">${touch ? 'LOFT' : 'right-click'} to go aerial</span><span class="chip">${touch ? 'BLOCK' : 'Space'} to defend</span><span class="chip">do nothing = leave</span></div>`;
@@ -167,20 +167,30 @@
     _physChips(r, chips) {
       const p = r.physInfo || {};
       const cm = (m) => Math.round(Math.abs(m) * 100);
+      const crossB = p.cross > 0.5;
       if (!r.contact) {
         if (r.kind === 'leave') chips.push({ t: 'Left it', c: r.out ? 'bad' : 'good' });
         else chips.push({ t: `Missed — ${p.miss || 'passed the bat'}`, c: 'bad' });
         if (p.speed != null && r.kind !== 'leave') chips.push({ t: `bat speed ${Math.round(p.speed)} m/s`, c: 'meh' });
+        if (r.kind !== 'leave') this._footChip(p, chips);
+        if (crossB && p.B && p.B.y < 0.5 && r.kind !== 'leave') chips.push({ t: 'Cross bat at a full one: only the bat\u2019s width to hit with', c: 'bad' });
         return;
       }
+      this._footChip(p, chips);
       let where;
-      if (p.edge) where = 'off the edge';
+      const hi = crossB ? 'toward the handle' : 'above the middle', lo = crossB ? 'toward the toe' : 'below the middle';
+      if (r.label === 'GLOVED') where = 'off your gloves';
+      else if (p.edge) where = `off the ${p.edgeName || 'edge'}`;
       else if (r.label === 'MIDDLED' || Math.abs(p.along) < 0.05) where = 'sweet spot';
-      else if (p.along > 0) where = `Toe end — ${cm(p.along)} cm below the middle`;
-      else where = `High on the bat — ${cm(p.along)} cm above the middle`;
-      chips.push({ t: `${r.label} · ${where}`, c: r.label === 'MIDDLED' ? 'good' : r.label === 'EDGED' || r.label === 'MISTIMED' || r.label === 'MISHIT' ? 'bad' : 'meh' });
+      else if (p.along > 0) where = `${crossB ? 'Toward the toe' : 'Toe end'} — ${cm(p.along)} cm ${lo}`;
+      else where = `${crossB ? 'Toward the handle' : 'High on the bat'} — ${cm(p.along)} cm ${hi}`;
+      chips.push({ t: `${crossB ? 'Cross bat · ' : ''}${r.label} · ${where}`, c: r.label === 'MIDDLED' ? 'good' : /EDGED|MISTIMED|MISHIT|GLOVED/.test(r.label) ? 'bad' : 'meh' });
+      if (p.noRoom) chips.push({ t: 'No room to pull: it was at your body', c: 'bad' });
+      if (p.noWidth) chips.push({ t: 'No width to cut: too close to you', c: 'bad' });
+      if (p.reachU > 0.2) chips.push({ t: 'Hung the bat out, away from your body', c: 'bad' });
       const sp = Math.round(p.speed || 0);
-      chips.push({ t: sp < 3 ? 'still bat (block)' : `bat speed ${sp} m/s`, c: sp >= 18 ? 'good' : sp >= 8 ? 'meh' : '' });
+      const capTxt = p.capped ? ` · capped at ${Math.round((p.cap / CLLM.PhysBat.PHYS.MAX_BAT) * 100)}% (feet)` : '';
+      chips.push({ t: sp < 3 ? 'still bat (block)' : `bat speed ${sp} m/s${capTxt}`, c: p.capped ? 'bad' : sp >= 18 ? 'good' : sp >= 8 ? 'meh' : '' });
       if (sp >= 3 && p.tErr != null) {
         const ms = Math.round(Math.abs(p.tErr)), deg = Math.round(Math.abs(p.tRot || 0));
         const early = p.tErr < 0;
@@ -194,6 +204,41 @@
       const yaw = Math.round((p.yaw || 0) / (Math.PI / 180));
       // yaw > 0 = swiped right on screen = toward -x = a right-hander's off side
       if (Math.abs(yaw) >= 8) chips.push({ t: `face turned ${Math.abs(yaw)}° ${yaw * (this.game.session.h) > 0 ? 'to the off side' : 'to the leg side'}`, c: '' });
+    },
+
+    // Footwork verdict in coaching language: which foot, for which length,
+    // and what it cost you.
+    _footChip(p, chips) {
+      const ff = p.ff;
+      if (!ff) return;
+      const s = this.game.session, len = (s.b.plan && s.b.plan.lengthName) || 'that';
+      const good = ff.fit >= 0.9;
+      let t;
+      if (ff.danced) t = good ? 'Down the track to the pitch ✓' : 'Down the track — beaten in the flight ✗';
+      else {
+        const fwd = ff.feet > 0.4, back = ff.feet < -0.4, row = ff.row;
+        const fullish = row.front > row.back + 0.2, shortish = row.back > row.front + 0.2;
+        if (good && fwd) t = ff.spin ? 'Got to the pitch ✓' : `Got forward to a ${len} ball ✓`;
+        else if (good && back) t = `Went back to a ${len} ball ✓`;
+        else if (good) t = `Feet fine for a ${len} ball ✓`;
+        else if (back && fullish) t = `Played back to a ${len} ball ✗ (trapped)`;
+        else if (fwd && shortish) t = `Front foot to a ${len} ball ✗ — cramped`;
+        else if (ff.spin && ff.feet > 0.15 && ff.feet <= 0.75) t = 'Half-forward to the spinner ✗';
+        else if (!fwd && !back) t = `Caught on the crease ✗ — ${ff.bestFoot > 0 ? 'get forward' : ff.bestFoot < 0 ? 'go back' : 'commit'} to that length`;
+        else t = `${fwd ? 'Front' : 'Back'} foot to a ${len} ball ~`;
+      }
+      if (ff.notes && ff.notes.length) t += ` · ${ff.notes[0]}`;
+      if (ff.late) t += ' · late feet';
+      chips.push({ t, c: good ? 'good' : ff.fit >= 0.7 ? 'meh' : 'bad' });
+    },
+
+    // Readable value for the bat tuning settings
+    tuneText(key, v, short) {
+      if (key === 'batLimit') return short ? (v ? `${v} m/s` : 'off') : `Bat speed limit: ${v ? v + ' m/s' : 'off'}`;
+      const W = CLLM.CFG.PHYS.WEIGHT_STEPS, i = Math.max(0, W.indexOf(v));
+      const name = ['off', 'light', 'medium', 'heavy', 'heavier', 'heaviest'][i] || 'heavy';
+      if (key === 'batWeight') return short ? name : `Bat weight: ${name}`;
+      return String(v);
     },
 
     newInnings(s) {
@@ -293,7 +338,7 @@
       }
       // swing-speed meter: a vertical bar on the right edge
       const W = cam.w, H = cam.h;
-      let bh = Math.min(260, H * 0.34), y0 = H * 0.52 - bh / 2;
+      let bh = Math.min(260, H * 0.34, W * 0.5), y0 = H * 0.52 - bh / 2;
       const bw = 12, x0 = W - 34;
       const hint = document.getElementById('controlsHint');
       const hr = hint ? hint.getBoundingClientRect() : null;
@@ -319,10 +364,26 @@
         ctx.fillStyle = '#ff9d6b';
         ctx.fillRect(x0 - 5, Y(b.res.physInfo.speed || 0) - 1, bw + 10, 2);
       }
+      // cramped: once it has pitched, the most your feet will let you swing
+      const cap = b.physCap;
+      if (cap != null && cap < max - 0.5) {
+        ctx.fillStyle = 'rgba(10,20,14,0.55)'; ctx.fillRect(x0, y0, bw, Y(cap) - y0);
+        ctx.fillStyle = '#ff6b6e'; ctx.fillRect(x0 - 6, Y(cap) - 1.5, bw + 12, 3);
+      }
       ctx.textAlign = 'center'; ctx.font = '700 10px "Barlow", sans-serif'; ctx.fillStyle = 'rgba(246,241,227,0.8)';
-      ctx.fillText('SWING', x0 + bw / 2, y0 - 12);
+      ctx.fillText(s.phys.pose && s.phys.pose.cross > 0.5 ? 'CROSS' : 'SWING', x0 + bw / 2, y0 - 12);
       ctx.fillText(`${Math.round(sp)}`, x0 + bw / 2, y0 + bh + 13);
+      // tuning in effect (pause menu / hotkeys)
+      const S = g.save.data.settings, tags = [];
+      if (+S.batLimit) tags.push(`limit ${S.batLimit}`);
+      if (+S.batWeight) tags.push(this.tuneText('batWeight', +S.batWeight, true));
+      if (Math.abs((+S.batPower || 1) - 1) > 1e-6) tags.push(`power ×${(+S.batPower).toFixed(2)}`);
+      if (tags.length) {
+        ctx.font = '600 9px "Barlow", sans-serif'; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(242,193,78,0.85)';
+        tags.forEach((tg, i) => ctx.fillText(tg, x0 + bw + 6, y0 + bh + 30 + i * 11));
+      }
       ctx.restore();
+      if (!g.input.touch) this._drawFeetMeter(ctx, s, cam, y0, bh);
       // first-ball hint
       if (W >= 700 && g.save.data.stats.batBalls < 4 && (b.phase === 'runup' || b.phase === 'flight')) {
         const txt = g.input.touch ? 'Your finger is the bat: get it in the ball\u2019s path, swipe through to hit' : 'Your mouse is the bat: get it in the ball\u2019s path, swipe through to hit';
@@ -333,6 +394,42 @@
         ctx.fillStyle = '#f6f1e3'; ctx.fillText(txt, W / 2, H * 0.14 + 1);
         ctx.restore();
       }
+    },
+
+    // Back <-> front footwork meter (left edge). Club/Grade light up the right
+    // zone for this ball once it has pitched.
+    _drawFeetMeter(ctx, s, cam, y0, bh) {
+      const b = s.b, g = this.game, ph = s.phys, D = s.diff;
+      const bw = 12, x0 = 22;
+      const Y = (p) => y0 + bh * (1 - (p + 1) / 2);            // +1 (front) at the top
+      ctx.save();
+      ctx.fillStyle = 'rgba(10,20,14,0.65)';
+      ctx.fillRect(x0 - 8, y0 - 26, bw + 44, bh + 44);
+      ctx.fillStyle = 'rgba(246,241,227,0.18)'; ctx.fillRect(x0, y0, bw, bh);
+      // Where your feet should be for this ball: from release on Club, once
+      // it has pitched on Grade, never on State / Test (read it yourself)
+      const inPlay = b.plan && b.phase === 'flight';
+      const pitched = inPlay && s.simAt(g.clock) >= b.plan.T;
+      const show = D.physRing === true ? inPlay : D.physRing === 'late' ? pitched : false;
+      if (show && !b.danced) {
+        const row = ph.footRow(b.plan, s.spin, ph.crossOn);
+        for (let i = 0; i < 20; i++) {
+          const p0 = -1 + i * 0.1, p1 = p0 + 0.1, f = ph.fitAt(row, (p0 + p1) / 2, s.spin);
+          if (f < 0.72) continue;
+          ctx.fillStyle = f >= 0.9 ? 'rgba(95,210,138,0.75)' : 'rgba(242,193,78,0.45)';
+          ctx.fillRect(x0, Y(p1), bw, Y(p0) - Y(p1));
+        }
+      }
+      ctx.fillStyle = 'rgba(246,241,227,0.5)'; ctx.fillRect(x0 - 2, Y(0) - 1, bw + 4, 2);
+      ctx.fillStyle = b.physPending || b.danced ? '#ff9d6b' : '#ffffff';
+      ctx.fillRect(x0 - 3, Y(b.danced ? 1 : ph.feet) - 2, bw + 6, 4);
+      ctx.font = '700 10px "Barlow", sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(246,241,227,0.8)';
+      ctx.fillText('FRONT', x0 - 4, y0 - 12);
+      ctx.fillText('BACK', x0 - 2, y0 + bh + 13);
+      ctx.font = '600 9px "Barlow", sans-serif'; ctx.fillStyle = 'rgba(246,241,227,0.6)';
+      ctx.fillText(g.input.touch ? '' : 'W', x0 + bw + 6, y0 + 10);
+      ctx.fillText(g.input.touch ? '' : 'S', x0 + bw + 6, y0 + bh - 2);
+      ctx.restore();
     },
 
     _shotLabel(s) {
