@@ -166,6 +166,8 @@
       this.onScore = null; this.onBall = null; this.onOut = null;
       // Physical bat: you hold the bat yourself (pointer = sweet spot)
       this.physical = opts.controls === 'physical';
+      const gBtn = document.querySelector('#touch [data-act="ground"]');
+      if (gBtn) gBtn.classList.remove('on');                // a new session starts with GROUND off
       this.bestKey = this.physical ? this.bowlerChoice + '-phys' : this.bowlerChoice;
       if (this.physical) {
         this.phys = new CLLM.PhysBat(this);
@@ -284,21 +286,23 @@
       }
     }
 
-    // Physical bat: the pointer IS the bat. Keys only move your feet.
     // Physical bat: the pointer IS the bat. Hold W / S to move your feet;
-    // hold Space (or Shift, or the right mouse button) to turn the bat cross.
+    // hold Space (or the right mouse button) to turn the bat cross; hold
+    // Shift to keep it along the ground.
     // Holds are read as levels (they can't get stuck), and changes are
     // stamped with the moment they happened.
     _crossLevel() {
       const I = this.game.input;
-      return I.down(' ') || I.down('shift') || I.rmb || !!(I.pad && I.pad.cross) || !!(I.btnHeld && I.btnHeld.cross);
+      return I.down(' ') || I.rmb || !!(I.pad && I.pad.cross) || !!(I.btnHeld && I.btnHeld.cross);
     }
+    _groundLevel() { return this.game.input.down('shift') || !!this.groundToggle; }
     _inputPhys(ev, t) {
       const b = this.b, k = ev.key;
-      if (((ev.type === 'keydown' || ev.type === 'keyup') && (k === ' ' || k === 'shift')) ||
+      if (((ev.type === 'keydown' || ev.type === 'keyup') && k === ' ') ||
           ((ev.type === 'mousedown' || ev.type === 'mouseup') && ev.button === 2) || ev.type === 'pad') {
         this.phys.noteCross(ev.stamp, this._crossLevel());
       }
+      if ((ev.type === 'keydown' || ev.type === 'keyup') && k === 'shift') this.phys.noteGround(ev.stamp, this._groundLevel());
       if (ev.type === 'keydown') {
         if (k === 'e') this._commit('dance', t);
         else if ((k === 'enter' || k === ' ') && b.phase === 'done') this._skip();
@@ -306,7 +310,13 @@
         else if (k === '-' || k === '=') this._tune('batWeight', k === '=' ? 1 : -1);
       } else if (ev.type === 'mousedown' && ev.button === 0 && b.phase === 'done') this._skip();
       else if (ev.type === 'touchbtn' && ev.phase !== 'up') {
-        if (b.phase === 'done' && k !== 'cross') this._skip();
+        if (k === 'ground') {
+          // touch: GROUND is a toggle (your thumbs are busy)
+          this.groundToggle = !this.groundToggle;
+          this.phys.noteGround(ev.stamp, this._groundLevel());
+          const el = document.querySelector('#touch [data-act="ground"]');
+          if (el) el.classList.toggle('on', !!this.groundToggle);
+        } else if (b.phase === 'done' && k !== 'cross') this._skip();
         else if (k === 'dance') this._commit('dance', t);
       }
     }
@@ -345,6 +355,8 @@
       // cross-bat hold: events stamp it exactly; this catches anything missed
       const lv = this._crossLevel();
       if (lv !== ph.crossOn) ph.noteCross(performance.now(), lv);
+      const gl = this._groundLevel();
+      if (gl !== !!ph.groundOn) ph.noteGround(performance.now(), gl);
       // How freely your feet let you swing at this ball: the swing meter
       // shows the cap once it has pitched; Club tints your reach by it from
       // release, Grade once it has pitched.
@@ -381,6 +393,7 @@
       const b = this.b;
       if (b && b.physPending && !b.resolved) this._physResolve();
       this.phys.noteCross(performance.now(), false);
+      this.phys.noteGround(performance.now(), !!this.groundToggle);
     }
     onResume() {
       if (this.physical) { this.phys.noteCross(performance.now(), this._crossLevel()); this._bestOK(); }

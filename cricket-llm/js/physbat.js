@@ -173,9 +173,24 @@
     resetTrack() {
       this.trk = [];              // {s, x, y (bat), hx, hy (hand, for swing speed), c, p, brk}
       this.crossEv = [];          // {s, on}: cross-bat hold changes, timestamped
+      this.groundEv = [];         // {s, on}: 'along the ground' hold changes (Shift)
       this.feetHist = [];         // {s, p}: where your feet were
       this.tgtRaw = null;         // latest pointer point on the plane (unpinned)
     }
+    noteGround(s, on) {
+      const E = this.groundEv, L = E[E.length - 1];
+      this.groundOn = on;
+      if (L && L.on === on) return;
+      if (L && s < L.s) s = L.s;
+      E.push({ s, on });
+      while (E.length > 2 && E[1].s < s - 2000) E.shift();
+    }
+    groundAt(s) {
+      const E = this.groundEv;
+      for (let i = E.length - 1; i >= 0; i--) if (E[i].s <= s) return E[i].on;
+      return E.length ? !E[0].on : !!this.groundOn;
+    }
+
     noteCross(s, on) {
       const E = this.crossEv, L = E[E.length - 1];
       this.crossOn = on;
@@ -269,7 +284,7 @@
       const touch = I.touchBat();
       let lift = touch ? this.touchLiftFor(r0.y) : 0;
       let P = this.refPoint(r0.x, r0.y, lift) || { x: 0, y: 0.6 };
-      let c = this.crossAt(t) ? 1 : 0, p = this.feetAt(t);
+      let c = this.crossAt(t) ? 1 : 0, p = this.feetAt(t), gd = this.groundAt(t) ? 1 : 0;
       let box = this.reach(c, p), hand = this._pin(P, box);
       let bx = hand.x, by = hand.y, vx = 0, vy = 0, ox = 0, oy = 0;
       let brkPending = !!(rest && rest.until > start);
@@ -277,6 +292,7 @@
         const r = rawAt(t);
         if (touch) lift += (this.touchLiftFor(r.y) - lift) * (1 - Math.exp(-DT / 300));
         P = this.refPoint(r.x, r.y, lift) || P;
+        gd = approach(gd, this.groundAt(t) ? 1 : 0, DT / PC.GROUND.rampMs);
         const want = this.crossAt(t) ? 1 : 0;
         c = approach(c, want, DT / (want ? PC.CROSS_IN_MS : PC.CROSS_OUT_MS));
         p = this.feetAt(t);
@@ -308,7 +324,7 @@
         } else { bx = hNew.x; by = hNew.y; }
         // the swing is the BAT's motion (so a speed limit or a heavy bat
         // changes the swing too), minus any shift of the reach itself
-        out.push({ s: t, x: bx, y: by, hx: bx - ox, hy: by - oy, c, p, brk });
+        out.push({ s: t, x: bx, y: by, hx: bx - ox, hy: by - oy, c, p, gd, brk });
       }
       this.trk = out;
       this.tgtRaw = P;
@@ -323,7 +339,7 @@
       const i = Math.min(h.length - 1, Math.max(1, Math.ceil((s - h[0].s) / (h[1].s - h[0].s || 2))));
       const a = h[i - 1], b = h[i];
       const u = M.clamp((s - a.s) / Math.max(1e-6, b.s - a.s), 0, 1);
-      return { s, x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, hx: a.hx + (b.hx - a.hx) * u, hy: a.hy + (b.hy - a.hy) * u, c: a.c + (b.c - a.c) * u, p: a.p + (b.p - a.p) * u };
+      return { s, x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, hx: a.hx + (b.hx - a.hx) * u, hy: a.hy + (b.hy - a.hy) * u, c: a.c + (b.c - a.c) * u, p: a.p + (b.p - a.p) * u, gd: (a.gd || 0) + ((b.gd || 0) - (a.gd || 0)) * u };
     }
     ptAt(s) { const T = this.trkAt(s); return T ? V.v(T.x, T.y, this.plane) : null; }
     // Latest moment in (s0, s1] where a fresh touch broke the track, or null
@@ -339,7 +355,7 @@
     stateAt(sMs) {
       const T = this.trkAt(sMs);
       if (!T) return null;
-      return { S: V.v(T.x, T.y, this.plane), vReal: this.velAt(sMs, PHYS.VEL_WINDOW), c: T.c, p: T.p };
+      return { S: V.v(T.x, T.y, this.plane), vReal: this.velAt(sMs, PHYS.VEL_WINDOW), c: T.c, p: T.p, gd: T.gd || 0 };
     }
 
     // Least-squares HAND velocity (m/s on the plane) over [sMs - win, sMs + win2].
@@ -394,7 +410,7 @@
 
     // Build the full bat pose from the sweet spot and the hand's velocity.
     // strokeL (m) caps the power by how long the stroke was; c = cross-bat turn.
-    poseFrom(S, vReal, tsc, strokeL, c = 0) {
+    poseFrom(S, vReal, tsc, strokeL, c = 0, gd = 0) {
       const h = this.h;
       const k = smooth(c);
       // swing: hand speed -> bat speed (measured in real time, so the slowed
@@ -413,7 +429,9 @@
       const yawMax = M.lerp(50, 65, k);                       // a cross bat can go further round (cut, pull)
       const yaw = M.clamp((sx / (spReal + 1e-6)) * u * 55, -yawMax, yawMax) * D2R;
       // hands slightly ahead of the blade: the face looks a touch down unless you swing up
-      const pitch = (M.clamp((sy / (spReal + 1e-6)) * u * 30, -10, 26) - 5 - (batSpeed < 2.2 ? 14 : 0)) * D2R;
+      let pitch = (M.clamp((sy / (spReal + 1e-6)) * u * 30, -10, 26) - 5 - (batSpeed < 2.2 ? 14 : 0)) * D2R;
+      // along the ground (Shift): the face rolls over the ball, hands ahead
+      if (gd > 0) pitch = M.lerp(pitch, Math.min(pitch, -CFG.PHYS.GROUND.faceDown * D2R), gd);
       const fwd = V.v(0, 0, 1);
       let n = V.norm(V.add(V.add(V.mul(fwd, Math.cos(yaw) * Math.cos(pitch)), V.mul(rH, Math.sin(yaw) * Math.cos(pitch))), V.v(0, Math.sin(pitch), 0)));
       // A straight bat: nearly upright, leaning only a little toward where
@@ -444,7 +462,7 @@
       let w = V.cross(dir, n);
       if (V.len(w) < 1e-3) w = V.v(1, 0, 0);
       w = V.norm(w);                                          // across the blade
-      return { S, H, dir, grip, n, w, batSpeed, vReal, yaw, pitch, cross: k };
+      return { S, H, dir, grip, n, w, batSpeed, vReal, yaw, pitch, cross: k, ground: gd };
     }
 
     // Per-frame display pose.
@@ -457,7 +475,7 @@
       const st = this.stateAt(now);
       if (!st) return;
       const tsc = b && b.tsc ? b.tsc : 0.5;
-      this.pose = this.poseFrom(st.S, st.vReal, tsc, this.strokeLen(now - 160, now), st.c);
+      this.pose = this.poseFrom(st.S, st.vReal, tsc, this.strokeLen(now - 160, now), st.c, st.gd);
       // the swing meter shows the swing you'd make now (capped if cramped)
       const cap = b && b.physCap != null ? b.physCap : PHYS.MAX_BAT;
       this.speedNow = M.lerp(this.speedNow, Math.min(cap, this.pose.batSpeed), 0.5);
@@ -611,7 +629,7 @@
       }
       const at = this.trkAt(tSee);
       const Sx = at ? V.v(at.x, at.y, this.plane) : null;
-      const pose = Sx ? this.poseFrom(Sx, this.swingAt(tSee), b.tsc, this.strokeLen(tSee - 130, tSee + 30), at.c) : this.pose;
+      const pose = Sx ? this.poseFrom(Sx, this.swingAt(tSee), b.tsc, this.strokeLen(tSee - 130, tSee + 30), at.c, at.gd || 0) : this.pose;
       this.lastPose = pose;
       const r = {
         phys: true, cls: 0, e: null, kind: 'phys', foot: b.foot || 'stance', notes: [], why: [], a: 0,
@@ -759,6 +777,17 @@
       const drive = M.clamp((pose.batSpeed - 2.2) / 3.8, 0, 1);          // a push isn't a swing: little extra
       const boost = CFG.PHYS.SWEET_BOOST * Math.pow(sweet, 1.5) * drive;
       if (boost > 0.001) vOut = V.mul(vOut, 1 + boost);
+      // Along the ground (Shift): off the face it's kept down, for a little
+      // less power. Edges and gloves still go where they go.
+      const groundNow = (pose.ground || 0) > 0.5 && !edge && !gloved;
+      if (groundNow) {
+        const G = CFG.PHYS.GROUND, hz = Math.hypot(vOut.x, vOut.z), sp0 = V.len(vOut);
+        if (hz > 0.1 && Math.atan2(vOut.y, hz) > G.maxLaunch * D2R) {
+          const vy = hz * Math.tan(G.maxLaunch * D2R), k = sp0 / Math.hypot(hz, vy);
+          vOut = V.v(vOut.x * k, vy * k, vOut.z * k);
+        }
+        vOut = V.mul(vOut, G.power);
+      }
       const speed = V.len(vOut);
       const horiz = Math.hypot(vOut.x, vOut.z);
       const phi = Math.atan2(vOut.x, vOut.z);
@@ -770,7 +799,7 @@
       r.exitVel = vOut; r.exitPhi = phi; r.exitSpeed = speed; r.exitLoft = loft;
       r.physInfo.q = q; r.physInfo.exit = speed; r.physInfo.edge = edge; r.physInfo.launch = loft / D2R;
       r.physInfo.tErr = tErr || 0; r.physInfo.tRot = tRot / D2R; r.physInfo.tAxis = tAxis;
-      r.physInfo.sweet = sweet; r.physInfo.boost = boost;
+      r.physInfo.sweet = sweet; r.physInfo.boost = boost; r.physInfo.ground = groundNow;
       this.flash = { P: B, t0: performance.now(), sweet, gold: middled, edge: edge || gloved };
       // which edge: top/bottom on a cross bat, outside (off side)/inside on a straight one
       const sideV = V.mul(pose.w, Math.sign(across || 1));

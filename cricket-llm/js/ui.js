@@ -40,7 +40,7 @@
     setHint(mode) {
       const el = $('controlsHint');
       if (mode === 'bat' && this.game.session && this.game.session.physical) {
-        el.innerHTML = 'the mouse <b>is the bat</b> · hold still to block<br><b>swipe through</b> the ball to hit · direction steers<br>hold <kbd>Space</kbd> (or right-click) = <b>cross bat</b><br>hold <kbd>W</kbd> forward · <kbd>S</kbd> back · <kbd>Esc</kbd> pause';
+        el.innerHTML = 'the mouse <b>is the bat</b> · hold still to block<br><b>swipe through</b> the ball to hit · direction steers<br>hold <kbd>Space</kbd> (or right-click) = <b>cross bat</b><br>hold <kbd>Shift</kbd> = <b>keep it along the ground</b><br>hold <kbd>W</kbd> forward · <kbd>S</kbd> back · <kbd>Esc</kbd> pause';
       } else if (mode === 'bat') {
         el.innerHTML = '<kbd>W</kbd> front foot · <kbd>S</kbd> back foot' + (this.game.session && this.game.session.spin ? ' · <kbd>E</kbd> dance' : '') +
           '<br>aim with the mouse · <b>click</b> hit · <b>right-click</b> loft<br><kbd>Space</kbd> defend · no click = leave · <kbd>Esc</kbd> pause';
@@ -55,7 +55,7 @@
       const touch = this.game.input.touch;
       if (mode === 'bat' && this.game.session && this.game.session.physical) {
         c.innerHTML = `<div><span class="tag">Coach</span>You're holding the bat. ${touch ? 'Your finger' : 'The mouse'} puts it where you want it — get it in the ball's path.</div>` +
-          `<div class="chips"><span class="chip">hold still = block</span><span class="chip">swipe through = hit</span><span class="chip">swipe sideways = steer</span><span class="chip">swipe up = loft · down = along the ground</span><span class="chip">move it away = leave</span><span class="chip">${touch ? 'stance pad: drag in' : 'hold Space / right-click'} = cross bat (pull, cut, hook)</span><span class="chip">${touch ? 'stance pad: drag up / down' : 'hold W / S'} = feet: forward to full, back to short</span></div>`;
+          `<div class="chips"><span class="chip">hold still = block</span><span class="chip">swipe through = hit</span><span class="chip">swipe sideways = steer</span><span class="chip">swipe up = loft · down = along the ground</span><span class="chip">move it away = leave</span><span class="chip">${touch ? 'stance pad: drag in' : 'hold Space / right-click'} = cross bat (pull, cut, hook)</span><span class="chip">${touch ? 'GROUND button' : 'hold Shift'} = keep it along the ground</span><span class="chip">${touch ? 'stance pad: drag up / down' : 'hold W / S'} = feet: forward to full, back to short</span></div>`;
       } else if (mode === 'bat') {
         c.innerHTML = `<div><span class="tag">Coach</span>Watch the hand, then the ball. <b>Full</b>? ${touch ? 'FRONT' : '<kbd>W</kbd>'} and drive. <b>Short</b>? ${touch ? 'BACK' : '<kbd>S</kbd>'} and cut or pull.</div>` +
           `<div class="chips"><span class="chip">${touch ? 'drag to aim' : 'aim with the mouse'}</span><span class="chip">${touch ? 'HIT' : 'click'} as it arrives</span><span class="chip">${touch ? 'LOFT' : 'right-click'} to go aerial</span><span class="chip">${touch ? 'BLOCK' : 'Space'} to defend</span><span class="chip">do nothing = leave</span></div>`;
@@ -186,6 +186,7 @@
       else if (p.along > 0) where = `${crossB ? 'Toward the toe' : 'Toe end'} — ${cm(p.along)} cm ${lo}`;
       else where = `${crossB ? 'Toward the handle' : 'High on the bat'} — ${cm(p.along)} cm ${hi}`;
       chips.push({ t: `${crossB ? 'Cross bat · ' : ''}${r.label} · ${where}`, c: r.label === 'MIDDLED' ? 'good' : /EDGED|MISTIMED|MISHIT|GLOVED/.test(r.label) ? 'bad' : 'meh' });
+      if (p.ground) chips.push({ t: 'Kept it along the ground', c: 'good' });
       if (p.noRoom) chips.push({ t: 'No room to pull: it was at your body', c: 'bad' });
       if (p.noWidth) chips.push({ t: 'No width to cut: too close to you', c: 'bad' });
       if (p.reachU > 0.2) chips.push({ t: 'Hung the bat out, away from your body', c: 'bad' });
@@ -373,6 +374,10 @@
       }
       ctx.textAlign = 'center'; ctx.font = '700 10px "Barlow", sans-serif'; ctx.fillStyle = 'rgba(246,241,227,0.8)';
       ctx.fillText(s.phys.pose && s.phys.pose.cross > 0.5 ? 'CROSS' : 'SWING', x0 + bw / 2, y0 - 12);
+      if (s.phys.pose && s.phys.pose.ground > 0.5) {
+        ctx.fillStyle = '#9ee6b0'; ctx.fillText('▼ GROUND', x0 + bw / 2, y0 - 24);
+        ctx.fillStyle = 'rgba(246,241,227,0.8)';
+      }
       ctx.fillText(`${Math.round(sp)}`, x0 + bw / 2, y0 + bh + 13);
       // tuning in effect (pause menu / hotkeys)
       const S = g.save.data.settings, tags = [];

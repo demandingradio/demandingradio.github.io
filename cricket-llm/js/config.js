@@ -108,6 +108,9 @@
     // The standard bat everyone plays with (pause-menu sliders start here;
     // best scores only count at this swing power or less)
     BASE: { power: 0.82, weight: 20, limit: 0 },
+    // Shift held: play along the ground - face over the ball, hands ahead,
+    // off the face it stays down (edges still fly), a touch less power
+    GROUND: { faceDown: 14, maxLaunch: 2, power: 0.92, rampMs: 80 },
     SWEET_BOOST: 0.5,      // a pure middle adds up to this much exit speed (scaled by sweetness^1.5)
     BODY_ALPHA: { legs: 0.28, arms: 0.5, torso: 0.07, head: 0 },    // your batter, seen from just behind (ghosted: the ball comes past it)
     LIMIT_STEPS: [0, 20, 15, 12, 9, 7, 5],   // bat speed limit choices (m/s; 0 = off)
