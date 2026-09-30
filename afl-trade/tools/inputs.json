@@ -1,0 +1,150 @@
+{
+ "note": "Hand-verified inputs (30 Sep 2026): guernsey colours; 2027 picks not held by their original club (verified vs afl.com.au future-picks page). Update after each trade.",
+ "colours": [
+  {
+   "code": "ADE",
+   "primary": "#002B5C",
+   "secondary": "#E21937",
+   "tertiary": "#FFD200"
+  },
+  {
+   "code": "BRL",
+   "primary": "#7A184A",
+   "secondary": "#0054A4",
+   "tertiary": "#FDBE57"
+  },
+  {
+   "code": "CAR",
+   "primary": "#031A29",
+   "secondary": "#FFFFFF",
+   "tertiary": null
+  },
+  {
+   "code": "COL",
+   "primary": "#000000",
+   "secondary": "#FFFFFF",
+   "tertiary": null
+  },
+  {
+   "code": "ESS",
+   "primary": "#000000",
+   "secondary": "#CC2031",
+   "tertiary": null
+  },
+  {
+   "code": "FRE",
+   "primary": "#2A0D54",
+   "secondary": "#FFFFFF",
+   "tertiary": null
+  },
+  {
+   "code": "GEE",
+   "primary": "#1C3C63",
+   "secondary": "#FFFFFF",
+   "tertiary": null
+  },
+  {
+   "code": "GCS",
+   "primary": "#E11B0A",
+   "secondary": "#FFDB60",
+   "tertiary": "#004677"
+  },
+  {
+   "code": "GWS",
+   "primary": "#F15C22",
+   "secondary": "#343433",
+   "tertiary": "#FFFFFF"
+  },
+  {
+   "code": "HAW",
+   "primary": "#4D2004",
+   "secondary": "#FBBF15",
+   "tertiary": null
+  },
+  {
+   "code": "MEL",
+   "primary": "#0F1131",
+   "secondary": "#CC2031",
+   "tertiary": null
+  },
+  {
+   "code": "NTH",
+   "primary": "#013B9F",
+   "secondary": "#FFFFFF",
+   "tertiary": null
+  },
+  {
+   "code": "PTA",
+   "primary": "#000000",
+   "secondary": "#008AAB",
+   "tertiary": "#FFFFFF"
+  },
+  {
+   "code": "RIC",
+   "primary": "#000000",
+   "secondary": "#FED102",
+   "tertiary": null
+  },
+  {
+   "code": "STK",
+   "primary": "#ED0F05",
+   "secondary": "#000000",
+   "tertiary": "#FFFFFF"
+  },
+  {
+   "code": "SYD",
+   "primary": "#E1251B",
+   "secondary": "#FFFFFF",
+   "tertiary": null
+  },
+  {
+   "code": "WCE",
+   "primary": "#003087",
+   "secondary": "#F2A900",
+   "tertiary": "#FFFFFF"
+  },
+  {
+   "code": "WBD",
+   "primary": "#014896",
+   "secondary": "#E21937",
+   "tertiary": "#FFFFFF"
+  }
+ ],
+ "future2027Traded": [
+  {
+   "round": 1,
+   "orig": "SYD",
+   "owner": "CAR"
+  },
+  {
+   "round": 2,
+   "orig": "CAR",
+   "owner": "SYD"
+  },
+  {
+   "round": 3,
+   "orig": "GCS",
+   "owner": "MEL"
+  },
+  {
+   "round": 3,
+   "orig": "HAW",
+   "owner": "WCE"
+  },
+  {
+   "round": 3,
+   "orig": "MEL",
+   "owner": "STK"
+  },
+  {
+   "round": 3,
+   "orig": "WCE",
+   "owner": "STK"
+  },
+  {
+   "round": 4,
+   "orig": "MEL",
+   "owner": "STK"
+  }
+ ]
+}

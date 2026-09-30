@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mega Trade Machine - Monday Jeffrey</title>
+  <meta name="description" content="Build any AFL trade — drag players and draft picks between clubs, then rate it with a value model tuned on real trades.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+  <a class="back-link" href="/">← desktop</a>
+
+  <header class="top">
+    <div class="brand">
+      <div class="wordmark"><span>MEGA</span><span class="arrows" aria-hidden="true">⇄</span><span class="accent">TRADE</span></div>
+      <div class="tagline">Trade machine · 2026 AFL trade period · lists &amp; picks as at <span id="asOf"></span></div>
+    </div>
+    <nav class="actions">
+      <button class="btn ghost" id="btnHow">How values work</button>
+      <button class="btn ghost" id="btnReset">Clear</button>
+    </nav>
+  </header>
+
+  <section class="club-strip" aria-label="Clubs">
+    <div class="strip-top"><div class="strip-label">Add clubs to the deal</div><input type="search" id="find" class="find" placeholder="Find any player…" autocomplete="off" aria-label="Find any player"></div>
+    <div class="strip" id="clubStrip"></div>
+  </section>
+
+  <main class="layout">
+    <aside class="browser" id="browser" aria-label="Club list and picks">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="browser-body" id="browserBody"></div>
+    </aside>
+
+    <section class="board-wrap" aria-label="Trade board">
+      <div class="board" id="board"></div>
+      <div class="board-actions">
+        <button class="btn rate" id="btnRate" disabled>Rate this trade</button>
+        <button class="btn ghost" id="btnShare" disabled>🔗 Copy link</button>
+        <button class="btn ghost" id="btnImage" disabled>🖼️ Save graphic</button>
+      </div>
+      <div class="warnings" id="warnings"></div>
+      <div class="results" id="results" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Unofficial fan tool — not affiliated with the AFL or any club. Player data: footywire.com &amp; afltables.com · picks &amp; Draft Value Index: afl.com.au · trades: Wikipedia.
+  </footer>
+
+  <div class="menu" id="menu" hidden></div>
+  <div class="modal" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true"><button class="modal-x" id="modalX" aria-label="Close">×</button><div id="modalBody"></div></div></div>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="data.js?v=2"></script>
+  <script src="model.js?v=2"></script>
+  <script src="jumpers.js?v=2"></script>
+  <script src="app.js?v=2"></script>
+</body>
+</html>
