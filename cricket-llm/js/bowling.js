@@ -80,6 +80,7 @@
 
     // ---- phases ---------------------------------------------------------------
     _toPlan(delay) {
+      this._stopAudio();
       this.field.last = null;
       this.game.ui.shotAnim = null;
       this.ball.reset();
@@ -119,6 +120,8 @@
       b.stray = 0;
       b.spec = this.vars[this.varIdx];
       this.game.ui.setHint('bowl');
+      document.getElementById('coach').classList.add('hidden');   // eyes on the lane
+      this._scheduleAudio();
     }
 
     // Footfall positions of the run-up (shorter strides so it all fits in
@@ -234,7 +237,9 @@
         b.phase = 'load';
         const e = (t - b.tLoad) * 1000;
         b.loadErr = e;
-        Audio.step(0.9);
+        const lw = B.beatWin[this.type];
+        const lq = Math.abs(e) <= lw[0] ? 1 : Math.abs(e) <= lw[1] ? 0.7 : Math.abs(e) <= lw[2] ? 0.4 : 0.1;
+        this._judge('HOLDING…', lq, e, this.game.clock);
         return;
       }
       // Footfall taps (judged beats only)
@@ -254,9 +259,12 @@
       if (j) {
         j.e = e; j.t = t;
         b.judged[best] = j;
-        if (j.q >= 0.7) Audio.tick(false);
+        Audio.judge(j.q >= 1 ? 3 : j.q >= 0.7 ? 2 : 1);
+        this._judge(j.label, j.q, e, this.game.clock);
       } else {
         b.stray = Math.min(0.2, b.stray + 0.05);
+        Audio.judge(0);
+        this._judge('NO BEAT', 0, null, this.game.clock);
       }
     }
 
@@ -299,6 +307,9 @@
       const ae = Math.abs(e);
       const rel = ae <= RW[0] ? 'perfect' : ae <= RW[1] ? 'good' : ae <= RW[2] ? 'ok' : 'wild';
       b.rel = rel; b.relErr = e;
+      this._stopAudio();
+      Audio.judge(rel === 'perfect' ? 3 : rel === 'good' ? 2 : rel === 'ok' ? 1 : 0);
+      this._judge(rel === 'wild' ? 'WILD' : rel.toUpperCase(), rel === 'perfect' ? 1 : rel === 'good' ? 0.7 : rel === 'ok' ? 0.4 : 0, e, this.game.clock);
       const relFactor = { perfect: 1, good: 0.85, ok: 0.6, wild: 0.3 }[rel];
       let Q = (0.45 + 0.55 * R) * relFactor;
       // --- length error: early = fuller
@@ -537,11 +548,9 @@
 
       if (b.phase === 'runup' || b.phase === 'load') {
         // footfall thuds on the beat
-        b.thudded = b.thudded || [];
-        b.beats.forEach((bt, i) => { if (!b.thudded[i] && now >= bt) { b.thudded[i] = true; Audio.step(i < b.countIn ? 0.3 : 0.5 + 0.4 * (i / b.beats.length)); } });
         // missed beats
         for (let i = b.countIn; i < b.beats.length; i++) {
-          if (!b.judged[i] && now > b.beats[i] + B.beatWin[this.type][2] / 1000 + 0.02) b.judged[i] = { q: 0, label: 'MISS', e: null, t: b.beats[i] };
+          if (!b.judged[i] && now > b.beats[i] + B.beatWin[this.type][2] / 1000 + 0.02) { b.judged[i] = { q: 0, label: 'MISS', e: null, t: b.beats[i] }; this._judge('MISS', 0, null, now); }
         }
         // didn't load in time: pull out
         if (b.phase === 'runup' && now > b.tLoad + 0.22) {
@@ -931,6 +940,24 @@
       } else if (b.phase === 'runup') {
         prompt = now > b.beats[b.beats.length - 1] - 0.05 ? 'HOLD on the jump!' : 'Tap on each footfall';
       } else if (b.phase === 'load') prompt = 'LET GO at the notch';
+      const laneOn = b.phase === 'runup' || b.phase === 'load' || (b.phase === 'flight' && b.relAt != null && now < b.relAt + 0.8);
+      if (laneOn) {
+        const L = this._laneGeom(W, H);
+        const lastBeat = b.beats[b.beats.length - 1];
+        if (b.phase === 'runup') prompt = now < b.beats[b.countIn] - 0.45 ? 'Get ready…' : now > lastBeat + 0.06 ? 'HOLD on the green!' : 'TAP as each footprint hits the ring';
+        else if (b.phase === 'load') prompt = 'LET GO on the line!';
+        else prompt = '';
+        this._drawLane(ctx, L, now);
+        if (prompt) {
+          ctx.font = '800 20px "Barlow Condensed", sans-serif';
+          const w = ctx.measureText(prompt).width + 24;
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(W / 2 - w / 2, L.y - L.h / 2 - 34, w, 28);
+          ctx.fillStyle = '#f6f1e3';
+          ctx.fillText(prompt, W / 2, L.y - L.h / 2 - 14);
+        }
+        prompt = '';
+      }
       if (prompt) {
         ctx.font = '800 20px "Barlow Condensed", sans-serif';
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -940,63 +967,144 @@
         ctx.fillStyle = '#f6f1e3';
         ctx.fillText(prompt, W / 2, y + 3);
       }
-      // Rhythm strip
-      if (b.phase === 'runup' || b.phase === 'load') {
-        const n = b.beats.length - b.countIn;
-        const x0 = W / 2 - n * 14, y0 = (g.input.touch || W < 500 ? H * 0.36 : H * 0.18) + 22;
-        for (let i = 0; i < n; i++) {
-          const j = b.judged[i + b.countIn];
-          ctx.fillStyle = !j ? 'rgba(255,255,255,0.2)' : j.q >= 1 ? '#5fd28a' : j.q >= 0.7 ? '#f2c14e' : j.q > 0 ? '#ffb070' : '#ff6b6e';
-          ctx.beginPath(); ctx.arc(x0 + i * 28 + 14, y0 + 8, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    // ---- the beat lane -------------------------------------------------------
+    // Footprints slide right-to-left into a target ring; tap as each one hits
+    // it. The jump is a green HOLD bar that ends on a LET GO line.
+    _laneGeom(W, H) {
+      const touch = this.game.input.touch;
+      const laneW = Math.min(660, W - 32);
+      const x0 = (W - laneW) / 2;
+      const y = touch ? (H < 520 ? H - 140 : H - 235) : H - 120;
+      const hitX = x0 + 64;
+      const lookahead = 1.35;
+      return { x0, laneW, y, hitX, pps: (laneW - 96) / lookahead, h: 62 };
+    }
+
+    _drawLane(ctx, L, now) {
+      const b = this.b, type = this.type;
+      const xs = (t) => L.hitX + (t - now) * L.pps;
+      const top = L.y - L.h / 2;
+      ctx.save();
+      // panel
+      ctx.fillStyle = 'rgba(9,18,12,0.93)';
+      ctx.strokeStyle = 'rgba(242,193,78,0.35)';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, L.x0, top, L.laneW, L.h, 14); ctx.fill(); ctx.stroke();
+      ctx.save();
+      roundRect(ctx, L.x0, top, L.laneW, L.h, 14); ctx.clip();
+      // track
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(L.x0 + 10, L.y); ctx.lineTo(L.x0 + L.laneW - 10, L.y); ctx.stroke();
+      // tap window around the ring (GOOD window)
+      const W1 = (B.beatWin[type][1] / 1000) * L.pps;
+      ctx.fillStyle = 'rgba(242,193,78,0.10)';
+      ctx.fillRect(L.hitX - W1, top + 6, W1 * 2, L.h - 12);
+      // HOLD note -> LET GO line
+      const xa = xs(b.tLoad), xb = xs(b.tRelTarget);
+      if (xb > L.x0 - 40 && xa < L.x0 + L.laneW + 40) {
+        const held = b.loadAt != null;
+        ctx.fillStyle = held ? 'rgba(95,210,138,0.55)' : 'rgba(95,210,138,0.28)';
+        ctx.fillRect(xa, L.y - 9, Math.max(0, xb - xa), 18);
+        if (held && b.relAt == null) {
+          // the part that has already passed the ring = how long you've held
+          ctx.fillStyle = 'rgba(95,210,138,0.95)';
+          ctx.fillRect(xa, L.y - 9, Math.max(0, Math.min(L.hitX, xb) - xa), 18);
         }
-        // load dot
-        ctx.strokeStyle = b.loadAt ? '#5fd28a' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(x0 + n * 28 + 18, y0 + 8, 9, 0, Math.PI * 2); ctx.stroke();
+        // release bands on the LET GO line
+        const wm = b.spec && b.spec.winMul ? b.spec.winMul : 1;
+        const RW = B.relWin[type].map((w) => ((w * wm) / 1000) * L.pps);
+        const band = (w, col) => { ctx.fillStyle = col; ctx.fillRect(xb - w, L.y - 17, w * 2, 34); };
+        band(RW[2], 'rgba(255,176,112,0.55)'); band(RW[1], 'rgba(242,193,78,0.75)'); band(RW[0], 'rgba(95,210,138,0.95)');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(xb - 1.5, L.y - 22, 3, 44);
+        // start cap
+        ctx.fillStyle = held ? '#5fd28a' : 'rgba(95,210,138,0.9)';
+        ctx.beginPath(); ctx.arc(xa, L.y, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.font = '800 11px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#0b2413'; ctx.fillText('HOLD', xa, L.y + 4);
+        ctx.fillStyle = '#e8ffe9';
+        ctx.fillText('LET GO', xb, top + 11);
+        if (this.spin && held && b.relAt == null) {
+          const revs = (now - b.loadAt) / (B.releaseAfterLoad[type] / 1000);
+          ctx.fillStyle = revs > 1.1 ? '#ff8a8d' : revs >= 0.9 ? '#8ff0b4' : '#9ec5ff';
+          ctx.font = '800 13px "Barlow Condensed", sans-serif';
+          ctx.fillText(`REVS ${Math.round(revs * 100)}%`, L.x0 + L.laneW - 44, L.y + 5);
+        }
       }
-      // Release meter (arc near the bowler)
-      if (b.phase === 'load' || (b.phase === 'runup' && now > b.tLoad - 0.6)) {
-        const cx = Math.max(90, W * 0.2), cy = H * 0.52;
-        const Rr = Math.max(46, Math.min(64, H * 0.08));
-        ctx.fillStyle = 'rgba(10,20,14,0.72)';
-        ctx.beginPath(); ctx.arc(cx, cy, Rr + 20, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'rgba(242,193,78,0.5)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(cx, cy, Rr + 20, 0, Math.PI * 2); ctx.stroke();
-        const D = B.releaseAfterLoad[this.type] / 1000;
-        const RW = B.relWin[this.type].map((w) => w * (b.spec.winMul || 1));
-        const a0 = -Math.PI * 0.95, a1 = Math.PI * 0.35;         // sweep from back-low to over the top
-        const tA = b.tLoad, tB = b.tLoad + D * 1.6;
-        const angAt = (t) => a0 + ((t - tA) / (tB - tA)) * (a1 - a0);
-        const tgt = b.tRelTarget;
-        ctx.lineCap = 'butt';
-        ctx.lineWidth = 12;
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.beginPath(); ctx.arc(cx, cy, Rr, a0, a1); ctx.stroke();
-        const band = (w, col) => { ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(cx, cy, Rr, angAt(tgt - w / 1000), angAt(tgt + w / 1000)); ctx.stroke(); };
-        band(RW[2], 'rgba(255,176,112,0.8)'); band(RW[1], 'rgba(242,193,78,0.9)'); band(RW[0], 'rgba(95,210,138,1)');
-        // spin: rev ring
-        if (this.spin && b.loadAt) {
-          const revs = (now - b.loadAt) / D;
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = revs > 1.1 ? '#ff6b6e' : revs >= 0.9 ? '#5fd28a' : '#9ec5ff';
-          ctx.beginPath(); ctx.arc(cx, cy, Rr - 11, -Math.PI / 2, -Math.PI / 2 + Math.min(1.3, revs) * Math.PI * 2 / 1.3); ctx.stroke();
-          ctx.font = '700 11px "Barlow", sans-serif'; ctx.fillStyle = '#f6f1e3';
-          ctx.fillText(`REVS ${Math.round(revs * 100)}%`, cx, cy + Rr + 22);
+      // footprints
+      for (let i = 0; i < b.beats.length; i++) {
+        const x = xs(b.beats[i]);
+        if (x < L.x0 - 20 || x > L.x0 + L.laneW + 20) continue;
+        const j = b.judged[i];
+        if (i < b.countIn) {
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.beginPath(); ctx.arc(x, L.y, 10, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#0d1a12'; ctx.font = '800 12px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText(String(i + 1), x, L.y + 4);
+          continue;
         }
-        if (b.loadAt) {
-          const an = angAt(Math.min(now, tB));
-          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(an) * (Rr + 8), cy + Math.sin(an) * (Rr + 8)); ctx.stroke();
+        if (j && j.q > 0) continue;                  // tapped: it burst on the ring
+        const miss = j && j.q === 0;
+        footprint(ctx, x, L.y, miss ? '#ff6b6e' : '#f2c14e', miss ? 0.6 : 1);
+      }
+      ctx.restore();   // unclip
+      // target ring + a pulse on every beat (a visual metronome)
+      let pulse = 0;
+      const allBeats = b.beats.concat([b.tLoad]);
+      for (const bt of allBeats) { const age = now - bt; if (age >= 0 && age < 0.2) pulse = Math.max(pulse, 1 - age / 0.2); }
+      const nextDt = allBeats.reduce((m, bt) => (bt >= now ? Math.min(m, bt - now) : m), Infinity);
+      const soon = nextDt < 0.14 ? 1 - nextDt / 0.14 : 0;
+      ctx.lineWidth = 3 + 3 * pulse;
+      ctx.strokeStyle = `rgba(242,193,78,${0.7 + 0.3 * Math.max(pulse, soon)})`;
+      ctx.beginPath(); ctx.arc(L.hitX, L.y, 19 + 3 * soon, 0, Math.PI * 2); ctx.stroke();
+      if (pulse > 0) {
+        ctx.strokeStyle = `rgba(255,255,255,${0.6 * pulse})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(L.hitX, L.y, 19 + 16 * (1 - pulse), 0, Math.PI * 2); ctx.stroke();
+      }
+      // judgement pop
+      const lj = b.lastJudge;
+      if (lj && now - lj.t < 0.6) {
+        const a = 1 - (now - lj.t) / 0.6;
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.textAlign = 'center';
+        ctx.font = '800 16px "Barlow Condensed", sans-serif';
+        ctx.fillStyle = lj.col;
+        ctx.fillText(lj.label, L.hitX, L.y - L.h / 2 - 6 - 8 * (1 - a));
+        if (lj.sub) {
+          ctx.font = '700 11px "Barlow", sans-serif';
+          ctx.fillStyle = 'rgba(246,241,227,0.85)';
+          ctx.fillText(lj.sub, L.hitX, L.y + L.h / 2 + 14);
         }
-        // notch tick at the target
-        const at = angAt(tgt);
-        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(cx + Math.cos(at) * (Rr - 9), cy + Math.sin(at) * (Rr - 9)); ctx.lineTo(cx + Math.cos(at) * (Rr + 9), cy + Math.sin(at) * (Rr + 9)); ctx.stroke();
-        ctx.fillStyle = '#f6f1e3';
-        ctx.font = '800 14px "Barlow Condensed", sans-serif';
-        ctx.fillText(b.loadAt ? 'LET GO' : 'HOLD', cx, cy + 5);
+        if (lj.q > 0) {
+          ctx.strokeStyle = lj.col; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(L.hitX, L.y, 19 + 22 * (1 - a), 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
       ctx.restore();
     }
+
+    _judge(label, q, e, now) {
+      const col = q >= 1 ? '#5fd28a' : q >= 0.7 ? '#f2c14e' : q > 0 ? '#ffb070' : '#ff6b6e';
+      const sub = e == null ? '' : Math.abs(e) < 8 ? 'spot on' : `${Math.round(Math.abs(e))} ms ${e < 0 ? 'early' : 'late'}`;
+      this.b.lastJudge = { label, q, e, t: now, col, sub };
+    }
+
+    // Audio: the run-up clicks, scheduled on the audio clock from now
+    _scheduleAudio() {
+      const b = this.b;
+      if (b.audio) b.audio.cancel();
+      const now = this.game.clock;
+      const ev = [];
+      b.beats.forEach((bt, i) => { if (bt > now - 0.005) ev.push({ dt: bt - now, kind: i < b.countIn ? 'count' : 'beat' }); });
+      if (b.tLoad > now) ev.push({ dt: b.tLoad - now, kind: 'hold', len: b.tRelTarget - b.tLoad });
+      b.audio = Audio.schedule(ev);
+    }
+    _stopAudio() { if (this.b && this.b.audio) { this.b.audio.cancel(); this.b.audio = null; } }
+    onPause() { this._stopAudio(); }
+    onResume() { const b = this.b; if (b && (b.phase === 'runup' || b.phase === 'load')) this._scheduleAudio(); }
 
     _variationBar(ctx, W, H) {
       const vars = this.vars;
@@ -1039,6 +1147,26 @@
   }
 
   function mvAway(d) { return d.mAir + d.mPitch > 0.04; }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+  }
+
+  // A little shoe-print: the "tap here" note
+  function footprint(ctx, x, y, col, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(20,16,4,0.75)';
+    ctx.beginPath(); ctx.ellipse(x, y - 2, 5, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y + 8, 4, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
 
   CLLM.BowlingSession = BowlingSession;
 })();

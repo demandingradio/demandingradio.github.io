@@ -45,7 +45,7 @@
       f.type = type; f.frequency.value = freq; f.Q.value = q;
       const g = c.createGain();
       this._env(g, t, att, peak, dec);
-      src.connect(f); f.connect(g); g.connect(this.master);
+      src.connect(f); f.connect(g); g.connect(this._out || this.master);
       src.start(t, Math.random() * 1.0);
       src.stop(t + att + dec + 0.05);
     },
@@ -58,7 +58,7 @@
       if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + att + dec);
       const g = c.createGain();
       this._env(g, t, att, peak, dec);
-      o.connect(g); g.connect(this.master);
+      o.connect(g); g.connect(this._out || this.master);
       o.start(t); o.stop(t + att + dec + 0.05);
     },
 
@@ -130,6 +130,50 @@
       if (!this.ctx) return;
       const t = this.ctx.currentTime;
       this._tone(t, 'sine', accent ? 1760 : 1320, null, accent ? 0.16 : 0.09, 0.05);
+    },
+
+    /*
+     * Schedule the bowler's run-up on the AUDIO clock (sample-accurate, no
+     * frame jitter): events = [{dt: seconds from now, kind}] where kind is
+     * 'count' (count-in click), 'beat' (a footfall to tap on), 'hold' (the
+     * jump: press and hold). Returns a handle whose cancel() silences
+     * anything not yet played (pause, pull-out, new ball).
+     */
+    schedule(events) {
+      if (!this.ctx) return { cancel() {} };
+      const c = this.ctx;
+      const bus = c.createGain();
+      bus.connect(this.master);
+      const t0 = c.currentTime + 0.005;
+      this._out = bus;
+      for (const e of events) {
+        if (e.dt < -0.01) continue;
+        const t = t0 + Math.max(0, e.dt);
+        if (e.kind === 'count') {
+          // soft wood click
+          this._tone(t, 'triangle', 1500, 1200, 0.1, 0.05);
+          this._noise(t, 0.03, 'bandpass', 2500, 4, 0.06, 0.03);
+        } else if (e.kind === 'beat') {
+          // brighter woodblock: this is the one to tap on
+          this._tone(t, 'triangle', 1900, 1500, 0.2, 0.06);
+          this._noise(t, 0.03, 'bandpass', 3200, 5, 0.12, 0.035);
+          // footfall thud underneath
+          this._noise(t, 0.05, 'lowpass', 500, 1, 0.22, 0.07);
+        } else if (e.kind === 'hold') {
+          // accent + a rising swell into the release
+          this._tone(t, 'triangle', 1100, 1400, 0.24, 0.12);
+          this._noise(t, 0.08, 'lowpass', 420, 1, 0.35, 0.1);
+          const len = e.len || 0.45;
+          this._noise(t + 0.02, len, 'bandpass', 900, 1.5, 0.06, 0.15, Math.max(0.05, len - 0.02));   // swells up to the LET GO moment
+        }
+      }
+      this._out = null;
+      return {
+        cancel() {
+          try { bus.gain.setValueAtTime(0, c.currentTime); } catch (err) { /* ignore */ }
+          setTimeout(() => { try { bus.disconnect(); } catch (err) { /* ignore */ } }, 200);
+        },
+      };
     },
 
     // Graded judgement chime (0 = miss .. 3 = perfect)

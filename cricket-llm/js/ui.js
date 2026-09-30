@@ -43,7 +43,7 @@
         el.innerHTML = '<kbd>W</kbd> front foot · <kbd>S</kbd> back foot' + (this.game.session && this.game.session.spin ? ' · <kbd>E</kbd> dance' : '') +
           '<br>aim with the mouse · <b>click</b> hit · <b>right-click</b> loft<br><kbd>Space</kbd> defend · no click = leave · <kbd>Esc</kbd> pause';
       } else if (mode === 'bowl') {
-        el.innerHTML = 'mouse: aim the spot · <kbd>1</kbd>-<kbd>5</kbd> variation<br><kbd>Space</kbd>/click to run in, tap on each footfall<br><b>hold</b> on the last beat · <b>let go</b> at the top · <kbd>Esc</kbd> pause';
+        el.innerHTML = 'mouse: aim the spot · <kbd>1</kbd>-<kbd>5</kbd> variation<br><kbd>Space</kbd>/click to run in, then tap on the beats<br><b>hold</b> on the green · <b>let go</b> on the line · <kbd>Esc</kbd> pause';
       } else el.innerHTML = '';
     },
 
@@ -56,7 +56,7 @@
           `<div class="chips"><span class="chip">${touch ? 'drag to aim' : 'aim with the mouse'}</span><span class="chip">${touch ? 'HIT' : 'click'} as it arrives</span><span class="chip">${touch ? 'LOFT' : 'right-click'} to go aerial</span><span class="chip">${touch ? 'BLOCK' : 'Space'} to defend</span><span class="chip">do nothing = leave</span></div>`;
       } else {
         c.innerHTML = `<div><span class="tag">Coach</span>Put the marker where you want it to pitch, then ${touch ? 'tap BOWL' : 'press <kbd>Space</kbd>'} to run in.</div>` +
-          `<div class="chips"><span class="chip">tap on every footfall ring</span><span class="chip">HOLD on the jump</span><span class="chip">LET GO on the notch</span><span class="chip">early = fuller · late = shorter</span></div>`;
+          `<div class="chips"><span class="chip">tap as each footprint hits the ring</span><span class="chip">HOLD on the green bar</span><span class="chip">LET GO on the white line</span><span class="chip">early = fuller · late = shorter</span></div>`;
       }
       c.classList.remove('hidden');
     },

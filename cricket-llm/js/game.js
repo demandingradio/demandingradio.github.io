@@ -83,6 +83,7 @@
     }
 
     quitToMenu() {
+      if (this.session && this.session.onPause) this.session.onPause();
       this.mode = null;
       this.session = null;
       this.paused = false;
@@ -93,10 +94,12 @@
     pause() {
       if (!this.mode) return;
       this.paused = true;
+      if (this.session && this.session.onPause) this.session.onPause();
       if (this.onPause) this.onPause();
     }
     resume() {
       this.paused = false;
+      if (this.session && this.session.onResume) this.session.onResume();
       Input.clear();
       this.lastPerf = performance.now();
     }
