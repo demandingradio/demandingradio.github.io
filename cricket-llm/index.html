@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Cricket LLM - Monday Jeffrey</title>
+  <meta name="description" content="Cricket LLM: a net session. Bat against pace, off spin or leg spin, or bowl them yourself. Reaction, timing and choice.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <a id="back" href="../index.html">← desktop</a>
+
+  <!-- ============ TITLE ============ -->
+  <div class="screen" id="title">
+    <div class="card">
+      <div class="logo">
+        <h1>CRICKET <span>LLM</span></h1>
+        <p>Net session</p>
+      </div>
+      <div class="modes">
+        <button class="mode-btn" id="goBat">
+          <span class="emoji">🏏</span>
+          <div class="big">BAT</div>
+          <div class="sub">Face the net bowler. Read the hand, get your feet moving, time it. Out and your score starts again.</div>
+        </button>
+        <button class="mode-btn" id="goBowl">
+          <span class="emoji">🔴</span>
+          <div class="big">BOWL</div>
+          <div class="sub">Pace, off spin or leg spin. Hit your marks in the run-up, land the release, set the batter up.</div>
+        </button>
+      </div>
+      <div class="bests" id="titleBests"></div>
+    </div>
+  </div>
+
+  <!-- ============ BAT SETUP ============ -->
+  <div class="screen hidden" id="setupBat">
+    <div class="card setup">
+      <h2>Pad up</h2>
+      <p class="lead">Just you, a net, and a bowler who wants your stumps. Every run counts until you're out, then it's back to zero.</p>
+      <div class="row"><label>You bat</label>
+        <div class="seg" data-key="hand">
+          <button data-v="R">Right-handed</button>
+          <button data-v="L">Left-handed</button>
+        </div>
+      </div>
+      <div class="row"><label>Net bowler</label>
+        <div class="seg" data-key="bowler">
+          <button data-v="pace">Pace<small>swing, bouncers, yorkers</small></button>
+          <button data-v="off">Off spin<small>turns into a right-hander</small></button>
+          <button data-v="leg">Leg spin<small>drift, turn, googlies</small></button>
+          <button data-v="mixed">Mixed<small>new bowler every over</small></button>
+        </div>
+      </div>
+      <div class="row"><label>Level</label>
+        <div class="seg" data-key="diff">
+          <button data-v="club">Club</button>
+          <button data-v="grade">Grade</button>
+          <button data-v="state">State</button>
+          <button data-v="test">Test</button>
+        </div>
+        <div class="lead" id="diffBlurb" style="margin:6px 0 0"></div>
+      </div>
+      <div class="howto">
+        <b>1 · READ</b> the bowler's hand (the bubble at release shows the grip) and the flight of the ball. Full or short?<br>
+        <b>2 · COMMIT</b> your feet: <kbd>W</kbd> front foot, <kbd>S</kbd> back foot. It locks on the first press. Commit early and it's worth more; commit late and you're cramped. Against spin, <kbd>E</kbd> dances down the track.<br>
+        <b>3 · EXECUTE</b> aim with the mouse around the batter (move right, hit right). <b>Click</b> to hit along the ground, <b>right-click</b> to go aerial, <kbd>Space</kbd> to defend. <b>Don't click</b> and you leave it.<br>
+        <span style="opacity:.8">Timing is judged in milliseconds. Front foot means you swing earlier than on the back foot. After every ball you're told exactly what went right or wrong. <kbd>C</kbd> switches camera.</span>
+      </div>
+      <div class="actions">
+        <button class="btn" data-back>Back</button>
+        <button class="btn primary" id="startBat">Take guard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BOWL SETUP ============ -->
+  <div class="screen hidden" id="setupBowl">
+    <div class="card setup">
+      <h2>Mark your run-up</h2>
+      <p class="lead">Bowling is rhythm. Hit each footfall, hold on the last beat and let it go at the top. The batter's score resets every time you knock him over.</p>
+      <div class="row"><label>You bowl</label>
+        <div class="seg" data-key="bowlType">
+          <button data-v="pace">Pace<small>long run, big bound, no-balls</small></button>
+          <button data-v="off">Off spin<small>metronome, tight lines</small></button>
+          <button data-v="leg">Leg spin<small>loping, rip it, most turn</small></button>
+        </div>
+      </div>
+      <div class="row"><label>Batter</label>
+        <div class="seg" data-key="batterHand">
+          <button data-v="R">Right-hander</button>
+          <button data-v="L">Left-hander</button>
+        </div>
+      </div>
+      <div class="row"><label>Batter's level</label>
+        <div class="seg" data-key="batterDiff">
+          <button data-v="club">Club</button>
+          <button data-v="grade">Grade</button>
+          <button data-v="state">State</button>
+          <button data-v="test">Test</button>
+        </div>
+      </div>
+      <div class="howto">
+        <b>1 · PLAN</b> put the marker on the pitch with the mouse (line and length), pick a variation with <kbd>1</kbd>–<kbd>5</kbd>.<br>
+        <b>2 · RUN IN</b> press <kbd>Space</kbd> or click to start, then tap on every footfall as the rings close. Good rhythm = more pace, less scatter.<br>
+        <b>3 · LOAD & RELEASE</b> on the final beat <b>press and hold</b> (the bound). <b>Let go</b> when the needle hits the notch. Early = fuller, late = shorter. Pace bowlers who land the bound late overstep: no-ball.<br>
+        <span style="opacity:.8">The batter learns. Bowl the same ball and he'll line you up. Set him up with a few, then change it.</span>
+      </div>
+      <div class="actions">
+        <button class="btn" data-back>Back</button>
+        <button class="btn primary" id="startBowl">Bowl</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div class="screen hidden" id="pause">
+    <div class="card setup" style="max-width:460px">
+      <h2>Drinks break</h2>
+      <div class="row"><label>Timing calibration (if your clicks feel consistently early or late)</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="range" id="calib" min="-80" max="80" step="5" style="flex:1">
+          <span id="calibVal" class="cond" style="min-width:60px;font-size:18px"></span>
+        </div>
+      </div>
+      <div class="actions" style="flex-direction:column">
+        <button class="btn primary" id="resume">Resume</button>
+        <button class="btn" id="camBtn">Switch camera (C)</button>
+        <button class="btn" id="restart">Restart session</button>
+        <button class="btn" id="toMenu">Main menu</button>
+        <a class="btn" href="../index.html" style="text-align:center;text-decoration:none">Back to the desktop</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HUD ============ -->
+  <div class="hud hidden" id="scoreboard">
+    <div class="title" id="sbTitle"></div>
+    <div class="main"><span class="runs" id="sbRuns">0</span><span class="balls" id="sbBalls"></span></div>
+    <div class="meta" id="sbMeta"></div>
+    <div id="recent"></div>
+  </div>
+  <div class="hud hidden" id="field"><canvas id="fieldCanvas"></canvas><div id="fieldLabel">the imaginary field</div></div>
+  <div class="hud hidden" id="bowlerTag"></div>
+  <div class="hud hidden" id="callout"><div class="big" id="calloutBig"></div><div class="small" id="calloutSmall"></div></div>
+  <div class="hud hidden" id="coach"></div>
+  <div class="hud hidden" id="controlsHint"></div>
+  <div class="hud" id="toast"></div>
+  <button id="pauseBtn" class="hidden" title="Pause (Esc)">❚❚</button>
+  <button id="muteBtn" class="hidden" title="Sound (M)">🔊</button>
+
+  <!-- touch controls -->
+  <div id="touch">
+    <div class="tgroup left" data-mode="bat">
+      <button class="tbtn" data-act="front">FRONT</button>
+      <button class="tbtn" data-act="back">BACK</button>
+      <button class="tbtn small" data-act="dance">DANCE</button>
+    </div>
+    <div class="tgroup right" data-mode="bat">
+      <button class="tbtn small" data-act="defend">BLOCK</button>
+      <button class="tbtn big" data-act="hit">HIT</button>
+      <button class="tbtn small" data-act="loft">LOFT</button>
+    </div>
+    <div class="tgroup right" data-mode="bowl">
+      <button class="tbtn big" data-act="bowl">BOWL</button>
+    </div>
+  </div>
+
+  <script src="js/math.js?v=1"></script>
+  <script src="js/camera.js?v=1"></script>
+  <script src="js/world.js?v=1"></script>
+  <script src="js/figure.js?v=1"></script>
+  <script src="js/bowlanim.js?v=1"></script>
+  <script src="js/batanim.js?v=1"></script>
+  <script src="js/ball.js?v=1"></script>
+  <script src="js/render.js?v=1"></script>
+  <script src="js/field.js?v=1"></script>
+  <script src="js/deliveries.js?v=1"></script>
+  <script src="js/config.js?v=1"></script>
+  <script src="js/input.js?v=1"></script>
+  <script src="js/audio.js?v=1"></script>
+  <script src="js/save.js?v=1"></script>
+  <script src="js/ui.js?v=1"></script>
+  <script src="js/batting.js?v=1"></script>
+  <script src="js/aibatter.js?v=1"></script>
+  <script src="js/bowling.js?v=1"></script>
+  <script src="js/game.js?v=1"></script>
+  <script src="js/main.js?v=1"></script>
+</body>
+</html>

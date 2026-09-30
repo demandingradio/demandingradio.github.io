@@ -1,0 +1,284 @@
+/* Cricket LLM — full-page nets game. Canvas does the scene, DOM does the UI. */
+:root {
+  --ink: #f6f1e3;
+  --ink-dim: rgba(246, 241, 227, 0.72);
+  --panel: rgba(14, 26, 20, 0.86);
+  --panel-2: rgba(22, 40, 31, 0.92);
+  --line: rgba(246, 241, 227, 0.14);
+  --gold: #f2c14e;
+  --red: #e2474b;
+  --green: #5fd28a;
+  --blue: #6fb8ff;
+  --board: #101915;
+  --cream: #efe4c6;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #0d1a12; }
+body {
+  font-family: "Barlow", "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+canvas#game { position: fixed; inset: 0; display: block; cursor: crosshair; }
+.hidden { display: none !important; }
+button { font: inherit; color: inherit; }
+
+.cond { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; }
+
+/* ---------- back link ---------- */
+#back {
+  position: fixed; left: 14px; bottom: 12px; z-index: 30;
+  color: var(--ink-dim); text-decoration: none; font-size: 13px; letter-spacing: 0.04em;
+  padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.25);
+}
+#back:hover { color: var(--ink); background: rgba(0, 0, 0, 0.45); }
+
+/* ---------- menus ---------- */
+.screen {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px 16px;
+  background: radial-gradient(120% 90% at 50% 30%, rgba(10, 22, 15, 0.35), rgba(6, 14, 9, 0.82));
+  overflow-y: auto;
+}
+.card {
+  width: min(720px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 26px 26px 22px;
+  backdrop-filter: blur(6px);
+  margin: auto;
+}
+.logo { text-align: center; margin-bottom: 18px; }
+.logo h1 {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-size: clamp(44px, 9vw, 76px);
+  letter-spacing: 0.02em; line-height: 0.95; color: var(--cream);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+.logo h1 span { color: var(--gold); }
+.logo p { color: var(--ink-dim); font-size: 15px; margin-top: 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+.mode-btn {
+  cursor: pointer; text-align: left;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px 18px 16px; transition: transform 0.12s, border-color 0.12s, background 0.12s;
+}
+.mode-btn:hover, .mode-btn:focus-visible { transform: translateY(-2px); border-color: var(--gold); outline: none; }
+.mode-btn .big { font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-size: 34px; letter-spacing: 0.03em; }
+.mode-btn .sub { color: var(--ink-dim); font-size: 14px; margin-top: 2px; line-height: 1.35; }
+.mode-btn .emoji { font-size: 26px; float: right; line-height: 40px; height: 40px; }
+.mode-btn .big { line-height: 40px; }
+
+.setup h2 { font-family: "Barlow Condensed", sans-serif; font-size: 34px; font-weight: 800; letter-spacing: 0.03em; margin-bottom: 4px; }
+.setup .lead { color: var(--ink-dim); font-size: 14px; margin-bottom: 14px; }
+.row { margin: 12px 0; }
+.row > label { display: block; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 6px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button {
+  cursor: pointer; flex: 1 1 auto; min-width: 90px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 10px; font-weight: 600; font-size: 15px;
+}
+.seg button small { display: block; font-weight: 400; font-size: 11.5px; color: var(--ink-dim); margin-top: 1px; }
+.seg button.on { background: var(--cream); color: #16261b; border-color: var(--cream); }
+.seg button.on small { color: #3b4c40; }
+.actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.btn {
+  cursor: pointer; border: 0; border-radius: 12px; padding: 12px 18px;
+  font-weight: 700; font-size: 16px; letter-spacing: 0.03em;
+  background: rgba(255, 255, 255, 0.1); color: var(--ink);
+}
+.btn:hover { background: rgba(255, 255, 255, 0.16); }
+.btn.primary { background: var(--gold); color: #1e1a0a; flex: 1; }
+.btn.primary:hover { background: #ffd169; }
+
+.howto { margin-top: 14px; background: rgba(0, 0, 0, 0.22); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.5; color: var(--ink-dim); }
+.howto b { color: var(--ink); }
+.howto kbd, .hud kbd, .tip kbd {
+  display: inline-block; min-width: 22px; text-align: center;
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 13px; color: var(--ink);
+  background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.22); border-bottom-width: 2px;
+  border-radius: 5px; padding: 0 5px; margin: 0 1px;
+}
+.bests { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--ink-dim); justify-content: center; }
+.bests b { color: var(--gold); }
+
+/* ---------- HUD ---------- */
+.hud { position: fixed; z-index: 10; pointer-events: none; }
+#scoreboard {
+  top: 12px; left: 12px;
+  background: var(--board); border: 2px solid #2c3a31; border-radius: 12px;
+  padding: 8px 12px 9px; min-width: 200px; box-shadow: var(--shadow);
+}
+#scoreboard .title { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); display: flex; justify-content: space-between; gap: 12px; }
+#scoreboard .main { display: flex; align-items: baseline; gap: 10px; margin-top: 1px; }
+#scoreboard .runs { font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-size: 50px; line-height: 1; color: #fff4c9; font-variant-numeric: tabular-nums; }
+#scoreboard .balls { font-family: "Barlow Condensed", sans-serif; font-size: 18px; color: var(--ink-dim); }
+#scoreboard .meta { font-size: 12.5px; color: var(--ink-dim); margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+#scoreboard .meta b { color: var(--ink); font-weight: 700; }
+#recent { display: flex; gap: 4px; margin-top: 7px; }
+#recent span {
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 13px;
+  background: rgba(255, 255, 255, 0.08); color: var(--ink-dim);
+}
+#recent span.r4 { background: #2f6fd6; color: #fff; }
+#recent span.r6 { background: #8c3fd6; color: #fff; }
+#recent span.rW { background: var(--red); color: #fff; }
+#recent span.rN { background: rgba(255, 255, 255, 0.18); color: #fff; }
+
+#field {
+  top: 12px; right: 12px; width: 190px; height: 190px;
+  background: rgba(10, 20, 14, 0.55); border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow);
+}
+#field canvas { width: 100%; height: 100%; display: block; border-radius: 50%; }
+#fieldLabel { position: absolute; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 11px; letter-spacing: 0.14em; color: var(--ink-dim); text-transform: uppercase; }
+
+#callout {
+  top: 22%; left: 50%; transform: translateX(-50%);
+  text-align: center; width: min(92vw, 720px);
+}
+#callout .big {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-size: clamp(40px, 8vw, 84px);
+  line-height: 0.95; letter-spacing: 0.02em; color: #fff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 0 30px rgba(0, 0, 0, 0.3);
+  opacity: 0; transform: scale(0.8);
+}
+#callout .big.show { animation: pop 0.35s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+#callout .big.four { color: #8fc3ff; }
+#callout .big.six { color: #d6a4ff; }
+#callout .big.out { color: #ff8a8d; }
+#callout .big.good { color: var(--gold); }
+@keyframes pop { to { opacity: 1; transform: scale(1); } }
+#callout .small {
+  margin-top: 8px; font-size: clamp(14px, 2.2vw, 18px); color: var(--ink);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+#coach {
+  bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 9px 14px; font-size: 14px; max-width: min(92vw, 760px); text-align: center; box-shadow: var(--shadow);
+  line-height: 1.4;
+}
+#coach .tag { display: inline-block; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-right: 8px; font-weight: 700; }
+#coach .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+#coach .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); }
+#coach .chip.good { background: rgba(95, 210, 138, 0.22); color: #bff3d2; }
+#coach .chip.bad { background: rgba(226, 71, 75, 0.22); color: #ffc9ca; }
+#coach .chip.meh { background: rgba(242, 193, 78, 0.2); color: #ffe7ad; }
+
+#bowlerTag {
+  top: 12px; left: 50%; transform: translateX(-50%);
+  font-size: 13px; letter-spacing: 0.08em; color: var(--ink-dim); text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.28); padding: 5px 12px; border-radius: 999px; white-space: nowrap;
+}
+#bowlerTag b { color: var(--ink); }
+
+#controlsHint {
+  bottom: 18px; right: 14px; font-size: 12px; color: var(--ink-dim); text-align: right; line-height: 1.7;
+  background: rgba(0, 0, 0, 0.25); padding: 8px 10px; border-radius: 10px;
+}
+
+.tip { position: fixed; z-index: 11; pointer-events: none; }
+
+/* pause */
+#pauseBtn {
+  position: fixed; top: 12px; right: 214px; z-index: 12; cursor: pointer;
+  width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35); color: var(--ink); font-size: 16px;
+}
+#muteBtn {
+  position: fixed; top: 54px; right: 214px; z-index: 12; cursor: pointer;
+  width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35); color: var(--ink); font-size: 16px;
+}
+
+/* ---------- touch controls ---------- */
+#touch { position: fixed; inset: auto 0 0 0; z-index: 12; display: none; pointer-events: none; }
+body.touch #touch { display: block; }
+
+@media (max-width: 760px) {
+  .modes { grid-template-columns: 1fr; }
+  #field { width: 120px; height: 120px; top: 10px; right: 10px; }
+  #pauseBtn, #muteBtn { right: 138px; }
+  #scoreboard { min-width: 0; padding: 6px 10px; }
+  #scoreboard .runs { font-size: 38px; }
+  #controlsHint { display: none; }
+  #bowlerTag { top: auto; bottom: 110px; font-size: 11px; }
+  #coach { font-size: 12.5px; bottom: 10px; }
+}
+
+/* toast */
+#toast {
+  top: 70px; left: 50%; transform: translateX(-50%) translateY(-8px);
+  background: rgba(242, 193, 78, 0.95); color: #1e1a0a; font-weight: 700; font-size: 14px;
+  padding: 7px 14px; border-radius: 999px; opacity: 0; pointer-events: none; white-space: nowrap;
+}
+#toast.show { animation: toast 2.6s ease forwards; }
+@keyframes toast { 0% { opacity: 0; transform: translateX(-50%) translateY(-8px); } 10%, 80% { opacity: 1; transform: translateX(-50%) translateY(0); } 100% { opacity: 0; } }
+
+body[data-mode="bat"] canvas#game { cursor: none; }
+body.in-menu canvas#game { cursor: default; }
+
+/* touch buttons */
+#touch .tgroup { position: absolute; bottom: 14px; display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+#touch .tgroup.left { left: 12px; }
+#touch .tgroup.right { right: 12px; align-items: flex-end; }
+#touch .tbtn {
+  width: 84px; height: 56px; border-radius: 14px; border: 2px solid rgba(255,255,255,0.35);
+  background: rgba(10, 20, 14, 0.55); color: #fff; font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.05em;
+}
+#touch .tbtn.small { height: 42px; font-size: 15px; }
+#touch .tbtn.big { width: 110px; height: 84px; font-size: 24px; background: rgba(242, 193, 78, 0.35); }
+#touch .tbtn.down { background: rgba(242, 193, 78, 0.8); color: #1e1a0a; }
+body.touch #controlsHint { display: none; }
+body.touch #coach { bottom: auto; top: 118px; }
+
+/* ---------- narrow / touch layout ---------- */
+@media (max-width: 760px) {
+  #scoreboard { max-width: calc(100vw - 128px); top: 8px; left: 8px; }
+  #scoreboard .title { font-size: 9.5px; letter-spacing: 0.1em; flex-wrap: wrap; gap: 2px 8px; }
+  #scoreboard .runs { font-size: 34px; }
+  #scoreboard .meta { font-size: 11px; gap: 8px; }
+  #recent span { width: 18px; height: 18px; font-size: 11px; }
+  #field { width: 104px; height: 104px; top: 8px; right: 8px; }
+  #fieldLabel { display: none; }
+  #pauseBtn { top: 118px; right: 8px; width: 34px; height: 34px; }
+  #muteBtn { top: 118px; right: 48px; width: 34px; height: 34px; }
+  #callout { top: 30%; }
+  #bowlerTag { top: auto; bottom: 150px; }
+  #toast { top: 160px; }
+}
+body.touch #coach { top: auto; bottom: auto; top: 158px; font-size: 11.5px; padding: 6px 10px; max-width: calc(100vw - 20px); width: max-content; }
+body.touch #coach .chip { font-size: 10.5px; }
+body.touch[data-mode="bat"] #back, body.touch[data-mode="bowl"] #back { display: none; }
+body.touch #callout { top: 34%; }
+@media (max-width: 760px) {
+  .card { padding: 20px 16px 18px; }
+  .seg button { min-width: 70px; font-size: 14px; padding: 8px 8px; }
+  .howto { font-size: 13px; }
+}
+
+/* desktop: keep the controls hint out of the coach card's band */
+#controlsHint { bottom: auto; top: 250px; }
+@media (max-width: 1100px) { #controlsHint { display: none; } }
+
+/* touch landscape (short screens): coach between the button columns, callout high */
+@media (max-height: 520px) {
+  body.touch #coach { top: auto; bottom: 6px; max-width: calc(100vw - 250px); font-size: 11px; }
+  body.touch #coach .chips { display: none; }
+  body.touch #callout { top: 16%; }
+  body.touch #bowlerTag { bottom: auto; top: 10px; }
+  #field { width: 96px; height: 96px; }
+  #pauseBtn { top: 10px; right: 112px; }
+  #muteBtn { top: 52px; right: 112px; }
+}
