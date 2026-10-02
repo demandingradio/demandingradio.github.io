@@ -18,8 +18,7 @@
     { label: 'Drive',        icon: '\u{1F697}', href: '/drive/',        title: 'Drive' },
     { label: 'Password Test',icon: '\u{1F510}', href: '/password-test/', title: 'Password Test' },
     { label: 'Diorama',      icon: '\u{1F3DE}', href: '/worldbuild/',    title: 'Diorama' },
-    { label: 'Cricket LLM',  icon: '\u{1F945}', href: '/cricket-llm/',   title: 'Cricket LLM' },
-    { label: 'AFL Trades',   icon: '\u{1F91D}', href: '/afl-trade/',     title: 'Mega Trade Machine' }
+    { label: 'Cricket LLM',  icon: '\u{1F945}', href: '/cricket-llm/',   title: 'Cricket LLM' }
   ];
 
   function renderDesktop(container) {
