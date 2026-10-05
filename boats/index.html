@@ -1115,7 +1115,7 @@ img.pxi{ image-rendering:pixelated; vertical-align:middle; }
     <kbd>J</kbd> contracts &nbsp; <kbd>C</kbd> cook &nbsp; <kbd>L</kbd> log &nbsp; <kbd>H</kbd> (pad Y) leave the helm &amp; walk your deck &nbsp; <kbd>F</kbd> on deck: decorate<br>
     <kbd>X</kbd> (pad LB) send the explorer &nbsp; <kbd>🖱</kbd> click the chart: set a course &nbsp; <kbd>Shift</kbd> run &nbsp; <kbd>Esc</kbd> menu &amp; crew<br>
     <kbd>🖱</kbd> drag &amp; drop &nbsp; right-click: quick action &nbsp; <kbd>Shift</kbd>+click: satchel ↔ Hold &nbsp; <kbd>Shift</kbd>+<kbd>P</kbd> music
-    <span id="tPlogK" class="hidden"><br><kbd>F2</kbd> a playtest note — the 📝 log is on</span>
+    <span id="tPlogK" class="hidden"><br><kbd>0</kbd> a playtest note — the 📝 log is on</span>
   </div>
 </div>
 
@@ -3114,7 +3114,7 @@ function renderControlsTab(){
   h+='<p class="sub">'+(gp?('Connected: <b>'+String(padDevName).replace(/[<>&]/g,'').slice(0,40)+'</b>'):'No controller detected — connect one and press any button.')+'</p>';
   h+='<label style="display:flex;align-items:center;gap:8px;color:#cdd9f3;font-size:13px;margin:4px 0 8px;"><input type="checkbox" id="ctlEnable"'+(PAD.enabled?' checked':'')+'> Controller enabled</label>';
   h+='<p class="hint">Left stick moves / steers &amp; works the sail — push the stick fully to run in towns and on deck. At sea '+padGlyph('skill4')+' sends your explorer ashore and '+padGlyph('deck')+' leaves the helm; on deck '+padGlyph('interact')+' uses & talks to the crew (the wheel takes her back), '+padGlyph('cancel')+' closes a card and '+padGlyph('skill2')+' decorates ('+padGlyph('attack')+' picks up & sets down, '+padGlyph('deck')+' turns, '+padGlyph('skill2')+' stows, '+padGlyph('skill4')+' / '+padGlyph('interact')+' pick from the stores, the triggers filter them); at the stern line '+padGlyph('attack')+' or '+padGlyph('interact')+' casts and strikes, held they reel. With the chart open it pans; the triggers zoom. Ashore the right stick aims (twin-stick); without it, your blows fire the way you face and lean onto the nearest foe — with none near, your shots lean onto a rock, herb, ruin or cracked wall ahead (shots break them, as a blade does). Hold the strike: 1 · 2 · FINISHER — the third blow is the big one (it floors normal foes and pays half again in Tide); every hit builds the TIDE; the skill buttons (X · Y · LB · RT · LT = slots 2-6) spend it — a skill hits 3–5× a strike, and one cast on a FULL bar CRESTS (+25%). B dashes (two charges; strike right after one for a heavy DASH STRIKE), D↓ drinks the flask, D↑ opens the satchel. In menus the stick or D-pad moves the highlight, the strike button confirms, back closes, and the shoulder buttons flip tabs.</p>';
-  h+='<p class="hint">Keys: at sea <b>X</b> sends your explorer · <b>H</b> leaves the helm (walk your deck · <b>E</b> beside a hand talks · <b>E</b> at the wheel to sail · <b>F</b> decorates) · <b>M</b> the chart (click a known place to set your course) · in port, in rooms &amp; on deck hold <b>Shift</b> to run · <b>Shift+P</b> music on/off'+(PLOG?' · <b>F2</b> a playtest note':'')+' · ashore <b>LMB</b> / J strike · <b>RMB</b> / K slot 2 · <b>1-4</b> slots 3-6 · <b>Space</b> dash · <b>Q</b> (or H) drink · <b>E</b> use · <b>I</b> satchel · <b>M</b> map · gear &amp; gems: <b>drag &amp; drop</b> (the figure, the bar, a socket, the bin, the market’s sell box, the forge’s anvil — an Elixir onto the figure drinks it, a Goods row onto its sell box sells the lot) · <b>right-click</b> quick action · <b>Shift+click</b> satchel ↔ Hold (the pad: A picks a piece, then its buttons).</p>';   // (PT1 W11)
+  h+='<p class="hint">Keys: at sea <b>X</b> sends your explorer · <b>H</b> leaves the helm (walk your deck · <b>E</b> beside a hand talks · <b>E</b> at the wheel to sail · <b>F</b> decorates) · <b>M</b> the chart (click a known place to set your course) · in port, in rooms &amp; on deck hold <b>Shift</b> to run · <b>Shift+P</b> music on/off'+(PLOG?' · <b>0</b> a playtest note':'')+' · ashore <b>LMB</b> / J strike · <b>RMB</b> / K slot 2 · <b>1-4</b> slots 3-6 · <b>Space</b> dash · <b>Q</b> (or H) drink · <b>E</b> use · <b>I</b> satchel · <b>M</b> map · gear &amp; gems: <b>drag &amp; drop</b> (the figure, the bar, a socket, the bin, the market’s sell box, the forge’s anvil — an Elixir onto the figure drinks it, a Goods row onto its sell box sells the lot) · <b>right-click</b> quick action · <b>Shift+click</b> satchel ↔ Hold (the pad: A picks a piece, then its buttons).</p>';   // (PT1 W11)
   h+='<div class="pt-sep"></div><div class="ctlrows">';
   for(const r of PAD_ROLES){ const idx=PAD.bind[r[0]], cap=padCapture===r[0];
     h+='<div class="ctlrow"><span class="cln">'+r[1]+'</span><span class="clb">'+(cap?'<i>press a button…'+(PAD_DPAD_OK[r[0]]?'':' (not the D-pad)')+'</i>':(idx==null||idx<0)?'<i>unbound</i>':('btn '+idx+padBtnName(idx)))+'</span><button class="sbtn ghost" data-rebind="'+r[0]+'">'+(cap?'…':'Rebind')+'</button></div>';
@@ -3128,7 +3128,7 @@ function renderControlsTab(){
 }
 
 /* ============================ THE PLAYTEST LOG (PT1 PL — the owner's decision, 2026-10-02) ============================
-   Off by default: 🎮 Options → 📝 Playtest log (this device's choice, never the voyage's) or a ?playtest link. On, F2 (the pad: click the RIGHT
+   Off by default: 🎮 Options → 📝 Playtest log (this device's choice, never the voyage's) or a ?playtest link. On, the 0 key (F2 too; the pad: click the RIGHT
    STICK · the mouse: the 📝 by the ☰) opens a small note box anywhere — the game runs on behind it, but every key is the box's while it's up
    (Enter saves · Shift+Enter a new line · Esc cancels · Tab or 1-4 the tag · Alt+1-5 the feel; the pad: A presses · B cancels · Start saves ·
    X the tag · Y the feel). A note keeps its moment, caught at the press: a small screenshot, where you are & what you carry, the last 10 s off a
@@ -3161,7 +3161,8 @@ function plogFt(ts,c){ const L=PLOG, i=(L.fn++)%PLOG_FT, m=started?mode:'title';
 function plogErrAdd(s){ const L=PLOG; if(!L) return; s=String(s).slice(0,400); if(L.err.length<20) L.err.push(s); plogEv(PLE.err,s.slice(0,160).replace(/\s+/g,' ')); }
 function plogErrEv(e){ plogErrAdd(e.type==='unhandledrejection' ? 'unhandled rejection: '+String(e.reason&&e.reason.stack||e.reason) : String(e.message||'error')+' @'+String(e.filename||'').split('/').pop()+':'+(e.lineno|0)); }
 function plogKey(e){ const L=PLOG; if(!L) return; const B=L.box;
-  if(!B){ if(e.key==='F2'){ e.preventDefault(); e.stopPropagation(); if(!e.repeat){ inDev='kb'; plogOpen('key'); } } return; }
+  if(!B){ const tg=e.target, typing=tg&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA'||tg.tagName==='SELECT'||tg.isContentEditable);   // (owner: F2 doesn't reach every keyboard — the 0 key, right of 9, opens a note; F2 still works · never while a text box has the keys)
+    if((e.key==='0'||e.code==='Digit0'||e.code==='Numpad0'||e.key==='F2') && !typing && !e.ctrlKey && !e.metaKey && !e.altKey){ e.preventDefault(); e.stopPropagation(); if(!e.repeat){ inDev='kb'; plogOpen('key'); } } return; }
   e.stopPropagation(); inDev='kb'; const ta=document.getElementById('plText'), k=e.key, dg=/^(Digit|Numpad)([0-9])$/.exec(e.code||'')||/^()([0-9])$/.exec(k);   // (the box is up: no key reaches the game — the note keeps its letters, the rest is the box's)
   if(k==='Escape'){ e.preventDefault(); plogClose(false); return; }
   if(k==='Enter' && !e.shiftKey){ e.preventDefault(); plogSave(); return; }
@@ -3242,7 +3243,7 @@ function plogShot(){ try{ const W0=cv.width, H0=cv.height; if(!W0 || !H0) return
       if(u.length<=PLOG_SHOT) return u; if(q>0.4) q-=0.12; else w=Math.round(w*0.8); } }catch(e){} return null; }
 /* THE BOX */
 function plogDom(){ if(document.getElementById('plBox')) return;
-  const ch=document.createElement('div'); ch.id='plChip'; ch.className='hidden'; ch.title='Playtest log — F2 (the pad: click the right stick) writes a note'; document.body.appendChild(ch);
+  const ch=document.createElement('div'); ch.id='plChip'; ch.className='hidden'; ch.title='Playtest log — 0 (the pad: click the right stick) writes a note'; document.body.appendChild(ch);
   ch.onclick=e=>{ e.stopPropagation(); plogOpen('chip'); }; for(const ev of ['pointerdown','mousedown','mouseup']) ch.addEventListener(ev,e=>e.stopPropagation());
   const B=document.createElement('div'); B.id='plBox'; B.className='hidden';
   B.innerHTML='<div class="pltop"><b>📝 Playtest note</b><span id="plWhere"></span><span id="plCnt"></span></div>'+
@@ -3256,7 +3257,7 @@ function plogDom(){ if(document.getElementById('plBox')) return;
   B.querySelectorAll('[data-plsc]').forEach(b=>{ b.onclick=()=>plogScore(+b.dataset.plsc); });
   document.getElementById('plSave').onclick=()=>plogSave(); document.getElementById('plCancel').onclick=()=>plogClose(false);
   document.getElementById('plExpB').onclick=()=>plogExport(); document.getElementById('plCopyB').onclick=()=>plogCopy(); }
-function plogChip(){ const k=document.getElementById('tPlogK'); if(k) k.classList.toggle('hidden',!PLOG);   // (R1a: the title's keys name F2 while the log is on)
+function plogChip(){ const k=document.getElementById('tPlogK'); if(k) k.classList.toggle('hidden',!PLOG);   // (R1a: the title's keys name the 0 key while the log is on)
   const c=document.getElementById('plChip'); if(!c) return; c.classList.toggle('hidden',!PLOG); if(PLOG) c.textContent='📝 '+plogLoad().notes.length; }
 function plogOpen(src){ const L=PLOG; if(!L || L.box) return; plogDom();
   const B=L.box={src, iso:new Date().toISOString(), shot:plogShot(), ctx:plogCtx(), ev:plogEvents(), perf:plogPerf(), err:{frame:(window.__frameErr|0)-L.fe0, console:L.err.slice()}, fe:window.__frameErr|0, ne:L.err.length, tag:'', sc:0, af:document.activeElement, pf:padFocusEl};
@@ -3308,7 +3309,7 @@ function plogSaveRoom(str){ if(!localStorage.getItem(PLOG_IMG)) return false; co
   return false; }
 function plogExportObj(){ const S=plogLoad(), I=plogImgsLoad(); return {app:'BOATS playtest log', v:1, exported:new Date().toISOString(), build:plogBuild(), n:S.notes.length, notes:S.notes.map(n=>Object.assign({},n,{img:I[n.id]||null}))}; }
 function plogStamp(){ const d=new Date(), p=v=>String(v).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes()); }
-function plogExport(){ const S=plogLoad(); if(!S.notes.length){ plogToast('📝  The log is empty','F2 writes a note'); return null; } const txt=JSON.stringify(plogExportObj(),null,1);
+function plogExport(){ const S=plogLoad(); if(!S.notes.length){ plogToast('📝  The log is empty','0 writes a note'); return null; } const txt=JSON.stringify(plogExportObj(),null,1);
   try{ const u=URL.createObjectURL(new Blob([txt],{type:'application/json'})), a=document.createElement('a'); a.href=u; a.download='boats-playtest-'+plogStamp()+'.json'; a.style.display='none'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),8000);
     plogToast('📝  Log exported', S.notes.length+' note'+(S.notes.length>1?'s':'')+' → your Downloads ('+Math.max(1,Math.round(txt.length/1024))+' KB)'); }catch(e){ plogToast('📝  Export failed', String(e).slice(0,60)); }
   return txt; }
@@ -3336,7 +3337,7 @@ function plogClear(){ plogStore={v:1, seq:plogLoad().seq, notes:[]}; plogImgs={}
 /* the 🎮 Options block (under 🔊 Sound & music) */
 function plogBlock(){ const on=!!PLOG, n=plogLoad().notes.length, arm=plogClrArm>performance.now();
   return '<div id="plogBlock"><h3>📝 Playtest log</h3><div class="ctlrow"><span class="cln">Jot notes as you play'+(plogUrl?' <i>(on by the ?playtest link)</i>':'')+'</span><button class="sbtn'+(on?'':' ghost')+'" id="plogTog">'+(on?'📝 On':'Off')+'</button></div>'+
-    '<p class="hint">'+(on?'<b>F2</b> (the pad: click the <b>right stick</b> · or the 📝 by the ☰) opens a note box anywhere — the game runs on behind it · Enter saves, Esc cancels · each note keeps a screenshot, where you are, what you carry and the last '+PLOG_WIN+' s of what happened':'Off — turn it on and <b>F2</b> (the pad: click the right stick) jots a note with a screenshot and what was happening, for the playtest')+' · kept on this device'+(n?' · <b>'+n+'</b> note'+(n>1?'s':'')+' logged':'')+'</p>'+
+    '<p class="hint">'+(on?'<b>0</b> (the 0 key, right of 9 · the pad: click the <b>right stick</b> · or the 📝 by the ☰) opens a note box anywhere — the game runs on behind it · Enter saves, Esc cancels · each note keeps a screenshot, where you are, what you carry and the last '+PLOG_WIN+' s of what happened':'Off — turn it on and <b>F2</b> (the pad: click the right stick) jots a note with a screenshot and what was happening, for the playtest')+' · kept on this device'+(n?' · <b>'+n+'</b> note'+(n>1?'s':'')+' logged':'')+'</p>'+
     (n?'<div class="btns"><button id="plogExp">⬇ Export the log (one file)</button><button id="plogCopy">📋 Copy text summary</button><button id="plogClr">'+(arm?'Really clear '+n+' note'+(n>1?'s':'')+'?':'🗑 Clear log')+'</button></div>':'')+'</div>'; }
 function plogWire(){ const H=document.getElementById('plogBlock'); if(!H) return; const g=id=>H.querySelector('#'+id);
   g('plogTog').onclick=()=>{ plogSet(!PLOG); plogSfx('ui_tick'); plogBlockRefresh(); };
@@ -5834,7 +5835,7 @@ const CONTROLS_HTML=
   '<div class="vcg"><b>In port</b><span>WASD walk (hold Shift to run \u2014 in rooms too) \u00b7 E enter a building \u00b7 J contracts \u00b7 M chart</span></div>'+
   '<div class="vcg"><b>Your gear</b><span>drag &amp; drop in the satchel (I) and the \u2694 Gear tab: drag a piece onto the figure or a slot to wear it, off the figure to take it off, onto the \u27f2 salvage bin, the ground or the \u2693 Hold tab (hold it there to open the Hold) \u00b7 a skill gem onto a slot of the bar (or off it), a cut gem onto a piece to socket it \u00b7 an Elixir (the satchel, ashore) onto the figure to drink it \u00b7 at the market (\u2694 Sell gear) drag a piece onto the sell box \u2014 on \ud83d\udc1f Goods a row of the catch or the Hold\u2019s materials onto its own sell box (the lot of them) \u00b7 at the forge onto the anvil (its salvage tab has a bin) \u00b7 right-click = the quick action (equip / take off / unslot / drink \u2014 sell at the market, pick at the forge) \u00b7 Shift+click = satchel \u2194 Hold \u00b7 Esc lets go of a drag</span></div>'+
   '<div class="vcg"><b>Sound</b><span>P sound on/off'+(SND_MUS_ROW?' \u00b7 Shift+P music on/off':'')+' \u00b7 Esc \u2192 \ud83c\udfae Options for the volumes</span></div>'+   // (PT1 A1)
-  '<div class="vcg"><b>Playtest log</b><span>off by default \u2014 Esc \u2192 \ud83c\udfae Options turns it on \u00b7 then F2 (the pad: click the right stick) jots a note anywhere, with a screenshot and what was happening</span></div>';   // (PT1 PL)
+  '<div class="vcg"><b>Playtest log</b><span>off by default \u2014 Esc \u2192 \ud83c\udfae Options turns it on \u00b7 then 0 (the 0 key, right of 9 · the pad: click the right stick) jots a note anywhere, with a screenshot and what was happening</span></div>';   // (PT1 PL)
 function updateEnv(dt){            // day/night + weather — shared by sea AND island so time keeps flowing ashore
   if(!menuOpen) time+=dt;
   const DAY_LEN=210;                                   // seconds for a full day+night
