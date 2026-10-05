@@ -1,0 +1,385 @@
+Sounds: Kenney (kenney.nl) — CC0 · artisticdude, rubberduck, JaggedStone, StarNinjas (OpenGameArt.org) — CC0 · Joseph Sardin, BigSoundBank.com — CC0. Thank you!
+
+Packs used (all Creative Commons Zero / public domain):
+  Kenney: Impact Sounds, RPG Audio, Interface Sounds, Casino Audio — https://kenney.nl/assets
+  artisticdude: Swishes Sound Pack, Battle Sound Effects — https://opengameart.org
+  rubberduck: 80 CC0 RPG SFX, 80 CC0 creature SFX — https://opengameart.org
+  JaggedStone: Magic Spell SFX — https://opengameart.org/content/magic-spell-sfx
+  StarNinjas: 20 Sword Sound Effects (attacks and clashes) — https://opengameart.org
+  Joseph Sardin: BigSoundBank.com — https://bigsoundbank.com
+
+Every file here was trimmed, faded, levelled and converted to MP3 (mono, 44.1 kHz) for BOATS. File → source:
+  sw/l0          OGA swishes swish-10 (D3a; the 4 shortest & brightest)
+  sw/l1          OGA swishes swish-11 (D3a; the 4 shortest & brightest)
+  sw/l2          OGA swishes swish-12 (D3a; the 4 shortest & brightest)
+  sw/l3          OGA swishes swish-13 (D3a; the 4 shortest & brightest)
+  sw/l4          OGA battle sfx swish_4 (D3b)
+  sw/sw0         OGA swishes sw:swish-9.wav (D3a; the 4 longest/lowest)
+  sw/sw1         OGA swishes sw:swish-7.wav (D3a; the 4 longest/lowest)
+  sw/sw2         OGA swishes sw:swish-8.wav (D3a; the 4 longest/lowest)
+  sw/sw3         OGA swishes sw:swish-3.wav (D3a; the 4 longest/lowest)
+  sw/h0          OGA swishes sw:swish-4.wav (D3a)
+  sw/h1          OGA swishes sw:swish-6.wav (D3a)
+  sw/h2          OGA swishes sw:swish-5.wav (D3a)
+  sw/h3          OGA swishes sw:swish-1.wav (D3a)
+  sw/h4          OGA swishes sw:swish-2.wav (D3a)
+  sw/h5          OGA battle sfx swish_2 (D3b)
+  sw/bl0         BigSoundBank 0128 Sword through the air (D6)
+  sw/bl1         OpenGameArt StarNinjas sword attack sword.8.ogg (D8)
+  sw/bl2         OpenGameArt StarNinjas sword attack sword.6.ogg (D8)
+  sw/bl3         OpenGameArt StarNinjas sword attack sword.5.ogg (D8)
+  sw/rope0       BSB 1795 Whoosh #3
+  sw/rope1       BSB 1796 Whoosh #4
+  sw/stick0      BSB 1797 Whoosh #5
+  sw/bamboo0     BSB 1798 Whoosh #10
+  sw/sheet0      BSB 1799 Whoosh #6
+  sw/sheet1      BSB 1802 Whoosh #9
+  sw/tube0       BSB 1800 Whoosh #7
+  sw/tube1       BSB 1801 Whoosh #8
+  sw/rope2       BSB 1795 Whoosh #3 (resampled -1.5 semitones)
+  sw/rope3       BSB 1796 Whoosh #4 (resampled +1.5 semitones, its body 12 % shorter)
+  sw/rope4       BSB 1795 Whoosh #3 (resampled +1.5 semitones, its body 12 % shorter)
+  sw/rope5       BSB 1796 Whoosh #4 (resampled -1.5 semitones)
+  sw/stick1      BSB 1797 Whoosh #5 (resampled -1.5 semitones)
+  sw/stick2      BSB 1797 Whoosh #5 (resampled +1.5 semitones, its body 12 % shorter)
+  sw/bamboo1     BSB 1798 Whoosh #10 (resampled -1.5 semitones)
+  sw/bamboo2     BSB 1798 Whoosh #10 (resampled +1.5 semitones, its body 12 % shorter)
+  sw/sheet2      BSB 1799 Whoosh #6 (resampled -1.5 semitones)
+  sw/sheet3      BSB 1802 Whoosh #9 (resampled +1.5 semitones, its body 12 % shorter)
+  sw/tube2       BSB 1800 Whoosh #7 (resampled -1.5 semitones)
+  sw/tube3       BSB 1801 Whoosh #8 (resampled +1.5 semitones, its body 12 % shorter)
+  sw/tube4       BSB 1800 Whoosh #7 (resampled +1.5 semitones, its body 12 % shorter)
+  sw/tube5       BSB 1801 Whoosh #8 (resampled -1.5 semitones)
+  sw/bow0        BSB 0549 Archery — the release
+  sw/bow1        OGA battle sfx Bow (D3b)
+  sw/bow2        BSB 0549 release + OGA swish-12 air (a composite)
+  sw/bow3        OGA Bow (lowpassed) + OGA swish-10 air (a composite)
+  sw/knife0      Kenney RPG drawKnife1 (D1b)
+  sw/knife1      Kenney RPG drawKnife2 (D1b)
+  sw/knife2      Kenney RPG drawKnife1 (resampled -1.5 semitones)
+  sw/knife3      Kenney RPG drawKnife2 (resampled +1.5 semitones)
+  sw/slice0      Kenney RPG knifeSlice
+  sw/slice1      Kenney RPG knifeSlice2
+  sw/slice2      BSB 0127 Sword That Cuts
+  sw/slice3      Kenney RPG knifeSlice2 (resampled +1.5 semitones)
+  hit/fl0        Kenney impactPunch_medium_000
+  hit/flh0       Kenney impactPunch_heavy_000
+  hit/sh0        Kenney impactPlate_medium_000
+  hit/so0        Kenney impactSoft_medium_000
+  hit/soh0       Kenney impactSoft_heavy_000
+  hit/wd0        Kenney impactWood_medium_000
+  hit/wdh0       Kenney impactWood_heavy_000
+  hit/wdl0       Kenney impactWood_light_000
+  hit/mt0        Kenney impactMetal_light_000
+  hit/mtm0       Kenney impactMetal_medium_000
+  hit/mth0       Kenney impactMetal_heavy_000
+  hit/fl1        Kenney impactPunch_medium_001
+  hit/flh1       Kenney impactPunch_heavy_001
+  hit/sh1        Kenney impactPlate_medium_001
+  hit/so1        Kenney impactSoft_medium_001
+  hit/soh1       Kenney impactSoft_heavy_001
+  hit/wd1        Kenney impactWood_medium_001
+  hit/wdh1       Kenney impactWood_heavy_001
+  hit/wdl1       Kenney impactWood_light_001
+  hit/mt1        Kenney impactMetal_light_001
+  hit/mtm1       Kenney impactMetal_medium_001
+  hit/mth1       Kenney impactMetal_heavy_001
+  hit/fl2        Kenney impactPunch_medium_002
+  hit/flh2       Kenney impactPunch_heavy_002
+  hit/sh2        Kenney impactPlate_medium_002
+  hit/so2        Kenney impactSoft_medium_002
+  hit/soh2       Kenney impactSoft_heavy_002
+  hit/wd2        Kenney impactWood_medium_002
+  hit/wdh2       Kenney impactWood_heavy_002
+  hit/wdl2       Kenney impactWood_light_002
+  hit/mt2        Kenney impactMetal_light_002
+  hit/mtm2       Kenney impactMetal_medium_002
+  hit/mth2       Kenney impactMetal_heavy_002
+  hit/fl3        Kenney impactPunch_medium_003
+  hit/flh3       Kenney impactPunch_heavy_003
+  hit/sh3        Kenney impactPlate_medium_003
+  hit/so3        Kenney impactSoft_medium_003
+  hit/soh3       Kenney impactSoft_heavy_003
+  hit/wd3        Kenney impactWood_medium_003
+  hit/wdh3       Kenney impactWood_heavy_003
+  hit/wdl3       Kenney impactWood_light_003
+  hit/mt3        Kenney impactMetal_light_003
+  hit/mtm3       Kenney impactMetal_medium_003
+  hit/mth3       Kenney impactMetal_heavy_003
+  hit/fl4        Kenney impactPunch_medium_004
+  hit/flh4       Kenney impactPunch_heavy_004
+  hit/sh4        Kenney impactPlate_medium_004
+  hit/so4        Kenney impactSoft_medium_004
+  hit/soh4       Kenney impactSoft_heavy_004
+  hit/wd4        Kenney impactWood_medium_004
+  hit/wdh4       Kenney impactWood_heavy_004
+  hit/wdl4       Kenney impactWood_light_004
+  hit/mt4        Kenney impactMetal_light_004
+  hit/mtm4       Kenney impactMetal_medium_004
+  hit/mth4       Kenney impactMetal_heavy_004
+  hit/cl0        OpenGameArt StarNinjas sword_clash.7.ogg (D8)
+  hit/cl1        OpenGameArt StarNinjas sword_clash.9.ogg (D8)
+  hit/cl2        OpenGameArt StarNinjas sword_clash.1.ogg (D8)
+  hit/cl3        OpenGameArt StarNinjas sword_clash.3.ogg (D8)
+  hit/cl4        OpenGameArt StarNinjas sword_clash.10.ogg (D8)
+  hit/cl5        OpenGameArt StarNinjas sword_clash.2.ogg (D8)
+  hit/bone0      BSB 1408 Bones cracking — the crack at 0.23 s
+  hit/bone1      BSB 1409 Bones cracking — the crack at 0.10 s
+  hit/bone2      BSB 1409 Bones cracking — the crack at 0.42 s
+  hit/ar0        BSB 0548 An arrow on a target — the hit at 0.15 s
+  hit/ar1        BSB 0548 An arrow on a target — the hit at 1.62 s
+  hit/ar2        BSB 0548 An arrow on a target — the hit at 0.82 s
+  hit/ar3        BSB 0548 An arrow on a target — the hit at 3.65 s
+  hit/ar4        BSB 0548 An arrow on a target — the hit at 4.67 s
+  hit/helm0      Kenney impactPlate_heavy_000 (D2 hitHelmet declined)
+  hit/helm1      Kenney impactPlate_heavy_001 (D2 hitHelmet declined)
+  hit/helm2      Kenney impactPlate_heavy_002 (D2 hitHelmet declined)
+  hit/helm3      Kenney impactPlate_heavy_003 (D2 hitHelmet declined)
+  hit/helm4      Kenney impactPlate_heavy_004 (D2 hitHelmet declined)
+  hit/bl0        OGA 80 CC0 RPG blade_01 (D3c; D2 swords declined)
+  hit/bl1        OGA 80 CC0 RPG blade_02 (D3c; D2 swords declined)
+  hit/bl2        OGA 80 CC0 RPG blade_03 (D3c; D2 swords declined)
+  hit/bl3        OGA 80 CC0 RPG blade_01 (resampled -1.5 semitones)
+  hit/bone3      BSB 1409 Bones cracking — the crack at 0.11 s (resampled -1.5 semitones)
+  hit/bone4      BSB 1408 Bones cracking — the crack at 0.24 s (resampled +1.5 semitones)
+  wld/st0        BSB 1022 Fall of Stone — the impact at 1.72 s
+  wld/st1        BSB 1022 Fall of Stone — the impact at 4.64 s
+  wld/st2        BSB 1022 Fall of Stone — the impact at 6.21 s
+  wld/st3        BSB 1022 Fall of Stone — the impact at 11.70 s
+  wld/st4        BSB 1022 Fall of Stone — the impact at 21.96 s
+  wld/st5        BSB 1022 Fall of Stone — the impact at 14.96 s
+  wld/st6        BSB 1022 Fall of Stone — the impact at 18.62 s
+  hit/st0        BSB 1022 Fall of Stone — the impact at 25.04 s (D2 swordStone declined)
+  hit/st1        BSB 1022 Fall of Stone — the impact at 27.93 s (D2 swordStone declined)
+  hit/st2        BSB 1022 Fall of Stone — the impact at 0.20 s (D2 swordStone declined)
+  hit/st3        BSB 1022 Fall of Stone — the impact at 3.10 s (D2 swordStone declined)
+  wld/rf0        BSB 1022 Fall of Stone — 16.5-18.1 s (a run of impacts)
+  wld/rf1        BSB 1022 Fall of Stone — 20.0-21.4 s (a run of impacts)
+  wld/rf2        BSB 1022 Fall of Stone — 8.2-9.7 s (a run of impacts)
+  wld/dh0        BSB 1022 Fall of Stone (13.2 s, lowpassed) + Kenney impactPunch_heavy_002 under it (a composite; D2 stoneDragHit declined)
+  wld/rb0        OGA 80 CC0 RPG stones_01 (D3c; D2 stonesHit declined)
+  wld/rb1        OGA 80 CC0 RPG stones_02 (D3c; D2 stonesHit declined)
+  wld/rb2        OGA 80 CC0 RPG stones_03 (D3c; D2 stonesHit declined)
+  wld/rb3        OGA 80 CC0 RPG stones_04 (D3c; D2 stonesHit declined)
+  wld/mine0      Kenney impactMining_000
+  wld/pl0        Kenney impactPlank_medium_000
+  wld/gl0        Kenney impactGlass_light_000
+  wld/mine1      Kenney impactMining_001
+  wld/pl1        Kenney impactPlank_medium_001
+  wld/gl1        Kenney impactGlass_light_001
+  wld/mine2      Kenney impactMining_002
+  wld/pl2        Kenney impactPlank_medium_002
+  wld/gl2        Kenney impactGlass_light_002
+  wld/mine3      Kenney impactMining_003
+  wld/pl3        Kenney impactPlank_medium_003
+  wld/gl3        Kenney impactGlass_light_003
+  wld/mine4      Kenney impactMining_004
+  wld/pl4        Kenney impactPlank_medium_004
+  wld/gl4        Kenney impactGlass_light_004
+  wld/gm0        Kenney impactGlass_medium_000
+  wld/gh0        Kenney impactGlass_heavy_000
+  wld/be0        Kenney impactBell_heavy_000
+  wld/cr0        Kenney RPG creak1
+  wld/po0        Kenney RPG metalPot1
+  wld/gm1        Kenney impactGlass_medium_001
+  wld/gh1        Kenney impactGlass_heavy_001
+  wld/be1        Kenney impactBell_heavy_001
+  wld/cr1        Kenney RPG creak2
+  wld/po1        Kenney RPG metalPot2
+  wld/gm2        Kenney impactGlass_medium_002
+  wld/gh2        Kenney impactGlass_heavy_002
+  wld/be2        Kenney impactBell_heavy_002
+  wld/cr2        Kenney RPG creak3
+  wld/po2        Kenney RPG metalPot3
+  wld/tn0        Kenney impactTin_medium_000
+  wld/tn1        Kenney impactTin_medium_001
+  wld/la0        Kenney RPG metalClick
+  wld/la1        Kenney RPG metalLatch
+  wld/do0        Kenney RPG doorOpen_1
+  wld/do1        Kenney RPG doorOpen_2
+  wld/dc0        Kenney RPG doorClose_1
+  wld/dc1        Kenney RPG doorClose_2
+  wld/dc2        Kenney RPG doorClose_3
+  wld/dc3        Kenney RPG doorClose_4
+  wld/an0        BSB 3589 Anvil #1 — the strike at 0.12 s
+  wld/an1        BSB 3589 Anvil #1 — the strike at 2.42 s
+  wld/an2        BSB 3589 Anvil #1 — the strike at 7.07 s
+  wld/an3        BSB 3589 Anvil #1 — the strike at 10.51 s
+  wld/bw0        BSB 0492 Small broth in a pot — the 1.5 s with the most bubbles
+  wld/sb0        BSB 0292 Small bell #1 (1.2 s)
+  wld/oa0        BSB 1514 Rowing slowly — a stroke, 0-2.4 s
+  wld/oa1        BSB 1514 Rowing slowly — a stroke, 5.45-7.85 s
+  wld/ds0        Kenney Casino dice-shake-1 (D1d)
+  wld/di0        Kenney Casino die-throw-1
+  wld/di1        Kenney Casino die-throw-2
+  wld/di2        Kenney Casino die-throw-3
+  wld/gu0        BSB 2573 Gulls on the harbor — a call at 39.00 s (highpassed 600 Hz: the harbour hum out)
+  wld/gu1        BSB 2573 Gulls on the harbor — a call at 51.50 s (highpassed 600 Hz: the harbour hum out)
+  wld/gu2        BSB 2573 Gulls on the harbor — a call at 15.43 s (highpassed 600 Hz: the harbour hum out)
+  wld/gu3        BSB 2573 Gulls on the harbor — a call at 111.60 s (highpassed 600 Hz: the harbour hum out)
+  wld/gu4        BSB 2573 Gulls on the harbor — a call at 110.35 s (highpassed 600 Hz: the harbour hum out)
+  wld/gu5        BSB 2573 Gulls on the harbor — a call at 29.00 s (highpassed 600 Hz: the harbour hum out)
+  wld/tw0        BSB 1300 Broken twigs #2
+  wld/tw1        BSB 1299 Broken twigs #1 — the snap at 3.73 s
+  wld/tw2        BSB 1299 Broken twigs #1 — the snap at 1.12 s
+  wld/tw3        BSB 1299 Broken twigs #1 — the snap at 1.98 s
+  wld/sa0        BSB 1633 Flag in the wind #2 — the flap at 3.1 s
+  wld/sa1        BSB 1633 Flag in the wind #2 — the flap at 53.8 s
+  wat/ss0        BSB 1529 Splash, small
+  wat/ss1        BSB 1530 Splash, small
+  wat/ss2        BSB 1531 Splash, small
+  wat/ss3        BSB 1530 Splash, small #2 (resampled -1.5 semitones)
+  wat/sb0        BSB 1519 Splash, big #1
+  wat/sb1        BSB 1521 Splash, big #3
+  wat/bu0        BSB 0150 Water bubbles — 0.8 s from 0.15 s
+  wat/bu1        BSB 0150 Water bubbles — 0.8 s from 1.95 s
+  wat/bu2        BSB 0150 Water bubbles — 0.8 s from 7.45 s
+  wat/bu3        BSB 0150 Water bubbles — 0.8 s from 21.00 s
+  boom/b0        BSB 1807 Explosion #1 + a lowpassed tail of BSB 3113 Thunder #2 (a composite)
+  boom/b1        BSB 1808 Explosion #2 + a lowpassed tail of BSB 3113 Thunder #2 (a composite)
+  boom/f0        BSB 1806 Explosion far away #2 + a lowpassed tail of BSB 3114 Thunder #3 (a composite)
+  boom/b2        BSB 1807 Explosion #1 + a lowpassed tail of BSB 3114 Thunder #3 (a composite)
+  boom/b3        BSB 1808 Explosion #2 + a lowpassed tail of BSB 3114 Thunder #3 (a composite)
+  boom/f1        BSB 1806 Explosion far away #2 + a lowpassed tail of BSB 3113 Thunder #2 (a composite)
+  boom/f2        BSB 1806 Explosion far away #2 (resampled -1.5 semitones) + a lowpassed tail of BSB 3114 Thunder #3 (a composite)
+  boom/f3        BSB 1807 Explosion #1 (lowpassed 1.2 kHz: far off) + a lowpassed roll of BSB 0740 Rain and Thunder #2 (a composite)
+  boom/th0       BSB 3113 Thunder #2 (4 s)
+  boom/th1       BSB 3114 Thunder #3 (4 s)
+  boom/th2       BSB 3114 Thunder #3 — the first clap (0.7-4.4 s)
+  boom/th3       BSB 0740 Rain and Thunder #2 — the clap at 6 s (lowpassed 3 kHz)
+  boom/th4       BSB 0740 Rain and Thunder #2 — the clap at 9.7 s, far (lowpassed 1.2 kHz, -5 dB)
+  boom/th5       BSB 0740 Rain and Thunder #2 — the roll at 125.7 s, far (lowpassed 1 kHz, -5 dB)
+  boom/th6       BSB 0740 Rain and Thunder #2 — the roll at 61.3 s, far (lowpassed 900 Hz, -5 dB)
+  boom/th7       BSB 3114 Thunder #3 — the clap at 5.7 s, far (lowpassed 1.5 kHz, -5 dB)
+  mag/sp0        OGA 80 CC0 RPG spell_01
+  mag/sp1        OGA 80 CC0 RPG spell_02
+  mag/sp2        OGA 80 CC0 RPG spell_01 (resampled +1.5 semitones)
+  mag/sp3        OGA 80 CC0 RPG spell_02 (resampled -1.5 semitones)
+  mag/sf0        OGA 80 CC0 RPG spell_fire_06
+  mag/sf1        OGA 80 CC0 RPG spell_fire_03
+  mag/sf2        OGA 80 CC0 RPG spell_fire_04
+  mag/sf3        OGA 80 CC0 RPG spell_fire_01
+  mag/fi0        BSB 1340 Gasoline fire #1 — the catch (0-1 s)
+  mag/fi1        BSB 1340 Gasoline fire #1 — the roar, 1.3-2.1 s
+  mag/fi2        BSB 1340 Gasoline fire #1 — the roar, 5.3-6.1 s
+  mag/fi3        BSB 1340 Gasoline fire #1 — the roar, 3.3-4.1 s
+  mag/sk0        OGA Magic Spell SFX magical_1 (D5, JaggedStone)
+  mag/sk1        OGA Magic Spell SFX magical_2 (D5, JaggedStone)
+  mag/sk2        OGA Magic Spell SFX magical_3 (D5, JaggedStone)
+  mag/sk3        OGA Magic Spell SFX magical_5 (D5, JaggedStone)
+  mag/ch0        OGA 80 CC0 RPG chain_01
+  mag/ch1        OGA 80 CC0 RPG chain_02
+  mag/ch2        OGA 80 CC0 RPG chain_03
+  mag/chh0       BSB 0359 Heavy chain (1.2 s)
+  mag/chh1       BSB 0359 Heavy chain — 3.25-4.5 s
+  mag/chh2       BSB 0359 Heavy chain — 2.2 s (resampled -1.5 semitones)
+  mag/chh3       BSB 0359 Heavy chain — 3.25 s (resampled +1.5 semitones)
+  vox/gr0        OGA 80 CC0 creature grunt_01
+  vox/gr1        OGA 80 CC0 creature grunt_02
+  vox/gr2        OGA 80 CC0 creature grunt_03
+  vox/gr3        OGA 80 CC0 creature grunt_04
+  vox/gr4        OGA 80 CC0 creature grunt_05
+  vox/ro0        OGA 80 CC0 RPG creature_roar_01
+  vox/ro1        OGA 80 CC0 RPG creature_roar_02
+  vox/ro2        OGA 80 CC0 RPG creature_roar_03
+  vox/ro3        OGA 80 CC0 creature roar_01
+  vox/sl0        OGA 80 CC0 RPG creature_slime_01
+  vox/sl1        OGA 80 CC0 RPG creature_slime_02
+  vox/sl2        OGA 80 CC0 RPG creature_slime_03
+  vox/sl3        OGA 80 CC0 RPG creature_slime_04
+  vox/cu0        OGA 80 CC0 creature cute_01
+  vox/cu1        OGA 80 CC0 creature cute_04
+  vox/cu2        OGA 80 CC0 creature cute_05
+  vox/cu3        OGA 80 CC0 creature cute_07
+  vox/cu4        OGA 80 CC0 creature cute_09
+  vox/we0        OGA 80 CC0 creature weird_01
+  vox/we1        OGA 80 CC0 creature weird_02
+  vox/we2        OGA 80 CC0 creature weird_03
+  vox/we3        OGA 80 CC0 creature weird_05
+  vox/sp0        OGA 80 CC0 creature spit_01
+  vox/sp1        OGA 80 CC0 creature spit_02
+  vox/sp2        OGA 80 CC0 creature spit_03
+  vox/sp3        OGA 80 CC0 creature spit_02 (resampled -1.5 semitones)
+  vox/be0        OGA 80 CC0 creature troll_01 (D4 beast declined)
+  vox/be1        OGA 80 CC0 creature troll_02 (D4 beast declined)
+  vox/be2        OGA 80 CC0 creature troll_03 (D4 beast declined)
+  vox/be3        OGA 80 CC0 creature monster_06 (D4 beast declined)
+  vox/wo0        OGA 80 CC0 creature howl (D4 wolfman declined)
+  vox/wo1        OGA 80 CC0 creature howl (resampled -1.5 semitones)
+  vox/wo2        OGA 80 CC0 creature howl (resampled +1.5 semitones)
+  vox/wo3        OGA 80 CC0 creature howl (resampled -3 semitones)
+  vox/bu0        OGA 80 CC0 creature bug_01 (D4 beetle declined)
+  vox/bu1        OGA 80 CC0 creature bug_02 (D4 beetle declined)
+  vox/bu2        OGA 80 CC0 creature bug_03 (D4 beetle declined)
+  vox/bu3        OGA 80 CC0 creature bug_04 (D4 beetle declined)
+  ui/ck0         Kenney Interface click_001
+  ui/ck1         Kenney Interface click_002
+  ui/ck2         Kenney Interface click_003
+  ui/ck3         Kenney Interface click_004
+  ui/ck4         Kenney Interface click_005
+  ui/se0         Kenney Interface select_003
+  ui/se1         Kenney Interface select_004
+  ui/se2         Kenney Interface select_005
+  ui/se3         Kenney Interface select_006
+  ui/ti0         Kenney Interface tick_001
+  ui/ti1         Kenney Interface tick_002
+  ui/dr0         Kenney Interface drop_001
+  ui/dr1         Kenney Interface drop_002
+  ui/dr2         Kenney Interface drop_003
+  ui/dr3         Kenney Interface drop_004
+  ui/pl0         Kenney Interface pluck_001
+  ui/pl1         Kenney Interface pluck_002
+  ui/sc0         Kenney Interface scratch_001
+  ui/sc1         Kenney Interface scratch_002
+  ui/sc2         Kenney Interface scratch_004
+  ui/sc3         Kenney Interface scratch_005
+  ui/gl0         Kenney Interface glass_001
+  ui/gl1         Kenney Interface glass_002
+  ui/gl2         Kenney Interface glass_003
+  ui/gl3         Kenney Interface glass_004
+  ui/gl4         Kenney Interface glass_005
+  ui/bo0         Kenney RPG bookOpen
+  ui/bc0         Kenney RPG bookClose
+  ui/pg0         Kenney RPG bookFlip1
+  ui/bp0         Kenney RPG bookPlace1
+  ui/pg1         Kenney RPG bookFlip2
+  ui/bp1         Kenney RPG bookPlace2
+  ui/pg2         Kenney RPG bookFlip3
+  ui/bp2         Kenney RPG bookPlace3
+  ui/cl0         Kenney RPG cloth1
+  ui/cl1         Kenney RPG cloth2
+  ui/cl2         Kenney RPG cloth3
+  ui/cl3         Kenney RPG cloth4
+  ui/cl4         Kenney RPG clothBelt
+  ui/cl5         Kenney RPG clothBelt2
+  ui/le0         Kenney RPG beltHandle1
+  ui/le1         Kenney RPG beltHandle2
+  ui/le2         Kenney RPG handleSmallLeather
+  ui/le3         Kenney RPG handleSmallLeather2
+  ui/co0         Kenney RPG handleCoins
+  ui/co1         Kenney RPG handleCoins2
+  ui/co2         OGA 80 CC0 RPG item_coins_01
+  ui/co3         OGA 80 CC0 RPG item_coins_02
+  ui/co4         OGA 80 CC0 RPG item_coins_03
+  ui/ch0         Kenney Casino chips-stack-1
+  ui/ch1         Kenney Casino chips-stack-2
+  ui/ch2         Kenney Casino chips-stack-3
+  ui/ca0         Kenney Casino card-place-1
+  ui/ca1         Kenney Casino card-place-2
+  ui/ca2         Kenney Casino card-place-3
+  ui/ca3         Kenney Casino card-place-4
+  ui/cs0         Kenney Casino card-slide-1
+  ui/cs1         Kenney Casino card-slide-2
+  ui/cs2         Kenney Casino card-slide-3
+  amb/sea        BSB 0266 Sea: Waves — a seamless 20 s loop
+  amb/rig        BSB 1633 Flag in the wind #2 (canvas — BSB 0697 "Boat – Back deck" is a motor boat's engine: unused) — a seamless 20 s loop
+  amb/wind       BSB 0595 Wind — a seamless 20 s loop
+  amb/gale       BSB 0146 Strong wind #1 — a seamless 20 s loop
+  amb/rain       BSB 0740 Rain and Thunder #2 (a rain-only stretch, 24-54 s) — a seamless 20 s loop
+  amb/whistle    BSB 2443 Masts whistling #1 — a seamless 20 s loop
+  amb/harbour    BSB 2571 Small fishing port #1 — a seamless 20 s loop
+  amb/tavern     BSB 0480 Atmosphere bar #2 — a seamless 20 s loop
+  amb/cave       BSB 2135 Cave #1 — a seamless 20 s loop
+  amb/breeze     BSB 0908 Wind in tall grass — a seamless 20 s loop
+  amb/birds      BSB 0097 Countryside (highpassed 1 kHz: the birdsong, not the mic rumble) — a seamless 20 s loop
+  amb/fire       BSB 1340 Gasoline fire #1 (after the catch) — a seamless 6 s loop
