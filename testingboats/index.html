@@ -9296,7 +9296,7 @@ const DEFAULT_ITUNE={ moveSpeed:86, slashRange:26, slashDmg:1, slashCD:0.14, arr
   bambooPer:34, ambushShare:0.55, ambushR:62, ambushBeat:0.45, ambushMax:4, ambushDg:1,                                            // bamboo (stands & ambush) · (C3b: a hider springs out ambushMax s after the rest of its clearing is down — §8.5)
   puffN:1, puffTrig:22, puffSwell:0.6, puffCD:9, sporeR:40, sporeLife:2.8, sporeTick:0.5, sporeDmg:0.6, sporeHang:0.8, sporeAtk:0.65, sporeFoe:0.04,   // mushroom (puffballs & spores)
   lavaRivers:3, emberEvery:4.5, emberWarn:1.25, emberR:24, emberDmg:1.4, emberFoe:1.5, emberH:120,
-  artSpr:1, artStyle:1, artGrade:0.6, artSat:0.12, artPost:16, artDith:0.3, artVig:0.32, artGlow:0.16, artScan:0 };   // TESTING GROUNDS — THE STYLE PASS (artPass): on/off · the grade (shadows cool, lights warm, an S-curve) · saturation + · posterise levels a channel (0 = off) · the posterise's ordered dither · the vignette (dithered, on the texel grid) · a soft glow of the bright texels · scanlines (full-res, 0 = off)                              // caldera (lava rivers & falling rocks)   // STAGE 3 HUD: size × · the local map's tiles across · its size × · its alpha while a foe is under it · small numbers fan out × · hits on one foe merge within (s) · the streak counter from N kills · one-time lesson strips (1 on) · the landfall lesson holds (s) past your first kill   // THE GROUND (baked): edge wobble · dither · patch contrast · decal density · edge shade · trail half-width & its fade into a clearing (wu) · tree spacing × · beach depth (tiles) · rim dressing × · a cave cliff's height (wu) · pre-bake budget (ms/frame)   // THE CRAWL CAMERA & PIXELS: view height (world units) · look-ahead toward your aim/travel (× view) · sits this much north of you (× view — more room ahead of the trail) · zoom-out × while a busy fight is on (0 = off, the default: while zoomed the picture is blitted a touch smaller, so texels are no longer a whole number of screen pixels) · …when more than N foes are in it · texel rows (pixel chunkiness: ~200 = SNES) · the explorer's drawn size × (hitbox unchanged) · your ground ring's alpha · swarm fodder desaturated by
+  hvOn:1, hvTime:0.55, hvMul:1.35, hvReach:1.25, hvKb:1.4, hvMove:0.35, hvHs:1.9, hvTide:2, hvMax:0, artSpr:1, artStyle:1, artGrade:0.6, artSat:0.12, artPost:16, artDith:0.3, artVig:0.32, artGlow:0.16, artScan:0 };   // TESTING GROUNDS — THE STYLE PASS (artPass): on/off · the grade (shadows cool, lights warm, an S-curve) · saturation + · posterise levels a channel (0 = off) · the posterise's ordered dither · the vignette (dithered, on the texel grid) · a soft glow of the bright texels · scanlines (full-res, 0 = off)                              // caldera (lava rivers & falling rocks)   // STAGE 3 HUD: size × · the local map's tiles across · its size × · its alpha while a foe is under it · small numbers fan out × · hits on one foe merge within (s) · the streak counter from N kills · one-time lesson strips (1 on) · the landfall lesson holds (s) past your first kill   // THE GROUND (baked): edge wobble · dither · patch contrast · decal density · edge shade · trail half-width & its fade into a clearing (wu) · tree spacing × · beach depth (tiles) · rim dressing × · a cave cliff's height (wu) · pre-bake budget (ms/frame)   // THE CRAWL CAMERA & PIXELS: view height (world units) · look-ahead toward your aim/travel (× view) · sits this much north of you (× view — more room ahead of the trail) · zoom-out × while a busy fight is on (0 = off, the default: while zoomed the picture is blitted a touch smaller, so texels are no longer a whole number of screen pixels) · …when more than N foes are in it · texel rows (pixel chunkiness: ~200 = SNES) · the explorer's drawn size × (hitbox unchanged) · your ground ring's alpha · swarm fodder desaturated by
 let ITUNE=Object.assign({},DEFAULT_ITUNE);
 function LF(k,d){ if(ITUNE.legacyFeel>0 && (k in LEGACY_FEEL)) return LEGACY_FEEL[k]; const v=ITUNE[k]; return v==null?d:v; }   // a FEEL knob, read through the Legacy preset (§2.14) — d: the default for a knob with no slider (hsYou)
 
@@ -10177,7 +10177,7 @@ function genIsland(core,opt){
   player.hid=false; player.hidT=0; player.hidA=-9; player.hidB=-9; player.onG=false;   // (PT1 K9a) out of the grass on every landfall & floor
   player.dashT=0; player.dashN=dashCh(); player.dashRc=0; player.dashEnd=-9; player.dsQ=0; player.bufS=0; player.bufD=0; player.bufQ=0; player.bufK=null; player.cdS=[0,0,0,0,0,0]; player.cdM=[1,1,1,1,1,1]; player.sipT=0; player.regen=null; gemReset();
   player.act=null; player.aimT=0; player.atkA=-Math.PI/2; mouseL=false; mouseR=false; closeInv();
-  player.cmb=0; player.combo=0; player.comboT=0; player.spinT=0; player.ccN=0; player.rwT=0; player.dashSeq=0; if(!keep) tide=Math.min(ITUNE.tideRest,tideMax()); tideHitT=-9;   // (C6a: Corsair's count · Rogue Wave's clock · the dash's pass-through tally start over)   // (a new floor or isle: no action in flight, the chain starts over · the dash charges back · Tide starts at its rest on each landfall and rides down the floors)
+  player.cmb=0; player.combo=0; player.comboT=0; player.hv=null; player.hvArm=0; player.spinT=0; player.ccN=0; player.rwT=0; player.dashSeq=0; if(!keep) tide=Math.min(ITUNE.tideRest,tideMax()); tideHitT=-9;   // (C6a: Corsair's count · Rogue Wave's clock · the dash's pass-through tally start over)   // (a new floor or isle: no action in flight, the chain starts over · the dash charges back · Tide starts at its rest on each landfall and rides down the floors)
   for(let i=0;i<6;i++) barFx[i]={aff:barCost(i)>0&&canPay(barCost(i))}; tideFull=tideMax()>0&&tide>=tideMax();   // (no 'now affordable' glint for what you landed with)
   HC=null; icorpse=[]; hsB=ITUNE.hsBank; hsX=0;                                       // (the fallen, the hit-stop bank — per floor)
   if(!keep) fcards=[]; phealF=null; bagNagT=-99; qeT=0; qeS=0; qeD=null; lchB.bank=0; lchB.k=-1;   // (first-cards, heal float, the bag-full nag, a half-held quick-equip & the leech bank are per-landfall)
@@ -10623,6 +10623,7 @@ function dashCh(){ if(TR.kIC) return 1; return Math.max(1,Math.round(ITUNE.dashC
 function doDash(){ if(koBeat||player.dashN<1||player.dashT>0||mode!=='island'||(player.snare||0)>0.85||player.stunT>0) return;
   if(player.pull && player.pull.tng){ player.tngSn={en:player.pull.tng, t:itime}; player.pull=null; burst(player.x,player.y,'#e8889a',6); }   // (C8a) a dash SNAPS a bog toad's tongue — and carries you out of its slam
   if(player.act){ if(player.act.ph==='act'){ player.bufD=1; return; } actEnd(true); player.bufS=0; player.bufQ=0; }   // (the cancelled blow's buffered presses go with it — a press BEFORE the dash is never a dash strike · G1 fix)
+  player.hv=null; player.hvArm=0;                                                              // (TESTING: a dash drops a charge)
   let dx=0,dy=0;
   if(keys['arrowleft']||keys['a']) dx-=1; if(keys['arrowright']||keys['d']) dx+=1;
   if(keys['arrowup']||keys['w']) dy-=1; if(keys['arrowdown']||keys['s']) dy+=1;
@@ -10928,21 +10929,22 @@ function areaK(){ const S=stats(); return 1+Math.min(STAT_CAP.aoe, (S.aoe||0)+(S
 function reachMul(){ const S=stats(); return (ITUNE.slashRange/26)*areaK()*(1+(S.rch||0)); }   // every melee shape × (the reach slider · area, cap +80% · a Boarding Pike's +10% reach — C5a)
 function actLeft(){ const A=player.act; return !A?0 : A.ph==='wind'?A.wind-A.t : A.ph==='act'?A.act-A.t : A.rec-A.t; }   // what's left of the current phase
 function actRemain(){ const A=player.act; return !A?0 : A.ph==='wind'?A.wind-A.t+A.act+A.rec : A.ph==='act'?A.act-A.t+A.rec : A.rec-A.t; }   // what's left of the whole action
-function doSlash(){ if(koBeat||mode!=='island'||!ISL||player.stunT>0) return;
+function doSlash(){ if(koBeat||mode!=='island'||!ISL||player.stunT>0) return; player.hvArm=1;   // (TESTING: a press arms the HOLD — kept down past this beat, it winds up the heavy)
   if(player.dashT>0){ player.dsQ=1; return; }                                                   // in a dash: the DASH STRIKE fires as it ends
   if(!player.act){ if(itime-player.dashEnd<=0.15 && dashStrike()) return; actStart('basic'); return; }   // (just after one: the dash strike)
   if(actLeft()<=ITUNE.inputBuffer) player.bufS=1; }   // a press in a phase's last inputBuffer s fires when the action ends
-function actStart(slot,ds){ if(koBeat||!ISL||player.act) return false;                        // slot 'basic' (ds: the DASH STRIKE — the heavy at ×0.8, a 0.05 s wind-up) · skills start in skillStart
-  const W=wpnOf(), WD=WEAPON[W], leg=ITUNE.legacyFeel>0, hi=Math.max(0,WD.combo.findIndex(q=>q.heavy)), i=ds?hi:(player.cmb||0)%WD.combo.length, sp=aspMul(), tm=stats().tm||1;
-  const c=ds ? Object.assign({},WD.combo[hi],{wind:0.05, mul:WD.combo[hi].mul*0.8}) : WD.combo[i];
+function actStart(slot,ds,hv){ if(koBeat||!ISL||player.act) return false;                        // slot 'basic' (ds: the DASH STRIKE — the heavy at ×0.8, a 0.05 s wind-up) · skills start in skillStart
+  const W=wpnOf(), WD=WEAPON[W], leg=ITUNE.legacyFeel>0, hi=Math.max(0,WD.combo.findIndex(q=>q.heavy)), i=(ds||hv)?hi:(player.cmb||0)%WD.combo.length, sp=aspMul(), tm=stats().tm||1;
+  const c=ds ? Object.assign({},WD.combo[hi],{wind:0.05, mul:WD.combo[hi].mul*0.8}) : hv ? hvBeatOf(WD.combo[hi]) : WD.combo[i];
   let wind=ds?0.05:c.wind*ITUNE.swWindMul/sp*tm, act=c.act*tm, rec=c.rec*ITUNE.swRecMul/sp*tm;   // (C5a: × the base's timing factor tm — a hammer 1.15, a harpoon 1.1, a wand 0.85)
   if(leg){ wind=0; act=0; rec=(W==='bow'||W==='staff')?0.28*legK(W,'bow')*tm:eSlashCD()*(c.heavy?1.6:1)*legK(W,'sword')*tm; }   // the LEGACY feel: no wind-up, today's cooldown as the recovery (the finisher's ×1.6) — (C5a) the new types at the old sword's / bow's pace × their own weight (legK)
-  const a=aimFor((c.pr||c.bo)?'arrow':'slash'), fx=Math.cos(a), fy=Math.sin(a), gth=!!c.fin && !ds && !leg && wind>=(W==='daggers'?0.06:0.1);   // (PT1 K2) a finisher's GATHER: its wind-up glints at the tip (never the dash strike's, never under Legacy · G6 fix: the twin stab's short 0.08 s wind too)
-  if(WD.draw && wind>0.04 && !gth) sfx(WD.draw,{x:player.x});                         // (the bow: the string creaks taut in the draw)
+  const a=aimFor((c.pr||c.bo)?'arrow':'slash'), fx=Math.cos(a), fy=Math.sin(a), gth=!!c.fin && !ds && !hv && !leg && wind>=(W==='daggers'?0.06:0.1);   // (PT1 K2) a finisher's GATHER: its wind-up glints at the tip (never the dash strike's, never under Legacy · G6 fix: the twin stab's short 0.08 s wind too)
+  if(WD.draw && wind>0.04 && !gth && !hv) sfx(WD.draw,{x:player.x});                         // (the bow: the string creaks taut in the draw)
   if(gth) sfx(W==='bow'?'bow_draw_full':W==='staff'?'orb_charge':'fin_gather',{x:player.x, y:player.y});   // …the full draw · the orb gathers · a blade's glint
   const mk=ITUNE.swMoveWind/DEFAULT_ITUNE.swMoveWind, rk=ITUNE.swMoveRec/DEFAULT_ITUNE.swMoveRec;   // (PT1 K2: a beat's own mw / mr — the move knobs still scale them)
   player.act={W, slot, i, c, ds:!!ds, ph:wind>0?'wind':'act', t:0, wind, act, rec, eat:0, a, fx, fy, res:false, gth, t0:last/1000,
     mw:leg?LF('swMoveWind'):c.mw!=null?Math.min(1,c.mw*mk):WD.mw!=null?WD.mw:LF('swMoveWind'), mr:leg?LF('swMoveRec'):c.mr!=null?Math.min(1,c.mr*rk):WD.mr!=null?WD.mr:LF('swMoveRec')};
+  if(hv) player.act.hvy=1;                                                              // (TESTING: the charged heavy)
   player.atkA=a; player.aimT=0; player.comboT=0; actSeq++;                             // (actSeq: a thorn reflects once per ACTION)
   hideStrike(wind);                                                                     // (PT1 K9a) a blow from the grass is an AMBUSH · it ends hiding · searchers that see you find you
   if(aimDev!=='mouse' && !padAimOn){ player.fx=fx; player.fy=fy; }
@@ -10964,11 +10966,34 @@ function actTick(dt,frozen){ const A=player.act, k=(player.spore>0)?ITUNE.sporeA
       if(player.bufD>0){ player.bufD=0; doDash(); if(player.act!==A) return; }       // a dash pressed during act fires now (it cancels the rec)
       if(player.bufQ>0){ const q=player.bufQ; player.bufQ=0; castSlot(q); if(player.act!==A) return; } }  // …as does a skill (a skill cancels a basic's rec)
     if(A.ph==='rec' && A.t>=A.rec) actEnd(); else return; }
-  if(frozen || koBeat || player.stunT>0) return;                                            // (stunned: nothing starts)
+  if(frozen || koBeat || player.stunT>0){ if(player.hv && (koBeat || player.stunT>0)) player.hv=null; return; }   // (stunned: nothing starts — and a charge is lost)
+  const held=!!(mouseL || keys['j'] || padHold.s); if(!held) player.hvArm=0;
+  if(player.hv){ hvTick(dt,held); return; }
   if(player.bufQ>0){ const q=player.bufQ; player.bufQ=0; castSlot(q); if(player.act) return; }
-  if(player.bufS>0 || mouseL || keys['j'] || padHold.s){ player.bufS=0;                        // held = the chain rolls on at the end of each rec
+  if(player.bufS>0 || held){                                                                   // held = the chain rolls on at the end of each rec (hvOn: it winds up the HEAVY instead)
     if(player.dashT>0){ player.dsQ=1; return; }                                               // (mid-dash: the strike waits for its end — the DASH STRIKE)
+    if(ITUNE.hvOn>0 && !(player.bufS>0) && player.hvArm && !(itime-player.dashEnd<=0.15)){ hvStart(); return; }   // TESTING: still down from the last beat, no fresh tap — the charge
+    player.bufS=0;
     if(!(itime-player.dashEnd<=0.15 && dashStrike())) actStart('basic'); } }
+/* TESTING GROUNDS — THE CHARGED HEAVY (hvOn): hold the strike past a beat's end and the weapon winds up (hvTime s to full — the glint grows, a ring fills
+   under you, you move at hvMove); let go to unleash the weapon's finisher as a HEAVY: × hvMul damage, × hvReach reach, × hvKb shove, the finisher's floor,
+   a × hvHs freeze, × hvTide Tide (the bow looses two more arrows and pierces one more · the staff's orb swells). Let go early: the next light beat.
+   A dash, a skill, a stun or a KO drops the charge. The chain is tapped, not held (hvOn 0: the old hold-to-chain). */
+function hvBeatOf(c0){ const k=Math.max(1,+ITUNE.hvReach||1), c=Object.assign({},c0,{wind:0.06, mul:c0.mul*(+ITUNE.hvMul||1), hsK:+ITUNE.hvHs||1.4, tdK:+ITUNE.hvTide||1.5, kb:(c0.kb!=null?c0.kb:20)*(+ITUNE.hvKb||1), heavy:1, fin:1, hvy:1});
+  if(c0.sh) c.sh=Object.assign({},c0.sh, c0.sh.k==='line'?{L:c0.sh.L*k}:{R:c0.sh.R*k}); if(c0.R2) c.R2=c0.R2*k;
+  if(c0.bo) c.bo=Object.assign({},c0.bo,{R:(c0.bo.R||WEAPON.staff.bolt.R)*k, k:Math.min(1,(c0.bo.k||0.5)*1.1)});
+  if(c0.pr) c.pr=Object.assign({},c0.pr,{n:(c0.pr.n||1)+2, pc:(c0.pr.pc||0)+1});
+  return c; }
+function hvStart(){ if(player.act || player.hv || koBeat || !ISL || player.stunT>0) return false; const W=wpnOf(), WD=WEAPON[W], hi=Math.max(0,WD.combo.findIndex(q=>q.heavy)), c0=WD.combo[hi], a=aimFor((c0.pr||c0.bo)?'arrow':'slash');
+  const A={W, slot:'basic', i:hi, c:c0, ph:'wind', t:c0.wind, wind:c0.wind, act:c0.act, rec:c0.rec, a, fx:Math.cos(a), fy:Math.sin(a), gth:true};   // (a stand-in action: the weapon's cocked pose & the glint read it)
+  player.hv={t:0, W, A, full:false}; player.hvArm=0; player.comboT=Math.max(player.comboT||0,ITUNE.comboWindow);
+  sfx(W==='bow'?'bow_draw_full':W==='staff'?'orb_charge':'fin_gather',{x:player.x, y:player.y}); return true; }
+function hvTick(dt,held){ const H=player.hv; if(!H) return; const T=Math.max(0.05,+ITUNE.hvTime||0.55), A=H.A; H.t+=dt;
+  A.a=aimFor((A.c.pr||A.c.bo)?'arrow':'slash'); A.fx=Math.cos(A.a); A.fy=Math.sin(A.a); player.atkA=A.a; player.aimT=0.08; player.comboT=Math.max(player.comboT||0,0.2);   // (the aim follows the cursor · the chain waits)
+  if(!H.full && H.t>=T){ H.full=true; sfx('fin_gather',{pitch:1.6, x:player.x, y:player.y}); burst(player.x,player.y,'#ffd23f',6);
+    if((player.hvN||0)<3){ player.hvN=(player.hvN||0)+1; ifloat.push({x:player.x, y:player.y-24, txt:'let go — HEAVY', t:0, life:0.8, c:'#ffd23f'}); } }
+  const mx=+ITUNE.hvMax||0; if(held && !(mx>0 && H.t>=mx)) return;
+  player.hv=null; if(H.W!==wpnOf()) return; if(H.full) actStart('basic',0,H); else actStart('basic'); }   // let go (or held past hvMax): the HEAVY — early, the next light beat
 /* THE SHAPES (§2.1) — the drawn shape is the hitbox: cone {R, H} · line {L, W} · circle {R, off} · ring {R0, R1}, from (ox,oy) along the angle a,
    each widened by the struck body (a reefspike's TRUE body only — it reflects the blows you actually aim at it) */
 function shapeHits(sh,ox,oy,a,en){ if(untouchable(en)) return false; const dx=en.x-ox, dy=en.y-oy, br=en.type==='reefspike'?en.r:en.r*SLASH_BODY, fx=Math.cos(a), fy=Math.sin(a);   // (a buried sand devil is never struck — §2.1)
@@ -11378,7 +11403,7 @@ function castSlot(i){ if(koBeat||mode!=='island'||!ISL||caveFade||player.stunT>0
   skillStart(i,G,D); }
 function skillStart(i,G,D){ const L=gemLv(G), T=D.tim||GEM_TIM, rch=D.gt||(G.g==='G07'?(L>=5?190:150):G.g==='G15'?170:0);   // (G5 fix) the breakable lean: a shot skill's own reach (a ground skill's: its range) · never for a leap or the Beacon
   let a=aimFor((D.prj||D.gt)?'arrow':'slash', D.gt && (D.mel || !(D.pct>0)), rch);
-  if(!TR.kCC){ player.cmb=0; player.combo=0; } player.comboT=0; player.bufS=0; player.bufK=null;      // (a skill resets the combo — CORSAIR'S CREED: it keeps its place)
+  if(!TR.kCC){ player.cmb=0; player.combo=0; } player.comboT=0; player.bufS=0; player.bufK=null; player.hv=null; player.hvArm=0;      // (a skill resets the combo — CORSAIR'S CREED: it keeps its place)
   const act=G.g==='G04' ? (EQ.off && IB(EQ.off) && IB(EQ.off).t==='shield' ? 0.5 : 0.35) : T[1];     // (Riposte's guard: 0.5 s with a shield)
   const A={W:wpnOf(), slot:'skill', sk:G.g, si:i, G, D, L, m:gLvK(G,L), i:0, c:D, ph:T[0]>0?'wind':'act', t:0, wind:T[0], act, rec:T[2], eat:0, a, fx:0, fy:0, res:false,
     mw:D.mw!=null?D.mw:0.6, mr:D.mw===0?0.7:(D.mw!=null?D.mw:0.6), kills:0, fl:!TR.kBT && tideMax()>0 && tide>=tideMax()-1e-6};   // (G6 fix fl: the bar was full as the cast began — skillResolve's Crest)
@@ -14562,7 +14587,7 @@ function updateIsland(dt){
   aimBrkTick();                                                                     // (PT1 K1) keys/pad with a bow or a staff: the breakable a shot would lean onto wears its ring
   // THE ACTION MACHINE: the current action's phases (the blade arrives at act) — then a held button or a buffered press starts the next
   actTick(dt,false); if(!ISL) return;                                               // (a reflected blow can KO you)
-  oocTick(dt); const slR=stats().slowR||0, mvK=(player.oocK||1)*(player.act ? (player.act.ph==='rec'?player.act.mr:player.act.mw) : 1)*(player.sipT>0?0.6:1)*(player.chill>0?1-0.25*(1-slR):1)*(player.zsl>0?1-player.zsl*(1-slR):1);  // you slow while you swing (§2.1) · while you sip (§2.11) · CHILLED −25% (§2.8 — C6a Sure-footed: 30% less of it) · (C8a) in a foe's cloud (the pollen −40%)
+  oocTick(dt); const slR=stats().slowR||0, mvK=(player.oocK||1)*(player.act ? (player.act.ph==='rec'?player.act.mr:player.act.mw) : player.hv ? clamp(+ITUNE.hvMove,0,1) : 1)*(player.sipT>0?0.6:1)*(player.chill>0?1-0.25*(1-slR):1)*(player.zsl>0?1-player.zsl*(1-slR):1);  // you slow while you swing (§2.1) · while you sip (§2.11) · CHILLED −25% (§2.8 — C6a Sure-footed: 30% less of it) · (C8a) in a foe's cloud (the pollen −40%)
   if(player.chill>0 && Math.random()<dt*6) ifx.push({k:'p', x:player.x+(Math.random()-0.5)*10, y:player.y-4, vx:0, vy:10, t:0, life:0.4, c:'#bfe6ff'});
   if(player.pois && player.pois.length && Math.random()<dt*5) ifx.push({k:'p', x:player.x+(Math.random()-0.5)*8, y:player.y, vx:0, vy:14, t:0, life:0.45, c:'#9be85a'});   // (poisoned: a green drip)
   if(player.pull){ pullTick(dt); }                                                  // (C5b Harpoon Line: the rope reels you in to a big foe)
@@ -19217,7 +19242,7 @@ function paintExplorer(g,x,y0,pr,pfa,stride,bob,tvx,tvy,sw,bow,px){
    off-hand's dagger}. The wind cocks it, the ACT is when the blade arrives (its sweep, its thrust, its slam, its loose), the recovery holds it and eases it
    home. The Legacy feel (no act) plays its act over the first 0.16 s of the recovery, as ever. */
 const W_REST={sword:0.6, axe:0.75, spear:0.3, daggers:0.7, bow:0.9, staff:0.45};   // each type's rest angle off your facing (rad)
-function wPose(pfa,prk){ const A=player.act, W=wpnOf(), R={a:pfa+(W_REST[W]||0.6), lg:0, st:0, oa:pfa-0.75, olg:0};
+function wPose(pfa,prk){ const A=player.act||(player.hv&&player.hv.A), W=wpnOf(), R={a:pfa+(W_REST[W]||0.6), lg:0, st:0, oa:pfa-0.75, olg:0};
   if(!A || A.slot!=='basic' || !A.c) return R;                                                   // (a skill leaves the weapon at rest — the Whirl & the Volley draw their own)
   const c=A.c, pose=c.pose||(WEAPON[A.W]||WEAPON.sword).pose, dir=c.dir||1, sw=A.act>0.01?A.act:0.16, hv=!!c.heavy, wd=A.ph==='wind';
   const w=wd?clamp(A.t/Math.max(0.001,A.wind),0,1):1, p=wd?0 : A.ph==='act'?clamp(A.t/sw,0,1) : (A.act>0.01?1:clamp(A.t/sw,0,1)), r=A.ph==='rec'?clamp(A.t/Math.max(0.001,A.rec),0,1):0;
@@ -19373,11 +19398,13 @@ function drawExplorerPix(){
   if(O && ol!=='quiver') pctx.drawImage(O.cv, ox-O.ax, oy-O.ay);                                                   // the off-hand's piece on your far arm (a shield, a focus, a second dagger)
   pctx.drawImage(W.cv, wx-W.ax, wy-W.ay);                                                                          // THE WEAPON in your hand, posed (whole texels, never baked into you)
   pctx.globalAlpha=1;
-  { const A=player.act; if(A && A.gth && A.ph==='wind'){ const q=A.t/Math.max(1e-3,A.wind); if(q>=0.5){ const L=Math.max(3,wLen(look,pr,prk)), tx=Math.round(wx+Math.cos(wa)*L), ty=Math.round(wy+Math.sin(wa)*L), big=q>=0.9 || A.W==='bow' || A.W==='staff' || A.W==='daggers', n=big?2:1;   // (PT1 K2) the finisher GATHERS: a white star on the weapon's tip from half its wind-up — a 2-texel cross flash at 90% (G6 fix: the bow's, the staff's & the twin stab's whole gather — their draws are short)
+  { const H=player.hv, A=player.act||(H&&H.A); if(A && A.gth && A.ph==='wind'){ const q=H?clamp(H.t/Math.max(0.05,+ITUNE.hvTime||0.55),0,1):A.t/Math.max(1e-3,A.wind); if(q>=0.5){ const L=Math.max(3,wLen(look,pr,prk)), tx=Math.round(wx+Math.cos(wa)*L), ty=Math.round(wy+Math.sin(wa)*L), big=q>=0.9 || A.W==='bow' || A.W==='staff' || A.W==='daggers', n=big?2:1;   // (PT1 K2) the finisher GATHERS: a white star on the weapon's tip from half its wind-up — a 2-texel cross flash at 90% (G6 fix: the bow's, the staff's & the twin stab's whole gather — their draws are short)
       pctx.fillStyle='#ffd86b'; if(big){ pctx.globalAlpha=0.5; pctx.fillRect(tx-3,ty,7,1); pctx.fillRect(tx,ty-3,1,7); } pctx.globalAlpha=big?0.75:0.45; pctx.fillRect(tx-1,ty-1,3,3); pctx.globalAlpha=1; pctx.fillStyle='#ffffff'; pctx.fillRect(tx-n,ty,2*n+1,1); pctx.fillRect(tx,ty-n,1,2*n+1); } } }
   const ax=Math.cos(fa0), ay=Math.sin(fa0), tr=pr*1.72, tx=Math.round(X+ax*tr), ty=Math.round(Y-bob+ay*tr);   // the aim tick: a whisper of three texels
   pctx.fillStyle='rgba(255,255,255,.55)'; pctx.fillRect(tx,ty,1,1);
   pctx.fillStyle='rgba(255,255,255,.3)'; pctx.fillRect(Math.round(tx-ax*1.4-ay*1.2),Math.round(ty-ay*1.4+ax*1.2),1,1); pctx.fillRect(Math.round(tx-ax*1.4+ay*1.2),Math.round(ty-ay*1.4-ax*1.2),1,1);
+  if(player.hv){ const H=player.hv, q=clamp(H.t/Math.max(0.05,+ITUNE.hvTime||0.55),0,1), R=Math.round(pr*2.1)+2;   // TESTING: the charge ring — gold as it fills, white and pulsing at full
+    pctx.save(); pctx.beginPath(); pctx.arc(X+0.5,Y-bob+Math.round(pr*0.3)+0.5,R,-Math.PI/2,-Math.PI/2+q*TAU); pctx.strokeStyle=H.full?'#ffffff':'#ffd23f'; pctx.lineWidth=1; pctx.globalAlpha=H.full?(0.55+0.35*Math.abs(Math.sin(itime*14))):0.5; pctx.stroke(); pctx.restore(); }
 }
 /* ============================================================ *
  *  STAGE 3 · LIGHT & DARK · AMBIENT LIFE · AFTERMATH · CEREMONY (the crawl)
@@ -30661,7 +30688,7 @@ function devCastDone(){ if(!gemLog) return; const K=gemLog.keep, rows=gemLog.row
   window.__castAll=out; gemLog=null; EQ=K.EQ; BAG=K.BAG; BAR=K.BAR; devGod=K.god; gearChanged(); gemBarChanged(); BUFF={}; recalcStats();
   const bad=out.filter(r=>!r.ok).length; toast('🛠  ◈ Cast all done', out.length+' gems · '+(bad?bad+' off their row — see the console':'every one on its row')); if(devOn) renderDev(); }
 const DEV_FEEL=[['swWindMul','wind×',0.1,0,3],['swRecMul','rec×',0.1,0,3],['swMoveWind','move',0.05,0,1],['swStepMul','step×',0.25,0,3],['hsWeapMul','stop×',0.1,0,2],['kbSlide','kb×',0.25,0,3],['corpseV','corpse×',0.25,0,2],['shakeCap','shake',1,0,12],['finHsMin','fin stop',0.01,0,0.15],['lightHs','light stop×',0.1,0,2],['crestK','crest×',0.05,1,2]];   // (PT1 K2: the finisher's least freeze · the light beats' freeze × · K4: the Crest's ×)   // row 4 (§13): [knob, label, step, min, max]
-function actDrop(){ player.act=null; player.cmb=0; player.combo=0; player.bufS=0; player.bufD=0; player.bufQ=0; player.bufK=null; player.dsQ=0; }   // the action in flight AND its buffered presses are dropped (a feel or weapon swap)
+function actDrop(){ player.act=null; player.hv=null; player.hvArm=0; player.cmb=0; player.combo=0; player.bufS=0; player.bufD=0; player.bufQ=0; player.bufK=null; player.dsQ=0; }   // the action in flight AND its buffered presses are dropped (a feel or weapon swap)
 function legacyToggle(){ ITUNE.legacyFeel=ITUNE.legacyFeel>0?0:1; actDrop(); hitStop=0; hsX=0;   // (§2.14: flip mid-fight — the action in flight is dropped)
   toast(ITUNE.legacyFeel>0?'⟲  LEGACY feel':'✦  Crawl 2.0 feel', ITUNE.legacyFeel>0?'today’s swings (~6/s), no freezes on plain hits, the one-frame shove, the old beeps':'wind-up · the blade arrives · freeze · the slide · bodies fly · the new sounds'); if(devOn) renderDev(); }
 function copyTuning(){ const o={}; for(const k of FEEL_KEYS) if(ITUNE[k]!==DEFAULT_ITUNE[k]) o[k]=ITUNE[k]; const s=JSON.stringify(o), n=Object.keys(o).length;   // one JSON line of the CHANGED feel knobs
@@ -31282,6 +31309,15 @@ function refreshPlaytest(){
 /* ============================ start / boot ============================ */
 /* island combat tuning rows + rename overlay wiring */
 const ITUNE_DEF=[
+  ['hvOn','HEAVY · hold the strike to wind up a charged heavy (0 = the old hold-to-chain)',0,1,1],
+  ['hvTime','HEAVY · the wind-up to full (s)',0.15,1.5,0.05],
+  ['hvMul','HEAVY · damage × the finisher\'s',0.5,3,0.05],
+  ['hvReach','HEAVY · reach × the finisher\'s',1,2,0.05],
+  ['hvKb','HEAVY · shove × the finisher\'s',0.5,3,0.1],
+  ['hvMove','HEAVY · you move at × while winding up',0,1,0.05],
+  ['hvHs','HEAVY · its freeze × (the finisher: 1.4)',0.5,3,0.1],
+  ['hvTide','HEAVY · Tide × (the finisher: 1.5)',0,4,0.1],
+  ['hvMax','HEAVY · fires by itself after (s; 0 = hold as long as you like)',0,4,0.1],
   ['artSpr','ART · Sprites 2.0: the hand-placed bodies (0 = the old ovals)',0,1,1],
   ['artStyle','ART · the style pass (0 off · 1 on)',0,1,1],
   ['artGrade','ART · colour grade (shadows cool, lights warm, contrast)',0,1,0.05],
