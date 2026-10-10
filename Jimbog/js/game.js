@@ -1025,6 +1025,9 @@
       if (this.shafts) this.shafts.userData.shaft.uniforms.uTime.value = performance.now() / 1000;
       this.fx.update(dt, this.R.camera);
       this.R.render();
+      // first second in the menu: make sure post-processing isn't drawing black
+      this.frames = (this.frames || 0) + 1;
+      if (this.R.composer && this.frames <= 90 && this.frames % 15 === 0) this.R.selfCheck();
     }
   }
 

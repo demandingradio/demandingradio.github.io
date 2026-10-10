@@ -3,25 +3,47 @@
   'use strict';
   const JB = window.JB;
 
+  // Post-processing renders into plain (non-multisampled) targets and
+  // anti-aliases with FXAA in the final pass. three.js r137 invalidates a
+  // multisampled target's colour after every render() into it, so drawing
+  // the world and then the view-model into one MSAA target leaves black on
+  // real GPUs (software GL ignores the invalidate, which hid the bug).
   const QUALITY = {
-    low:    { ratio: 0.75, shadow: 1024, bloom: false, msaa: 0, tex: 256 },
-    medium: { ratio: 1.25, shadow: 2048, bloom: true, msaa: 4, tex: 512 },
-    high:   { ratio: 2.0, shadow: 4096, bloom: true, msaa: 4, tex: 512 }
+    low:    { ratio: 0.75, shadow: 1024, bloom: false, tex: 256 },
+    medium: { ratio: 1.25, shadow: 2048, bloom: true, tex: 512 },
+    high:   { ratio: 2.0, shadow: 4096, bloom: true, tex: 512 }
   };
 
   const FinalShader = {
     uniforms: {
       tDiffuse: { value: null }, uTime: { value: 0 }, uDamage: { value: 0 }, uFlash: { value: 0 },
-      uRes: { value: new THREE.Vector2(1, 1) }, uSat: { value: 1.08 }, uVignette: { value: 0.55 }, uHeal: { value: 0 }
+      uRes: { value: new THREE.Vector2(1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1024, 1 / 768) },
+      uSat: { value: 1.08 }, uVignette: { value: 0.55 }, uHeal: { value: 0 }
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: [
-      'uniform sampler2D tDiffuse; uniform float uTime, uDamage, uFlash, uSat, uVignette, uHeal; uniform vec2 uRes; varying vec2 vUv;',
+      'uniform sampler2D tDiffuse; uniform float uTime, uDamage, uFlash, uSat, uVignette, uHeal; uniform vec2 uRes, uTexel; varying vec2 vUv;',
       'vec3 toSRGB(vec3 c){ c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }',
+      // FXAA (Lottes, PC-lite). Luma uses sqrt() because the input is linear.
+      'vec3 fxaa(vec2 uv){',
+      '  vec3 nw = texture2D(tDiffuse, uv + vec2(-1.0, -1.0) * uTexel).rgb, ne = texture2D(tDiffuse, uv + vec2(1.0, -1.0) * uTexel).rgb;',
+      '  vec3 sw = texture2D(tDiffuse, uv + vec2(-1.0, 1.0) * uTexel).rgb, se = texture2D(tDiffuse, uv + vec2(1.0, 1.0) * uTexel).rgb;',
+      '  vec3 m = texture2D(tDiffuse, uv).rgb; vec3 W = vec3(0.299, 0.587, 0.114);',
+      '  float lNW = dot(sqrt(nw), W), lNE = dot(sqrt(ne), W), lSW = dot(sqrt(sw), W), lSE = dot(sqrt(se), W), lM = dot(sqrt(m), W);',
+      '  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));',
+      '  vec2 d = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));',
+      '  float red = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);',
+      '  float rcp = 1.0 / (min(abs(d.x), abs(d.y)) + red);',
+      '  d = clamp(d * rcp, vec2(-8.0), vec2(8.0)) * uTexel;',
+      '  vec3 a = 0.5 * (texture2D(tDiffuse, uv + d * (1.0 / 3.0 - 0.5)).rgb + texture2D(tDiffuse, uv + d * (2.0 / 3.0 - 0.5)).rgb);',
+      '  vec3 b = a * 0.5 + 0.25 * (texture2D(tDiffuse, uv - d * 0.5).rgb + texture2D(tDiffuse, uv + d * 0.5).rgb);',
+      '  float lB = dot(sqrt(b), W);',
+      '  return (lB < lMin || lB > lMax) ? a : b;',
+      '}',
       'void main(){',
       '  vec2 dir = vUv - 0.5;',
-      '  float ca = 0.0008 + uDamage * 0.007;',
-      '  vec3 col = vec3(texture2D(tDiffuse, vUv + dir * ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - dir * ca).b);',
+      '  vec3 col = fxaa(vUv);',
+      '  if (uDamage > 0.01) { vec2 off = dir * uDamage * 0.007; col.r = texture2D(tDiffuse, vUv + off).r; col.b = texture2D(tDiffuse, vUv - off).b; }',
       '  col = toSRGB(col);',
       '  float l = dot(col, vec3(0.299, 0.587, 0.114));',
       '  col = mix(vec3(l), col, uSat);',
@@ -125,11 +147,11 @@
       try {
         const size = renderer.getDrawingBufferSize(new THREE.Vector2());
         let rt;
-        const pars = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, type: renderer.capabilities.isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType };
-        if (Q.msaa && renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) {
-          rt = new THREE.WebGLMultisampleRenderTarget(size.x, size.y, pars);
-          rt.samples = Q.msaa;
-        } else rt = new THREE.WebGLRenderTarget(size.x, size.y, pars);
+        // Half-float keeps dark scenes free of banding; fall back to 8-bit
+        // where the GPU can't render to float targets.
+        const halfOK = renderer.capabilities.isWebGL2 && renderer.extensions.has('EXT_color_buffer_float');
+        const pars = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, type: halfOK ? THREE.HalfFloatType : THREE.UnsignedByteType };
+        rt = new THREE.WebGLRenderTarget(size.x, size.y, pars);
         composer = new THREE.EffectComposer(renderer, rt);
         composer.addPass(new THREE.RenderPass(scene, camera));
         const vmPass = new THREE.RenderPass(vmScene, vmCamera);
@@ -155,6 +177,34 @@
         renderer.render(vmScene, vmCamera);
       }
     }
+    // Safety net: if post-processing produces a black picture on this GPU,
+    // drop back to direct rendering. Reads two pixel rows of the frame that
+    // was just drawn (only called a few times, at startup).
+    let blackChecks = 0;
+    function looksBlack() {
+      const gl = renderer.getContext();
+      const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+      if (w < 4 || h < 4) return false;
+      const row = new Uint8Array(w * 4);
+      let max = 0;
+      for (const y of [Math.floor(h * 0.5), Math.floor(h * 0.3)]) {
+        gl.readPixels(0, y, w, 1, gl.RGBA, gl.UNSIGNED_BYTE, row);
+        for (let i = 0; i < row.length; i += 4) max = Math.max(max, row[i], row[i + 1], row[i + 2]);
+      }
+      return max < 6;
+    }
+    function selfCheck() {
+      if (!composer) return;
+      if (looksBlack()) {
+        if (++blackChecks >= 3) {
+          console.warn('Jimbog: post-processing rendered black on this GPU; switching to direct rendering.');
+          composer = null; finalPass = null; bloomPass = null;
+          api.composer = null; api.finalPass = null; api.bloomPass = null;
+          renderer.autoClear = false;
+          renderer.setRenderTarget(null);
+        }
+      } else blackChecks = 0;
+    }
     function resize() {
       const w = window.innerWidth, h = window.innerHeight;
       renderer.setSize(w, h);
@@ -164,7 +214,11 @@
         composer.setPixelRatio(renderer.getPixelRatio());
         composer.setSize(w, h);
       }
-      if (finalPass) finalPass.uniforms.uRes.value.set(w, h);
+      if (finalPass) {
+        const pr = renderer.getPixelRatio();
+        finalPass.uniforms.uRes.value.set(w, h);
+        finalPass.uniforms.uTexel.value.set(1 / Math.max(1, Math.floor(w * pr)), 1 / Math.max(1, Math.floor(h * pr)));
+      }
     }
     resize();
     window.addEventListener('resize', resize);
@@ -190,10 +244,11 @@
       if (finalPass) finalPass.uniforms.uTime.value = time;
     }
 
-    return {
+    const api = {
       renderer, scene, camera, vmScene, vmCamera, vmHemi, vmKey, vmFlash, sun, hemi, env,
-      composer, finalPass, bloomPass, render, resize, flash, update, quality: Q
+      composer, finalPass, bloomPass, render, resize, flash, update, selfCheck, quality: Q
     };
+    return api;
   }
 
   JB.Render = { create, QUALITY };
