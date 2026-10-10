@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+  <title>Jimbog - Monday Jeffrey</title>
+  <meta name="description" content="Jimbog: a first-person deathmatch between four armed cats in a factory.">
+  <meta name="theme-color" content="#0d0f12">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ============================== HUD ============================== -->
+  <div id="hud" hidden>
+    <div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><b></b></div>
+    <div id="hitmarker"></div>
+    <div id="scope" hidden><div class="ret"></div></div>
+    <div id="dmgdirs"></div>
+    <div id="topbar"><div id="timer">10:00</div><div id="scoreline"></div></div>
+    <div id="killfeed"></div>
+    <div id="msgs"></div>
+    <div id="pickupmsg"></div>
+    <div id="area"></div>
+    <div id="hint"></div>
+    <div id="vitals">
+      <div class="vrow hp"><span class="ic">✚</span><span class="num" id="hpnum">100</span><div class="bar"><div id="hpbar"></div></div></div>
+      <div class="vrow ar"><span class="ic">⛨</span><span class="num" id="arnum">0</span><div class="bar"><div id="arbar"></div></div></div>
+    </div>
+    <div id="ammo">
+      <div id="wname">Purr-9 Pistol</div>
+      <div class="ammonum"><span id="wmag">12</span><span id="wres">/ 48</span></div>
+      <div id="reloadbar" hidden><div id="reloadfill"></div></div>
+      <div id="slots"></div>
+    </div>
+    <div id="death" hidden><div id="deathtext"></div><div id="deathcount"></div></div>
+    <div id="scoreboard" hidden></div>
+  </div>
+
+  <!-- ============================== MENU ============================== -->
+  <div id="menu">
+    <div class="menu-inner">
+      <header>
+        <div class="logo">JIMBOG</div>
+        <div class="tag">Facility Deathmatch · you vs three armed cats</div>
+      </header>
+      <div class="cols">
+        <section class="panel">
+          <h3>Your cat</h3>
+          <label class="field"><span>Name</span><input id="pname" maxlength="16" autocomplete="off" spellcheck="false"></label>
+          <div id="furs"></div>
+          <h3>Match</h3>
+          <div class="row"><span>Bot skill</span>
+            <div class="seg" id="diff"><button data-v="easy" type="button">Kitten</button><button data-v="normal" type="button">Alley Cat</button><button data-v="hard" type="button">Tiger</button></div></div>
+          <div class="row"><span>Kills to win</span>
+            <div class="seg" id="frags"><button data-v="10" type="button">10</button><button data-v="15" type="button">15</button><button data-v="25" type="button">25</button></div></div>
+          <div class="row"><span>Time limit</span>
+            <div class="seg" id="tlimit"><button data-v="5" type="button">5 min</button><button data-v="10" type="button">10 min</button><button data-v="15" type="button">15 min</button></div></div>
+          <div class="row"><span>Weapons</span>
+            <div class="seg" id="loadout"><button data-v="pickups" type="button">Find them</button><button data-v="arsenal" type="button">Full arsenal</button></div></div>
+        </section>
+        <section class="panel">
+          <h3>Settings</h3>
+          <div class="row"><span>Graphics</span>
+            <div class="seg" id="quality"><button data-v="low" type="button">Low</button><button data-v="medium" type="button">Medium</button><button data-v="high" type="button">High</button></div></div>
+          <div class="note" id="qnote" hidden>Graphics change applies after a reload. <button id="qreload" type="button">Reload now</button></div>
+          <label class="row"><span>Mouse sensitivity</span><input type="range" id="sens" min="0.2" max="3" step="0.05"><em id="sensv"></em></label>
+          <label class="row"><span>Field of view</span><input type="range" id="fov" min="55" max="95" step="1"><em id="fovv"></em></label>
+          <label class="row"><span>Volume</span><input type="range" id="vol" min="0" max="1" step="0.05"><em id="volv"></em></label>
+          <label class="row chk"><span>Invert mouse Y</span><input type="checkbox" id="invert"></label>
+          <h3>Controls</h3>
+          <ul class="keys">
+            <li><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump · <kbd>C</kbd> crouch</li>
+            <li><kbd>Mouse</kbd> aim · <kbd>Left</kbd> fire · <kbd>Right</kbd> aim down sights / scope</li>
+            <li><kbd>1–7</kbd> / <kbd>Wheel</kbd> weapons · <kbd>Q</kbd> last · <kbd>V</kbd> claws · <kbd>R</kbd> reload</li>
+            <li><kbd>Tab</kbd> scores · <kbd>Esc</kbd> pause · claw a cat from behind to <b>pounce</b> (double damage)</li>
+          </ul>
+        </section>
+      </div>
+      <div class="actions">
+        <button id="deploy" type="button" disabled>DEPLOY</button>
+        <a class="back" href="../index.html">← Back to the desktop</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== PAUSE / END ============================== -->
+  <div id="pause" class="overlay" hidden>
+    <div class="card">
+      <div class="logo small">PAUSED</div>
+      <label class="row"><span>Mouse sensitivity</span><input type="range" id="psens" min="0.2" max="3" step="0.05"><em id="psensv"></em></label>
+      <label class="row"><span>Field of view</span><input type="range" id="pfov" min="55" max="95" step="1"><em id="pfovv"></em></label>
+      <label class="row"><span>Volume</span><input type="range" id="pvol" min="0" max="1" step="0.05"><em id="pvolv"></em></label>
+      <label class="row chk"><span>Invert mouse Y</span><input type="checkbox" id="pinvert"></label>
+      <div class="btns">
+        <button id="resume" type="button" class="primary">RESUME</button>
+        <button id="restart" type="button">Restart match</button>
+        <button id="tomenu" type="button">Quit to menu</button>
+      </div>
+    </div>
+  </div>
+  <div id="end" class="overlay" hidden>
+    <div class="card wide">
+      <div class="logo small" id="endtitle">VICTORY</div>
+      <div class="sub" id="endsub"></div>
+      <table class="standings"><thead><tr><th></th><th>Cat</th><th>Kills</th><th>Deaths</th><th>Best streak</th></tr></thead><tbody id="endrows"></tbody></table>
+      <div class="btns">
+        <button id="rematch" type="button" class="primary">REMATCH</button>
+        <button id="endmenu" type="button">Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== TOUCH ============================== -->
+  <div id="touch" hidden>
+    <div id="stick"><div id="knob"></div></div>
+    <button data-b="fire" class="tb fire" type="button">FIRE</button>
+    <button data-b="ads" class="tb ads" type="button">AIM</button>
+    <button data-b="jump" class="tb jump" type="button">JUMP</button>
+    <button data-b="crouch" class="tb crouch" type="button">DUCK</button>
+    <button data-b="reload" class="tb reload" type="button">R</button>
+    <button data-b="swap" class="tb swap" type="button">⇄</button>
+    <button data-b="pause" class="tb pausebtn" type="button">II</button>
+  </div>
+
+  <div id="loading"><div class="logo">JIMBOG</div><div id="loadtext">Loading…</div><div class="spin"></div></div>
+
+  <!-- three.js r137 (vendored global build) + post-processing -->
+  <script src="lib/three.min.js"></script>
+  <script src="lib/post/CopyShader.js"></script>
+  <script src="lib/post/LuminosityHighPassShader.js"></script>
+  <script src="lib/post/EffectComposer.js"></script>
+  <script src="lib/post/RenderPass.js"></script>
+  <script src="lib/post/ShaderPass.js"></script>
+  <script src="lib/post/MaskPass.js"></script>
+  <script src="lib/post/UnrealBloomPass.js"></script>
+  <!-- the game. Bump ?v= when changing files so browsers don't serve stale code. -->
+  <script src="js/util.js?v=1"></script>
+  <script src="js/textures.js?v=1"></script>
+  <script src="js/audio.js?v=1"></script>
+  <script src="js/mapdata.js?v=1"></script>
+  <script src="js/props.js?v=1"></script>
+  <script src="js/level.js?v=1"></script>
+  <script src="js/physics.js?v=1"></script>
+  <script src="js/nav.js?v=1"></script>
+  <script src="js/render.js?v=1"></script>
+  <script src="js/cat.js?v=1"></script>
+  <script src="js/weapons.js?v=1"></script>
+  <script src="js/fx.js?v=1"></script>
+  <script src="js/bots.js?v=1"></script>
+  <script src="js/hud.js?v=1"></script>
+  <script src="js/game.js?v=1"></script>
+  <script src="js/main.js?v=1"></script>
+</body>
+</html>
