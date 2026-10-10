@@ -69,7 +69,7 @@
   const BYPASS = new Set(['flash_ring']);
 
   // Floor materials for footsteps, landings and bounces.
-  const SURFACES = new Set(['concrete', 'metal', 'tile', 'grate']);
+  const SURFACES = new Set(['concrete', 'metal', 'tile', 'grate', 'grass', 'gravel', 'wood', 'carpet']);
 
   // Relative loudness per sound, multiplied by the caller's volume.
   const LEVEL = {
@@ -638,6 +638,20 @@
           dst: filt(c, { type: 'bandpass', f: rnd(2400, 3400), q: 3 })
         });
       }
+    } else if (surface === 'grass') {
+      // Soft swish of grass and a dull thump.
+      noise(c, { dur: 0.09, peak: 0.16 * k, a: 0.012, dst: filt(c, { type: 'bandpass', f: rnd(1800, 2600), q: 0.8 }) });
+      noise(c, { dur: 0.05, peak: 0.12 * k, a: 0.004, dst: filt(c, { type: 'lowpass', f: 400 }) });
+    } else if (surface === 'gravel') {
+      // Crunch: a burst of tiny clicks.
+      for (let i = 0; i < 5; i++) noise(c, { at: i * rnd(0.008, 0.02), dur: 0.012, peak: rnd(0.12, 0.22) * k, a: 0.0005, dst: filt(c, { type: 'bandpass', f: rnd(1500, 4000), q: 2 }) });
+    } else if (surface === 'wood') {
+      // Hollow knock of a sprung timber floor.
+      tone(c, { type: 'triangle', f: rnd(160, 200), dur: 0.09, peak: 0.22 * k, a: 0.001 });
+      noise(c, { dur: 0.03, peak: 0.12 * k, a: 0.001, dst: filt(c, { type: 'bandpass', f: 900, q: 2 }) });
+    } else if (surface === 'carpet') {
+      // Muffled: almost no click.
+      noise(c, { dur: 0.05, peak: 0.1 * k, a: 0.004, dst: filt(c, { type: 'lowpass', f: 500 }) });
     } else {
       // Concrete (default): low grit.
       noise(c, { dur: 0.06, peak: 0.22 * k, a: 0.002, dst: filt(c, { type: 'lowpass', f: 900 }) });
@@ -648,7 +662,8 @@
   function stepSound(c, k) {
     tone(c, { type: 'triangle', f: [[0, 130], [0.06, 52]], dur: 0.08, peak: 0.6 * k, a: 0.0015 });  // thud
     tone(c, { f: [[0, 220], [0.03, 100]], dur: 0.05, peak: 0.25 * k, a: 0.001 });                  // knock
-    noise(c, { dur: 0.008, peak: 0.35 * k, a: 0.0005, dst: filt(c, { type: 'highpass', f: 2200 }) }); // heel click
+    const soft = c.surface === 'grass' || c.surface === 'carpet' ? 0.25 : 1;
+    noise(c, { dur: 0.008, peak: 0.35 * k * soft, a: 0.0005, dst: filt(c, { type: 'highpass', f: 2200 }) }); // heel click
     // high scuff: gives the ear (HRTF) enough treble to tell front from behind
     noise(c, { at: 0.01, dur: 0.045, peak: 0.14 * k, a: 0.004, dst: filt(c, { type: 'bandpass', f: rnd(5500, 7500), q: 1.2 }) });
     floorHit(c, c.surface, k);

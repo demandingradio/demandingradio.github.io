@@ -111,7 +111,7 @@
     }
     pickSettings() {
       const s = this.game.settings;
-      this.settings = { frags: s.frags, time: s.time, loadout: s.loadout };
+      this.settings = { frags: s.frags, time: s.time, loadout: s.loadout, map: s.map || 'facility' };
       return this.settings;
     }
     // Host presses Start (or Rematch).
@@ -125,6 +125,8 @@
     // ---------------------------------------------------------------- both
     begin(settings, roster, lateJoin, matchTime, extra) {
       const g = this.game;
+      // everyone plays the host's map (building it can take a moment)
+      if (settings.map && g.mapId !== settings.map) g.loadMap(settings.map);
       this.settings = settings;
       this.started = true;
       this.byId.clear();

@@ -83,7 +83,29 @@
     return rt.texture;
   }
 
-  function create(canvas, qualityName, level) {
+  function makeOutdoorEnvironment(renderer) {
+    // Blue sky, bright sun patch, green-grey ground: reflections for the campus.
+    const s = new THREE.Scene();
+    const geo = new THREE.SphereGeometry(30, 32, 16);
+    const col = [];
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i) / 30;
+      const c = y > 0 ? new THREE.Color(0xcfe2f0).lerp(new THREE.Color(0x4f8fd0), Math.pow(y, 0.6)) : new THREE.Color(0x5d6b4a).lerp(new THREE.Color(0x3a4030), -y);
+      c.multiplyScalar(y > 0 ? 0.75 : 0.45);
+      col.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    s.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    const sunM = new THREE.Mesh(new THREE.SphereGeometry(2.5, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4e0).multiplyScalar(6) }));
+    sunM.position.set(-11, 25, -13); s.add(sunM);
+    const pm = new THREE.PMREMGenerator(renderer);
+    const rt = pm.fromScene(s, 0.02);
+    pm.dispose();
+    return rt.texture;
+  }
+
+  function create(canvas, qualityName, level, envCfg) {
     const Q = QUALITY[qualityName] || QUALITY.medium;
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: !Q.bloom, powerPreference: 'high-performance', stencil: false });
     const dpr = window.devicePixelRatio || 1;
@@ -101,25 +123,48 @@
     const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.08, 260);
     scene.add(camera);
 
-    const env = makeEnvironment(renderer);
+    const envMaps = {};
+    let env = envMaps.factory = makeEnvironment(renderer);
     scene.environment = env;
 
     const hemi = new THREE.HemisphereLight(0xa9bfd6, 0x2b241d, 0.32);
     scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xfff0d6, 2.6);
-    const b = level.bounds, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
-    sun.target.position.set(cx, 0, cz);
-    sun.position.set(cx - level.SUN_DIR.x * 90, -level.SUN_DIR.y * 90, cz - level.SUN_DIR.z * 90);
     sun.castShadow = true;
     sun.shadow.mapSize.set(Q.shadow, Q.shadow);
-    const sc = sun.shadow.camera;
-    sc.left = -74; sc.right = 74; sc.top = 74; sc.bottom = -74; sc.near = 10; sc.far = 190;
-    sc.updateProjectionMatrix();   // three only reads the frustum through the projection matrix
-    const texel = 148 / Q.shadow;
-    sun.shadow.bias = -0.0004;
-    sun.shadow.normalBias = 0.02 + texel * 0.6;
     sun.shadow.radius = 2.5;
     scene.add(sun); scene.add(sun.target);
+
+    // Per-map lighting, sky and shadow coverage (called again on map change).
+    // env: { background, fog: [colour, density], hemi: [sky, ground, k], sun: [colour, k],
+    //        exposure, envMap: 'factory' | 'outdoor', far }
+    function setLevel(lv, e) {
+      e = e || {};
+      const b = lv.bounds, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+      const half = Math.max(74, Math.hypot(b.x1 - b.x0, b.z1 - b.z0) / 2 + 4);
+      sun.target.position.set(cx, 0, cz);
+      sun.position.set(cx - lv.SUN_DIR.x * 120, -lv.SUN_DIR.y * 120, cz - lv.SUN_DIR.z * 120);
+      const sc = sun.shadow.camera;
+      sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.near = 10; sc.far = 260;
+      sc.updateProjectionMatrix();   // three only reads the frustum through the projection matrix
+      const texel = half * 2 / Q.shadow;
+      sun.shadow.bias = -0.0004;
+      sun.shadow.normalBias = 0.02 + texel * 0.6;
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+      const sn = e.sun || [0xfff0d6, 2.6];
+      sun.color.setHex(sn[0]); sun.intensity = sn[1];
+      const hm = e.hemi || [0xa9bfd6, 0x2b241d, 0.32];
+      hemi.color.setHex(hm[0]); hemi.groundColor.setHex(hm[1]); hemi.intensity = hm[2];
+      scene.background = e.background === null ? null : new THREE.Color(e.background !== undefined ? e.background : 0x0b0d10);
+      const fg = e.fog || [0x15191e, 0.0085];
+      scene.fog = new THREE.FogExp2(fg[0], fg[1]);
+      renderer.toneMappingExposure = e.exposure || 1.05;
+      const want = e.envMap || 'factory';
+      env = envMaps[want] || (envMaps[want] = want === 'outdoor' ? makeOutdoorEnvironment(renderer) : makeEnvironment(renderer));
+      scene.environment = env; vmScene.environment = env;
+      api.env = env;
+      camera.far = e.far || 260; camera.updateProjectionMatrix();
+    }
 
     // Fixed pool of flash lights (muzzle flashes, explosions). The count never
     // changes so shaders never recompile mid-game.
@@ -250,8 +295,9 @@
 
     const api = {
       renderer, scene, camera, vmScene, vmCamera, vmHemi, vmKey, vmFlash, sun, hemi, env,
-      composer, finalPass, bloomPass, render, resize, flash, update, selfCheck, quality: Q
+      composer, finalPass, bloomPass, render, resize, flash, update, selfCheck, setLevel, quality: Q
     };
+    setLevel(level, envCfg);
     return api;
   }
 

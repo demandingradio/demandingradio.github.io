@@ -417,10 +417,14 @@
       crates: BUILD_crates, pipes: BUILD_pipes, barrels: BUILD_barrels, tanks: BUILD_tanks, conveyor: BUILD_conveyor,
       forklift: BUILD_forklift, pallets: BUILD_pallets, sinks: BUILD_sinks, stalls: BUILD_stalls, vents: BUILD_vents
     };
+    const ctx = { P, put, boxG, cyl, sph, solidBox, rng, aoFor, dyn, U };
     for (const p of list) {
+      P.hintY = p.y;   // multi-storey maps: which floor the prop stands on
       const fn = BUILD[p.t];
       if (fn) fn(p);
+      else if (EXTRA[p.t]) EXTRA[p.t](p, ctx);
     }
+    P.hintY = undefined;
     return dyn;
   }
 
@@ -434,5 +438,11 @@
     P.addGeo('p:highbay', disc, new THREE.Matrix4().makeTranslation(x, y - 0.34, z), g);
   }
 
-  JB.Props = { build, materials, highbay };
+  // Extra prop builders from other files: fn(p, ctx) where ctx has the level
+  // API (P) and the helpers above. Extra materials: { 'p:name': { params, tex, basic } }.
+  const EXTRA = {}, EXTRA_MATS = {};
+  function register(type, fn) { EXTRA[type] = fn; }
+  function addMaterials(m) { Object.assign(EXTRA_MATS, m); }
+  const baseMaterials = materials;
+  JB.Props = { build, materials: () => Object.assign(baseMaterials(), EXTRA_MATS), highbay, register, addMaterials };
 })();

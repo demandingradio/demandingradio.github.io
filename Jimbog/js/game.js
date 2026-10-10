@@ -151,10 +151,10 @@
       this.g = game; this.index = index;
       this.kind = ['health', 'armor', 'ammo', 'nades'].includes(def.t) ? def.t : 'weapon';
       this.type = def.t;
-      const y = game.level.floorAt(def.x, def.z);
+      const y = game.level.floorAt(def.x, def.z, def.y);
       this.pos = new THREE.Vector3(def.x, y === null ? 0 : y, def.z);
       // keep every pickup on walkable floor so cats can actually reach it
-      if (!game.nav.isNode(game.nav.cellOf(def.x, def.z)) || y === null) {
+      if (!game.nav.isNode(game.nav.cellOf(def.x, def.z, this.pos.y)) || y === null) {
         const c = game.nav.nearest(def.x, this.pos.y, def.z, 2.5);
         if (c >= 0) game.nav.pointOf(c, this.pos);
       }
@@ -213,21 +213,46 @@
     }
 
     build(progress) {
+      this.mapId = null;
+      this.loadMap(this.settings.map || 'facility', progress);
+    }
+
+    // Build (or rebuild) the world for a map. Safe to call between matches.
+    loadMap(id, progress) {
+      progress = progress || (() => {});
+      const map = JB.Maps.get(id);
+      if (this.mapId === map.id && this.level) return false;
       const q = this.settings.quality;
-      progress('Building the factory…');
-      this.level = JB.Level.build({ quality: q });
+      if (this.level) this.unloadMap();
+      this.map = map; this.mapId = map.id;
+      const data = map.data();
+      progress(map.builder === 'spans' ? 'Building the campus…' : 'Building the factory…');
+      this.level = map.builder === 'spans' ? JB.Level2.build({ quality: q, map: { data }, envIntensity: map.env.envIntensity }) : JB.Level.build({ quality: q, map: { data } });
       progress('Laying collision…');
       this.world = new JB.World(this.level.boxes, this.level.bounds);
       progress('Teaching cats the way around…');
       this.nav = new JB.Nav(this.level, this.world);
-      progress('Lighting the plant…');
-      this.R = JB.Render.create(this.canvas, q, this.level);
+      progress('Lighting the place…');
+      if (!this.R) {
+        this.R = JB.Render.create(this.canvas, q, this.level, map.env);
+        this.fx = new JB.FX(this.R);
+        if (JB.GrenadeFX && JB.GrenadeFX.FlashOverlay) this.flashFX = new JB.GrenadeFX.FlashOverlay(this.canvas);
+      } else this.R.setLevel(this.level, map.env);
       this.R.scene.add(this.level.group);
       this.shafts = this.level.group.getObjectByName('shafts');
-      this.fx = new JB.FX(this.R);
-      if (JB.GrenadeFX && JB.GrenadeFX.FlashOverlay) this.flashFX = new JB.GrenadeFX.FlashOverlay(this.canvas);
-      this.spawns = JB.MapData.spawns.map(([x, z, yaw]) => {
-        const c = this.nav.nearest(x, this.level.floorAt(x, z) || 0, z, 3);
+      this.sky = null;
+      if (map.env.sky && JB.Sky && data.backdrop) {
+        try {
+          const b = this.level.bounds;
+          this.sky = JB.Sky.build(Object.assign({ sunDir: this.level.SUN_DIR.clone(), bounds: { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1 }, far: 900 }, data.backdrop));
+          this.R.scene.add(this.sky.group);
+        } catch (e) { console.warn('Jimbog: sky failed', e); this.sky = null; }
+      }
+      // no sky module: at least a sky-blue background
+      if (map.env.background === null && !this.sky) this.R.scene.background = new THREE.Color(0x8fbbe6);
+      this.spawns = data.spawns.map(([x, z, yaw, y]) => {
+        const fy = this.level.floorAt(x, z, y);
+        const c = this.nav.nearest(x, fy === null || fy === undefined ? (y || 0) : fy, z, 3);
         const p = this.nav.pointOf(c, new THREE.Vector3());
         return { pos: p, yaw };
       });
@@ -239,8 +264,23 @@
         fan.position.set(d.x, d.y, d.z);
         this.R.scene.add(fan); this.fans.push(fan);
       }
+      this.menuShots = map.menuShots || data.menuShots || [];
       this.menuCam = { shot: 0, t: 0 };
-      this.R.camera.position.set(70, 1, 45);
+      const s0 = this.menuShots[0];
+      if (s0) this.R.camera.position.set(s0.a[0], s0.a[1], s0.a[2]);
+      return true;
+    }
+    unloadMap() {
+      this.clearMatch();
+      if (this.vm) { this.R.vmCamera.remove(this.vm.root); disposeTree(this.vm.root); this.vm = null; }
+      const scene = this.R.scene;
+      scene.remove(this.level.group);
+      disposeTree(this.level.group);
+      if (this.sky) { scene.remove(this.sky.group); disposeTree(this.sky.group); this.sky = null; }
+      for (const f of this.fans || []) { scene.remove(f); disposeTree(f); }
+      this.fans = [];
+      if (this.fx && this.fx.clearMarks) this.fx.clearMarks();
+      this.level = null; this.world = null; this.nav = null;
     }
 
     // ---------------------------------------------------------------- match
@@ -277,7 +317,7 @@
         });
         for (const b of bots.slice(0, s.bots)) this.fighters.push(new Fighter(this, b, 'bot'));
       }
-      JB.MapData.pickups.forEach((p, i) => {
+      this.map.data().pickups.forEach((p, i) => {
         const it = new Pickup(this, p, i);
         if (it.kind === 'weapon' && this.loadout === 'arsenal') { this.R.scene.remove(it.mesh); disposeTree(it.mesh); return; }
         this.pickups.push(it);
@@ -461,7 +501,7 @@
         else if (e[0] === 'land') {
           const ls = e[1];
           if (ls > 3) {
-            const surface = MV.surfaceAt(this.level, f.pos.x, f.pos.z);
+            const surface = MV.surfaceAt(this.level, f.pos.x, f.pos.z, f.pos.y);
             sfx('land', f.isPlayer ? { volume: U.clamp(ls / 10, 0.3, 1), surface } : { pos: f.pos, volume: 0.7, surface, occluded: !this.audibleLOS(f.pos) });
             if (f.isPlayer) this.dipV -= ls * 0.025;
             if (!f.isPlayer) this.noise(f.pos, f, false, 14);
@@ -469,7 +509,7 @@
           const fd = MV.fallDamage(ls);
           if (fd > 0 && (f.isPlayer || f.brain)) this.reportHit(f, f, fd, 'fall', { group: 'chest', premult: true });
         } else if (e[0] === 'step') {
-          const surface = MV.surfaceAt(this.level, f.pos.x, f.pos.z);
+          const surface = MV.surfaceAt(this.level, f.pos.x, f.pos.z, f.pos.y);
           if (e[1]) {
             sfx('footstep', f.isPlayer ? { volume: 0.55, surface } : { pos: f.pos, surface, occluded: !this.audibleLOS(f.pos) });
             this.noise(f.pos, f, false, 22);
@@ -557,10 +597,14 @@
 
     // ---------------------------------------------------------------- pickups
     updatePickups(dt) {
+      // far away pickups only show their glow ring (big open maps see them all at once)
+      const cam = this.R.camera, lod = 38 * (cam.userData.zoom || 1);
       for (let i = this.pickups.length - 1; i >= 0; i--) {
         const it = this.pickups[i];
         if (!it.update(dt)) { this.pickups.splice(i, 1); continue; }
         if (!it.active) continue;
+        const ex = cam.position.x - it.pos.x, ez = cam.position.z - it.pos.z;
+        it.mesh.userData.item.visible = ex * ex + ez * ez < lod * lod;
         for (const f of this.fighters) {
           if (!f.alive || f.remote) continue;
           const dx = f.pos.x - it.pos.x, dz = f.pos.z - it.pos.z, dy = f.pos.y - it.pos.y;
@@ -711,7 +755,8 @@
         L.sampleLight(f.pos.x, f.pos.y, f.pos.z, col);
         const lum = col.r * 0.3 + col.g * 0.59 + col.b * 0.11;
         c.setLight(col, U.clamp(lum * 1.6 + 0.1, 0.12, 1.1));
-        c.setShadow(L.inSun(f.pos.x, f.pos.y + 0.2, f.pos.z) || L.inSun(f.pos.x, f.pos.y + 1.0, f.pos.z) || L.inSun(f.pos.x, f.pos.y + 1.7, f.pos.z));
+        const cp = this.R.camera.position, sx = cp.x - f.pos.x, sz = cp.z - f.pos.z;
+        c.setShadow(sx * sx + sz * sz < 2500 && (L.inSun(f.pos.x, f.pos.y + 0.2, f.pos.z) || L.inSun(f.pos.x, f.pos.y + 1.0, f.pos.z) || L.inSun(f.pos.x, f.pos.y + 1.7, f.pos.z)));
         c.probe.flash.value.setRGB(f.invuln > 0 ? 0.15 + Math.sin(this.time * 20) * 0.1 : 0, f.invuln > 0 ? 0.3 : 0, f.invuln > 0 ? 0.4 : 0);
         if (!f.alive && f.respawnT < 0.6 && !f.isPlayer && !f.remote) c.root.visible = f.respawnT > 0 ? (Math.floor(f.respawnT * 20) % 2 === 0) : false;
       }
@@ -775,8 +820,8 @@
         const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
         JB.Audio.setListener(cam.position, dir);
         if (JB.Audio.setRoom) {
-          const reg = this.level.regionAt(cam.position.x, cam.position.z);
-          const room = reg ? U.clamp((reg.ceil - reg.floor) / 10, 0, 1) * 0.6 + (reg.rects ? 0.2 : 0) : 0.3;
+          const reg = this.level.regionAt(cam.position.x, cam.position.z, cam.position.y - 1.5);
+          const room = !reg ? 0.3 : (reg.outdoor ? (reg.ceil < 100 ? 0.25 : 0.05) : U.clamp((reg.ceil - reg.floor) / 10, 0, 1) * 0.6 + (reg.rects ? 0.2 : 0));
           if (Math.abs(room - (this.roomK || 0)) > 0.05) { this.roomK = room; JB.Audio.setRoom(room); }
         }
       }
@@ -805,7 +850,7 @@
       const leader = rows[0] === p ? (rows[1] ? rows[1] : null) : rows[0];
       h.timer(this.matchTime, ord + '  ·  ' + p.kills + ' / ' + this.fragLimit + (leader ? '   (' + (rows[0] === p ? 'next ' : 'leader ') + leader.name + ' ' + leader.kills + ')' : ''));
       if (p.alive) {
-        const reg = this.level.regionAt(p.pos.x, p.pos.z);
+        const reg = this.level.regionAt(p.pos.x, p.pos.z, p.pos.y);
         if (reg && reg.name) h.area(reg.name);
         h.hint(p.invuln > 0 && this.state === 'play' ? 'Spawn protection' : (def.grenade ? 'Left-click throw · Right-click lob · both = medium' : (w.mag === 0 && w.reserve === 0 && !def.melee ? 'Out of ammo — find a pickup or switch weapon' : (w.mag === 0 && !def.melee ? 'Press R to reload' : ''))));
       } else if (this.state !== 'end') {
@@ -821,14 +866,8 @@
 
     // Slow cinematic fly-through behind the menu.
     menuCamera(dt) {
-      const shots = [
-        { a: [86, -2.2, 37.5], b: [70, -2.4, 50], look: [80, -1.0, 44] },
-        { a: [94, -2.6, 21.5], b: [107, -2.6, 20], look: [101, -2.5, 15] },
-        { a: [31, 1.5, 18.5], b: [58, 1.5, 19], look: [64, 1.4, 19] },
-        { a: [70, 0.0, 36.5], b: [78, -0.2, 36.8], look: [88, -2.0, 46] },
-        { a: [4, -3.0, 55], b: [10, -3.0, 59], look: [11, -3.3, 64] },
-        { a: [20, 1.6, 26], b: [12, 1.6, 33], look: [5, 1.4, 22] }
-      ];
+      const shots = this.menuShots;
+      if (!shots || !shots.length) return;
       const m = this.menuCam;
       m.t += dt;
       if (m.t > 9) { m.t = 0; m.shot = (m.shot + 1) % shots.length; }
@@ -843,6 +882,7 @@
     render(dt) {
       if (this.headless) { this.pendingFlash = null; return; }   // background tab: simulate only
       this.R.update(dt, performance.now() / 1000);
+      if (this.sky && this.sky.update) this.sky.update(dt, this.R.camera);
       if (this.shafts) this.shafts.userData.shaft.uniforms.uTime.value = performance.now() / 1000;
       this.fx.update(dt, this.R.camera);
       this.R.render();

@@ -228,6 +228,11 @@
         this.smoke.add(p.x, p.y, p.z, Math.cos(a) * s, 2 + Math.random() * 4, Math.sin(a) * s, 1 + Math.random(), 0.09, 0.06, 0.65, 0.45, 0.25, 1, 6, 1);
       }
     }
+    clearMarks() {
+      for (const m of this.decals) m.visible = false;
+      for (const m of this.scorches) this.R.scene.remove(m);
+      this.scorches.length = 0;
+    }
     scorch(p, ny) {
       if (ny < 0.7) return;
       let m = this.scorches.length < 12 ? null : this.scorches.shift();

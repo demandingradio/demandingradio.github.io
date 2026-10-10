@@ -217,7 +217,7 @@
     },
 
     impactFX(hit, pt, withSound) {
-      const reg = this.level.regionAt(hit.x - (hit.nx || 0) * 0.1, hit.z - (hit.nz || 0) * 0.1);
+      const reg = this.level.regionAt(hit.x - (hit.nx || 0) * 0.1, hit.z - (hit.nz || 0) * 0.1, hit.y - 0.3);
       const metal = reg && /metal|diamond|grate/.test(reg.wmat + reg.fmat);
       this.fx.impact(hit, metal ? 'metal' : 'concrete');
       if (withSound) sfx(Math.random() < 0.12 ? 'ricochet' : 'impact', { pos: pt, volume: 0.6 });
@@ -417,7 +417,7 @@
           const hit = this.world.bounce(n, dt, 0.45);
           if (hit) {
             n.bounces++;
-            if (before > 1.5 && n.bounces < 12) sfx('grenade_bounce', { pos: n.pos, volume: U.clamp(before / 10, 0.2, 1), surface: JB.Movement.surfaceAt(this.level, n.pos.x, n.pos.z) });
+            if (before > 1.5 && n.bounces < 12) sfx('grenade_bounce', { pos: n.pos, volume: U.clamp(before / 10, 0.2, 1), surface: JB.Movement.surfaceAt(this.level, n.pos.x, n.pos.z, n.pos.y) });
             // ground friction
             n.vel.x *= 0.8; n.vel.z *= 0.8;
             if (n.rest) n.vel.set(0, 0, 0);   // settled on the floor

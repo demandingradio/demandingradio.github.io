@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -46,7 +46,7 @@
     <div class="menu-inner">
       <header>
         <div class="logo">JIMBOG</div>
-        <div class="tag">Facility Deathmatch · you vs three armed cats</div>
+        <div class="tag" id="maptag">Facility Deathmatch · you vs three armed cats</div>
       </header>
       <div class="cols">
         <section class="panel">
@@ -54,6 +54,8 @@
           <label class="field"><span>Name</span><input id="pname" maxlength="16" autocomplete="off" spellcheck="false"></label>
           <div id="furs"></div>
           <h3>Match</h3>
+          <div class="row"><span>Map</span>
+            <div class="seg" id="mapsel"><button data-v="facility" type="button">Facility</button><button data-v="campus" type="button">Research Campus</button></div></div>
           <div class="row"><span>Bot skill</span>
             <div class="seg" id="diff"><button data-v="easy" type="button">Kitten</button><button data-v="normal" type="button">Alley Cat</button><button data-v="hard" type="button">Tiger</button></div></div>
           <div class="row"><span>Kills to win</span>
@@ -160,28 +162,35 @@
   <script src="lib/post/MaskPass.js"></script>
   <script src="lib/post/UnrealBloomPass.js"></script>
   <!-- the game. Bump ?v= when changing files so browsers don't serve stale code. -->
-  <script src="js/util.js?v=4"></script>
-  <script src="js/textures.js?v=4"></script>
-  <script src="js/audio.js?v=4"></script>
-  <script src="js/mapdata.js?v=4"></script>
-  <script src="js/props.js?v=4"></script>
-  <script src="js/level.js?v=4"></script>
-  <script src="js/physics.js?v=4"></script>
-  <script src="js/nav.js?v=4"></script>
-  <script src="js/render.js?v=4"></script>
-  <script src="js/cat.js?v=4"></script>
-  <script src="js/weapons.js?v=4"></script>
-  <script src="js/fx.js?v=4"></script>
-  <script src="js/grenadefx.js?v=4"></script>
-  <script src="js/movement.js?v=4"></script>
-  <script src="js/bots.js?v=4"></script>
-  <script src="js/hud.js?v=4"></script>
-  <script src="js/combat.js?v=4"></script>
-  <script src="js/game.js?v=4"></script>
+  <script src="js/util.js?v=5"></script>
+  <script src="js/textures.js?v=5"></script>
+  <script src="js/tex_campus.js?v=5"></script>
+  <script src="js/audio.js?v=5"></script>
+  <script src="js/mapdata.js?v=5"></script>
+  <script src="js/props.js?v=5"></script>
+  <script src="js/props_outdoor.js?v=5"></script>
+  <script src="js/props_indoor.js?v=5"></script>
+  <script src="js/maps/campus.js?v=5"></script>
+  <script src="js/maps/maps.js?v=5"></script>
+  <script src="js/level.js?v=5"></script>
+  <script src="js/level2.js?v=5"></script>
+  <script src="js/physics.js?v=5"></script>
+  <script src="js/nav.js?v=5"></script>
+  <script src="js/render.js?v=5"></script>
+  <script src="js/sky.js?v=5"></script>
+  <script src="js/cat.js?v=5"></script>
+  <script src="js/weapons.js?v=5"></script>
+  <script src="js/fx.js?v=5"></script>
+  <script src="js/grenadefx.js?v=5"></script>
+  <script src="js/movement.js?v=5"></script>
+  <script src="js/bots.js?v=5"></script>
+  <script src="js/hud.js?v=5"></script>
+  <script src="js/combat.js?v=5"></script>
+  <script src="js/game.js?v=5"></script>
   <!-- online play: PeerJS (WebRTC, MIT licence) + our transport + protocol -->
   <script src="lib/peerjs.min.js"></script>
-  <script src="js/net.js?v=4"></script>
-  <script src="js/online.js?v=4"></script>
-  <script src="js/main.js?v=4"></script>
+  <script src="js/net.js?v=5"></script>
+  <script src="js/online.js?v=5"></script>
+  <script src="js/main.js?v=5"></script>
 </body>
 </html>

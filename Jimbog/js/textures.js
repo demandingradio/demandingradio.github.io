@@ -810,5 +810,9 @@
     });
   }
 
-  JB.Tex = { make: make, list: Object.keys(GEN) };
+  // Other files can add generators: gen(S, R) fills S.c (sRGB 0..1, 3 per px),
+  // S.h (height 0..1), S.r (roughness), optional S.a (alpha) and S.bump.
+  function register(name, gen) { GEN[name] = gen; JB.Tex.list = Object.keys(GEN); }
+  const helpers = { vnoise, fbm, fbmN, worley, stamp, walk, shadeC, tintC, sstep, lerp, clamp01, clampN, wrapI, TAU };
+  JB.Tex = { make: make, list: Object.keys(GEN), register: register, helpers: helpers };
 })();

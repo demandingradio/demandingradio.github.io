@@ -24,11 +24,17 @@
   };
 
   // Surface under a fighter's feet, for footstep sounds.
-  function surfaceAt(level, x, z) {
-    const r = level.regionAt(x, z);
+  function surfaceAt(level, x, z, y) {
+    const r = level.regionAt(x, z, y);
     if (!r) return 'concrete';
-    if (r.isStair || /diamond|grate/.test(r.fmat)) return 'metal';
-    if (/tiles/.test(r.fmat)) return 'tile';
+    const f = r.fmat || '';
+    if (/diamond|grate|roof_metal/.test(f) || (r.isStair && !r.outdoor && /diamond/.test(f))) return 'metal';
+    if (/tiles|lino/.test(f)) return 'tile';
+    if (/grass|soil/.test(f)) return 'grass';
+    if (/timber/.test(f)) return 'wood';
+    if (/carpet/.test(f)) return 'carpet';
+    if (/gravel/.test(f)) return 'gravel';
+    if (r.isStair && /diamond/.test(f)) return 'metal';
     return 'concrete';
   }
 

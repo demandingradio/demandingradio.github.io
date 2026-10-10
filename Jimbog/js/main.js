@@ -7,7 +7,7 @@
 
   const isTouch = ('ontouchstart' in window) && matchMedia('(pointer: coarse)').matches;
   const DEFAULTS = {
-    name: 'Jimbog', fur: 'tuxedo', difficulty: 'normal', frags: 15, time: 10, loadout: 'pickups',
+    name: 'Jimbog', fur: 'tuxedo', difficulty: 'normal', frags: 15, time: 10, loadout: 'pickups', map: 'facility',
     quality: isTouch ? 'low' : 'medium', sens: 1.0, fov: 72, volume: 0.8, invert: false, bots: 3
   };
   const settings = Object.assign({}, DEFAULTS, U.load('jimbog.settings', {}));
@@ -60,11 +60,14 @@
           b.classList.add('sel');
           click();
           if (changedQuality) $('qnote').hidden = false;
+          if (key === 'map') switchMap(v);
         });
       });
     };
     seg('diff', 'difficulty'); seg('frags', 'frags', Number); seg('tlimit', 'time', Number);
-    seg('loadout', 'loadout'); seg('quality', 'quality');
+    if (JB.Maps && !JB.Maps[settings.map]) settings.map = 'facility';
+    seg('loadout', 'loadout'); seg('quality', 'quality'); seg('mapsel', 'map');
+    showMapTag();
     const slider = (id, key, fmt, after) => {
       const el = $(id), out = $(id + 'v');
       el.value = settings[key];
@@ -111,15 +114,37 @@
     if (isTouch) document.body.classList.add('touch');
   }
 
+  // ---------------------------------------------------------------- maps
+  function showMapTag() {
+    const m = JB.Maps ? JB.Maps.get(settings.map) : null;
+    if (m && $('maptag')) $('maptag').textContent = m.tagline + ' · you vs three armed cats';
+  }
+  // Rebuild the world for another map behind a loading card. cb runs after.
+  function switchMap(id, cb) {
+    showMapTag();
+    if (!game || !booted || game.mapId === id) { if (cb) cb(); return; }
+    const ld = $('loading');
+    ld.classList.remove('done');
+    setLoading('Loading ' + JB.Maps.get(id).name + '…');
+    setTimeout(() => {
+      try { game.loadMap(id, setLoading); }
+      catch (e) { console.error(e); setLoading('Could not build that map: ' + e.message); return; }
+      ld.classList.add('done');
+      if (cb) cb();
+    }, 40);
+  }
+
   // ---------------------------------------------------------------- bots mode
   function deploy() {
     if (!booted) return;
     initAudio(); click();
+    if (game.mapId !== settings.map) { switchMap(settings.map, deploy); return; }
     $('menu').hidden = true;
     startBots();
   }
   function startBots() {
     if (online) leaveOnline();
+    if (game.mapId !== settings.map) game.loadMap(settings.map, setLoading);
     game.startMatch();
     lock();
   }
@@ -201,8 +226,9 @@
       const F = JB.Cat.FURS[r.fur] || JB.Cat.FURS.ginger;
       return '<div class="pl"><i style="background:' + c.color + '"></i>' + String(r.name).replace(/[<&]/g, '') + (r.id === o.myId ? ' (you)' : '') + '<small>' + F.label + (host && r.id === host.id ? ' · host' : '') + '</small></div>';
     }).join('');
-    if (o.isHost) $('onstart').textContent = o.roster.length > 1 ? 'START MATCH (' + o.roster.length + ' cats)' : 'START MATCH (just you)';
-    else if (!o.started) $('onstatus').textContent = 'Connected — waiting for the host to start…';
+    const mapName = JB.Maps.get(o.isHost ? settings.map : (o.settings && o.settings.map)).name;
+    if (o.isHost) $('onstart').textContent = (o.roster.length > 1 ? 'START MATCH (' + o.roster.length + ' cats' : 'START MATCH (just you') + ' · ' + mapName + ')';
+    else if (!o.started) $('onstatus').textContent = 'Connected — waiting for the host to start… Map: ' + mapName;
   }
   function leaveOnline() {
     if (online) { online.leave(); online = null; }

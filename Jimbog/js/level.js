@@ -69,7 +69,7 @@
   }
 
   function build(opts) {
-    const M = JB.MapData;
+    const M = opts.map && opts.map.data ? opts.map.data : JB.MapData;
     const quality = opts.quality || 'medium';
     const texSize = quality === 'low' ? 256 : 512;
     const W = Math.round((GX1 - GX0) / CS), H = Math.round((GZ1 - GZ0) / CS), N = W * H;
@@ -816,7 +816,7 @@
     return {
       group, boxes, lights, regions: regs, stairs, decor,
       grid: { W, H, CS, GX0, GZ0, cellR, floorH, solid, edgeFlag, doorCell, idx, cellAt },
-      regionAt, floorAt, sampleLight, inSun, SUN_DIR,
+      regionAt: (x, z) => regionAt(x, z), floorAt: (x, z) => floorAt(x, z), sampleLight, inSun, SUN_DIR,
       bounds: { x0: -1, z0: 0, x1: 112, z1: 82, y0: -5, y1: 8 },
       stats: { verts: vertsTotal, boxes: boxes.length, lights: lights.length, buckets: Object.keys(buckets).length },
       F_GLASS, F_RAIL

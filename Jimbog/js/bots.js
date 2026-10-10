@@ -311,7 +311,7 @@
         let mx = fwdX * approach + -fwdZ * this.strafeDir * S.strafe;
         let mz = fwdZ * approach + fwdX * this.strafeDir * S.strafe;
         // don't strafe off ledges / into walls
-        const probe = g.nav.cellOf(me.pos.x + mx * 1.0, me.pos.z + mz * 1.0);
+        const probe = g.nav.cellOf(me.pos.x + mx * 1.0, me.pos.z + mz * 1.0, me.pos.y);
         if (!g.nav.isNode(probe) || Math.abs(g.level.grid.floorH[probe] - me.pos.y) > 0.6) { this.strafeDir *= -1; mx = fwdX * approach; mz = fwdZ * approach; }
         if (approach > 0 && distT > 3) {
           // close in along the nav path rather than straight through walls
