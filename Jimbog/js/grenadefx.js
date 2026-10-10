@@ -362,7 +362,17 @@
       // Height range of the part of the segment that is inside the cylinder.
       const y0 = a.y + (b.y - a.y) * t0, y1 = a.y + (b.y - a.y) * t1;
       const lo = Math.min(y0, y1), hi = Math.max(y0, y1);
-      return hi >= this.pos.y && lo <= this.pos.y + this.height;
+      if (!(hi >= this.pos.y && lo <= this.pos.y + this.height)) return false;
+      // smoke doesn't reach through walls: the middle of that stretch must be
+      // on the cloud's side of any wall (same test as density())
+      if (this.clip) {
+        const tm = (t0 + t1) / 2;
+        const m = new THREE.Vector3(a.x + (b.x - a.x) * tm, a.y + (b.y - a.y) * tm, a.z + (b.z - a.z) * tm);
+        m.y = clamp(m.y, this.pos.y + 0.2, this.pos.y + this.height - 0.2);
+        const hit = this.clip(this._C, m);
+        if (hit && hit.distanceTo(this._C) < this._C.distanceTo(m) - 0.35) return false;
+      }
+      return true;
     }
 
     dispose() {

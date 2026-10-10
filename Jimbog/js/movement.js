@@ -70,16 +70,20 @@
   function step(game, f, dt, events) {
     const inp = f.input, b = f.body, world = game.world;
     // ---- crouch, with CS crouch-jump (tuck the feet up while airborne)
+    // (the 'stepup' events keep the camera steady while the feet move)
     const dH = C.STAND_H - C.CROUCH_H;
+    if (b.onGround) f.tucked = false;
     if (inp.crouch && !f.crouching) {
-      if (!b.onGround && world.fits(f.pos.x, f.pos.y + dH, f.pos.z, b.r, C.CROUCH_H)) f.pos.y += dH;
+      if (!b.onGround && world.fits(f.pos.x, f.pos.y + dH, f.pos.z, b.r, C.CROUCH_H)) {
+        f.pos.y += dH; f.tucked = true;
+        if (events) events.push(['stepup', dH]);
+      }
       f.crouching = true;
     } else if (!inp.crouch && f.crouching) {
-      if (b.onGround) {
-        if (world.fits(f.pos.x, f.pos.y, f.pos.z, b.r, C.STAND_H)) f.crouching = false;
-      } else if (world.fits(f.pos.x, f.pos.y - dH, f.pos.z, b.r, C.STAND_H) && world.fits(f.pos.x, f.pos.y - dH, f.pos.z, b.r, 0.1)) {
-        f.pos.y -= dH; f.crouching = false;
-      } else if (world.fits(f.pos.x, f.pos.y, f.pos.z, b.r, C.STAND_H)) f.crouching = false;
+      if (f.tucked && world.fits(f.pos.x, f.pos.y - dH, f.pos.z, b.r, C.STAND_H)) {
+        f.pos.y -= dH; f.crouching = false; f.tucked = false;
+        if (events) events.push(['stepup', -dH]);
+      } else if (world.fits(f.pos.x, f.pos.y, f.pos.z, b.r, C.STAND_H)) { f.crouching = false; f.tucked = false; }
     }
     b.h = f.crouching ? C.CROUCH_H : C.STAND_H;
     f.crouchK = U.damp(f.crouchK, f.crouching ? 1 : 0, 12, dt);

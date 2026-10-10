@@ -69,7 +69,7 @@
       this.resetWeapons();
     }
     resetWeapons() {
-      const arsenal = this.g.settings.loadout === 'arsenal';
+      const arsenal = (this.g.loadout || this.g.settings.loadout) === 'arsenal';
       for (const k of W.ORDER) {
         const d = DEFS[k];
         this.weapons[k] = { owned: k === 'claws' || k === 'pistol' || !!d.grenade || arsenal, mag: d.mag || 0, reserve: k === 'pistol' ? 24 : (arsenal ? (d.reserve || 0) : 0) };
@@ -262,6 +262,7 @@
       this.net = opts.online || null;
       this.authority = !this.net || this.net.isHost;
       this.mode = this.net ? 'online' : 'bots';
+      this.loadout = opts.loadout || s.loadout;   // online: the host's choice, for this match only
       const me = this.net ? this.net.myInfo() : { name: (s.name || 'Jimbog').slice(0, 16), fur: s.fur, vest: 0x3f8f4f, color: '#7dff8a', voice: 1.05 };
       this.player = new Fighter(this, me, 'player');
       this.fighters.push(this.player);
@@ -277,7 +278,7 @@
       }
       JB.MapData.pickups.forEach((p, i) => {
         const it = new Pickup(this, p, i);
-        if (it.kind === 'weapon' && s.loadout === 'arsenal') { this.R.scene.remove(it.mesh); disposeTree(it.mesh); return; }
+        if (it.kind === 'weapon' && this.loadout === 'arsenal') { this.R.scene.remove(it.mesh); disposeTree(it.mesh); return; }
         this.pickups.push(it);
       });
       if (this.vm) { this.R.vmCamera.remove(this.vm.root); disposeTree(this.vm.root); }
@@ -363,6 +364,8 @@
         this.healK = 0.6;
         this.awaitSpawn = false;
         this.punch.x = this.punch.y = 0;
+        this.zoomK = 1;
+        if (this.touch) { this.touch.cycle = false; this.touch.reload = false; }
       }
     }
 
@@ -622,6 +625,7 @@
     frame(dt) {
       dt = Math.min(dt, 0.05);
       if (this.net) this.net.update(dt);
+      if (this.paused && this.player && this.player.nadeHold) { this.player.nadeHold = null; if (this.vm) this.vm.nadeState = 'idle'; }
       if (this.paused && !this.net) { this.render(0); return; }
       if (this.state === 'menu' || this.state === 'lobby') { this.menuCamera(dt); this.render(dt); return; }
       this.time += dt;

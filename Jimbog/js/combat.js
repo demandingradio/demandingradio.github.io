@@ -58,7 +58,7 @@
         if (f.reloadT <= 0) {
           if (def.shellReload) {
             if (w.reserve > 0 && w.mag < def.mag) { w.mag++; w.reserve--; sfx('shell', f.isPlayer ? {} : { pos: f.pos }); }
-            if (w.mag < def.mag && w.reserve > 0 && !inp.fire) { f.reloadT = def.reload; if (f.isPlayer) this.vm.reload(def.reload); }
+            if (w.mag < def.mag && w.reserve > 0 && !(inp.fire && !f.fireLatch)) { f.reloadT = def.reload; if (f.isPlayer) this.vm.reload(def.reload); }
           } else {
             const n = Math.min(def.mag - w.mag, w.reserve);
             w.mag += n; w.reserve -= n;
@@ -108,7 +108,7 @@
       if (def.grenade && !(f.nades[def.grenade] > 0)) return;
       f.prev = DEFS[f.current].grenade ? f.prev : f.current;
       f.current = type;
-      f.switching = true; f.switchT = def.deploy || 0.5; f.reloadT = 0; f.cool = Math.max(f.cool, 0.05);
+      f.switching = true; f.switchT = def.deploy || 0.5; f.reloadT = 0; f.cool = 0;
       f.zoom = 0; f.rescopeT = 0; f.nadeHold = null; f.recoilIdx = 0;
       f.cat.setWeapon(type);
       if (f.isPlayer) { this.vm.setWeapon(type); sfx('deploy', { volume: 0.7 }); }
@@ -188,7 +188,7 @@
       const perVictim = new Map();
       const tracers = [];
       for (let i = 0; i < n; i++) {
-        W.spreadDir(aim, inacc + (def.pellets ? def.spread : 0), dir);
+        W.spreadDir(aim, inacc, dir);
         const r = W.trace(this.world, this.fighters, f, eye, dir, def.range);
         const pt = new THREE.Vector3(r.x, r.y, r.z);
         if (i < 3) { this.fx.tracer(muzzle, pt, f.isPlayer ? 0xffe0a8 : 0xffc890, def.slot === 6 ? 0.045 : 0.022); tracers.push([+pt.x.toFixed(2), +pt.y.toFixed(2), +pt.z.toFixed(2)]); }
@@ -346,7 +346,7 @@
         let dmg = def.damage * k;
         if (e === owner) dmg *= 0.55;
         const dir = c.clone().sub(p).normalize();
-        if (!e.remote) { e.vel.addScaledVector(dir, 9 * k); e.vel.y += 4 * k; e.body.onGround = false; }
+        if (!e.remote && !this.net) { e.vel.addScaledVector(dir, 9 * k); e.vel.y += 4 * k; e.body.onGround = false; }
         this.reportHit(owner, e, dmg, 'launcher', { dir, point: c, group: 'chest', premult: true, push: [dir.x * 9 * k, 4 * k, dir.z * 9 * k] });
       }
     },
@@ -386,20 +386,22 @@
       const vel = new THREE.Vector3(dx / tFlight, (dy + 0.5 * NADE_GRAVITY * tFlight * tFlight) / tFlight, dz / tFlight);
       if (vel.length() > NADE_SPEED * 1.1) vel.multiplyScalar(NADE_SPEED * 1.1 / vel.length());
       f.nades[kind]--;
-      this.spawnNade(kind, eye.clone().add(new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(0.3)), vel, f);
+      // CS bots time their grenades: pop on arrival instead of rolling on
+      const fuse = kind === 'flash' ? U.clamp(tFlight, 0.5, DEFS.flash.fuse) : tFlight + 0.25;
+      this.spawnNade(kind, eye.clone().add(new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(0.3)), vel, f, fuse);
       sfx('grenade_throw', { pos: f.pos, volume: 0.6 });
       f.cat.fire();
       return true;
     },
 
-    spawnNade(kind, start, vel, owner) {
+    spawnNade(kind, start, vel, owner, fuse) {
       if (!this.nadeModels) this.nadeModels = {};
       const proto = this.nadeModels[kind] || (this.nadeModels[kind] = W.buildModel(kind, null, false));
       const mesh = proto.clone();
       mesh.scale.setScalar(1.2);
       mesh.position.copy(start);
       this.R.scene.add(mesh);
-      this.nades.push({ kind, mesh, owner, pos: mesh.position, vel: vel.clone(), r: 0.05, t: 0, still: 0, bounces: 0 });
+      this.nades.push({ kind, mesh, owner, pos: mesh.position, vel: vel.clone(), r: 0.05, t: 0, still: 0, bounces: 0, fuse: fuse || 0 });
     },
 
     updateNades(dt) {
@@ -415,14 +417,15 @@
             if (before > 1.5 && n.bounces < 12) sfx('grenade_bounce', { pos: n.pos, volume: U.clamp(before / 10, 0.2, 1), surface: JB.Movement.surfaceAt(this.level, n.pos.x, n.pos.z) });
             // ground friction
             n.vel.x *= 0.8; n.vel.z *= 0.8;
+            if (n.rest) n.vel.set(0, 0, 0);   // settled on the floor
           }
           n.mesh.rotation.x += dt * Math.min(20, n.vel.length() * 2); n.mesh.rotation.z += dt * 3;
         }
         const speed = n.vel.length();
         n.still = speed < 0.25 ? n.still + dt : 0;
         let boom = false;
-        if (n.kind === 'flash') boom = n.t >= DEFS.flash.fuse;
-        else boom = (n.t > 1.2 && n.still > 0.25) || n.t >= DEFS.smoke.fuse;
+        if (n.kind === 'flash') boom = n.t >= (n.fuse || DEFS.flash.fuse);
+        else boom = (n.t > 1.2 && n.still > 0.25) || n.t >= (n.fuse || DEFS.smoke.fuse);
         if (boom) {
           if (n.kind === 'flash') this.detonateFlash(n.pos.clone(), n.owner);
           else this.detonateSmoke(n.pos.clone(), n.owner);
@@ -439,6 +442,7 @@
       this.noise(p, owner, true);
       for (const f of this.fighters) {
         if (!f.alive || f.remote) continue;   // remote players work out their own flash
+        if (f === owner && f.brain) continue;  // bots turn away from their own flash
         const eye = this.eyeOf(f, new THREE.Vector3());
         const d = eye.distanceTo(p);
         if (d > 42) continue;
@@ -523,13 +527,29 @@
     reportHit(attacker, victim, dmg, weapon, opts) {
       if (this.net && !this.authority) {
         if (attacker === this.player) {
+          if (!victim.alive || victim.invuln > 0) return null;
           this.net.sendHit(victim, dmg, weapon, opts);
           if (opts.point) this.fx.fur(opts.point, victim.furColor, opts.head ? 14 : 8, opts.dir);
           if (victim !== this.player) sfx(opts.head ? (victim.armor > 0 && victim.helmet ? 'headshot_helmet' : 'headshot') : 'hitmarker', { volume: 0.7 });
+          // the host decides; this guess only picks the kill-style hitmarker
+          const group = opts.head ? 'head' : (opts.group || 'chest');
+          const est = this.armorSplit(victim, opts.premult ? dmg : dmg * this.groupMult(group), weapon, group);
+          return victim.hp - est.hp <= 0 ? 'kill' : 'pending';
         }
         return 'pending';
       }
       return this.applyDamage(victim, dmg, attacker, weapon, opts);
+    },
+
+    // CS armour: how much of `dmg` reaches health and how much armour it eats.
+    armorSplit(v, dmg, weapon, group) {
+      const def = DEFS[weapon] || {};
+      const armored = v.armor > 0 && group !== 'legs' && (group !== 'head' || v.helmet) && weapon !== 'fall';
+      if (!armored) return { hp: dmg, ar: 0, armored: false };
+      const pen = def.armorPen !== undefined ? def.armorPen : (weapon === 'claws' ? 0.85 : 0.57);
+      let hp = dmg * pen, ar = (dmg - hp) * 0.5;
+      if (ar > v.armor) { hp = dmg - v.armor * 2; ar = v.armor; }
+      return { hp: Math.max(0, hp), ar, armored: true };
     },
 
     // Authoritative damage (offline or on the host).
@@ -538,15 +558,12 @@
       const def = DEFS[weapon] || {};
       const group = opts.head ? 'head' : (opts.group || 'chest');
       let dmg = Math.max(0, opts.premult ? amount : amount * this.groupMult(group));
-      const armored = v.armor > 0 && group !== 'legs' && (group !== 'head' || v.helmet) && weapon !== 'fall';
       let dink = false;
-      if (armored) {
-        const pen = def.armorPen !== undefined ? def.armorPen : (weapon === 'claws' ? 0.85 : 0.57);
-        let hp = dmg * pen, ar = (dmg - hp) * 0.5;
-        if (ar > v.armor) { hp = dmg - v.armor * 2; ar = v.armor; }
-        v.armor = Math.max(0, v.armor - ar);
+      const split = this.armorSplit(v, dmg, weapon, group);
+      if (split.armored) {
+        v.armor = Math.max(0, v.armor - split.ar);
         if (v.armor <= 0) v.helmet = false;
-        dmg = Math.max(0, hp);
+        dmg = split.hp;
         dink = group === 'head';
       }
       v.hp -= dmg;

@@ -408,7 +408,7 @@
       }
     }
     setWeapon(type, instant) {
-      if (this.type === type && !this.nadeGone) { this.nextType = null; return; }
+      if (this.type === type && !this.nadeGone) { this.nextType = null; this.reloadT = 0; return; }
       this.nextType = type;
       if (instant || !this.type) { this._swap(); this.switchK = instant ? 0 : 1; }
     }

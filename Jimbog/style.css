@@ -235,3 +235,10 @@ button.alt:disabled { filter: grayscale(1) brightness(0.6); cursor: wait; }
   .cm.big { font-size: 5.5vw; letter-spacing: 1px; }
   .cm { font-size: 17px; }
 }
+#notice { z-index: 12; }
+input#pname { min-width: 0; width: 100%; }
+/* narrow screens: weapon slots show numbers only so the row fits */
+@media (max-width: 600px) {
+  .slot .w { display: none; }
+  #slots { flex-wrap: wrap; max-width: calc(100vw - 40px); margin-left: auto; }
+}

@@ -25,7 +25,7 @@
   const MAX_MESSAGE_BYTES = 64 * 1024;  // app cap on the JSON size of a message
   const JSON_CHANNEL_LIMIT = 16300;     // PeerJS json serializer refuses payloads >= this many bytes
   const PING_MS = 1000;
-  const SILENT_MS = 8000;
+  const SILENT_MS = 15000;   // generous: a slow phone can stall a few seconds compiling shaders at match start
   const CONNECT_MS = 15000;
   const HOST_ATTEMPTS = 5;
   const RECONNECT_TRIES = 5;

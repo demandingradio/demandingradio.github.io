@@ -18,6 +18,7 @@
   const syncers = [];         // refresh the menu + pause sliders from settings
   const syncSettings = () => syncers.forEach((f) => f());
   let online = null;          // JB.Online while hosting / joined
+  let lockOnStart = false;    // the host clicked START/REMATCH: lock the mouse instead of showing PLAY
   const joinId = JB.Net && JB.Net.parseJoin ? JB.Net.parseJoin() : null;
 
   function setLoading(text) { $('loadtext').textContent = text; }
@@ -90,7 +91,7 @@
     $('tomenu').addEventListener('click', toMenu);
     $('rematch').addEventListener('click', () => {
       $('end').hidden = true;
-      if (online && online.isHost) { online.startMatch(); lock(); }
+      if (online && online.isHost) { lockOnStart = true; online.startMatch(); lockOnStart = false; }
       else if (!online) startBots();
     });
     $('endmenu').addEventListener('click', () => { $('end').hidden = true; toMenu(); });
@@ -98,7 +99,7 @@
     // online box
     $('onhost').addEventListener('click', hostGame);
     $('onjoin').addEventListener('click', joinGame);
-    $('onstart').addEventListener('click', () => { click(); if (online) { online.startMatch(); } });
+    $('onstart').addEventListener('click', () => { click(); if (online) { lockOnStart = true; online.startMatch(); lockOnStart = false; } });
     $('onleave').addEventListener('click', () => { click(); leaveOnline(); $('onlinebox').hidden = true; });
     $('oncopy').addEventListener('click', () => {
       const inp = $('onlinkurl');
@@ -132,6 +133,7 @@
         $('onlinebox').hidden = true; $('menu').hidden = true; $('end').hidden = true; $('pause').hidden = true;
         game.paused = false;
         if (isTouch) { game.touchMode = true; $('touch').hidden = false; }
+        else if (lockOnStart) lock();
         else if (!document.pointerLockElement) showPause(true);
       },
       onLeave: (reason) => {
@@ -235,6 +237,7 @@
     if (!keepNotice) click();
     leaveOnline();
     hidePause();
+    $('end').hidden = true;
     if (document.pointerLockElement) document.exitPointerLock();
     game.state = 'menu';
     game.paused = false;

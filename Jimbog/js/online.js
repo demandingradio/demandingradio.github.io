@@ -95,14 +95,15 @@
       const r = { id: from, name: String(m.name || 'Cat').slice(0, 16), fur: JB.Cat.FURS[m.fur] ? m.fur : 'ginger', c };
       this.roster = this.roster.filter((x) => x.id !== from).concat([r]);
       const g = this.game;
+      const live = this.started && !g.ended;
       this.session.send({
         t: 'welcome', you: r, r: this.roster, s: this.settings || this.pickSettings(),
-        state: this.started ? 'play' : 'lobby', mt: g.matchTime || 0,
-        sc: this.started ? g.fighters.map((f) => [f.netId, f.kills, f.deaths]) : [],
-        pk: this.started ? g.pickups.map((p) => (p.active ? 1 : 0)) : []
+        state: live ? 'play' : 'lobby', mt: g.matchTime || 0,
+        sc: live ? g.fighters.map((f) => [f.netId, f.kills, f.deaths]) : [],
+        pk: live ? g.pickups.map((p) => [p.index, p.active ? 1 : 0]) : []
       }, from);
       this.session.broadcast({ t: 'roster', r: this.roster }, from);
-      if (this.started) {
+      if (live) {
         this.byId.set(from, g.addRemote(this.infoFor(r)));
         g.hud.center(r.name + ' joined', '');
       }
@@ -124,16 +125,15 @@
     // ---------------------------------------------------------------- both
     begin(settings, roster, lateJoin, matchTime, extra) {
       const g = this.game;
-      Object.assign(g.settings, { loadout: settings.loadout });
       this.settings = settings;
       this.started = true;
       this.byId.clear();
-      g.startMatch({ online: this, frags: settings.frags, matchTime, skipCountdown: lateJoin });
+      g.startMatch({ online: this, frags: settings.frags, matchTime, skipCountdown: lateJoin, loadout: settings.loadout });
       this.byId.set(this.myId, g.player);
       g.player.netId = this.myId;
       for (const r of roster) if (r.id !== this.myId) this.byId.set(r.id, g.addRemote(this.infoFor(r)));
       if (extra && extra.sc) for (const [id, k, d] of extra.sc) { const f = this.byId.get(id); if (f) { f.kills = k; f.deaths = d; } }
-      if (extra && extra.pk) extra.pk.forEach((on, i) => { const it = g.pickups.find((p) => p.index === i); if (it && !on) it.take(); });
+      if (extra && extra.pk) extra.pk.forEach(([i, on]) => { const it = g.pickups.find((p) => p.index === i); if (it && !on) it.take(); });
       if (this.ui.onStart) this.ui.onStart(this);
     }
 
@@ -143,7 +143,10 @@
         // ---- host receives
         case 'hello': if (this.isHost) this.hostHello(m, from); break;
         case 'st': if (this.isHost) this.applyState(this.byId.get(from), m.s); break;
-        case 'ev': if (this.isHost) { this.applyEvent(m.e, m.d, from); this.session.broadcast({ t: 'ev', e: m.e, d: m.d }, from); } break;
+        case 'ev':
+          if (this.isHost) { this.applyEvent(m.e, m.d, from); this.session.broadcast({ t: 'ev', e: m.e, d: m.d }, from); }
+          else this.applyEvent(m.e, m.d, null);
+          break;
         case 'hit': if (this.isHost) this.hostHit(m, from); break;
         case 'rs': if (this.isHost) this.hostRespawn(this.byId.get(from)); break;
         case 'pick': if (this.isHost) this.hostPick(m.i, this.byId.get(from), from); break;
@@ -163,7 +166,6 @@
         case 'left': { const r = this.roster.find((x) => x.id === m.id); this.roster = this.roster.filter((x) => x.id !== m.id); this.dropFighter(m.id, r && r.name); break; }
         case 'start': if (!this.isHost) this.begin(m.s, m.r, false, m.s.time * 60, null); break;
         case 'snap': if (!this.isHost) this.applySnap(m); break;
-        case 'ev': if (!this.isHost) this.applyEvent(m.e, m.d, null); break;
         case 'dmg': if (!this.isHost) this.applyDmg(m); break;
         case 'kill': if (!this.isHost) this.applyKill(m); break;
         case 'spawn': if (!this.isHost && this.started) { g.placeAt(g.player, v3(m.p), m.y); g.player.invuln = 1.5; } break;
@@ -320,7 +322,7 @@
     hostHit(m, from) {
       const g = this.game;
       const attacker = this.byId.get(from), victim = this.byId.get(m.v);
-      if (!attacker || !victim || !(m.d >= 0) || m.d > 800) return;
+      if (!attacker || !victim || !(m.d >= 0) || m.d > (m.w === 'fall' ? 1000 : 800)) return;
       g.applyDamage(victim, m.d, attacker, DEFS[m.w] || m.w === 'fall' ? m.w : 'pistol', {
         premult: true, group: m.g, head: !!m.h, point: m.p ? v3(m.p) : null, dir: m.dir ? v3(m.dir) : null, push: m.push
       });
@@ -334,7 +336,7 @@
         p: o.point ? [r2(o.point.x), r2(o.point.y), r2(o.point.z)] : null, dir: o.dir ? [r2(o.dir.x), r2(o.dir.y), r2(o.dir.z)] : null, push: o.push || null
       });
       // knockback on the host's own cat
-      if (v === this.game.player && o.push) v.vel.add(v3(o.push));
+      if (v === this.game.player && o.push) { v.vel.add(v3(o.push)); v.body.onGround = false; }
     }
     applyDmg(m) {
       const g = this.game;
@@ -342,7 +344,7 @@
       if (!v) return;
       v.hp = m.hp; v.armor = m.ar; v.helmet = !!m.he;
       if (v === g.player && m.w && DEFS[m.w] && DEFS[m.w].tag) v.velMod = Math.min(v.velMod, 1 - DEFS[m.w].tag);
-      if (v === g.player && m.push) v.vel.add(v3(m.push));
+      if (v === g.player && m.push) { v.vel.add(v3(m.push)); v.body.onGround = false; }
       g.hitFX(v, a, m.d, { head: !!m.h, dink: !!m.dk, point: m.p ? v3(m.p) : null, dir: m.dir ? v3(m.dir) : null });
     }
     onKill(v, killer, weapon, head) {

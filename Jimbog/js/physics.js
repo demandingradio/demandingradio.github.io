@@ -143,7 +143,7 @@
       }
       if (!body.onGround) {
         const top = this.groundAt(p.x, p.y, p.z, body.r - 0.02, 0.01, 0.03);
-        if (top > -Infinity && p.y - top <= 0.03) { p.y = top; body.onGround = true; if (v.y < 0) v.y = 0; }
+        if (top > -Infinity && p.y - top <= 0.03) { p.y = top; body.onGround = true; if (v.y < 0) { body.landSpeed = -v.y; v.y = 0; } }
       }
     }
     _axis(body, a, d, canStep) {
