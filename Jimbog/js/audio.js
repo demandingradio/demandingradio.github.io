@@ -4,9 +4,22 @@
  * Every sound is synthesised at runtime with the Web Audio API: no sample
  * files, no libraries, no modules. Loaded with a plain <script> tag.
  *
+ * Signal flow, per voice:
+ *   voice bus -> [occlusion lowpass] -> [distance lowpass] -> head
+ *   head -> reverb send (spec ramp x panner distance gain) -> shared reverb
+ *   head -> [HRTF/equalpower panner] -> master (or bypass)
+ * Shared:
+ *   master -> duck -> deafen lowpass -> compressor -> speakers
+ *   bypass ---------------------------> compressor  (flash_ring only)
+ *   reverb (short + long convolver) -> wet return -> master
+ *
  *   JB.Audio.init();                             // call from a click
  *   JB.Audio.play('pistol');                     // 2D sound (UI, first person)
- *   JB.Audio.play('hit', { pos: { x, y, z } });  // 3D sound, HRTF panned
+ *   JB.Audio.play('hit', { pos: { x, y, z } });  // 3D sound, panned and distance-filtered
+ *   JB.Audio.play('footstep', { pos, surface: 'metal', occluded: true });
+ *   JB.Audio.setListener(pos, fwd);              // every frame
+ *   JB.Audio.setRoom(0.7);                       // 0 = small office, 1 = huge hall
+ *   JB.Audio.setDeafen(1, 2);                    // flashbang: muffle and duck, recover over 2 s
  */
 (function () {
   'use strict';
@@ -16,41 +29,74 @@
 
   // ---- State ---------------------------------------------------------------
   let ctx = null;          // AudioContext, created by the first init() call
-  let master = null;       // master GainNode -> compressor -> speakers
+  let master = null;       // master volume gain (setMasterVolume)
+  let duck = null;         // flashbang duck gain, between master and deafenLP
+  let deafenLP = null;     // flashbang lowpass
+  let comp = null;         // final compressor -> destination
+  let bypass = null;       // flash_ring path: skips the duck and the deafen lowpass
+  let reverbIn = null;     // mono send bus into both convolvers
+  let shortG = null;       // crossfade gain for the short IR
+  let longG = null;        // crossfade gain for the long IR
+  let wetG = null;         // wet return to master
   let bufs = null;         // shared 2 s noise loops: { white, pink, brown }
   let masterVol = 0.8;
   let voices = 0;          // one-shot sounds still playing
   let amb = null;          // running ambience (see buildAmbience), or null
   let ambWanted = false;   // startAmbience() was called; may start after init()
+  let roomSize = 0.6;      // 0 = small office, 1 = huge hall
+  let deaf = null;         // current deafen effect: { amt, t0, secs }, or null
+  let lis = { x: 0, y: 0, z: 0 };   // listener position, for distance filtering
 
   const SOFT_CAP = 48;     // at this many voices, LOW-priority sounds are dropped
   const HARD_CAP = 72;     // at this many, everything except CRITICAL is dropped
   const AMB_LEVEL = 0.03;  // ambience bus gain: bed sits about -34 dBFS RMS, well under the guns
+  const OCC_GAIN = 0.55;   // occluded sounds: level
+  const OCC_CUTOFF = 650;  // occluded sounds: extra lowpass, Hz
+  const DEAF_HZ = 20000;   // deafen lowpass when not deafened
+  const DEAF_MIN_HZ = 450; // deafen lowpass at full strength
+  const DUCK_DEPTH = 0.6;  // deafen at full strength drops master gain by this much
+  const DUCK_ATTACK = 0.015; // the duck drops over 15 ms, so it does not click
+  const WET_TRIM = 6;      // reverb return scale. Sets how loud the room is; see makeIR
 
   // Voice priority. LOW sounds are the first to go when voices pile up.
-  const LOW = new Set(['footstep', 'jump', 'land', 'impact', 'bullet_whiz', 'shell',
-    'empty', 'switch', 'claw', 'hiss', 'ui_click']);
-  const CRITICAL = new Set(['sniper', 'shotgun', 'explosion', 'launcher', 'hurt', 'death', 'kill']);
+  const LOW = new Set(['footstep', 'walk_step', 'jump', 'land', 'impact', 'bullet_whiz', 'shell',
+    'empty', 'dryfire', 'switch', 'claw', 'hiss', 'smoke_hiss', 'ui_click', 'grenade_pin',
+    'grenade_throw', 'grenade_bounce', 'scope_in', 'scope_out', 'knife_slash', 'deploy']);
+  const CRITICAL = new Set(['sniper', 'shotgun', 'explosion', 'launcher', 'hurt', 'death', 'kill',
+    'flash_explode', 'flash_ring']);
+
+  // Sounds that skip the duck and the deafen lowpass (the player's own tinnitus).
+  const BYPASS = new Set(['flash_ring']);
+
+  // Floor materials for footsteps, landings and bounces.
+  const SURFACES = new Set(['concrete', 'metal', 'tile', 'grate']);
 
   // Relative loudness per sound, multiplied by the caller's volume.
   const LEVEL = {
     sniper: 1.0, shotgun: 0.95, explosion: 0.95, launcher: 0.8,
     rifle: 0.8, pistol: 0.7, smg: 0.5, claw: 0.6, claw_hit: 0.7,
-    empty: 0.4, reload: 0.5, shell: 0.5, switch: 0.45, bullet_whiz: 0.4,
-    impact: 0.45, ricochet: 0.6, footstep: 0.22, jump: 0.5, land: 0.45,
+    empty: 0.4, dryfire: 0.4, reload: 0.5, shell: 0.5, switch: 0.45, bullet_whiz: 0.4,
+    impact: 0.45, ricochet: 0.6, footstep: 0.42, walk_step: 0.2, jump: 0.5, land: 0.45,
     pickup_weapon: 0.5, pickup_ammo: 0.45, pickup_health: 0.5, pickup_armor: 0.55,
-    hit: 0.6, hitmarker: 0.4, headshot: 0.5, hurt: 0.7, death: 0.6, meow: 0.6,
+    hit: 0.6, hit_armor: 0.6, hitmarker: 0.4, headshot: 0.5, headshot_helmet: 0.55,
+    hurt: 0.7, death: 0.6, meow: 0.6,
     hiss: 0.5, kill: 0.5, respawn: 0.5, countdown: 0.5, go: 0.5, match_end: 0.5,
-    ui_click: 0.25
+    ui_click: 0.25,
+    grenade_pin: 0.5, grenade_throw: 0.5, grenade_bounce: 0.55, flash_explode: 0.9,
+    smoke_pop: 0.6, smoke_hiss: 0.5, flash_ring: 0.7,
+    scope_in: 0.5, scope_out: 0.5, knife_slash: 0.6, knife_stab: 0.7, knife_hit_wall: 0.6,
+    deploy: 0.5
   };
 
   // These keep their exact pitch. Every other sound gets +/-4% random variation.
-  const NO_JITTER = new Set(['countdown', 'go', 'match_end', 'kill', 'respawn', 'ui_click']);
+  const NO_JITTER = new Set(['countdown', 'go', 'match_end', 'kill', 'respawn', 'ui_click', 'flash_ring']);
 
   // ---- Utilities -----------------------------------------------------------
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
+  const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   function warn(...args) {
     try { console.warn('[JB.Audio]', ...args); } catch (e) { /* no console */ }
   }
@@ -101,6 +147,126 @@
     return buf;
   }
 
+  // Procedural room impulse response, stereo. Each channel is built on its
+  // own so the room is decorrelated (wide, not mono). len in seconds; t60 is
+  // the time the tail takes to fall 60 dB.
+  function makeIR(len, t60) {
+    const sr = ctx.sampleRate;
+    const n = Math.floor(sr * len);
+    const buf = ctx.createBuffer(2, n, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      // Early reflections: 14 bounces off nearby walls and pillars, 15-60 ms.
+      // Each is a half-millisecond burst of noise, so it is not a bare click.
+      for (let r = 0; r < 14; r++) {
+        const t = rnd(0.015, 0.06);
+        const amp = rnd(0.4, 1) * (Math.random() < 0.5 ? -1 : 1) * Math.exp(-(t - 0.015) / 0.03);
+        const i0 = Math.floor(t * sr);
+        for (let k = 0; k < 24 && i0 + k < n; k++) {
+          d[i0 + k] += amp * (1 - k / 24) * (Math.random() * 2 - 1);
+        }
+      }
+      // Late tail: noise with an exponential decay. The highs die faster than
+      // the lows, as they do in concrete and steel rooms.
+      let y = 0;
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const fc = 7000 * Math.pow(2000 / 7000, Math.min(1, t / len));
+        const a = Math.exp(-2 * Math.PI * fc / sr);
+        y = (1 - a) * (Math.random() * 2 - 1) + a * y;
+        const onset = clamp((t - 0.01) / 0.05, 0, 1);   // fades in after the early reflections
+        d[i] += y * onset * Math.exp(-6.9078 * t / t60);
+      }
+    }
+    // Scale so the first 100 ms carry unit energy (both channels). Both IRs then
+    // start at the same level, and the long one simply sustains longer. The
+    // convolvers do not normalise (Chrome's normalize flag applies a fixed
+    // calibration that is far too quiet), so WET_TRIM sets the level instead.
+    let e = 0;
+    const early = Math.min(n, Math.floor(sr * 0.1));
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < early; i++) e += d[i] * d[i];
+    }
+    const k = 1 / Math.sqrt(e || 1);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < n; i++) d[i] *= k;
+    }
+    return buf;
+  }
+
+  // The output chain: compressor -> destination, deafen lowpass and duck in
+  // front of it, and the bypass path for the player's own tinnitus.
+  function buildOutput() {
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -10;
+    comp.knee.value = 8;
+    comp.ratio.value = 8;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.2;
+    comp.connect(ctx.destination);
+
+    deafenLP = ctx.createBiquadFilter();
+    deafenLP.type = 'lowpass';
+    deafenLP.frequency.value = DEAF_HZ;
+    deafenLP.Q.value = 0.5;
+    deafenLP.connect(comp);
+
+    duck = ctx.createGain();
+    duck.gain.value = 1;
+    duck.connect(deafenLP);
+
+    master = ctx.createGain();
+    master.gain.value = masterVol;
+    master.connect(duck);
+
+    bypass = ctx.createGain();
+    bypass.gain.value = masterVol;
+    bypass.connect(comp);
+  }
+
+  // Two convolvers, one short (~0.8 s) and one long (~2.2 s), fed by one mono
+  // send bus. setRoom() crossfades between them and sets the wet return.
+  function buildReverb() {
+    reverbIn = ctx.createGain();
+    reverbIn.channelCount = 1;
+    reverbIn.channelCountMode = 'explicit';
+
+    const shortConv = ctx.createConvolver();
+    shortConv.normalize = false;
+    shortConv.buffer = makeIR(0.8, 0.7);
+    const longConv = ctx.createConvolver();
+    longConv.normalize = false;
+    longConv.buffer = makeIR(2.2, 2.0);
+
+    shortG = ctx.createGain();
+    longG = ctx.createGain();
+    wetG = ctx.createGain();
+    reverbIn.connect(shortConv);
+    shortConv.connect(shortG);
+    shortG.connect(wetG);
+    reverbIn.connect(longConv);
+    longConv.connect(longG);
+    longG.connect(wetG);
+    wetG.connect(master);
+    applyRoom(roomSize, false);
+  }
+
+  // Set the crossfade and wet level for a room size. glide: ramp instead of jump.
+  function applyRoom(s, glide) {
+    const t = ctx.currentTime;
+    const targets = [
+      [shortG, Math.cos(s * Math.PI / 2)],   // equal-power crossfade
+      [longG, Math.sin(s * Math.PI / 2)],
+      [wetG, WET_TRIM * lerp(0.5, 1.2, s)]   // bigger room, longer and louder tail
+    ];
+    targets.forEach(([node, v]) => {
+      if (glide) node.gain.setTargetAtTime(v, t, 0.3);
+      else node.gain.setValueAtTime(v, t);
+    });
+  }
+
   // Create the audio graph on the first call, and resume it if the browser
   // suspended it. Call from a click so the browser allows sound. Safe to repeat.
   function init() {
@@ -108,25 +274,13 @@
       if (!AudioCtor) return;
       if (!ctx) {
         ctx = new AudioCtor();
-
-        // Final stage: a gentle compressor so stacked gunshots don't clip.
-        const comp = ctx.createDynamicsCompressor();
-        comp.threshold.value = -10;
-        comp.knee.value = 8;
-        comp.ratio.value = 8;
-        comp.attack.value = 0.003;
-        comp.release.value = 0.2;
-        comp.connect(ctx.destination);
-
-        master = ctx.createGain();
-        master.gain.value = masterVol;
-        master.connect(comp);
-
+        buildOutput();
         bufs = {
           white: makeNoise('white'),
           pink: makeNoise('pink'),
           brown: makeNoise('brown')
         };
+        buildReverb();
         if (ambWanted) buildAmbience();
       }
       if (ctx.state !== 'running') {
@@ -149,70 +303,163 @@
     if (!isFinite(x)) return;
     masterVol = clamp(x, 0, 1);
     try {
-      if (master) master.gain.setTargetAtTime(masterVol, ctx.currentTime, 0.02);
+      if (master) {
+        master.gain.setTargetAtTime(masterVol, ctx.currentTime, 0.02);
+        bypass.gain.setTargetAtTime(masterVol, ctx.currentTime, 0.02);
+      }
     } catch (e) { warn('setMasterVolume failed', e); }
   }
 
   // Called every frame. pos is the listener position, fwd a unit forward vector.
   // Up is always +Y.
   function setListener(pos, fwd) {
+    const p = pos || { x: 0, y: 0, z: 0 };
+    lis = { x: num(p.x, 0), y: num(p.y, 0), z: num(p.z, 0) };
     if (!ctx) return;
     try {
       const L = ctx.listener;
-      const p = pos || { x: 0, y: 0, z: 0 };
       const f = fwd || { x: 0, y: 0, z: -1 };
-      const x = num(p.x, 0), y = num(p.y, 0), z = num(p.z, 0);
       const fx = num(f.x, 0), fy = num(f.y, 0), fz = num(f.z, 0);
       if (L.positionX) {
-        L.positionX.value = x; L.positionY.value = y; L.positionZ.value = z;
+        L.positionX.value = lis.x; L.positionY.value = lis.y; L.positionZ.value = lis.z;
         L.forwardX.value = fx; L.forwardY.value = fy; L.forwardZ.value = fz;
         L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0;
       } else {
         // Older browsers only have the deprecated methods.
-        L.setPosition(x, y, z);
+        L.setPosition(lis.x, lis.y, lis.z);
         L.setOrientation(fx, fy, fz, 0, 1, 0);
       }
     } catch (e) { warn('setListener failed', e); }
   }
 
+  // Flashbang: muffle everything (except BYPASS sounds) and duck the master
+  // gain. amount 0..1, seconds = recovery time. The lowpass starts at
+  // lerp(20000, 450, amount) and climbs back to 20000 along an exponential
+  // curve over `seconds`: exponential in Hz, so the muffle lingers and then
+  // opens up. The duck recovers on the same schedule. A new call while a
+  // stronger effect is active is ignored.
+  function deafStrength(t) {
+    if (!deaf) return 0;
+    const k = (t - deaf.t0) / deaf.secs;
+    return k >= 1 ? 0 : deaf.amt * (1 - k);
+  }
+  function setDeafen(amount, seconds) {
+    try {
+      if (!ctx || !deafenLP) return;
+      const a = clamp(num(Number(amount), 0), 0, 1);
+      const secs = clamp(num(Number(seconds), 2), 0.05, 30);
+      if (a <= 0) return;
+      const t = ctx.currentTime;
+      if (a < deafStrength(t)) return;     // keep the stronger effect
+      deaf = { amt: a, t0: t, secs };
+      const f = deafenLP.frequency;
+      f.cancelScheduledValues(t);
+      f.setValueAtTime(lerp(DEAF_HZ, DEAF_MIN_HZ, a), t);
+      f.exponentialRampToValueAtTime(DEAF_HZ, t + secs);
+      // Duck: falls over DUCK_ATTACK (no step, so no click), then recovers on the same curve.
+      const g = duck.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(g.value, t);
+      g.linearRampToValueAtTime(1 - DUCK_DEPTH * a, t + DUCK_ATTACK);
+      g.exponentialRampToValueAtTime(1, t + secs);
+    } catch (e) { warn('setDeafen failed', e); }
+  }
+
+  // Room size 0..1: 0 = small office, 1 = huge hall. Works before init too.
+  function setRoom(size) {
+    try {
+      const x = Number(size);
+      if (!isFinite(x)) return;
+      roomSize = clamp(x, 0, 1);
+      if (ctx && wetG) applyRoom(roomSize, true);
+    } catch (e) { warn('setRoom failed', e); }
+  }
+
   // ---- Playback ------------------------------------------------------------
 
-  // Play a named sound. opts: { pos, volume, pitch } (all optional).
+  // Play a named sound. opts (all optional):
+  //   pos        {x,y,z}: 3D sound, panned and distance-filtered
+  //   volume     0..2, default 1
+  //   pitch      0.25..4, default 1
+  //   occluded   true: behind a wall (quieter, muffled, more reverb)
+  //   surface    'concrete' | 'metal' | 'tile' | 'grate' (footstep, walk_step, land, grenade_bounce)
+  //   duration   flash_ring only: fade-out length in seconds, default 3
   // Never throws. Unknown names and calls before init() are ignored.
   function play(name, opts) {
     try {
-      if (!isReady()) return;
-      if (!Object.prototype.hasOwnProperty.call(SOUNDS, name)) return;
+      if (!isReady() || !reverbIn) return;
+      if (!hasOwn(SOUNDS, name)) return;
 
       // Voice limiting: minor sounds go first, then everything but CRITICAL.
       if (voices >= SOFT_CAP && LOW.has(name)) return;
       if (voices >= HARD_CAP && !CRITICAL.has(name)) return;
 
       opts = opts || {};
-      const vol = clamp(num(opts.volume, 1), 0, 2) * (LEVEL[name] || 0.5);
+      const pos = opts.pos || null;
+      const occluded = !!opts.occluded;
+      const dist = pos ? distTo(pos) : 0;
+      const vol = clamp(num(opts.volume, 1), 0, 2) * (LEVEL[name] || 0.5) * (occluded ? OCC_GAIN : 1);
       let pitch = clamp(num(opts.pitch, 1), 0.25, 4);
       if (!NO_JITTER.has(name)) pitch *= rnd(0.96, 1.04);
+      const surface = SURFACES.has(opts.surface) ? opts.surface : 'concrete';
 
-      // Voice bus -> (optional HRTF panner) -> master.
+      // Voice bus (mono) -> optional filters -> head, which feeds the reverb
+      // send and the output.
       const bus = ctx.createGain();
+      bus.channelCount = 1;
+      bus.channelCountMode = 'explicit';
       bus.gain.value = vol;
       const nodes = [bus];
-      if (opts.pos) {
-        const pan = ctx.createPanner();
-        pan.panningModel = LOW.has(name) ? 'equalpower' : 'HRTF';
-        pan.distanceModel = 'inverse';
-        pan.refDistance = 2.5;
-        pan.maxDistance = 90;
-        pan.rolloffFactor = 1.1;
-        placePanner(pan, opts.pos);
-        bus.connect(pan);
-        pan.connect(master);
-        nodes.push(pan);
-      } else {
-        bus.connect(master);
+      let head = bus;
+      const chain = (node) => { head.connect(node); head = node; nodes.push(node); };
+
+      if (occluded) {
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = OCC_CUTOFF;
+        lp.Q.value = 0.7;
+        chain(lp);
+      }
+      if (pos) {
+        // Distance: 18 kHz up to 6 m, falling exponentially to 2.2 kHz at 70 m.
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = distCutoff(dist);
+        lp.Q.value = 0.7;
+        chain(lp);
       }
 
-      const c = { ctx, out: bus, t: ctx.currentTime + 0.005, p: pitch, nodes, end: 0 };
+      // Reverb send, tapped after the filters so distant sounds are dull in the tail too.
+      // The spec send ramp sets how wet a 3D sound is. The send also takes the panner's
+      // distance gain, so the tail falls with distance too. Without it, far sounds came
+      // out louder than near ones (a 70 m shot peaked about 13 dB above a 3 m shot).
+      const step = name === 'footstep' || name === 'walk_step';
+      const pp = panParams(step);
+      const send = ctx.createGain();
+      send.gain.value = sendLevel(pos ? dist : -1, occluded) * (pos ? distGain(dist, pp) : 1);
+      head.connect(send);
+      send.connect(reverbIn);
+      nodes.push(send);
+
+      const out = BYPASS.has(name) ? bypass : master;
+      if (pos) {
+        const pan = ctx.createPanner();
+        // Footsteps are key information and need front/back cues, which only HRTF gives.
+        // Other LOW-priority sounds keep equalpower to save CPU.
+        pan.panningModel = LOW.has(name) && !step ? 'equalpower' : 'HRTF';
+        pan.distanceModel = 'inverse';
+        pan.refDistance = pp.ref;
+        pan.maxDistance = pp.max;
+        pan.rolloffFactor = pp.roll;
+        placePanner(pan, pos);
+        head.connect(pan);
+        pan.connect(out);
+        nodes.push(pan);
+      } else {
+        head.connect(out);
+      }
+
+      const c = { ctx, out: bus, t: ctx.currentTime + 0.005, p: pitch, nodes, end: 0, surface, opts };
       c.end = c.t;
       voices++;
       try {
@@ -224,6 +471,32 @@
     } catch (e) {
       warn('play failed', name, e);
     }
+  }
+
+  // Distance from the listener to a point.
+  function distTo(p) {
+    const dx = num(p.x, 0) - lis.x, dy = num(p.y, 0) - lis.y, dz = num(p.z, 0) - lis.z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+
+  // Lowpass cutoff for a 3D sound at distance d (metres).
+  function distCutoff(d) {
+    return 18000 * Math.pow(2200 / 18000, clamp((d - 6) / 64, 0, 1));
+  }
+
+  // Reverb send level. d < 0 means a 2D sound.
+  function sendLevel(d, occluded) {
+    const s = d < 0 ? 0.10 : lerp(0.08, 0.5, clamp(d / 50, 0, 1));
+    return occluded ? s * 1.4 : s;
+  }
+
+  // Panner settings for a 3D sound. Footsteps reach further and roll off gently.
+  function panParams(step) {
+    return step ? { ref: 3.5, max: 45, roll: 1.0 } : { ref: 2.5, max: 90, roll: 1.1 };
+  }
+  // The PannerNode's 'inverse' distance gain, so the reverb send can follow it.
+  function distGain(d, p) {
+    return p.ref / (p.ref + p.roll * (clamp(d, p.ref, p.max) - p.ref));
   }
 
   function placePanner(pan, p) {
@@ -252,6 +525,7 @@
   //   c.t    start time          c.p    pitch multiplier
   //   c.nodes  every node made, so it can be disconnected later
   //   c.end    latest time anything is still audible
+  //   c.surface, c.opts  the play() options
   // Offsets (o.at) are seconds from c.t. Durations (o.dur) are total length.
 
   function hold(c, t) {
@@ -260,9 +534,10 @@
 
   // Attack-decay envelope: quick rise to peak, exponential fall to silence.
   // Exponential ramps can't reach 0, so they end at 0.0001 instead.
+  // Attacks down to 0.5 ms, so gunshot cracks can be real transients.
   function envelope(param, t, peak, attack, dur) {
-    const a = Math.max(attack || 0.002, 0.002);
-    const end = t + Math.max(dur, a + 0.01);
+    const a = Math.max(attack > 0 ? attack : 0.002, 0.0005);
+    const end = t + Math.max(dur, a + 0.003);
     param.setValueAtTime(0.0001, t);
     param.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t + a);
     param.exponentialRampToValueAtTime(0.0001, end);
@@ -331,33 +606,52 @@
     tone(c, { f: [[0, f], [0.035, f * 0.7]], at, dur: 0.035, peak: peak * 0.4, a: 0.001 });
   }
 
-  // Feedback delay with a lowpass in the loop: a long, darkening echo.
-  // Returns the input node. Feed it a short noise burst.
-  function echo(c, time, feedback, tail) {
-    const input = c.ctx.createGain();
-    const delay = c.ctx.createDelay(1.0);
-    delay.delayTime.value = time;
-    const fb = c.ctx.createGain();
-    fb.gain.value = feedback;
-    const lp = filt(c, { type: 'lowpass', f: 1800, q: 0.5 });
-    input.connect(delay);
-    delay.connect(lp);
-    lp.connect(fb);
-    fb.connect(delay);
-    c.nodes.push(input, delay, fb);
-    hold(c, c.t + tail);
-    return input;
+  // Gunshot, CS:GO style, as layers:
+  //   crack  1-2 ms highpassed noise: the snap you hear first
+  //   body   pitch-dropping tone plus lowpassed noise for 30-80 ms of boom
+  //   click  a quiet mechanical click 40-80 ms later
+  // The tail is not in here: it comes from the reverb bus.
+  function shot(c, s) {
+    noise(c, { dur: s.crackDur, peak: s.crack, a: 0.0005, dst: filt(c, { type: 'highpass', f: s.crackF, q: 0.7 }) });
+    tone(c, { type: s.bodyType || 'sine', f: s.body, dur: s.bodyDur, peak: s.bodyPeak, a: 0.001 });
+    noise(c, { dur: s.boomDur, peak: s.boom, a: 0.002, dst: filt(c, { type: 'lowpass', f: s.boomF, q: 0.7 }) });
+    click(c, s.clickAt, s.click, s.clickF);
   }
 
-  // Gunshot recipe: optional low thump, sharp crack, noisy tail, extras.
-  function gunshot(c, s) {
-    if (s.thump) tone(c, { f: s.thump.f, dur: s.thump.dur, peak: s.thump.peak, a: 0.002 });
-    noise(c, {
-      dur: s.crack.dur, peak: s.crack.peak, a: 0.001,
-      dst: filt(c, { type: s.crack.type, f: s.crack.f, q: s.crack.q })
-    });
-    noise(c, { dur: s.tail.dur, peak: s.tail.peak, a: 0.003, dst: filt(c, { type: 'lowpass', f: s.tail.f }) });
-    if (s.extra) s.extra(c);
+  // Floor contact for footsteps, landings and bounces. The surface sets the
+  // character; k scales the level.
+  function floorHit(c, surface, k) {
+    if (surface === 'metal') {
+      // A short ring from a steel plate: resonant band around 1.8-3 kHz.
+      tone(c, { f: rnd(1900, 2600), dur: 0.12, peak: 0.16 * k, a: 0.0008 });
+      noise(c, { dur: 0.12, peak: 0.1 * k, a: 0.001, dst: filt(c, { type: 'bandpass', f: 2400, q: 12 }) });
+    } else if (surface === 'tile') {
+      // Crisper: a sharp high click instead of grit.
+      noise(c, { dur: 0.008, peak: 0.5 * k, a: 0.0005, dst: filt(c, { type: 'highpass', f: 4500 }) });
+      tone(c, { f: 3400, dur: 0.02, peak: 0.12 * k, a: 0.0005 });
+    } else if (surface === 'grate') {
+      // Two or three rapid tiny rattles.
+      const n = Math.random() < 0.5 ? 2 : 3;
+      for (let i = 0; i < n; i++) {
+        noise(c, {
+          at: i * rnd(0.016, 0.024), dur: 0.01, peak: rnd(0.2, 0.3) * k, a: 0.0005,
+          dst: filt(c, { type: 'bandpass', f: rnd(2400, 3400), q: 3 })
+        });
+      }
+    } else {
+      // Concrete (default): low grit.
+      noise(c, { dur: 0.06, peak: 0.22 * k, a: 0.002, dst: filt(c, { type: 'lowpass', f: 900 }) });
+    }
+  }
+
+  // A footstep: a punchy thud and a heel click, then the floor material.
+  function stepSound(c, k) {
+    tone(c, { type: 'triangle', f: [[0, 130], [0.06, 52]], dur: 0.08, peak: 0.6 * k, a: 0.0015 });  // thud
+    tone(c, { f: [[0, 220], [0.03, 100]], dur: 0.05, peak: 0.25 * k, a: 0.001 });                  // knock
+    noise(c, { dur: 0.008, peak: 0.35 * k, a: 0.0005, dst: filt(c, { type: 'highpass', f: 2200 }) }); // heel click
+    // high scuff: gives the ear (HRTF) enough treble to tell front from behind
+    noise(c, { at: 0.01, dur: 0.045, peak: 0.14 * k, a: 0.004, dst: filt(c, { type: 'bandpass', f: rnd(5500, 7500), q: 1.2 }) });
+    floorHit(c, c.surface, k);
   }
 
   // Cat voice: a sawtooth buzz run through parallel formant bandpasses (the
@@ -403,49 +697,52 @@
   const SOUNDS = {
 
     // Weapons
-    pistol: (c) => gunshot(c, {
-      thump: { f: [[0, 180], [0.1, 60]], dur: 0.1, peak: 0.5 },
-      crack: { type: 'bandpass', f: 2200, q: 0.9, dur: 0.05, peak: 0.8 },
-      tail: { f: 1400, dur: 0.2, peak: 0.22 }
+    pistol: (c) => shot(c, {
+      crackF: 1800, crack: 0.75, crackDur: 0.003,
+      body: [[0, 330], [0.03, 150]], bodyDur: 0.05, bodyPeak: 0.5,
+      boomF: 1600, boom: 0.35, boomDur: 0.035,
+      clickAt: 0.055, click: 0.12, clickF: 2600
     }),
 
-    smg: (c) => gunshot(c, {
-      thump: { f: [[0, 200], [0.06, 90]], dur: 0.06, peak: 0.32 },
-      crack: { type: 'bandpass', f: 3400, q: 1.1, dur: 0.03, peak: 0.5 },
-      tail: { f: 2600, dur: 0.09, peak: 0.14 }
+    smg: (c) => shot(c, {
+      crackF: 3000, crack: 0.5, crackDur: 0.002,
+      body: [[0, 260], [0.025, 130]], bodyDur: 0.035, bodyPeak: 0.3,
+      boomF: 2200, boom: 0.2, boomDur: 0.03,
+      clickAt: 0.045, click: 0.06, clickF: 3000
     }),
 
-    rifle: (c) => gunshot(c, {
-      thump: { f: [[0, 150], [0.16, 45]], dur: 0.16, peak: 0.75 },
-      crack: { type: 'bandpass', f: 2000, q: 0.8, dur: 0.05, peak: 0.75 },
-      tail: { f: 1100, dur: 0.22, peak: 0.34 }
+    rifle: (c) => shot(c, {
+      crackF: 2000, crack: 0.8, crackDur: 0.003,
+      body: [[0, 95], [0.06, 66], [0.14, 60]], bodyDur: 0.14, bodyPeak: 0.85,  // ~70 Hz thump
+      boomF: 1100, boom: 0.42, boomDur: 0.07,
+      clickAt: 0.06, click: 0.14, clickF: 2200
     }),
 
-    shotgun: (c) => gunshot(c, {
-      thump: { f: [[0, 120], [0.35, 30]], dur: 0.35, peak: 0.95 },
-      crack: { type: 'bandpass', f: 1200, q: 0.7, dur: 0.06, peak: 0.6 },
-      tail: { f: 800, dur: 0.5, peak: 0.5 },
-      extra: (c2) => {
-        tone(c2, { f: [[0, 60], [0.4, 25]], dur: 0.4, peak: 0.5, a: 0.003 });                 // sub boom
-        noise(c2, { dur: 0.12, peak: 0.12, a: 0.002, dst: filt(c2, { type: 'highpass', f: 4000 }) }); // pellets
-      }
-    }),
+    shotgun: (c) => {
+      shot(c, {
+        crackF: 900, crack: 0.6, crackDur: 0.004,
+        body: [[0, 95], [0.2, 52], [0.45, 45]], bodyDur: 0.45, bodyPeak: 0.8,   // 50 Hz thump
+        boomF: 800, boom: 0.5, boomDur: 0.3,
+        clickAt: 0.07, click: 0.1, clickF: 1800
+      });
+      noise(c, { dur: 0.12, peak: 0.12, a: 0.002, dst: filt(c, { type: 'highpass', f: 4000 }) }); // pellets
+    },
 
     sniper: (c) => {
-      gunshot(c, {
-        thump: { f: [[0, 220], [0.14, 55]], dur: 0.14, peak: 0.8 },
-        crack: { type: 'highpass', f: 1400, q: 0.7, dur: 0.05, peak: 1.0 },
-        tail: { f: 1200, dur: 0.15, peak: 0.25 }
+      shot(c, {
+        crackF: 1200, crack: 0.7, crackDur: 0.003,
+        body: [[0, 90], [0.15, 42]], bodyDur: 0.25, bodyPeak: 0.7,
+        boomF: 900, boom: 0.4, boomDur: 0.1,
+        clickAt: 0.07, click: 0.15, clickF: 2000
       });
-      // Long echo fed by a short burst.
-      const input = echo(c, 0.19, 0.6, 1.3);
-      noise(c, { dur: 0.03, peak: 1.0, a: 0.001, dst: input });
+      noise(c, { at: 0.02, dur: 0.6, peak: 0.12, a: 0.03, dst: filt(c, { type: 'lowpass', f: [[0, 500], [0.6, 150]], q: 0.7 }) }); // long bass tail
     },
 
     launcher: (c) => {
-      tone(c, { f: [[0, 230], [0.28, 70]], dur: 0.28, peak: 0.7, a: 0.004 });                 // hollow pitch drop
-      tone(c, { type: 'triangle', f: [[0, 110], [0.3, 55]], dur: 0.3, peak: 0.25, a: 0.004 });
-      noise(c, { dur: 0.22, peak: 0.45, a: 0.01, dst: filt(c, { type: 'bandpass', f: 450, q: 1.8 }) }); // puff
+      tone(c, { f: [[0, 230], [0.28, 70]], dur: 0.28, peak: 0.6, a: 0.004 });                 // hollow pitch drop
+      tone(c, { type: 'triangle', f: [[0, 110], [0.3, 55]], dur: 0.3, peak: 0.3, a: 0.004 });
+      noise(c, { dur: 0.22, peak: 0.4, a: 0.01, dst: filt(c, { type: 'bandpass', f: 450, q: 1.8 }) }); // puff
+      noise(c, { dur: 0.01, peak: 0.2, a: 0.0005, dst: filt(c, { type: 'highpass', f: 1500 }) });   // launch snap
     },
 
     explosion: (c) => {
@@ -479,6 +776,8 @@
       tone(c, { type: 'triangle', f: 1400, dur: 0.012, peak: 0.08, a: 0.001 });
     },
 
+    dryfire: (c) => SOUNDS.empty(c),
+
     reload: (c) => {
       click(c, 0, 0.5, 1800);                                                                 // magazine out
       click(c, 0.35, 0.6, 1300);                                                              // magazine in
@@ -500,6 +799,103 @@
       dst: filt(c, { type: 'bandpass', f: [[0, 800], [0.12, 3200], [0.3, 500]], q: 5 })
     }),
 
+    deploy: (c) => {
+      click(c, 0, 0.3, 1900);                                                                 // bolt back
+      noise(c, { at: 0.1, dur: 0.05, peak: 0.25, a: 0.002, dst: filt(c, { type: 'bandpass', f: 3000, q: 2 }) });
+      tone(c, { f: [[0, 600], [0.12, 900]], at: 0.15, dur: 0.12, peak: 0.1, a: 0.003 });      // draw
+      click(c, 0.3, 0.35, 2300);                                                              // ready
+    },
+
+    grenade_pin: (c) => {
+      noise(c, { dur: 0.05, peak: 0.25, a: 0.002, dst: filt(c, { type: 'bandpass', f: [[0, 2000], [0.05, 4200]], q: 4 }) }); // slide
+      tone(c, { f: 3100, at: 0.045, dur: 0.14, peak: 0.12, a: 0.001 });                       // ring
+      tone(c, { f: 4650, at: 0.045, dur: 0.09, peak: 0.05, a: 0.001 });
+    },
+
+    grenade_throw: (c) => noise(c, {
+      dur: 0.22, peak: 0.3, a: 0.02,
+      dst: filt(c, { type: 'bandpass', f: [[0, 500], [0.1, 1600], [0.22, 700]], q: 1.4 })
+    }),
+
+    grenade_bounce: (c) => {
+      tone(c, { f: [[0, 260], [0.05, 140]], dur: 0.07, peak: 0.35, a: 0.001 });               // clunk
+      tone(c, { f: rnd(2000, 2600), at: 0.002, dur: 0.12, peak: 0.12, a: 0.0008 });           // tink
+      noise(c, { dur: 0.006, peak: 0.25, a: 0.0005, dst: filt(c, { type: 'highpass', f: 3000 }) });
+      floorHit(c, c.surface, 0.6);
+    },
+
+    flash_explode: (c) => {
+      noise(c, { dur: 0.004, peak: 0.7, a: 0.0005, dst: filt(c, { type: 'highpass', f: 2000, q: 0.7 }) }); // crack
+      noise(c, { dur: 0.4, peak: 0.35, a: 0.001, dst: filt(c, { type: 'highpass', f: 3500, q: 0.6 }) }); // bright noise
+      noise(c, { dur: 0.25, peak: 0.25, a: 0.001, dst: filt(c, { type: 'bandpass', f: 1500, q: 0.9 }) }); // body
+      tone(c, { f: [[0, 220], [0.2, 90]], dur: 0.22, peak: 0.2, a: 0.001 });                  // thump
+    },
+
+    smoke_pop: (c) => {
+      tone(c, { f: [[0, 160], [0.07, 70]], dur: 0.08, peak: 0.5, a: 0.001 });                 // pop
+      noise(c, { dur: 0.05, peak: 0.35, a: 0.001, dst: filt(c, { type: 'lowpass', f: 700 }) });
+      noise(c, { at: 0.03, dur: 0.3, peak: 0.12, a: 0.06, dst: filt(c, { type: 'bandpass', f: 2600, q: 0.8 }) }); // start of the hiss
+    },
+
+    smoke_hiss: (c) => noise(c, {
+      dur: 3.0, peak: 0.12, a: 0.25,
+      dst: filt(c, { type: 'bandpass', f: [[0, 2600], [3, 1800]], q: 0.7 })
+    }),
+
+    flash_ring: (c) => {
+      // Tinnitus: two sines 12 Hz apart, so they beat. Fade in, hold, then fade
+      // out over `duration`. Routed around the deafen filter (see BYPASS).
+      const dur = clamp(num(c.opts.duration, 3), 0.2, 20);
+      const t = c.t;
+      const fadeIn = 0.05, sustain = 0.3;
+      const end = t + fadeIn + sustain + dur;
+      const g = c.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.09, t + fadeIn);
+      g.gain.setValueAtTime(0.09, t + fadeIn + sustain);
+      g.gain.exponentialRampToValueAtTime(0.0001, end);
+      g.connect(c.out);
+      c.nodes.push(g);
+      [3400, 3412].forEach((f) => {
+        const o = c.ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = f * c.p;
+        o.connect(g);
+        o.start(t);
+        o.stop(end + 0.05);
+        c.nodes.push(o);
+      });
+      hold(c, end + 0.05);
+    },
+
+    scope_in: (c) => {
+      noise(c, { dur: 0.1, peak: 0.12, a: 0.01, dst: filt(c, { type: 'bandpass', f: [[0, 1200], [0.1, 3000]], q: 3 }) }); // zoom whirr
+      click(c, 0.1, 0.25, 2400);
+    },
+
+    scope_out: (c) => {
+      noise(c, { dur: 0.1, peak: 0.12, a: 0.01, dst: filt(c, { type: 'bandpass', f: [[0, 3000], [0.1, 1200]], q: 3 }) });
+      click(c, 0.1, 0.25, 1800);
+    },
+
+    knife_slash: (c) => noise(c, {
+      dur: 0.22, peak: 0.4, a: 0.012,
+      dst: filt(c, { type: 'bandpass', f: [[0, 1200], [0.12, 2600], [0.22, 800]], q: 1.5 })
+    }),
+
+    knife_stab: (c) => {
+      noise(c, {
+        dur: 0.32, peak: 0.5, a: 0.02,
+        dst: filt(c, { type: 'bandpass', f: [[0, 500], [0.15, 1100], [0.32, 400]], q: 1.2 })
+      });
+      tone(c, { f: [[0, 130], [0.1, 70]], dur: 0.12, peak: 0.3, a: 0.003 });                  // weight
+    },
+
+    knife_hit_wall: (c) => {
+      click(c, 0, 0.5, 1800);                                                                 // metal tick
+      noise(c, { at: 0.005, dur: 0.1, peak: 0.22, a: 0.004, dst: filt(c, { type: 'bandpass', f: [[0, 2600], [0.1, 1400]], q: 2.5 }) }); // scrape
+    },
+
     // Impacts and world
     impact: (c) => {
       if (Math.random() < 0.5) {
@@ -516,11 +912,9 @@
       noise(c, { dur: 0.3, peak: 0.1, a: 0.01, dst: filt(c, { type: 'highpass', f: 1500 }) });
     },
 
-    footstep: (c) => {
-      tone(c, { type: 'triangle', f: [[0, 120], [0.06, 55]], dur: 0.07, peak: 0.22, a: 0.003 }); // padded thud
-      noise(c, { dur: 0.05, peak: 0.1, a: 0.002, dst: filt(c, { type: 'lowpass', f: 900 }) });   // grit
-      noise(c, { dur: 0.01, peak: 0.04, a: 0.001, dst: filt(c, { type: 'highpass', f: 3500 }) });
-    },
+    footstep: (c) => stepSound(c, 1),
+
+    walk_step: (c) => stepSound(c, 0.5),
 
     jump: (c) => noise(c, {
       dur: 0.28, peak: 0.25, a: 0.05,
@@ -528,8 +922,9 @@
     }),
 
     land: (c) => {
-      tone(c, { f: [[0, 90], [0.15, 40]], dur: 0.18, peak: 0.45, a: 0.003 });
-      noise(c, { dur: 0.12, peak: 0.25, a: 0.002, dst: filt(c, { type: 'lowpass', f: 500 }) });
+      tone(c, { f: [[0, 95], [0.15, 42]], dur: 0.18, peak: 0.5, a: 0.003 });
+      noise(c, { dur: 0.12, peak: 0.22, a: 0.002, dst: filt(c, { type: 'lowpass', f: 500 }) });
+      floorHit(c, c.surface, 1.1);
     },
 
     pickup_weapon: (c) => {
@@ -566,16 +961,31 @@
       noise(c, { dur: 0.04, peak: 0.15, a: 0.002, dst: filt(c, { type: 'bandpass', f: 900, q: 1.5 }) });
     },
 
+    hit_armor: (c) => {
+      tone(c, { type: 'triangle', f: [[0, 95], [0.1, 55]], dur: 0.12, peak: 0.5, a: 0.002 }); // padded thump
+      noise(c, { dur: 0.1, peak: 0.25, a: 0.003, dst: filt(c, { type: 'lowpass', f: 380 }) }); // dull, no ring
+      noise(c, { dur: 0.02, peak: 0.1, a: 0.001, dst: filt(c, { type: 'bandpass', f: 800, q: 1.2 }) });
+    },
+
     hitmarker: (c) => {
       tone(c, { f: 2000, dur: 0.035, peak: 0.2, a: 0.001 });                                  // "tk"
       tone(c, { f: 3000, dur: 0.03, peak: 0.08, a: 0.001 });
     },
 
+    headshot_helmet: (c) => {
+      // The CS helmet "dink": inharmonic metal partials, fast attack.
+      noise(c, { dur: 0.0015, peak: 0.3, a: 0.0005, dst: filt(c, { type: 'highpass', f: 5000 }) }); // tiny click
+      tone(c, { f: 2900, dur: 0.25, peak: 0.24, a: 0.0005 });
+      tone(c, { f: 4600, dur: 0.15, peak: 0.13, a: 0.0005 });
+      tone(c, { f: 6900, dur: 0.08, peak: 0.06, a: 0.0005 });
+    },
+
     headshot: (c) => {
-      tone(c, { f: 2800, dur: 0.25, peak: 0.22, a: 0.001 });                                  // "ding"
-      tone(c, { f: 4200, dur: 0.14, peak: 0.1, a: 0.001 });
-      tone(c, { f: 5600, dur: 0.06, peak: 0.04, a: 0.001 });
-      noise(c, { dur: 0.01, peak: 0.12, a: 0.001, dst: filt(c, { type: 'highpass', f: 6000 }) });
+      // No helmet: a wet, bright crack.
+      noise(c, { dur: 0.004, peak: 0.55, a: 0.0005, dst: filt(c, { type: 'highpass', f: 3500, q: 0.7 }) }); // crack
+      noise(c, { dur: 0.05, peak: 0.25, a: 0.001, dst: filt(c, { type: 'bandpass', f: 1600, q: 1.2 }) });  // wet body
+      tone(c, { f: [[0, 320], [0.06, 130]], dur: 0.07, peak: 0.25, a: 0.001 });                           // splat drop
+      noise(c, { at: 0.012, dur: 0.05, peak: 0.12, a: 0.002, dst: filt(c, { type: 'highpass', f: 6000 }) }); // sheen
     },
 
     hurt: (c) => catVoice(c, {
@@ -684,7 +1094,7 @@
       g.linearRampToValueAtTime(0, t + 0.5);
     } catch (e) { warn('stopAmbience failed', e); }
     setTimeout(() => {
-      a.sources.forEach((s) => { try { s.stop(); } catch (e) { /* already stopped */ } });
+      a.sources.forEach((s) => { try { s.stop(); } catch (e) { /* already stopped */ } disconnectNode(s); });
       a.nodes.forEach(disconnectNode);
       disconnectNode(a.bus);
     }, 600);
@@ -773,5 +1183,8 @@
   }
 
   // ---- Public API ----------------------------------------------------------
-  JB.Audio = { init, play, setListener, setMasterVolume, startAmbience, stopAmbience, isReady };
+  JB.Audio = {
+    init, play, setListener, setMasterVolume, startAmbience, stopAmbience, isReady,
+    setRoom, setDeafen
+  };
 })();

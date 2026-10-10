@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -26,6 +26,7 @@
     <div id="pickupmsg"></div>
     <div id="area"></div>
     <div id="hint"></div>
+    <div id="smokefog"></div>
     <div id="vitals">
       <div class="vrow hp"><span class="ic">✚</span><span class="num" id="hpnum">100</span><div class="bar"><div id="hpbar"></div></div></div>
       <div class="vrow ar"><span class="ic">⛨</span><span class="num" id="arnum">0</span><div class="bar"><div id="arbar"></div></div></div>
@@ -73,15 +74,16 @@
           <label class="row chk"><span>Invert mouse Y</span><input type="checkbox" id="invert"></label>
           <h3>Controls</h3>
           <ul class="keys">
-            <li><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump · <kbd>C</kbd> crouch</li>
-            <li><kbd>Mouse</kbd> aim · <kbd>Left</kbd> fire · <kbd>Right</kbd> aim down sights / scope</li>
-            <li><kbd>1–7</kbd> / <kbd>Wheel</kbd> weapons · <kbd>Q</kbd> last · <kbd>V</kbd> claws · <kbd>R</kbd> reload</li>
-            <li><kbd>Tab</kbd> scores · <kbd>Esc</kbd> pause · claw a cat from behind to <b>pounce</b> (double damage)</li>
+            <li><kbd>W A S D</kbd> move · <kbd>Shift</kbd> walk (silent) · <kbd>C</kbd> crouch · <kbd>Space</kbd> jump</li>
+            <li><kbd>Left</kbd> fire · <kbd>Right</kbd> sniper scope / claw stab / grenade lob</li>
+            <li><kbd>1–7</kbd> weapons · <kbd>8</kbd> flashbang · <kbd>9</kbd> smoke · <kbd>G</kbd> grenades · <kbd>Q</kbd> last · <kbd>R</kbd> reload</li>
+            <li>Plays like CS: stop moving to shoot accurately, tap or burst, pull down to control the spray. <kbd>Tab</kbd> scores · <kbd>Esc</kbd> pause</li>
           </ul>
         </section>
       </div>
       <div class="actions">
-        <button id="deploy" type="button" disabled>DEPLOY</button>
+        <button id="deploy" type="button" disabled>VS BOTS</button>
+        <button id="online" type="button" class="alt" disabled>PLAY ONLINE</button>
         <a class="back" href="../index.html">← Back to the desktop</a>
       </div>
     </div>
@@ -102,6 +104,25 @@
       </div>
     </div>
   </div>
+  <div id="onlinebox" class="overlay" hidden>
+    <div class="card wide">
+      <div class="logo small">ONLINE</div>
+      <div class="sub" id="onsub">Play against your friends — no bots. Host a game and send them the link.</div>
+      <div id="onstatus" class="onstatus"></div>
+      <div id="onlink" class="onlink" hidden><input id="onlinkurl" readonly><button id="oncopy" type="button">Copy link</button></div>
+      <div id="onplayers" class="onplayers"></div>
+      <div class="btns">
+        <button id="onhost" type="button" class="primary">HOST A GAME</button>
+        <button id="onjoin" type="button" class="primary" hidden>JOIN GAME</button>
+        <button id="onstart" type="button" class="primary" hidden>START MATCH</button>
+        <button id="onleave" type="button">Back</button>
+      </div>
+    </div>
+  </div>
+  <div id="notice" class="overlay" hidden>
+    <div class="card"><div class="logo small" id="noticetitle">HEADS UP</div><div class="sub" id="noticetext"></div>
+      <div class="btns"><button id="noticeok" type="button" class="primary">OK</button></div></div>
+  </div>
   <div id="end" class="overlay" hidden>
     <div class="card wide">
       <div class="logo small" id="endtitle">VICTORY</div>
@@ -111,6 +132,7 @@
         <button id="rematch" type="button" class="primary">REMATCH</button>
         <button id="endmenu" type="button">Menu</button>
       </div>
+      <div class="sub" id="endwait" hidden>Waiting for the host to start a rematch…</div>
     </div>
   </div>
 
@@ -138,21 +160,28 @@
   <script src="lib/post/MaskPass.js"></script>
   <script src="lib/post/UnrealBloomPass.js"></script>
   <!-- the game. Bump ?v= when changing files so browsers don't serve stale code. -->
-  <script src="js/util.js?v=2"></script>
-  <script src="js/textures.js?v=2"></script>
-  <script src="js/audio.js?v=2"></script>
-  <script src="js/mapdata.js?v=2"></script>
-  <script src="js/props.js?v=2"></script>
-  <script src="js/level.js?v=2"></script>
-  <script src="js/physics.js?v=2"></script>
-  <script src="js/nav.js?v=2"></script>
-  <script src="js/render.js?v=2"></script>
-  <script src="js/cat.js?v=2"></script>
-  <script src="js/weapons.js?v=2"></script>
-  <script src="js/fx.js?v=2"></script>
-  <script src="js/bots.js?v=2"></script>
-  <script src="js/hud.js?v=2"></script>
-  <script src="js/game.js?v=2"></script>
-  <script src="js/main.js?v=2"></script>
+  <script src="js/util.js?v=4"></script>
+  <script src="js/textures.js?v=4"></script>
+  <script src="js/audio.js?v=4"></script>
+  <script src="js/mapdata.js?v=4"></script>
+  <script src="js/props.js?v=4"></script>
+  <script src="js/level.js?v=4"></script>
+  <script src="js/physics.js?v=4"></script>
+  <script src="js/nav.js?v=4"></script>
+  <script src="js/render.js?v=4"></script>
+  <script src="js/cat.js?v=4"></script>
+  <script src="js/weapons.js?v=4"></script>
+  <script src="js/fx.js?v=4"></script>
+  <script src="js/grenadefx.js?v=4"></script>
+  <script src="js/movement.js?v=4"></script>
+  <script src="js/bots.js?v=4"></script>
+  <script src="js/hud.js?v=4"></script>
+  <script src="js/combat.js?v=4"></script>
+  <script src="js/game.js?v=4"></script>
+  <!-- online play: PeerJS (WebRTC, MIT licence) + our transport + protocol -->
+  <script src="lib/peerjs.min.js"></script>
+  <script src="js/net.js?v=4"></script>
+  <script src="js/online.js?v=4"></script>
+  <script src="js/main.js?v=4"></script>
 </body>
 </html>

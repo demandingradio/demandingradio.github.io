@@ -98,7 +98,7 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0d10);
     scene.fog = new THREE.FogExp2(0x15191e, 0.0085);
-    const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.05, 260);
+    const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.08, 260);
     scene.add(camera);
 
     const env = makeEnvironment(renderer);
@@ -114,8 +114,10 @@
     sun.shadow.mapSize.set(Q.shadow, Q.shadow);
     const sc = sun.shadow.camera;
     sc.left = -74; sc.right = 74; sc.top = 74; sc.bottom = -74; sc.near = 10; sc.far = 190;
-    sun.shadow.bias = -0.0006;
-    sun.shadow.normalBias = 0.045;
+    sc.updateProjectionMatrix();   // three only reads the frustum through the projection matrix
+    const texel = 148 / Q.shadow;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02 + texel * 0.6;
     sun.shadow.radius = 2.5;
     scene.add(sun); scene.add(sun.target);
 
@@ -152,6 +154,8 @@
         const halfOK = renderer.capabilities.isWebGL2 && renderer.extensions.has('EXT_color_buffer_float');
         const pars = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, type: halfOK ? THREE.HalfFloatType : THREE.UnsignedByteType };
         rt = new THREE.WebGLRenderTarget(size.x, size.y, pars);
+        // 24-bit depth (the default here is 16-bit, which makes thin trims flicker)
+        if (renderer.capabilities.isWebGL2) rt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.UnsignedIntType);
         composer = new THREE.EffectComposer(renderer, rt);
         composer.addPass(new THREE.RenderPass(scene, camera));
         const vmPass = new THREE.RenderPass(vmScene, vmCamera);

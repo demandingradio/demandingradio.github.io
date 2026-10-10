@@ -7,9 +7,9 @@
   const U = JB.U;
 
   const SKILL = {
-    easy:   { react: 0.7, err0: 0.11, err1: 0.045, track: 1.6, turn: 3.2, tap: 0.3, view: 38, fov: 1.0, strafe: 0.5, jump: 0.0 },
-    normal: { react: 0.4, err0: 0.075, err1: 0.022, track: 2.6, turn: 5.5, tap: 0.14, view: 60, fov: 1.15, strafe: 0.8, jump: 0.05 },
-    hard:   { react: 0.24, err0: 0.05, err1: 0.009, track: 4.0, turn: 9, tap: 0.06, view: 90, fov: 1.3, strafe: 1.0, jump: 0.12 }
+    easy:   { react: 0.7, err0: 0.11, err1: 0.045, track: 1.6, turn: 3.2, tap: 0.3, view: 38, fov: 1.0, strafe: 0.5, jump: 0.0, comp: 0.2, burst: 12, runGun: true, sneak: false, nades: 0.15 },
+    normal: { react: 0.4, err0: 0.075, err1: 0.022, track: 2.6, turn: 5.5, tap: 0.14, view: 60, fov: 1.15, strafe: 0.8, jump: 0.05, comp: 0.55, burst: 8, runGun: false, sneak: true, nades: 0.4 },
+    hard:   { react: 0.24, err0: 0.05, err1: 0.009, track: 4.0, turn: 9, tap: 0.06, view: 90, fov: 1.3, strafe: 1.0, jump: 0.12, comp: 0.85, burst: 10, runGun: false, sneak: true, nades: 0.7 }
   };
 
   class Brain {
@@ -22,6 +22,7 @@
       this.target = null; this.seenT = 0; this.visible = false;
       this.lastSeen = new THREE.Vector3(); this.lastSeenT = -99;
       this.heard = null; this.heardT = -99;
+      this.memory = new Map();      // fighter -> { pos, t } last seen / heard
       this.strafeDir = Math.random() < 0.5 ? -1 : 1; this.strafeT = 0;
       this.aimYaw = me.yaw; this.aimPitch = 0;
       this.err = new THREE.Vector2(); this.errT = 0;
@@ -39,11 +40,15 @@
       const d = pos.distanceTo(this.me.pos);
       if (d > (loud ? 55 : 32)) return;
       if (!this.visible || who === this.target) { this.heard = pos.clone(); this.heardT = this.g.time; this.heardWho = who; }
+      if (who) this.memory.set(who, { pos: pos.clone(), t: this.g.time });
     }
     damagedBy(who) {
       if (!who || who === this.me) return;
       this.lastAttacker = who; this.lastAttackT = this.g.time;
-      if (!this.visible) { this.heard = who.pos.clone(); this.heardT = this.g.time; this.heardWho = who; }
+      if (!this.visible) {
+        this.heard = who.pos.clone(); this.heardT = this.g.time; this.heardWho = who;
+        if (this.goalKind !== 'noise' && this.goalKind !== 'chase') { this.path = null; this.goal = null; }
+      }
       // turn toward the threat
       this.alarm = 0.5;
     }
@@ -51,6 +56,7 @@
     reset() {
       this.path = null; this.goal = null; this.target = null; this.visible = false; this.heard = null;
       this.lastSeenT = -99; this.huntT = 4 + Math.random() * 6;
+      this.memory.clear();
     }
 
     // --------------------------------------------------------------- senses
@@ -70,7 +76,7 @@
         if (ang > S.fov && d > 4 && !recentlyHurt) continue;
         // line of sight to head or chest
         const hy = e.pos.y + 1.45 - (e.crouchK || 0) * 0.4, cy = e.pos.y + 1.0 - (e.crouchK || 0) * 0.3;
-        const see = g.world.clear(eye.x, eye.y, eye.z, e.pos.x, hy, e.pos.z) || g.world.clear(eye.x, eye.y, eye.z, e.pos.x, cy, e.pos.z);
+        const see = g.losClear(eye.x, eye.y, eye.z, e.pos.x, hy, e.pos.z) || g.losClear(eye.x, eye.y, eye.z, e.pos.x, cy, e.pos.z);
         if (!see) continue;
         let score = -d - ang * 6 + (recentlyHurt ? 25 : 0) + (e === this.target ? 12 : 0) + (100 - e.hp) * 0.08;
         if (e.isPlayer) score += this.p.grudge || 0;
@@ -86,6 +92,7 @@
         }
         this.target = best; this.visible = true;
         this.lastSeen.copy(best.pos); this.lastSeenT = g.time;
+        this.memory.set(best, { pos: best.pos.clone(), t: g.time });
       } else {
         this.visible = false;
         if (this.target && !this.target.alive) this.target = null;
@@ -126,14 +133,23 @@
       this.huntT -= 1;
       if (this.huntT <= 0 || Math.random() < 0.45 + 0.4 * this.p.aggro) {
         this.huntT = 5 + Math.random() * 8;
-        const others = g.fighters.filter((e) => e !== me && e.alive);
-        if (others.length) {
-          // favour the leader / the player slightly, and closer cats
-          others.sort((a, b) => (a.pos.distanceTo(me.pos) - (a.isPlayer ? 25 : 0) - a.kills * 2) - (b.pos.distanceTo(me.pos) - (b.isPlayer ? 25 : 0) - b.kills * 2));
-          const e = others[Math.random() < 0.7 ? 0 : Math.floor(Math.random() * others.length)];
-          const p = e.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
-          return this._setGoal(p, 'hunt');
+        // somewhere a cat was last seen or heard, else a rough guess at the
+        // area a cat is in (a hunch, not a wallhack: ±12 m)
+        const mem = this.memory;
+        let p = null;
+        for (const [e, m] of mem) {
+          if (!e.alive || t - m.t > 20 || e.pos.distanceTo(m.pos) > 30) { mem.delete(e); continue; }
+          if (!p || Math.random() < 0.5) p = m.pos.clone();
         }
+        if (!p) {
+          const others = g.fighters.filter((e) => e !== me && e.alive);
+          if (others.length) {
+            const e = others[Math.floor(Math.random() * others.length)];
+            const c = g.nav.nearest(e.pos.x + (Math.random() - 0.5) * 24, e.pos.y, e.pos.z + (Math.random() - 0.5) * 24, 8);
+            if (c >= 0) p = g.nav.pointOf(c, new THREE.Vector3());
+          }
+        }
+        if (p) return this._setGoal(p, 'hunt');
       }
       // 5) wander somewhere far-ish
       const c = g.nav.randomNode();
@@ -165,7 +181,7 @@
       let best = 'claws', bestS = -1;
       for (const k of JB.Weapons.ORDER) {
         const w = me.weapons[k];
-        if (!w.owned) continue;
+        if (!w.owned || D[k].grenade) continue;
         const def = D[k];
         if (!def.melee && w.mag + w.reserve <= 0) continue;
         const b = def.bot;
@@ -183,10 +199,23 @@
     // Fills me.input = { move:{x,z} world dir, sprint, jump, crouch, fire, ads, reload, weapon }
     update(dt) {
       const me = this.me, g = this.g, S = this.S, inp = me.input;
-      inp.mx = 0; inp.mz = 0; inp.fire = false; inp.ads = false; inp.jump = false; inp.sprint = false; inp.reload = false; inp.crouch = false;
+      inp.mx = 0; inp.mz = 0; inp.fire = false; inp.alt = false; inp.jump = false; inp.walk = false; inp.reload = false; inp.crouch = false;
       if (!me.alive) return;
+      // flashed: blind, stumbling, maybe spraying where the enemy last was
+      if (me.blindT > 0) {
+        this.visible = false;
+        this.blindDir = this.blindDir || (Math.random() < 0.5 ? -1 : 1);
+        const sy = Math.sin(me.yaw), cy = Math.cos(me.yaw);
+        inp.mx = cy * this.blindDir * 0.8 + sy * 0.4; inp.mz = -sy * this.blindDir * 0.8 + cy * 0.4;
+        if (Math.random() < dt * 1.5) this.blindDir *= -1;
+        const def0 = JB.Weapons.DEFS[me.current];
+        if (g.time - this.lastSeenT < 1.5 && !def0.melee && Math.random() < 0.4) inp.fire = true;
+        return;
+      }
+      this.blindDir = 0;
       this.senseT -= dt;
       if (this.senseT <= 0) { this._sense(); this.senseT = 0.12 + Math.random() * 0.06; }
+      this._grenades(dt);
       if (this.target && !this.target.alive) { this.target = null; this.visible = false; }
 
       const tgt = this.visible ? this.target : null;
@@ -214,7 +243,7 @@
         this.err.x = U.damp(this.err.x, this.errTarget ? this.errTarget.x : 0, 6, dt);
         this.err.y = U.damp(this.err.y, this.errTarget ? this.errTarget.y : 0, 6, dt);
         // lead moving targets a little (projectiles more)
-        const lead = def.projectile ? distT / def.speed : 0.05;
+        const lead = def.projectile ? distT / def.projSpeed : 0.05;
         const tx = tgt.pos.x + tgt.vel.x * lead, tz = tgt.pos.z + tgt.vel.z * lead;
         const headBias = S === SKILL.hard ? 0.5 : 0.25;
         const ty = tgt.pos.y + (def.projectile ? 0.4 : U.lerp(1.05, 1.45, headBias)) - (tgt.crouchK || 0) * 0.35;
@@ -222,8 +251,14 @@
         const dx = tx - ex, dy = ty - ey, dz = tz - ez;
         desiredYaw = Math.atan2(-dx, -dz) + this.err.x;
         let pitch = Math.atan2(dy, Math.hypot(dx, dz));
-        if (def.projectile) pitch += Math.min(0.5, distT * distT * 0.5 * 9.8 / (def.speed * def.speed) / Math.max(1, distT)) ;
+        if (def.projectile) pitch += Math.min(0.5, distT * distT * 0.5 * 9.8 / (def.projSpeed * def.projSpeed) / Math.max(1, distT));
         desiredPitch = pitch + this.err.y;
+        // pull against the spray pattern (better bots control it better)
+        if (def.pattern) {
+          const off = g.recoilOffset(me), comp = S.comp;
+          desiredPitch -= off[1] * comp * Math.PI / 180;
+          desiredYaw += off[0] * comp * Math.PI / 180;
+        }
       } else if (this.path && this.pi < this.path.length) {
         const wp = this.path[this.pi];
         desiredYaw = Math.atan2(-(wp.x - me.pos.x), -(wp.z - me.pos.z));
@@ -238,16 +273,21 @@
       me.yaw = this.aimYaw; me.pitch = U.clamp(this.aimPitch, -1.3, 1.3);
 
       // ---------------- shooting
+      // CS habit: accurate guns are fired standing still (counter-strafe, then shoot)
+      const runGun = def.melee || def.pellets || me.current === 'smg' || me.current === 'launcher';
+      const speedNow = Math.hypot(me.vel.x, me.vel.z);
+      const steady = runGun || speedNow < JB.Movement.maxSpeed(me) * 0.36 || S.runGun;
+      if (def.scope) { const wantZoom = tgt && distT > 10 ? 1 : 0; if ((me.zoom || 0) !== wantZoom && !me.rescopeT) g.setZoom(me, wantZoom); }
       if (tgt && this.reactLeft <= 0 && !me.switching) {
         const aimErr = Math.abs(U.angDiff(this.aimYaw, desiredYaw - this.err.x));
-        const tol = def.melee ? 0.6 : Math.max(0.05, Math.atan2(0.45, distT) + (def.spread || 0));
+        const tol = def.melee ? 0.6 : Math.max(0.05, Math.atan2(0.45, distT) + (def.pellets ? def.spread : 0));
         const inRange = def.melee ? distT < def.range + 0.3 : distT < (def.bot ? def.bot.max * 1.3 : 50);
-        if (aimErr < tol && inRange) {
-          if (def.auto) inp.fire = true;
+        this.wantShoot = aimErr < tol * 2.5 && inRange;
+        if (aimErr < tol && inRange && steady) {
+          if (def.auto) { if (g.time >= this.nextShot) { inp.fire = true; if (me.recoilIdx > S.burst) this.nextShot = g.time + 0.25 + Math.random() * 0.3; } }
           else if (g.time >= this.nextShot) { inp.fire = true; this.nextShot = g.time + def.rate + S.tap * (0.6 + Math.random() * 0.8); }
-          if ((def.scope || def.slot === 5) && distT > 12) inp.ads = true;
         }
-      }
+      } else this.wantShoot = false;
       if (!def.melee && ws.mag === 0 && ws.reserve > 0) inp.reload = true;
       if (!tgt && !def.melee && ws.mag < def.mag * 0.5 && ws.reserve > 0) inp.reload = true;
 
@@ -256,7 +296,13 @@
       if (tgt) {
         // combat movement: strafe + keep preferred range
         this.strafeT -= dt;
-        if (this.strafeT <= 0) { this.strafeT = 0.5 + Math.random() * 1.0; if (Math.random() < 0.6) this.strafeDir *= -1; this.crouchT = Math.random() < 0.12 ? 0.6 : 0; }
+        if (this.strafeT <= 0) {
+          // alternate strafing with planting your feet to shoot
+          this.planted = !this.planted && !runGun;
+          this.strafeT = this.planted ? 0.35 + Math.random() * 0.45 : 0.35 + Math.random() * 0.7;
+          if (Math.random() < 0.6) this.strafeDir *= -1;
+          this.crouchT = this.planted && Math.random() < 0.15 ? 0.6 : 0;
+        }
         const pref = def.bot ? def.bot.pref * (1.15 - this.p.aggro * 0.3) : 10;
         const dx = tgt.pos.x - me.pos.x, dz = tgt.pos.z - me.pos.z, L = Math.hypot(dx, dz) || 1;
         const fwdX = dx / L, fwdZ = dz / L;
@@ -273,6 +319,7 @@
           const w = this._follow();
           if (w) { mx = w.x * 0.8 + mx * 0.4; mz = w.z * 0.8 + mz * 0.4; }
         }
+        if (this.planted && this.wantShoot) { mx = 0; mz = 0; }
         inp.mx = mx; inp.mz = mz;
         inp.crouch = this.crouchT > 0 && !def.melee;
         this.crouchT -= dt;
@@ -280,7 +327,11 @@
       } else {
         if (!this.goal || !this.path || this.pi >= this.path.length || this.repathT <= 0 && this.goalKind === 'chase') this._chooseGoal();
         const w = this._follow();
-        if (w) { inp.mx = w.x; inp.mz = w.z; inp.sprint = this.goalKind !== 'chase' && this.goalKind !== 'noise'; }
+        if (w) {
+          inp.mx = w.x; inp.mz = w.z;
+          // sneak (silent walk) when closing in on a sound, like a CS player
+          inp.walk = S.sneak && (this.goalKind === 'noise' || this.goalKind === 'chase') && this.goal && this.goal.distanceTo(me.pos) < 14;
+        }
         else this.goal = null;
       }
       // stuck detection
@@ -293,6 +344,30 @@
           if (this.stuckT > 1) { this.goal = null; this.path = null; this.stuckT = 0; }
         } else this.stuckT = 0;
         this.lastPos.copy(me.pos); this.progressT = 0;
+      }
+    }
+
+    // Flash a corner before pushing a lost target; smoke off a long-range threat.
+    _grenades(dt) {
+      const me = this.me, g = this.g, S = this.S;
+      this.nadeCool = (this.nadeCool || 3) - dt;
+      if (this.nadeCool > 0 || me.switching) return;
+      const t = g.time;
+      if (me.nades.flash > 0 && this.target && this.target.alive && !this.visible && t - this.lastSeenT > 0.6 && t - this.lastSeenT < 4) {
+        const d = this.lastSeen.distanceTo(me.pos);
+        if (d > 6 && d < 26 && Math.random() < S.nades) {
+          const aimAt = this.lastSeen.clone(); aimAt.y += 1.6;
+          if (g.botThrow(me, 'flash', aimAt)) { this.nadeCool = 8 + Math.random() * 6; return; }
+        }
+        this.nadeCool = 2;
+      }
+      if (me.nades.smoke > 0 && me.hp < 55 && this.lastAttacker && t - (this.lastAttackT || -9) < 1 && this.lastAttacker.alive) {
+        const a = this.lastAttacker.pos, d = a.distanceTo(me.pos);
+        if (d > 12 && Math.random() < S.nades) {
+          const mid = me.pos.clone().lerp(a, Math.min(0.5, 7 / d)); mid.y = me.pos.y;
+          if (g.botThrow(me, 'smoke', mid)) { this.nadeCool = 10; this.heard = null; this.goal = null; return; }
+        }
+        this.nadeCool = 2;
       }
     }
 

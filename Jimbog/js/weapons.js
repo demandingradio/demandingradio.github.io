@@ -6,50 +6,82 @@
   const U = JB.U;
 
   // ------------------------------------------------------------------ stats
-  // spread = cone half-angle (radians) from the hip; adsSpread when aiming.
+  // CS:GO-style handling. Speeds are metres/second (1 Source unit = 2.54 cm).
+  // Inaccuracy values are cone half-angles in radians:
+  //   stand/crouch  resting inaccuracy
+  //   move          added at full running speed (nothing below 34% speed)
+  //   jump          added while airborne
+  //   fire          added per shot, recovering with time constant `recover` (s)
+  // Spray `pattern` = bullet offset in degrees [right, up] for shot n of a
+  // burst; the screen kicks by half of it (like CS), so pull down to control.
+  const AK = [[0, 0], [0.05, 0.7], [-0.05, 1.6], [0.08, 2.6], [0.25, 3.6], [0.15, 4.5], [-0.25, 5.2], [-0.7, 5.8], [-1.3, 6.2], [-1.9, 6.5],
+    [-2.3, 6.7], [-2.1, 6.85], [-1.3, 6.95], [-0.1, 7.0], [1.1, 7.05], [2.1, 7.1], [2.7, 7.1], [2.9, 7.15], [2.5, 7.2], [1.7, 7.2],
+    [0.7, 7.25], [-0.5, 7.25], [-1.5, 7.3], [-2.1, 7.3], [-2.3, 7.3], [-1.9, 7.35], [-1.1, 7.35], [-0.1, 7.4], [0.7, 7.4], [1.1, 7.4]];
+  const MP9 = [[0, 0], [0.1, 0.5], [-0.1, 1.1], [0.15, 1.7], [0.3, 2.2], [0.1, 2.7], [-0.3, 3.0], [-0.7, 3.3], [-0.9, 3.5], [-0.6, 3.65],
+    [0, 3.75], [0.6, 3.8], [0.9, 3.85], [0.6, 3.9], [0, 3.9], [-0.6, 3.95], [-0.9, 3.95], [-0.5, 4.0], [0.2, 4.0], [0.8, 4.0],
+    [0.9, 4.0], [0.4, 4.05], [-0.3, 4.05], [-0.8, 4.05], [-0.7, 4.1], [-0.1, 4.1], [0.5, 4.1], [0.8, 4.1], [0.4, 4.1], [-0.2, 4.1]];
+  const USP = [[0, 0], [0.1, 1.4], [-0.15, 2.6], [0.2, 3.6], [-0.1, 4.4], [0.25, 5.0], [-0.2, 5.4], [0.15, 5.7], [-0.1, 5.9], [0.1, 6.0], [0, 6.1], [0.1, 6.2]];
+  const KICK = (y) => [[0, 0], [0, y], [0.1, y * 1.6], [-0.1, y * 2]];
+
   const DEFS = {
     claws: {
-      name: 'Claws', short: 'CLAWS', slot: 1, melee: true, damage: 55, rate: 0.45, range: 2.4,
-      icon: '🐾', sound: 'claw', bot: { min: 0, max: 2.5, pref: 1.5 }
+      name: 'Claws', short: 'CLAWS', slot: 1, melee: true, damage: 40, back: 90, stab: 65, stabBack: 180,
+      rate: 0.4, stabRate: 1.0, range: 1.9, stabRange: 1.6, speed: 6.35, deploy: 0.35,
+      icon: '🐾', sound: 'knife_slash', bot: { min: 0, max: 2.5, pref: 1.5 }
     },
     pistol: {
-      name: 'Purr-9 Pistol', short: 'PURR-9', slot: 2, damage: 24, rate: 0.17, auto: false, mag: 12, reserve: 72, maxReserve: 96,
-      spread: 0.016, adsSpread: 0.004, moveSpread: 0.02, recoil: 0.035, reload: 1.3, range: 120, head: 2.0, zoom: 1.25,
-      sound: 'pistol', icon: '🔫', hold: [0.04, -0.12, 0.27, -0.02, -0.13, 0.25],
-      vm: { hip: [0.13, -0.125, -0.34], ads: [0, 0, -0.27] }, bot: { min: 0, max: 30, pref: 10 }
+      name: 'Purr-9 Pistol', short: 'PURR-9', slot: 2, damage: 35, armorPen: 0.505, rangeMod: 0.91, rate: 0.17, auto: false,
+      mag: 12, reserve: 24, maxReserve: 48, reload: 2.2, deploy: 0.5, range: 120, speed: 6.1, tag: 0.4,
+      spread: 0.002, stand: 0.006, crouch: 0.0045, move: 0.035, jump: 0.14, fire: 0.022, recover: 0.3,
+      pattern: USP, recoverRate: 10, sound: 'pistol', icon: '🔫', hold: [0.04, -0.12, 0.27, -0.02, -0.13, 0.25],
+      vm: { hip: [0.12, -0.13, -0.33] }, bot: { min: 0, max: 30, pref: 10 }
     },
     smg: {
-      name: 'Hiss-5 SMG', short: 'HISS-5', slot: 3, damage: 13, rate: 0.068, auto: true, mag: 32, reserve: 128, maxReserve: 192,
-      spread: 0.032, adsSpread: 0.014, moveSpread: 0.025, recoil: 0.014, reload: 1.7, range: 90, head: 1.6, zoom: 1.3,
-      sound: 'smg', icon: '🔫', hold: [0.05, -0.11, 0.24, -0.01, -0.06, 0.44],
-      vm: { hip: [0.13, -0.13, -0.33], ads: [0, 0, -0.25] }, bot: { min: 0, max: 22, pref: 8 }
+      name: 'Hiss-5 SMG', short: 'HISS-5', slot: 3, damage: 26, armorPen: 0.6, rangeMod: 0.87, rate: 0.07, auto: true,
+      mag: 30, reserve: 120, maxReserve: 120, reload: 2.1, deploy: 0.6, range: 90, speed: 6.1, tag: 0.45,
+      spread: 0.003, stand: 0.01, crouch: 0.008, move: 0.04, jump: 0.12, fire: 0.0065, recover: 0.25,
+      pattern: MP9, recoverRate: 22, sound: 'smg', icon: '🔫', hold: [0.05, -0.11, 0.24, -0.01, -0.06, 0.44],
+      vm: { hip: [0.12, -0.135, -0.32] }, bot: { min: 0, max: 22, pref: 8 }
     },
     shotgun: {
-      name: 'Scratcher-12 Shotgun', short: 'SCRATCHER', slot: 4, damage: 11, pellets: 9, rate: 0.9, auto: false, mag: 6, reserve: 24, maxReserve: 36,
-      spread: 0.075, adsSpread: 0.06, moveSpread: 0.01, recoil: 0.09, reload: 0.5, shellReload: true, range: 40, head: 1.5, zoom: 1.2,
-      sound: 'shotgun', icon: '🔫', hold: [0.05, -0.1, 0.22, 0.0, -0.08, 0.58],
-      vm: { hip: [0.13, -0.13, -0.32], ads: [0, 0, -0.24] }, bot: { min: 0, max: 14, pref: 5 }
+      name: 'Scratcher-12 Shotgun', short: 'SCRATCHER', slot: 4, damage: 26, pellets: 9, armorPen: 1.0, rangeMod: 0.7, rate: 0.88, auto: false,
+      mag: 8, reserve: 32, maxReserve: 32, reload: 0.5, shellReload: true, deploy: 0.7, range: 40, speed: 5.59, tag: 0.5,
+      spread: 0.06, stand: 0.006, crouch: 0.005, move: 0.02, jump: 0.09, fire: 0.02, recover: 0.5,
+      pattern: KICK(3), recoverRate: 6, sound: 'shotgun', icon: '🔫', hold: [0.05, -0.1, 0.22, 0.0, -0.08, 0.58],
+      vm: { hip: [0.12, -0.13, -0.31] }, bot: { min: 0, max: 14, pref: 5 }
     },
     rifle: {
-      name: 'Tom-47 Rifle', short: 'TOM-47', slot: 5, damage: 19, rate: 0.1, auto: true, mag: 30, reserve: 120, maxReserve: 180,
-      spread: 0.02, adsSpread: 0.003, moveSpread: 0.022, recoil: 0.018, reload: 2.0, range: 150, head: 2.0, zoom: 1.6,
-      sound: 'rifle', icon: '🔫', hold: [0.05, -0.1, 0.22, 0.0, -0.07, 0.52],
-      vm: { hip: [0.13, -0.135, -0.33], ads: [0, 0, -0.22] }, bot: { min: 0, max: 45, pref: 16 }
+      name: 'Tom-47 Rifle', short: 'TOM-47', slot: 5, damage: 36, armorPen: 0.775, rangeMod: 0.98, rate: 0.1, auto: true,
+      mag: 30, reserve: 90, maxReserve: 90, reload: 2.4, deploy: 0.75, range: 150, speed: 5.46, tag: 0.55,
+      spread: 0.0008, stand: 0.0045, crouch: 0.0035, move: 0.11, jump: 0.28, fire: 0.0075, recover: 0.38,
+      pattern: AK, recoverRate: 25, sound: 'rifle', icon: '🔫', hold: [0.05, -0.1, 0.22, 0.0, -0.07, 0.52],
+      vm: { hip: [0.12, -0.14, -0.32] }, bot: { min: 0, max: 45, pref: 16 }
     },
     sniper: {
-      name: 'Whisker .50 Sniper', short: 'WHISKER', slot: 6, damage: 95, rate: 1.25, auto: false, mag: 5, reserve: 15, maxReserve: 25,
-      spread: 0.06, adsSpread: 0.0, moveSpread: 0.05, recoil: 0.11, reload: 2.6, range: 220, head: 2.5, zoom: 5, scope: true,
-      sound: 'sniper', icon: '🎯', hold: [0.05, -0.1, 0.22, 0.0, -0.08, 0.6],
-      vm: { hip: [0.13, -0.14, -0.33], ads: [0, 0, -0.2] }, bot: { min: 8, max: 90, pref: 30 }
+      name: 'Whisker .50 Sniper', short: 'WHISKER', slot: 6, damage: 115, armorPen: 0.975, rangeMod: 0.99, rate: 1.46, auto: false,
+      mag: 5, reserve: 20, maxReserve: 30, reload: 3.4, deploy: 0.9, range: 220, speed: 5.08, scopedSpeed: 2.54, tag: 0.7,
+      spread: 0.0, stand: 0.085, crouch: 0.07, scopedStand: 0.001, scopedCrouch: 0.0007, move: 0.18, jump: 0.42, fire: 0.09, recover: 0.6,
+      scope: true, zooms: [1, 2.6, 7], pattern: KICK(4), recoverRate: 3, sound: 'sniper', icon: '🎯', hold: [0.05, -0.1, 0.22, 0.0, -0.08, 0.6],
+      vm: { hip: [0.12, -0.14, -0.32] }, bot: { min: 8, max: 90, pref: 30 }
     },
     launcher: {
-      name: 'Hairball Launcher', short: 'HAIRBALL', slot: 7, damage: 125, radius: 4.8, rate: 0.85, auto: false, mag: 4, reserve: 8, maxReserve: 12,
-      projectile: true, speed: 24, spread: 0.01, adsSpread: 0.005, moveSpread: 0.01, recoil: 0.07, reload: 2.4, range: 60, zoom: 1.2,
-      sound: 'launcher', icon: '💥', hold: [0.06, -0.1, 0.18, 0.0, -0.06, 0.45],
-      vm: { hip: [0.14, -0.145, -0.36], ads: [0.0, 0, -0.28] }, bot: { min: 6, max: 30, pref: 14 }
+      name: 'Hairball Launcher', short: 'HAIRBALL', slot: 7, damage: 115, radius: 4.6, rate: 0.85, auto: false, mag: 4, reserve: 8, maxReserve: 12,
+      projectile: true, projSpeed: 24, reload: 2.4, deploy: 0.8, range: 60, speed: 5.08, tag: 0.6,
+      spread: 0.004, stand: 0.004, crouch: 0.003, move: 0.02, jump: 0.06, fire: 0.01, recover: 0.4,
+      pattern: KICK(2), recoverRate: 4, sound: 'launcher', icon: '💥', hold: [0.06, -0.1, 0.18, 0.0, -0.06, 0.45],
+      vm: { hip: [0.13, -0.15, -0.35] }, bot: { min: 6, max: 30, pref: 14 }
+    },
+    flash: {
+      name: 'Flashbang', short: 'FLASH', slot: 8, grenade: 'flash', speed: 6.22, deploy: 0.4, max: 2, fuse: 1.6,
+      icon: '💡', hold: [0.08, -0.06, 0.2, -0.12, -0.12, 0.18], bot: { min: 6, max: 25, pref: 12 }
+    },
+    smoke: {
+      name: 'Smoke Grenade', short: 'SMOKE', slot: 9, grenade: 'smoke', speed: 6.22, deploy: 0.4, max: 1, fuse: 3.0,
+      icon: '💨', hold: [0.08, -0.06, 0.2, -0.12, -0.12, 0.18], bot: { min: 6, max: 30, pref: 12 }
     }
   };
-  const ORDER = ['claws', 'pistol', 'smg', 'shotgun', 'rifle', 'sniper', 'launcher'];
+  const ORDER = ['claws', 'pistol', 'smg', 'shotgun', 'rifle', 'sniper', 'launcher', 'flash', 'smoke'];
+  const GUNS = ['pistol', 'smg', 'shotgun', 'rifle', 'sniper', 'launcher'];
   // Where the paws go on each gun (model space, +z = muzzle direction).
   const GRIPS = {
     pistol: { grip: [0, -0.05, -0.01], fore: [0.0, -0.075, 0.02] },
@@ -57,8 +89,12 @@
     shotgun: { grip: [0, -0.045, -0.07], fore: [0, -0.005, 0.36] },
     rifle: { grip: [0, -0.05, -0.045], fore: [0, -0.005, 0.33] },
     sniper: { grip: [0, -0.05, -0.065], fore: [0, -0.02, 0.3] },
-    launcher: { grip: [0, -0.045, 0.0], fore: [0, -0.04, 0.2] }
+    launcher: { grip: [0, -0.045, 0.0], fore: [0, -0.04, 0.2] },
+    flash: { grip: [0, -0.02, 0], fore: [0, 0.06, 0] },
+    smoke: { grip: [0, -0.02, 0], fore: [0, 0.06, 0] }
   };
+  // How hard each gun kicks the first-person model.
+  const VM_KICK = { pistol: 0.035, smg: 0.014, shotgun: 0.09, rifle: 0.02, sniper: 0.11, launcher: 0.07 };
   const VM_SCALE = 0.72;
 
   // ------------------------------------------------------------------ models
@@ -221,6 +257,18 @@
       part(g, B(0.06, 0.07, 0.12), M.polymer, 0, -0.005, -0.2);
       g.userData.muzzle.set(0, 0.05, 0.4);
       g.userData.sightY = 0.155;
+    } else if (type === 'flash' || type === 'smoke') {
+      // a grenade canister: body, coloured band, spoon (lever) and pin ring
+      const body = type === 'flash' ? M.grey : M.gunmetal;
+      part(g, C(0.03, 0.03, 0.1, 16), body, 0, 0, 0);
+      part(g, C(0.0305, 0.0305, 0.022, 16), type === 'flash' ? M.steel : M.teal, 0, 0.03, 0);
+      part(g, C(0.022, 0.026, 0.02, 12), M.steel, 0, 0.06, 0);
+      part(g, B(0.012, 0.075, 0.006), M.steel, 0.026, 0.035, 0, 0, 0, -0.18);
+      const ring = part(g, new THREE.TorusGeometry(0.014, 0.0025, 6, 14), M.steel, -0.02, 0.07, 0, 0, Math.PI / 2, 0);
+      ring.userData.pin = true;
+      if (type === 'smoke') for (let i = 0; i < 6; i++) part(g, C(0.004, 0.004, 0.004, 6), M.polymer, Math.cos(i) * 0.03, -0.035 + (i % 2) * 0.01, Math.sin(i) * 0.03, 0, 0, along);
+      g.userData.muzzle.set(0, 0.06, 0);
+      g.userData.sightY = 0;
     }
     if (!isVM) g.scale.setScalar(1.0);
     g.traverse((o) => { if (o.isMesh) { o.castShadow = !isVM; o.receiveShadow = !isVM; } });
@@ -306,6 +354,18 @@
       const toVM = (p) => [-p[0] * VM_SCALE, p[1] * VM_SCALE, -p[2] * VM_SCALE];
       const G2 = GRIPS[type];
       const gp = toVM(G2.grip), fp = toVM(G2.fore);
+      if (DEFS[type].grenade) {
+        // canister held up in the right paw; the left paw comes in to pull the pin
+        gun.scale.setScalar(1);
+        g.userData.nade = true;
+        g.userData.right = this._paw(g, [0.0, -0.03, 0.0], [0.3, -0.62, 0.72], false);
+        g.userData.left = this._paw(g, [-0.05, 0.05, 0.02], [-0.42, -0.5, 0.75], false);
+        g.userData.left.visible = false;
+        g.userData.muzzle = new THREE.Vector3(0, 0.05, -0.05);
+        g.userData.eject = null;
+        g.userData.sightY = 0;
+        return g;
+      }
       this._paw(g, [gp[0] + 0.006, gp[1] - 0.012, gp[2]], [0.3, -0.62, 0.72], false);
       if (type === 'pistol') this._paw(g, [fp[0] - 0.02, fp[1] - 0.006, fp[2] - 0.005], [-0.4, -0.58, 0.7], false);
       else this._paw(g, [fp[0] - 0.008, fp[1] - 0.024, fp[2]], [-0.42, -0.5, 0.75], false);
@@ -327,6 +387,7 @@
       }
       c.fill();
       const tex = new THREE.CanvasTexture(cv);
+      tex.userData.own = true;
       this.flashTex = tex;
       const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(1.6, 1.3, 1) });
       this.flash = new THREE.Group();
@@ -347,7 +408,7 @@
       }
     }
     setWeapon(type, instant) {
-      if (this.type === type) return;
+      if (this.type === type && !this.nadeGone) { this.nextType = null; this.reloadT = 0; return; }
       this.nextType = type;
       if (instant || !this.type) { this._swap(); this.switchK = instant ? 0 : 1; }
     }
@@ -357,22 +418,30 @@
       this.nextType = null;
       this.model = this.models[this.type] || (this.models[this.type] = this._build(this.type));
       this.holder.add(this.model);
+      this.model.traverse((o) => { if (o.userData.mag) o.position.y = -0.07; });
       this.flash.position.copy(this.model.userData.muzzle || new THREE.Vector3(0, 0, -0.5));
       this.reloadT = 0;
+      this.nadeState = 'idle'; this.nadeT = 0; this.nadeGone = false;
+      if (this.model.userData.nade) { this.model.userData.gun.visible = true; this.model.userData.left.visible = false; }
     }
     get busy() { return !!this.nextType || this.switchK > 0.3; }
-    fire(def) {
+    // opts: { stab } for claws
+    fire(def, opts) {
       const k = this.kick;
-      k.vz += 0.9 + def.recoil * 12; k.vp += 6 + def.recoil * 70;
-      k.roll = (Math.random() - 0.5) * def.recoil * 3;
+      const kick = VM_KICK[this.type] || 0.03;
+      k.vz += 0.9 + kick * 12; k.vp += 6 + kick * 70;
+      k.roll = (Math.random() - 0.5) * kick * 3;
       if (!def.melee) {
         this.flashT = 0.05;
         this.flash.rotation.z = Math.random() * Math.PI;
         const sc = def.pellets ? 1.5 : (def.slot === 6 ? 1.6 : 1);
         this.flash.scale.setScalar(sc * (0.8 + Math.random() * 0.4));
         if (!def.projectile && !def.pellets) this._ejectShell();
-      } else this.swingT = 0.35;
+      } else { this.swingT = opts && opts.stab ? 0.5 : 0.35; this.swingDur = this.swingT; this.stab = !!(opts && opts.stab); }
     }
+    // grenades: hold the pin pulled, then throw
+    pullPin() { if (this.model && this.model.userData.nade) { this.nadeState = 'pulled'; this.nadeT = 0; } }
+    throwNade() { if (this.model && this.model.userData.nade) { this.nadeState = 'throw'; this.nadeT = 0; } }
     _ejectShell() {
       const s = this.shells.find((x) => x.life <= 0) || this.shells[0];
       const ej = this.model.userData.eject;
@@ -383,41 +452,36 @@
       s.m.rotation.set(Math.random() * 3, 0, Math.random() * 3);
     }
     reload(dur) { this.reloadT = dur; this.reloadDur = dur; }
-    // st: { speed, sprint, onGround, ads, lookX, lookY, crouch, landing }
+    // st: { speed, maxSpeed, onGround, scoped, lookX, lookY }
     update(dt, st) {
       this.t += dt;
       const D = DEFS[this.type] || DEFS.pistol;
       // weapon switch: lower, swap, raise
-      if (this.nextType) { this.switchK = Math.min(1, this.switchK + dt * 6); if (this.switchK >= 1) this._swap(); }
-      else this.switchK = Math.max(0, this.switchK - dt * 4.5);
-      this.adsK = U.damp(this.adsK, st.ads && !this.nextType && this.reloadT <= 0 ? 1 : 0, 14, dt);
-      this.sprintK = U.damp(this.sprintK, st.sprint && st.speed > 1 ? 1 : 0, 8, dt);
-      // bob (figure-eight) scaled by speed
-      const sp = st.onGround ? U.clamp(st.speed / 6, 0, 1.4) : 0;
-      this.bobT += dt * (6 + sp * 5) * (sp > 0.05 ? 1 : 0);
-      const bobA = sp * (1 - this.adsK * 0.85);
-      const bx = Math.sin(this.bobT) * 0.012 * bobA, by = -Math.abs(Math.cos(this.bobT)) * 0.014 * bobA;
+      if (this.nextType) { this.switchK = Math.min(1, this.switchK + dt * 7); if (this.switchK >= 1) this._swap(); }
+      else this.switchK = Math.max(0, this.switchK - dt * 4);
+      this.adsK = U.damp(this.adsK, st.scoped && !this.nextType && this.reloadT <= 0 ? 1 : 0, 18, dt);
+      // CS-style bob: subtle, tied to speed
+      const sp = st.onGround ? U.clamp(st.speed / 6.3, 0, 1.2) : 0;
+      this.bobT += dt * (5 + sp * 5) * (sp > 0.05 ? 1 : 0);
+      const bx = Math.sin(this.bobT) * 0.006 * sp, by = -Math.abs(Math.cos(this.bobT)) * 0.008 * sp;
       // sway from mouse look
-      this.sway.x = U.damp(this.sway.x, U.clamp(-st.lookX * 0.0009, -0.04, 0.04), 9, dt);
-      this.sway.y = U.damp(this.sway.y, U.clamp(st.lookY * 0.0009, -0.04, 0.04), 9, dt);
-      const idle = Math.sin(this.t * 1.4) * 0.002 * (1 - this.adsK);
+      this.sway.x = U.damp(this.sway.x, U.clamp(-st.lookX * 0.0007, -0.03, 0.03), 10, dt);
+      this.sway.y = U.damp(this.sway.y, U.clamp(st.lookY * 0.0007, -0.03, 0.03), 10, dt);
+      this.airK = U.damp(this.airK || 0, st.onGround ? 0 : 1, 8, dt);
+      const idle = Math.sin(this.t * 1.4) * 0.0015;
       // recoil spring
       const k = this.kick;
       k.vz += (-k.z * 220 - k.vz * 22) * dt; k.z += k.vz * dt;
       k.vp += (-k.p * 200 - k.vp * 20) * dt; k.p += k.vp * dt;
       k.roll *= Math.exp(-dt * 10);
-      // place
-      const hip = D.vm ? D.vm.hip : [0.12, -0.11, -0.28];
-      const ads = D.vm ? D.vm.ads : hip;
-      const a = this.adsK;
-      const sightCorrection = this.model && this.model.userData.sightY ? -this.model.userData.sightY * a : 0;
-      const px = U.lerp(hip[0], ads[0], a) + bx + this.sway.x * (1 - a * 0.7);
-      const py = U.lerp(hip[1], ads[1], a) + by + idle + this.sway.y * (1 - a * 0.7) - this.switchK * 0.35 - this.sprintK * 0.05 + sightCorrection;
-      const pz = U.lerp(hip[2], ads[2], a);
-      this.root.position.set(px, py, pz);
-      this.root.rotation.set(this.switchK * -0.6 + this.sprintK * -0.25, (1 - a) * 0.045 + this.sprintK * 0.55 + this.sway.x * 2, this.sprintK * 0.2 + this.sway.x * 3);
+      // place (no iron-sight ADS: like CS, only the sniper scopes)
+      const hip = D.vm ? D.vm.hip : [0.12, -0.13, -0.3];
+      const px = hip[0] + bx + this.sway.x;
+      const py = hip[1] + by + idle + this.sway.y - this.switchK * 0.35 - this.airK * 0.012;
+      this.root.position.set(px, py, hip[2]);
+      this.root.rotation.set(this.switchK * -0.6, 0.045 + this.sway.x * 2, this.sway.x * 3);
       // recoil + reload motion on the holder
-      let rx = k.p * 0.01, rz = k.z * 0.05, ry = 0, rr = k.roll, hy = 0;
+      let rx = k.p * 0.01, rz = k.z * 0.05, ry = 0, rr = k.roll, hy = 0, hx = 0;
       if (this.reloadT > 0) {
         this.reloadT -= dt;
         const t = 1 - this.reloadT / this.reloadDur;
@@ -426,18 +490,41 @@
         // magazine drop + insert wobble
         if (this.model) this.model.traverse((o) => { if (o.userData.mag) o.position.y = -0.07 - Math.max(0, Math.sin(t * Math.PI * 2)) * 0.12; });
       }
-      // melee swipe
+      // melee: slash sweeps sideways, stab thrusts forward
       if (this.model && this.model.userData.claws) {
-        this.swingT = Math.max(0, this.swingT - dt);
-        const sw = this.swingT > 0 ? Math.sin((1 - this.swingT / 0.35) * Math.PI) : 0;
+        this.swingT = Math.max(0, (this.swingT || 0) - dt);
+        const sw = this.swingT > 0 ? Math.sin((1 - this.swingT / this.swingDur) * Math.PI) : 0;
         const right = this.model.children[0], left = this.model.children[1];
-        right.position.copy(right.userData.rest).add(new THREE.Vector3(-sw * 0.22, sw * 0.06, -sw * 0.12));
-        right.quaternion.copy(right.userData.restQ).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(sw * 0.5, 0, sw * 1.1)));
-        left.position.copy(left.userData.rest); left.position.y += Math.sin(this.t * 2) * 0.004;
+        if (this.stab) {
+          right.position.copy(right.userData.rest).add(new THREE.Vector3(-sw * 0.08, sw * 0.03, -sw * 0.22));
+          right.quaternion.copy(right.userData.restQ).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(sw * 0.9, 0, 0)));
+          left.position.copy(left.userData.rest).add(new THREE.Vector3(sw * 0.06, sw * 0.03, -sw * 0.2));
+        } else {
+          right.position.copy(right.userData.rest).add(new THREE.Vector3(-sw * 0.22, sw * 0.06, -sw * 0.12));
+          right.quaternion.copy(right.userData.restQ).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(sw * 0.5, 0, sw * 1.1)));
+          left.position.copy(left.userData.rest); left.position.y += Math.sin(this.t * 2) * 0.004;
+        }
       }
-      this.holder.position.set(0, hy, rz);
-      this.holder.rotation.set(-rx * -1, ry, rr);
-      this.holder.rotation.x = rx;
+      // grenade: pulled = cocked back with the left paw in; throw = fling forward then gone
+      if (this.model && this.model.userData.nade) {
+        const ud = this.model.userData;
+        this.nadeT += dt;
+        if (this.nadeState === 'pulled') {
+          const e = Math.min(1, this.nadeT / 0.25);
+          hy += e * 0.05; hx -= e * 0.02; rx += e * 0.4; rz += e * 0.08;
+          ud.left.visible = true;
+        } else if (this.nadeState === 'throw') {
+          const e = Math.min(1, this.nadeT / 0.2);
+          hy += 0.05 - e * 0.15; rz -= e * 0.3; rx -= e * 0.6;
+          ud.left.visible = false;
+          if (this.nadeT > 0.12) ud.gun.visible = false;
+          if (this.nadeT > 0.35) { this.nadeState = 'gone'; this.nadeGone = true; }
+        } else if (this.nadeState === 'gone') {
+          hy -= 0.4;
+        } else ud.left.visible = false;
+      }
+      this.holder.position.set(hx, hy, rz);
+      this.holder.rotation.set(rx, ry, rr);
       // muzzle flash
       if (this.flashT > 0) { this.flashT -= dt; this.flash.visible = true; } else this.flash.visible = false;
       this.R.vmFlash.intensity = this.flashT > 0 ? 3.5 : 0;
@@ -452,7 +539,7 @@
         if (s.life <= 0) s.m.visible = false;
       }
       // hide the gun when the sniper scope overlay is up
-      this.root.visible = !(D.scope && this.adsK > 0.85);
+      this.root.visible = !(D.scope && this.adsK > 0.6);
     }
     // muzzle position in view space (for tracers)
     muzzleView(out) {
@@ -534,5 +621,5 @@
     return out;
   }
 
-  JB.Weapons = { DEFS, ORDER, buildModel, ViewModel, trace, spreadDir, hitboxes };
+  JB.Weapons = { DEFS, ORDER, GUNS, buildModel, ViewModel, trace, spreadDir, hitboxes };
 })();

@@ -241,12 +241,14 @@
     { t: 'armor', x: 95, z: 12.5 },
     { t: 'armor', x: 67.5, z: 76.5 },
     { t: 'health', x: 15, z: 2.5 }, { t: 'health', x: 51.5, z: 25.2 }, { t: 'health', x: 83.5, z: 14.5 },
-    { t: 'health', x: 99.5, z: 50 }, { t: 'health', x: 70, z: 33 }, { t: 'health', x: 16, z: 59 },
+    { t: 'health', x: 99.5, z: 50 }, { t: 'health', x: 71.25, z: 33.25 }, { t: 'health', x: 16, z: 59 },
     { t: 'health', x: 2, z: 38 }, { t: 'health', x: 96.5, z: 79 },
     { t: 'ammo', x: 25.5, z: 35 }, { t: 'ammo', x: 37, z: 18.8 }, { t: 'ammo', x: 80, z: 23.5 },
     { t: 'ammo', x: 102.5, z: 16.5 }, { t: 'ammo', x: 89.5, z: 54.9 }, { t: 'ammo', x: 61.8, z: 58 },
     { t: 'ammo', x: 42, z: 60.5 }, { t: 'ammo', x: 8, z: 63.5 }, { t: 'ammo', x: 84, z: 72.8 },
-    { t: 'ammo', x: 72, z: 46.5 }
+    { t: 'ammo', x: 72, z: 46.5 },
+    { t: 'nades', x: 24, z: 36 }, { t: 'nades', x: 66.5, z: 18.8 }, { t: 'nades', x: 61.8, z: 37.5 },
+    { t: 'nades', x: 98.5, z: 17 }, { t: 'nades', x: 85, z: 59.5 }, { t: 'nades', x: 11, z: 54.5 }
   ];
 
   // Spawn points [x, z, yaw]. yaw 0 faces north (-z).
