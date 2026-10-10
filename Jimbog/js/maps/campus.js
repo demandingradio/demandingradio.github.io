@@ -273,10 +273,10 @@
   P({ t: 'machine', r: [64.4, 100, 67.6, 102.5], big: true }); P({ t: 'crates', x: 65.5, z: 104.6, n: 2 }); P({ t: 'pipes', r: [64, 98.5, 68, 106], axis: 'z' });
   // upstairs
   isl([52, 101.5, 56.5, 102.5], UP); isl([60, 101.5, 62.5, 102.5], UP); isl([70, 101.5, 73.5, 102.5], UP);
-  P({ t: 'meeting_table', r: [64.6, 100.5, 67.4, 103.5], y: UP }); P({ t: 'whiteboard', x: 66, z: 99.2, facing: 'S', y: UP });
+  P({ t: 'meeting_table', r: [65.4, 100.8, 66.6, 103.8], y: UP }); P({ t: 'whiteboard', x: 64.45, z: 102.3, facing: 'E', w: 2.0, y: UP });
   P({ t: 'desk', r: [76.5, 104.4, 82.5, 105.2], y: UP }); P({ t: 'whiteboard', x: 79, z: 101, facing: 'S', y: UP });
   P({ t: 'fume_hood', x: 51, z: 104.8, facing: 'N', y: UP });
-  P({ t: 'vending', x: 51.5, z: 96.5, facing: 'S', y: UP }); P({ t: 'sofa', x: 60, z: 97.4, rot: 0, y: UP });
+  P({ t: 'vending', x: 51.5, z: 96.5, facing: 'S', y: UP }); P({ t: 'sofa', x: 60, z: 96.5, rot: 0, y: UP });
   // Administration
   P({ t: 'reception_desk', r: [43, 83.5, 46.5, 84.5] }); P({ t: 'sofa', x: 44, z: 88, rot: Math.PI }); P({ t: 'vending', x: 41.6, z: 82, facing: 'E' });
   P({ t: 'desk', r: [49, 81.3, 52.5, 82.2] }); P({ t: 'desk', r: [54.5, 81.3, 58, 82.2] }); P({ t: 'desk', r: [60, 81.3, 63, 82.2] });
@@ -285,9 +285,9 @@
   // Archive Library: shelving rows with aisles, reading tables
   for (const z of [81.5, 83.5, 85.5]) P({ t: 'bookshelf', r: [73, z, 79, z + 0.6] });
   for (const z of [81.5, 83.5]) P({ t: 'bookshelf', r: [80.5, z, 84, z + 0.6] });
-  P({ t: 'meeting_table', r: [73, 89.5, 76, 91] }); P({ t: 'meeting_table', r: [77, 89.5, 79.5, 91] });
+  P({ t: 'meeting_table', r: [73, 89.5, 76, 91] }); P({ t: 'meeting_table', r: [76.8, 89.5, 78.8, 91] });
   P({ t: 'sofa', x: 82.5, z: 87.4, rot: Math.PI });
-  P({ t: 'shelf', r: [81, 89, 81.7, 92.6] }); P({ t: 'shelf', r: [84.2, 89, 84.9, 92.6] }); P({ t: 'crates', x: 82.8, z: 92.2, n: 2 });
+  P({ t: 'shelf', r: [81.6, 92.3, 83.9, 92.9] }); P({ t: 'shelf', r: [84.2, 89, 84.9, 92.6] }); P({ t: 'crates', x: 82.6, z: 89.3, n: 2 });
   // Test Hall
   P({ t: 'bleachers', r: [30, 64, 33, 78], facing: 'W' });
   P({ t: 'hoop', x: 26.25, z: 62.6, facing: 'S' }); P({ t: 'hoop', x: 26.25, z: 79.9, facing: 'N' });

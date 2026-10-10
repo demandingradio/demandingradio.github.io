@@ -156,7 +156,8 @@
       // keep every pickup on walkable floor so cats can actually reach it
       if (!game.nav.isNode(game.nav.cellOf(def.x, def.z, this.pos.y)) || y === null) {
         const c = game.nav.nearest(def.x, this.pos.y, def.z, 2.5);
-        if (c >= 0) game.nav.pointOf(c, this.pos);
+        // never move it to another storey (upstairs items stay upstairs)
+        if (c >= 0 && Math.abs(game.level.grid.floorH[c] - this.pos.y) <= 0.6) game.nav.pointOf(c, this.pos);
       }
       this.active = true; this.timer = 0; this.temp = !!temp; this.life = temp ? 20 : 0;
       this.respawn = { weapon: 16, health: 18, armor: 26, ammo: 12, nades: 20 }[this.kind];
@@ -252,9 +253,11 @@
       if (map.env.background === null && !this.sky) this.R.scene.background = new THREE.Color(0x8fbbe6);
       this.spawns = data.spawns.map(([x, z, yaw, y]) => {
         const fy = this.level.floorAt(x, z, y);
-        const c = this.nav.nearest(x, fy === null || fy === undefined ? (y || 0) : fy, z, 3);
-        const p = this.nav.pointOf(c, new THREE.Vector3());
-        return { pos: p, yaw };
+        const h = fy === null || fy === undefined ? (y || 0) : fy;
+        const c = this.nav.nearest(x, h, z, 3);
+        // snap to the bots' walkable grid, but never onto another storey
+        if (c < 0 || Math.abs(this.level.grid.floorH[c] - h) > 0.6) return { pos: new THREE.Vector3(x, h, z), yaw };
+        return { pos: this.nav.pointOf(c, new THREE.Vector3()), yaw };
       });
       this.fans = [];
       for (const d of this.level.decor) if (d.t === 'fan') {

@@ -146,8 +146,9 @@
             if (d < bd) { bd = d; best = C; }
           }
         }
-        // stop once no farther ring can beat the best so far (another storey may be closer)
-        if (best >= 0 && (r + 1) * (r + 1) > bd) return best;
+        // single-storey maps take the first ring with a node; stacked maps keep looking
+        // while a farther ring could still win (another storey may be closer)
+        if (best >= 0 && (this.L === 1 || (r + 1) * (r + 1) > bd)) return best;
       }
       return best;
     }
