@@ -133,7 +133,11 @@
       g.player.netId = this.myId;
       for (const r of roster) if (r.id !== this.myId) this.byId.set(r.id, g.addRemote(this.infoFor(r)));
       if (extra && extra.sc) for (const [id, k, d] of extra.sc) { const f = this.byId.get(id); if (f) { f.kills = k; f.deaths = d; } }
-      if (extra && extra.pk) extra.pk.forEach(([i, on]) => { const it = g.pickups.find((p) => p.index === i); if (it && !on) it.take(); });
+      if (extra && extra.pk) extra.pk.forEach((e, n) => {
+        const [i, on] = Array.isArray(e) ? e : [n, e];
+        const it = g.pickups.find((p) => p.index === i);
+        if (it && !on) it.take();
+      });
       if (this.ui.onStart) this.ui.onStart(this);
     }
 
@@ -144,7 +148,10 @@
         case 'hello': if (this.isHost) this.hostHello(m, from); break;
         case 'st': if (this.isHost) this.applyState(this.byId.get(from), m.s); break;
         case 'ev':
-          if (this.isHost) { this.applyEvent(m.e, m.d, from); this.session.broadcast({ t: 'ev', e: m.e, d: m.d }, from); }
+          if (this.isHost) {
+            if (m.d) m.d.id = from;   // a player can only speak for their own cat
+            this.applyEvent(m.e, m.d, from); this.session.broadcast({ t: 'ev', e: m.e, d: m.d }, from);
+          }
           else this.applyEvent(m.e, m.d, null);
           break;
         case 'hit': if (this.isHost) this.hostHit(m, from); break;
@@ -160,7 +167,7 @@
         case 'full': this.status('That game is full (8 cats max).'); this.leave(); break;
         case 'roster':
           this.roster = m.r;
-          if (this.started) for (const r of m.r) if (r.id !== this.myId && !this.byId.has(r.id)) { this.byId.set(r.id, g.addRemote(this.infoFor(r))); g.hud.center(r.name + ' joined', ''); }
+          if (this.started && !g.ended) for (const r of m.r) if (r.id !== this.myId && !this.byId.has(r.id)) { this.byId.set(r.id, g.addRemote(this.infoFor(r))); g.hud.center(r.name + ' joined', ''); }
           if (this.ui.onLobby) this.ui.onLobby(this);
           break;
         case 'left': { const r = this.roster.find((x) => x.id === m.id); this.roster = this.roster.filter((x) => x.id !== m.id); this.dropFighter(m.id, r && r.name); break; }
@@ -254,7 +261,7 @@
         }
         this.pushSample(f, e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8], e[9], e[10], e[18]);
         f.hp = e[12]; f.armor = e[13]; f.helmet = !!e[14]; f.kills = e[15]; f.deaths = e[16];
-        if (e[17]) f.invuln = 0.25;
+        if (e[17]) f.invuln = 0.1;   // host says protected; lapses quickly once the flag stops
         if (e[11] && !f.alive) this.reviveRemote(f, v3([e[1], e[2], e[3]]));
       }
     }
@@ -323,6 +330,7 @@
       const g = this.game;
       const attacker = this.byId.get(from), victim = this.byId.get(m.v);
       if (!attacker || !victim || !(m.d >= 0) || m.d > (m.w === 'fall' ? 1000 : 800)) return;
+      if (m.w === 'fall' && victim !== attacker) return;   // you can only fall yourself
       g.applyDamage(victim, m.d, attacker, DEFS[m.w] || m.w === 'fall' ? m.w : 'pistol', {
         premult: true, group: m.g, head: !!m.h, point: m.p ? v3(m.p) : null, dir: m.dir ? v3(m.dir) : null, push: m.push
       });

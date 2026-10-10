@@ -196,7 +196,7 @@
             const other = a === 1 ? 0.7 : 0.85;
             for (const k of ['x', 'y', 'z']) if (k !== key) o.vel[k] *= other;
             hit = true;
-            if (a === 1 && Math.abs(o.vel.y) < 0.8) { o.vel.y = 0; o.rest = true; }
+            if (a === 1 && d < 0 && Math.abs(o.vel.y) < 0.8) { o.vel.y = 0; o.rest = true; }
           }
         }
       }

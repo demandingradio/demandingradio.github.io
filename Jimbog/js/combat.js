@@ -144,6 +144,7 @@
     tryFire(f, secondary) {
       const def = DEFS[f.current], w = f.weapons[f.current];
       if (f.cool > 0 || f.switching || !f.alive || def.grenade) return;
+      if ((f.readyAt[f.current] || 0) > this.time) return;   // this gun's own fire rate
       if (f.reloadT > 0) {
         if (def.shellReload && w.mag > 0) f.reloadT = 0; else return;
       }
@@ -159,6 +160,7 @@
       }
       w.mag--;
       f.cool = def.rate;
+      f.readyAt[f.current] = this.time + def.rate;
       // spray pattern + inaccuracy cone
       const off = patternAt(def, f.recoilIdx || 0);
       const inacc = this.inaccuracy(f);
@@ -243,6 +245,7 @@
     melee(f, stab) {
       const def = DEFS.claws;
       f.cool = stab ? def.stabRate : def.rate;
+      f.readyAt.claws = this.time + f.cool;
       sfx(stab ? 'knife_stab' : 'knife_slash', f.isPlayer ? {} : { pos: f.pos });
       if (f.isPlayer) this.vm.fire(def, { stab });
       f.cat.fire();
@@ -347,7 +350,7 @@
         if (e === owner) dmg *= 0.55;
         const dir = c.clone().sub(p).normalize();
         if (!e.remote && !this.net) { e.vel.addScaledVector(dir, 9 * k); e.vel.y += 4 * k; e.body.onGround = false; }
-        this.reportHit(owner, e, dmg, 'launcher', { dir, point: c, group: 'chest', premult: true, push: [dir.x * 9 * k, 4 * k, dir.z * 9 * k] });
+        this.reportHit(owner, e, dmg, 'launcher', { dir, point: c, group: 'chest', premult: true, push: [dir.x * 9 * k, dir.y * 9 * k + 4 * k, dir.z * 9 * k] });
       }
     },
 
@@ -387,7 +390,7 @@
       if (vel.length() > NADE_SPEED * 1.1) vel.multiplyScalar(NADE_SPEED * 1.1 / vel.length());
       f.nades[kind]--;
       // CS bots time their grenades: pop on arrival instead of rolling on
-      const fuse = kind === 'flash' ? U.clamp(tFlight, 0.5, DEFS.flash.fuse) : tFlight + 0.25;
+      const fuse = kind === 'flash' ? U.clamp(tFlight, 0.4, DEFS.flash.fuse) : tFlight + 0.1;
       this.spawnNade(kind, eye.clone().add(new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(0.3)), vel, f, fuse);
       sfx('grenade_throw', { pos: f.pos, volume: 0.6 });
       f.cat.fire();

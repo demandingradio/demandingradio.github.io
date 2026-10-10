@@ -91,7 +91,7 @@
     $('tomenu').addEventListener('click', toMenu);
     $('rematch').addEventListener('click', () => {
       $('end').hidden = true;
-      if (online && online.isHost) { lockOnStart = true; online.startMatch(); lockOnStart = false; }
+      if (online && online.isHost) { lockOnStart = true; try { online.startMatch(); } finally { lockOnStart = false; } }
       else if (!online) startBots();
     });
     $('endmenu').addEventListener('click', () => { $('end').hidden = true; toMenu(); });
@@ -99,7 +99,7 @@
     // online box
     $('onhost').addEventListener('click', hostGame);
     $('onjoin').addEventListener('click', joinGame);
-    $('onstart').addEventListener('click', () => { click(); if (online) { lockOnStart = true; online.startMatch(); lockOnStart = false; } });
+    $('onstart').addEventListener('click', () => { click(); if (online) { lockOnStart = true; try { online.startMatch(); } finally { lockOnStart = false; } } });
     $('onleave').addEventListener('click', () => { click(); leaveOnline(); $('onlinebox').hidden = true; });
     $('oncopy').addEventListener('click', () => {
       const inp = $('onlinkurl');
@@ -133,7 +133,7 @@
         $('onlinebox').hidden = true; $('menu').hidden = true; $('end').hidden = true; $('pause').hidden = true;
         game.paused = false;
         if (isTouch) { game.touchMode = true; $('touch').hidden = false; }
-        else if (lockOnStart) lock();
+        else if (lockOnStart) lock(true);
         else if (!document.pointerLockElement) showPause(true);
       },
       onLeave: (reason) => {
@@ -210,12 +210,12 @@
   }
 
   // ---------------------------------------------------------------- flow
-  function lock() {
+  function lock(starting) {
     if (isTouch) { game.touchMode = true; $('touch').hidden = false; return; }
     try {
       const r = game.canvas.requestPointerLock();
-      if (r && r.catch) r.catch(() => showPause());
-    } catch (e) { showPause(); }
+      if (r && r.catch) r.catch(() => showPause(starting));
+    } catch (e) { showPause(starting); }
   }
   // starting=true: a match just began without a click (online) — ask for one
   function showPause(starting) {

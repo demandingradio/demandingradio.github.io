@@ -415,7 +415,7 @@
           return;
         }
         if (now - link.lastSeen > SILENT_MS) {
-          dbg('silent for 8 s', link.id);
+          dbg('silent for ' + SILENT_MS / 1000 + ' s', link.id);
           if (role === 'host') dropLink(link);
           else hostGone('host-timeout');
           return;

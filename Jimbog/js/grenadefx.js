@@ -366,11 +366,15 @@
       // smoke doesn't reach through walls: the middle of that stretch must be
       // on the cloud's side of any wall (same test as density())
       if (this.clip) {
-        const tm = (t0 + t1) / 2;
-        const m = new THREE.Vector3(a.x + (b.x - a.x) * tm, a.y + (b.y - a.y) * tm, a.z + (b.z - a.z) * tm);
-        m.y = clamp(m.y, this.pos.y + 0.2, this.pos.y + this.height - 0.2);
-        const hit = this.clip(this._C, m);
-        if (hit && hit.distanceTo(this._C) < this._C.distanceTo(m) - 0.35) return false;
+        const m = new THREE.Vector3();
+        for (let k = 0; k < 5; k++) {
+          const tm = t0 + (t1 - t0) * (k + 0.5) / 5;
+          m.set(a.x + (b.x - a.x) * tm, a.y + (b.y - a.y) * tm, a.z + (b.z - a.z) * tm);
+          m.y = clamp(m.y, this.pos.y + 0.2, this.pos.y + this.height - 0.2);
+          const hit = this.clip(this._C, m);
+          if (!(hit && hit.distanceTo(this._C) < this._C.distanceTo(m) - 0.35)) return true;
+        }
+        return false;
       }
       return true;
     }

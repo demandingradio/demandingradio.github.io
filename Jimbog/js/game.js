@@ -58,6 +58,7 @@
       this.cool = 0; this.reloadT = 0; this.switching = false; this.switchT = 0;
       this.fireInacc = 0; this.recoilIdx = 0; this.lastShot = -9; this.zoom = 0; this.velMod = 1; this.stamina = 0;
       this.fireLatch = false; this.altLatch = false; this.blindT = 0;
+      this.readyAt = {};   // weapon -> game time it can fire again
       this.input = { mx: 0, mz: 0, fire: false, alt: false, jump: false, crouch: false, walk: false, reload: false, weapon: null, fwd: 0, side: 0 };
       this.cat = new JB.Cat({ fur: cfg.fur, vest: cfg.vest, name: cfg.name });
       this.cat.root.rotation.order = 'YXZ';
@@ -350,7 +351,7 @@
       f.hp = 100; f.armor = 0; f.helmet = false; f.alive = true; f.invuln = 1.5;
       f.crouching = false; f.body.h = MV.C.STAND_H; f.crouchK = 0; f.eyeH = 1.58; f.body.onGround = true;
       f.reloadT = 0; f.switching = false; f.cool = 0.3; f.streak = 0; f.velMod = 1; f.stamina = 0;
-      f.fireInacc = 0; f.recoilIdx = 0; f.zoom = 0; f.blindT = 0; f.nadeHold = null; f.afterNade = null;
+      f.fireInacc = 0; f.recoilIdx = 0; f.zoom = 0; f.blindT = 0; f.nadeHold = null; f.afterNade = null; f.readyAt = {};
       f.resetWeapons();
       f.cat.revive();
       f.cat.root.visible = !f.isPlayer;
