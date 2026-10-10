@@ -649,6 +649,8 @@
     tone(c, { type: 'triangle', f: [[0, 130], [0.06, 52]], dur: 0.08, peak: 0.6 * k, a: 0.0015 });  // thud
     tone(c, { f: [[0, 220], [0.03, 100]], dur: 0.05, peak: 0.25 * k, a: 0.001 });                  // knock
     noise(c, { dur: 0.008, peak: 0.35 * k, a: 0.0005, dst: filt(c, { type: 'highpass', f: 2200 }) }); // heel click
+    // high scuff: gives the ear (HRTF) enough treble to tell front from behind
+    noise(c, { at: 0.01, dur: 0.045, peak: 0.14 * k, a: 0.004, dst: filt(c, { type: 'bandpass', f: rnd(5500, 7500), q: 1.2 }) });
     floorHit(c, c.surface, k);
   }
 
