@@ -22,6 +22,7 @@
       this.board = $('scoreboard');
       this.reloadEl = $('reloadbar'); this.reloadFill = $('reloadfill');
       this.hintEl = $('hint');
+      this.smokeEl = $('smokefog');
       this.cache = {};
       this.hitT = 0; this.pickT = 0; this.areaT = 0;
       this.dirs = [];
@@ -30,8 +31,8 @@
       for (const k of JB.Weapons.ORDER) {
         const d = JB.Weapons.DEFS[k];
         const s = document.createElement('div');
-        s.className = 'slot';
-        s.innerHTML = '<span class="n">' + d.slot + '</span><span class="w">' + d.short + '</span>';
+        s.className = 'slot' + (d.grenade ? ' nade' : '');
+        s.innerHTML = '<span class="n">' + d.slot + '</span><span class="w">' + d.short + '</span>' + (d.grenade ? '<span class="c"></span>' : '');
         this.slots.appendChild(s);
         this.slotEls[k] = s;
       }
@@ -42,10 +43,10 @@
       el[prop] = val;
     }
     show(on) { this.el.hidden = !on; }
-    vitals(hp, armor) {
+    vitals(hp, armor, helmet) {
       hp = Math.max(0, Math.ceil(hp)); armor = Math.max(0, Math.ceil(armor));
       this._set('hp', this.hpNum, 'textContent', String(hp));
-      this._set('ar', this.arNum, 'textContent', String(armor));
+      this._set('ar', this.arNum, 'textContent', String(armor) + (helmet && armor > 0 ? '+H' : ''));
       if (this.cache.hpw !== hp) { this.cache.hpw = hp; this.hpBar.style.width = hp + '%'; this.hpBar.parentNode.classList.toggle('low', hp <= 30); }
       if (this.cache.arw !== armor) { this.cache.arw = armor; this.arBar.style.width = armor + '%'; }
     }
@@ -53,17 +54,19 @@
       const d = JB.Weapons.DEFS[type];
       this._set('wn', this.wName, 'textContent', d.name);
       this._set('wm', this.wMag, 'textContent', d.melee ? '∞' : String(mag));
-      this._set('wr', this.wRes, 'textContent', d.melee ? '' : '/ ' + res);
+      this._set('wr', this.wRes, 'textContent', d.melee || res < 0 ? '' : '/ ' + res);
       if (this.cache.wlow !== (mag <= Math.ceil((d.mag || 1) * 0.25))) {
         this.cache.wlow = mag <= Math.ceil((d.mag || 1) * 0.25);
         this.wMag.classList.toggle('low', !d.melee && this.cache.wlow);
       }
-      const key = JB.Weapons.ORDER.map((k) => (owned[k] ? '1' : '0') + (k === type ? '*' : '')).join('');
+      const key = JB.Weapons.ORDER.map((k) => String(owned[k] === true ? 1 : (owned[k] || 0)) + (k === type ? '*' : '')).join(',');
       if (this.cache.slots !== key) {
         this.cache.slots = key;
         for (const k of JB.Weapons.ORDER) {
-          this.slotEls[k].classList.toggle('owned', !!owned[k]);
-          this.slotEls[k].classList.toggle('cur', k === type);
+          const el = this.slotEls[k], n = owned[k];
+          el.classList.toggle('owned', !!n);
+          el.classList.toggle('cur', k === type);
+          if (JB.Weapons.DEFS[k].grenade) el.querySelector('.c').textContent = n ? '×' + n : '';
         }
       }
       const showR = reloadK > 0 && reloadK < 1;
@@ -115,6 +118,17 @@
       this.cache.area = name;
       this.areaEl.textContent = name;
       this.areaEl.classList.add('on'); this.areaT = 2.2;
+    }
+    // d = 0..1 how deep in smoke; tint = the cloud's (linear) colour
+    smoke(d, tint) {
+      const v = Math.round(Math.min(1, d) * 100) / 100;
+      if (this.cache.smoke !== v) { this.cache.smoke = v; this.smokeEl.style.opacity = v; }
+      if (v > 0 && tint && this.cache.smokeTint !== tint) {
+        this.cache.smokeTint = tint;
+        const s = (c) => Math.round(255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055));
+        const r = s(tint.r), g = s(tint.g), b = s(tint.b);
+        this.smokeEl.style.background = 'radial-gradient(circle at 50% 50%, rgba(' + r + ',' + g + ',' + b + ',0.92), rgba(' + Math.round(r * 0.85) + ',' + Math.round(g * 0.85) + ',' + Math.round(b * 0.85) + ',0.98))';
+      }
     }
     hint(text) { this._set('hint', this.hintEl, 'textContent', text || ''); }
     timer(sec, line) {

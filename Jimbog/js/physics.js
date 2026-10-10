@@ -116,7 +116,7 @@
     // body: { pos: THREE.Vector3 (feet), vel, r, h, onGround }
     move(body, dt) {
       const p = body.pos, v = body.vel;
-      body.stepUp = 0;
+      body.stepUp = 0; body.snapDown = 0;
       const wasGround = body.onGround;
       this._axis(body, 0, v.x * dt, wasGround);
       this._axis(body, 2, v.z * dt, wasGround);
@@ -139,7 +139,7 @@
       // stick to stairs/ramps going down
       if (!body.onGround && wasGround && v.y <= 0.01) {
         const top = this.groundAt(p.x, p.y, p.z, body.r - 0.02, 0.01, STEP);
-        if (top > -Infinity && p.y - top <= STEP) { p.y = top; body.onGround = true; v.y = 0; }
+        if (top > -Infinity && p.y - top <= STEP) { body.snapDown = p.y - top; p.y = top; body.onGround = true; v.y = 0; }
       }
       if (!body.onGround) {
         const top = this.groundAt(p.x, p.y, p.z, body.r - 0.02, 0.01, 0.03);

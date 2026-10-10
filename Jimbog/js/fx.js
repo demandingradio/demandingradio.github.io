@@ -129,6 +129,7 @@
       dc.strokeStyle = 'rgba(15,12,10,0.6)'; dc.lineWidth = 1.2;
       for (let i = 0; i < 7; i++) { const a = i / 7 * 6.28 + 0.3; dc.beginPath(); dc.moveTo(32 + Math.cos(a) * 6, 32 + Math.sin(a) * 6); dc.lineTo(32 + Math.cos(a) * (14 + (i % 3) * 5), 32 + Math.sin(a) * (14 + (i % 3) * 5)); dc.stroke(); }
       const dtex = new THREE.CanvasTexture(dcv);
+      dtex.encoding = THREE.sRGBEncoding;
       const dmat = new THREE.MeshStandardMaterial({ map: dtex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, roughness: 0.9 });
       const dgeo = new THREE.PlaneGeometry(0.13, 0.13);
       this.decals = [];
@@ -145,7 +146,9 @@
       const sg = sc.createRadialGradient(64, 64, 0, 64, 64, 62);
       sg.addColorStop(0, 'rgba(10,8,6,0.9)'); sg.addColorStop(0.5, 'rgba(20,16,12,0.5)'); sg.addColorStop(1, 'rgba(20,16,12,0)');
       sc.fillStyle = sg; sc.fillRect(0, 0, 128, 128);
-      this.scorchMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(scv), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      const stex = new THREE.CanvasTexture(scv);
+      stex.encoding = THREE.sRGBEncoding;
+      this.scorchMat = new THREE.MeshBasicMaterial({ map: stex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
       this.scorches = [];
       this.time = 0;
       this._m = new THREE.Matrix4(); this._x = new THREE.Vector3(); this._y = new THREE.Vector3(); this._z = new THREE.Vector3();
@@ -236,7 +239,8 @@
     }
     update(dt, camera) {
       this.time += dt;
-      const scale = window.innerHeight * 0.5 / Math.tan(camera.fov * Math.PI / 360);
+      // gl_PointSize is in drawing-buffer pixels
+      const scale = this.R.renderer.domElement.height * 0.5 / Math.tan(camera.fov * Math.PI / 360);
       this.glow.update(dt, scale);
       this.smoke.update(dt, scale);
       // tracers: billboard quads stretched from a to b

@@ -512,8 +512,8 @@
     function skirting(axis, line, a0, a1, floor, sign, reg) {
       if (reg.isStair || reg.wmat === 'tiles_wall' || reg.wmat === 'brick') return;
       const off = sign * 0.015, h = 0.12;
-      if (axis === 'x') boxGeo('skirt', a0, floor, Math.min(line, line - off), a1, floor + h, Math.max(line, line - off), reg.gi, sign < 0 ? 'tn' : 'ts');
-      else boxGeo('skirt', Math.min(line, line - off), floor, a0, Math.max(line, line - off), floor + h, a1, reg.gi, sign < 0 ? 'tw' : 'te');
+      if (axis === 'x') boxGeo('skirt', a0, floor, Math.min(line, line + off), a1, floor + h, Math.max(line, line + off), reg.gi, sign < 0 ? 'tn' : 'ts');
+      else boxGeo('skirt', Math.min(line, line + off), floor, a0, Math.max(line, line + off), floor + h, a1, reg.gi, sign < 0 ? 'tw' : 'te');
     }
     // Door frame: two jambs + header + floor threshold, giving thin walls depth.
     function doorFrame(axis, line, a0, a1, base, top, reg, header) {
@@ -717,7 +717,7 @@
       if (mats[key]) return mats[key];
       let m;
       const [kind, name] = key.split(':');
-      if (kind === 'f') m = std({}, name, name === 'diamond_plate' ? 2 : 1);
+      if (kind === 'f') m = std(name === 'grate' ? { alphaTest: 0.5 } : {}, name, name === 'diamond_plate' ? 2 : 1);
       else if (kind === 'w') m = std({}, name);
       else if (key === 'ceil') m = std({ color: 0x9a9da3 }, 'ceiling');
       else if (key === 'stair') m = std({ color: 0x9a9c9e }, 'diamond_plate', 2);
