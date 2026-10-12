@@ -459,6 +459,13 @@
           ext = !!reg.outdoor || outdoorAt(c2, y);
           if (ext) bld = reg.outdoor ? bldAt[c2] : bldAt[c];
           top = ceil < INF / 2 ? ceil : t2;
+          // a ledge (raised walkway, terrace) is only solid up to the floor of the open space beside it
+          for (let s2 = 0; s2 < L; s2++) {
+            const C2 = s2 * N + c2, r2 = regC(C2);
+            if (!r2) break;
+            const f2 = G.floorH[C2];
+            if (f2 > y + 0.05 && f2 < top && (r2.outdoor || r2.gi === reg.gi)) top = f2;
+          }
           wallHere = true;
         } else {
           const C2 = c2;

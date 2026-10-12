@@ -9,7 +9,7 @@
       id: 'facility', name: 'Facility', tagline: 'Facility deathmatch · factory interiors',
       builder: 'grid', data: () => JB.MapData,
       // Interiors sit about a stop under the campus sun: dim cool skylight fill, warm bounce, light dusty haze.
-      env: { background: 0x0b0d10, fog: [0x262420, 0.0095], hemi: [0x9fb0bd, 0x3a2e22, 0.2], sun: [0xffe6c4, 3.1], exposure: 1.0, envMap: 'factory', far: 260 },
+      env: { background: 0x0b0d10, fog: [0x262420, 0.0075], hemi: [0x9fb0bd, 0x3a2e22, 0.26], sun: [0xffe6c4, 3.1], exposure: 1.08, envMap: 'factory', far: 260 },
       menuShots: [
         { a: [86, -2.2, 37.5], b: [70, -2.4, 50], look: [80, -1.0, 44] },
         { a: [94, -2.6, 21.5], b: [107, -2.6, 20], look: [101, -2.5, 15] },

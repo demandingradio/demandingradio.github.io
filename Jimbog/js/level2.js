@@ -34,23 +34,26 @@
     hall:     { c: 0xfff0dc, i: 0.95, r: 11, s: 5, fx: 'panel', bounce: 0.07 }
   });
 
+  // Real photo textures (js/texmanifest.js) carry their own roughness maps, so those use
+  // roughness 1 (the map as authored) and little or no metalness; procedural-only ones keep tuned values.
   const MATP = {
-    concrete_floor: { rough: 0.9, metal: 0.0, ns: 0.6 }, concrete_wall: { rough: 0.95, metal: 0.0, ns: 0.8 },
-    metal_panel: { rough: 0.7, metal: 0.55, ns: 0.7 }, diamond_plate: { rough: 0.65, metal: 0.7, ns: 1.0 },
-    tiles_wall: { rough: 0.55, metal: 0.0, ns: 0.6 }, tiles_floor: { rough: 0.8, metal: 0.0, ns: 0.6 },
-    lab_white: { rough: 0.5, metal: 0.0, ns: 0.5 }, ceiling: { rough: 0.9, metal: 0.3, ns: 0.8 },
-    brick: { rough: 0.95, metal: 0.0, ns: 1.0 }, hazard: { rough: 0.8, metal: 0.2, ns: 0.6 },
-    grass: { rough: 0.97, metal: 0.0, ns: 0.6 }, paving: { rough: 0.87, metal: 0.0, ns: 0.8 },
-    asphalt: { rough: 0.9, metal: 0.0, ns: 0.9 }, court_blue: { rough: 0.75, metal: 0.0, ns: 0.4 },
+    concrete_floor: { rough: 1.0, metal: 0.0, ns: 0.9 }, concrete_wall: { rough: 1.0, metal: 0.0, ns: 1.0 },
+    metal_panel: { rough: 1.0, metal: 0.2, ns: 0.9 }, diamond_plate: { rough: 1.0, metal: 0.2, ns: 1.0 },
+    tiles_wall: { rough: 1.0, metal: 0.0, ns: 0.8 }, tiles_floor: { rough: 1.0, metal: 0.0, ns: 0.8 },
+    lab_white: { rough: 1.0, metal: 0.0, ns: 0.6 }, ceiling: { rough: 1.0, metal: 0.05, ns: 0.9 },
+    brick: { rough: 1.0, metal: 0.0, ns: 1.0 }, hazard: { rough: 0.8, metal: 0.2, ns: 0.6 },
+    grass: { rough: 1.0, metal: 0.0, ns: 0.8 }, paving: { rough: 1.0, metal: 0.0, ns: 1.0 },
+    asphalt: { rough: 1.0, metal: 0.0, ns: 0.9 }, court_blue: { rough: 0.75, metal: 0.0, ns: 0.4 },
     court_green: { rough: 0.75, metal: 0.0, ns: 0.4 }, court_grey: { rough: 0.8, metal: 0.0, ns: 0.4 },
-    brick_tan: { rough: 0.92, metal: 0.0, ns: 1.0 }, brick_dark: { rough: 0.92, metal: 0.0, ns: 1.0 },
-    render_cream: { rough: 0.88, metal: 0.0, ns: 0.5 }, cladding_white: { rough: 0.5, metal: 0.12, ns: 0.6 },
+    brick_tan: { rough: 1.0, metal: 0.0, ns: 1.0 }, brick_dark: { rough: 1.0, metal: 0.0, ns: 1.0 },
+    render_cream: { rough: 1.0, metal: 0.0, ns: 0.9 }, cladding_white: { rough: 0.5, metal: 0.12, ns: 0.6 },
     cladding_bluegrey: { rough: 0.5, metal: 0.12, ns: 0.6 }, panel_green: { rough: 0.55, metal: 0.05, ns: 0.5 },
-    roof_membrane: { rough: 0.9, metal: 0.0, ns: 0.8 }, roof_metal: { rough: 0.42, metal: 0.5, ns: 1.0 },
+    roof_membrane: { rough: 1.0, metal: 0.0, ns: 0.8 }, roof_metal: { rough: 1.0, metal: 0.15, ns: 1.0 },
     carpet_grey: { rough: 0.98, metal: 0.0, ns: 0.6 }, lino: { rough: 0.55, metal: 0.0, ns: 0.4 },
-    timber_floor: { rough: 0.38, metal: 0.0, ns: 0.5 }, timber: { rough: 0.85, metal: 0.0, ns: 0.8 },
-    soil: { rough: 1.0, metal: 0.0, ns: 1.0 }, gravel: { rough: 0.95, metal: 0.0, ns: 1.0 }
+    timber_floor: { rough: 1.0, metal: 0.0, ns: 0.7 }, timber: { rough: 1.0, metal: 0.0, ns: 1.0 },
+    soil: { rough: 1.0, metal: 0.0, ns: 1.0 }, gravel: { rough: 1.0, metal: 0.0, ns: 1.0 }
   };
+
 
   class Bucket {
     constructor(key) { this.key = key; this.pos = []; this.nor = []; this.uv = []; this.grp = []; this.ao = []; this.idx = []; }
