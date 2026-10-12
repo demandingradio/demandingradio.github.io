@@ -224,7 +224,14 @@
     { t: 'stalls', side: 'top', z0: 49, z1: 53.5, xs: [3.5, 6.25, 9, 11.5] },
     { t: 'stalls', side: 'bottom', z0: 61, z1: 66, xs: [0, 2.5, 5, 7.5, 10, 12.5] },
     { t: 'pipes', r: [0.5, 26.5, 3.5, 49], axis: 'z' },
-    { t: 'vents', x: 40.5, z: 64.5 }, { t: 'vents', x: 42.5, z: 64.5 }
+    { t: 'vents', x: 40.5, z: 64.5 }, { t: 'vents', x: 42.5, z: 64.5 },
+    // CC0 models (decoration only; footprints are solid, so none sits in a doorway, spawn or pickup)
+    { t: 'model', m: 'generator', x: 84.2, z: 41.6 },
+    { t: 'model', m: 'propane', x: 68.6, z: 37.2 }, { t: 'model', m: 'propane', x: 68.6, z: 38.6 },
+    { t: 'model', m: 'propane', x: 67.2, z: 52.2 }, { t: 'model', m: 'propane', x: 86.2, z: 36.8 },
+    { t: 'model', m: 'cardboard', x: 71.3, z: 46.9, rot: 0.3 }, { t: 'model', m: 'cardboard', x: 68.4, z: 48.9, rot: 1.1 },
+    { t: 'model', m: 'utility_box', x: 72.6, z: 53.75 }, { t: 'model', m: 'utility_box', x: 64.25, z: 40.0, rot: Math.PI / 2 },
+    { t: 'model', m: 'wet_floor', x: 2.2, z: 57.0, rot: 0.5, solid: false }
   ];
 
   // Pickups: weapons, armour (as on the plan), fish snacks (health), ammo.

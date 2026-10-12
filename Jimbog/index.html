@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -154,6 +154,7 @@
 
   <!-- three.js r137 (vendored global build) + post-processing -->
   <script src="lib/three.min.js"></script>
+  <script src="lib/GLTFLoader.js?v=7"></script>
   <script src="lib/post/CopyShader.js"></script>
   <script src="lib/post/LuminosityHighPassShader.js"></script>
   <script src="lib/post/EffectComposer.js"></script>
@@ -162,38 +163,39 @@
   <script src="lib/post/MaskPass.js"></script>
   <script src="lib/post/UnrealBloomPass.js"></script>
   <!-- the game. Bump ?v= when changing files so browsers don't serve stale code. -->
-  <script src="js/util.js?v=5"></script>
-  <script src="js/texmanifest.js?v=6"></script>
-  <script src="js/textures.js?v=6"></script>
-  <script src="js/tex_campus.js?v=5"></script>
-  <script src="js/audio.js?v=5"></script>
-  <script src="js/mapdata.js?v=5"></script>
-  <script src="js/props.js?v=5"></script>
-  <script src="js/props_outdoor.js?v=5"></script>
-  <script src="js/props_indoor.js?v=5"></script>
-  <script src="js/maps/campus.js?v=5"></script>
-  <script src="js/maps/maps.js?v=5"></script>
-  <script src="js/level.js?v=5"></script>
-  <script src="js/level2.js?v=5"></script>
-  <script src="js/physics.js?v=5"></script>
-  <script src="js/nav.js?v=5"></script>
-  <script src="js/render.js?v=5"></script>
-  <script src="js/sky.js?v=5"></script>
-  <script src="js/cat.js?v=5"></script>
-  <script src="js/weapons.js?v=5"></script>
-  <script src="js/fx.js?v=5"></script>
-  <script src="js/decals.js?v=6"></script>
-  <script src="js/grenadefx.js?v=5"></script>
-  <script src="js/movement.js?v=5"></script>
-  <script src="js/bots.js?v=5"></script>
-  <script src="js/hud.js?v=5"></script>
-  <script src="js/combat.js?v=5"></script>
-  <script src="js/atmos.js?v=6"></script>
-  <script src="js/game.js?v=5"></script>
+  <script src="js/util.js?v=7"></script>
+  <script src="js/texmanifest.js?v=7"></script>
+  <script src="js/textures.js?v=7"></script>
+  <script src="js/tex_campus.js?v=7"></script>
+  <script src="js/audio.js?v=7"></script>
+  <script src="js/mapdata.js?v=7"></script>
+  <script src="js/models.js?v=7"></script>
+  <script src="js/props.js?v=7"></script>
+  <script src="js/props_outdoor.js?v=7"></script>
+  <script src="js/props_indoor.js?v=7"></script>
+  <script src="js/maps/campus.js?v=7"></script>
+  <script src="js/maps/maps.js?v=7"></script>
+  <script src="js/level.js?v=7"></script>
+  <script src="js/level2.js?v=7"></script>
+  <script src="js/physics.js?v=7"></script>
+  <script src="js/nav.js?v=7"></script>
+  <script src="js/render.js?v=7"></script>
+  <script src="js/sky.js?v=7"></script>
+  <script src="js/cat.js?v=7"></script>
+  <script src="js/weapons.js?v=7"></script>
+  <script src="js/fx.js?v=7"></script>
+  <script src="js/decals.js?v=7"></script>
+  <script src="js/grenadefx.js?v=7"></script>
+  <script src="js/movement.js?v=7"></script>
+  <script src="js/bots.js?v=7"></script>
+  <script src="js/hud.js?v=7"></script>
+  <script src="js/combat.js?v=7"></script>
+  <script src="js/atmos.js?v=7"></script>
+  <script src="js/game.js?v=7"></script>
   <!-- online play: PeerJS (WebRTC, MIT licence) + our transport + protocol -->
   <script src="lib/peerjs.min.js"></script>
-  <script src="js/net.js?v=5"></script>
-  <script src="js/online.js?v=5"></script>
-  <script src="js/main.js?v=5"></script>
+  <script src="js/net.js?v=7"></script>
+  <script src="js/online.js?v=7"></script>
+  <script src="js/main.js?v=7"></script>
 </body>
 </html>

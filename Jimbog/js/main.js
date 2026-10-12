@@ -382,7 +382,10 @@
   function boot() {
     buildMenu();
     if (!window.WebGLRenderingContext) { $('loadtext').textContent = 'Jimbog needs WebGL, which this browser could not start.'; return; }
-    setTimeout(() => {
+    // The CC0 models load first (never rejects; a late or failed model just keeps the primitive look).
+    setLoading('Loading models…');
+    const models = JB.Models ? JB.Models.load() : Promise.resolve();
+    models.catch(() => {}).then(() => setTimeout(() => {
       try {
         hud = new JB.HUD();
         game = new JB.Game($('game'), settings, hud);
@@ -402,7 +405,7 @@
         console.error(e);
         $('loadtext').textContent = 'Something went wrong starting the game: ' + e.message;
       }
-    }, 60);
+    }, 60));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   JB.main = { settings, get game() { return game; }, get online() { return online; } };

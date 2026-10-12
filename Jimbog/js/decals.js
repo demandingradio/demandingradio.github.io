@@ -533,7 +533,7 @@
       mulQuad(mulAcc, [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)], UV4(R[cell]), [0, 1, 0], tint, str);
     };
     const tuftAt = (x, y, z, gi, scale) => {
-      const s = scale || 1, col = [lin(0.42 + rnd() * 0.12), lin(0.47 + rnd() * 0.1), lin(0.27 + rnd() * 0.06)];   // faded olive-green #6e7a49, sRGB
+      const s = scale || 1, col = [lin(0.36 + rnd() * 0.1), lin(0.39 + rnd() * 0.08), lin(0.24 + rnd() * 0.05)];   // dry olive (the cards face up, so they catch full sun), sRGB
       const cell = T.grass.rect[Math.floor(rnd() * 4)];
       for (let k = 0; k < 2; k++) {
         const a = rnd() * Math.PI + k * Math.PI / 2, hw = 0.2 * s, hh = 0.2 * s + rnd() * 0.08 * s;

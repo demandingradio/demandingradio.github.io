@@ -259,6 +259,19 @@
   P({ t: 'posts', a: [22, 104.9], b: [36, 104.9], n: 8, h: 3.4 });
   P({ t: 'barrel_vault', r: [21, 91, 25.5, 104], y0: 4.4, rise: 1.6, axis: 'z' });
   P({ t: 'pergola_frame', r: [64, 81, 71.5, 89], y: 2.75, axis: 'z' });
+  // CC0 models: tyre stacks by the shed and car park, a road-barrier row on the car park's west edge,
+  // a classroom set in the Archive Library, and the cat statue on a plinth by the entrance sign.
+  P({ t: 'model', m: 'tyre', x: 85.6, z: 46.8, flat: true, stack: 3 });
+  P({ t: 'model', m: 'tyre', x: 101.0, z: 47.5, flat: true, stack: 2 });
+  P({ t: 'model', m: 'tyre', x: 86.4, z: 133.0, flat: true, stack: 3 });
+  P({ t: 'model', m: 'tyre', x: 86.4, z: 140.5, flat: true, stack: 2 });
+  for (const z of [121.0, 122.6, 124.2, 125.8]) P({ t: 'model', m: 'road_barrier', x: 86.8, z, rot: Math.PI / 2 });
+  // (the library's bookcases end at z 86.1, so the set stands on the open floor south of them, z 86.5 to 88)
+  for (const x of [74.0, 76.4, 78.8]) {
+    P({ t: 'model', m: 'school_desk', x, z: 86.75 });
+    P({ t: 'model', m: 'school_chair', x, z: 87.5, rot: Math.PI });
+  }
+  P({ t: 'model', m: 'cat_statue', x: 10.8, z: 96.2, s: 4, plinth: 0.4 });
 
   // ---- interiors
   const isl = (r, y) => P({ t: 'lab_island', r, y: y || 0 });

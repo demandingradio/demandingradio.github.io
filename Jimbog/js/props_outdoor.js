@@ -321,6 +321,10 @@
     const c = Math.cos(yaw), s = Math.sin(yaw);
     return [bx + lx * c + lz * s, bz - lx * s + lz * c];
   }
+  // A CC0 model with its origin at (x, y, z), spun by yaw and scaled by sc (local axes, applied before the spin).
+  function modelPut(P, name, x, y, z, yaw, g, aof, sc) {
+    JB.Models.put((key, geo, px, py, pz, ry, gg, ao, rx, rz, s2) => place(P, key, geo, px, py, pz, UP, ry, gg, ao, s2), name, x, y, z, yaw, g, aof, 0, 0, sc);
+  }
   // Facing: 'N','E','S','W' or radians. Radians convention matches the car: 0 faces -z (north).
   function facingAngle(f) {
     if (typeof f === 'number') return f;
@@ -624,12 +628,17 @@
   JB.Props.register('bench', function (p, ctx) {
     const P = ctx.P, yaw = p.rot || 0, f = floorOf(P, p), g = groupOf(P, p), aof = ctx.aoFor(f);
     const put = (key, geo, lx, ly, lz) => { const q = lp(p.x, p.z, yaw, lx, lz); place(P, key, geo, q[0], f + ly, q[1], UP, yaw, g, aof); };
-    for (let i = 0; i < 5; i++) put('p:timber', boxGeo(1.8, 0.035, 0.09), 0, 0.46, -0.24 + i * 0.12);       // seat slats
-    for (let i = 0; i < 3; i++) put('p:timber', boxGeo(1.8, 0.09, 0.03), 0, 0.6 + i * 0.12, -0.33);         // back slats
-    for (const sx of [-0.8, 0.8]) {
-      for (const sz of [-0.3, 0.3]) put('p:frame_dark', boxGeo(0.05, 0.46, 0.05), sx, 0.23, sz);           // legs
-      put('p:frame_dark', boxGeo(0.05, 0.6, 0.05), sx, 0.7, -0.33);                                         // back uprights
-      put('p:frame_dark', boxGeo(0.05, 0.05, 0.62), sx, 0.44, 0);                                           // seat frame rail
+    if (JB.Models && JB.Models.has('bench')) {
+      const S = JB.Models.size('bench');   // 1.8 m long along local x, 0.72 m deep (the collider's footprint)
+      modelPut(P, 'bench', p.x, f, p.z, yaw, g, aof, [1.8 / S.x, 1, 0.72 / S.z]);
+    } else {
+      for (let i = 0; i < 5; i++) put('p:timber', boxGeo(1.8, 0.035, 0.09), 0, 0.46, -0.24 + i * 0.12);       // seat slats
+      for (let i = 0; i < 3; i++) put('p:timber', boxGeo(1.8, 0.09, 0.03), 0, 0.6 + i * 0.12, -0.33);         // back slats
+      for (const sx of [-0.8, 0.8]) {
+        for (const sz of [-0.3, 0.3]) put('p:frame_dark', boxGeo(0.05, 0.46, 0.05), sx, 0.23, sz);           // legs
+        put('p:frame_dark', boxGeo(0.05, 0.6, 0.05), sx, 0.7, -0.33);                                         // back uprights
+        put('p:frame_dark', boxGeo(0.05, 0.05, 0.62), sx, 0.44, 0);                                           // seat frame rail
+      }
     }
     solidLocal(P, p.x, f, p.z, yaw, -0.9, -0.36, 0.9, 0.36, 0, 0.5);
   });
@@ -639,12 +648,17 @@
   JB.Props.register('picnic_table', function (p, ctx) {
     const P = ctx.P, yaw = p.rot || 0, f = floorOf(P, p), g = groupOf(P, p), aof = ctx.aoFor(f);
     const put = (key, geo, lx, ly, lz) => { const q = lp(p.x, p.z, yaw, lx, lz); place(P, key, geo, q[0], f + ly, q[1], UP, yaw, g, aof); };
-    for (let i = 0; i < 5; i++) put('p:wood_table', boxGeo(1.8, 0.04, 0.1), 0, 0.74, -0.24 + i * 0.12);    // table top
-    for (const sz of [-0.6, 0.6]) for (let i = 0; i < 3; i++) put('p:wood_table', boxGeo(1.8, 0.04, 0.1), 0, 0.44, sz - 0.1 + i * 0.1);  // seats
-    for (const sx of [-0.75, 0.75]) {
-      put('p:frame_dark', boxGeo(0.06, 0.74, 0.06), sx, 0.37, 0);                                       // table posts
-      for (const sz of [-0.6, 0.6]) put('p:frame_dark', boxGeo(0.06, 0.44, 0.06), sx, 0.22, sz);        // seat posts
-      put('p:frame_dark', boxGeo(0.06, 0.06, 1.4), sx, 0.2, 0);                                          // ground rail
+    if (JB.Models && JB.Models.has('picnic_table')) {
+      const S = JB.Models.size('picnic_table');   // model long axis (z) turned to local x: 1.8 m table, 1.5 m across the benches
+      modelPut(P, 'picnic_table', p.x, f, p.z, yaw + Math.PI / 2, g, aof, [1.5 / S.x, 1, 1.8 / S.z]);
+    } else {
+      for (let i = 0; i < 5; i++) put('p:wood_table', boxGeo(1.8, 0.04, 0.1), 0, 0.74, -0.24 + i * 0.12);    // table top
+      for (const sz of [-0.6, 0.6]) for (let i = 0; i < 3; i++) put('p:wood_table', boxGeo(1.8, 0.04, 0.1), 0, 0.44, sz - 0.1 + i * 0.1);  // seats
+      for (const sx of [-0.75, 0.75]) {
+        put('p:frame_dark', boxGeo(0.06, 0.74, 0.06), sx, 0.37, 0);                                       // table posts
+        for (const sz of [-0.6, 0.6]) put('p:frame_dark', boxGeo(0.06, 0.44, 0.06), sx, 0.22, sz);        // seat posts
+        put('p:frame_dark', boxGeo(0.06, 0.06, 1.4), sx, 0.2, 0);                                          // ground rail
+      }
     }
     solidLocal(P, p.x, f, p.z, yaw, -0.9, -0.3, 0.9, 0.3, 0, 0.75);
   });
@@ -654,11 +668,16 @@
   JB.Props.register('bin', function (p, ctx) {
     const P = ctx.P, rnd = _rng(seedOf(p, 71)), f = floorOf(P, p), g = groupOf(P, p), aof = ctx.aoFor(f);
     const put = (key, geo, x, y, z) => place(P, key, geo, x, f + y, z, UP, 0, g, aof);
-    put('p:bin_green', boxGeo(0.56, 0.9, 0.58), p.x, 0.5, p.z);
-    put(rnd() < 0.5 ? 'p:yellow' : 'p:barrel_red', boxGeo(0.6, 0.07, 0.62), p.x, 0.98, p.z);    // lid, sits on the body top (0.95 m)
-    put('p:rubber', boxGeo(0.5, 0.04, 0.04), p.x, 0.86, p.z + 0.31);                              // handle bar
-    // Two back wheels: discs with their axle along x.
-    for (const sx of [-0.22, 0.22]) place(P, 'p:rubber', cylGeo(0.05, 0.05, 0.04, 8), p.x + sx, f + 0.05, p.z - 0.2, new THREE.Vector3(1, 0, 0), 0, g, aof);
+    if (JB.Models && JB.Models.has('bin')) {
+      const S = JB.Models.size('bin');   // one bin of the source file, fitted to the 0.6 x 1.0 x 0.6 m footprint
+      modelPut(P, 'bin', p.x, f, p.z, 0, g, aof, [0.6 / S.x, 1.0 / S.y, 0.6 / S.z]);
+    } else {
+      put('p:bin_green', boxGeo(0.56, 0.9, 0.58), p.x, 0.5, p.z);
+      put(rnd() < 0.5 ? 'p:yellow' : 'p:barrel_red', boxGeo(0.6, 0.07, 0.62), p.x, 0.98, p.z);    // lid, sits on the body top (0.95 m)
+      put('p:rubber', boxGeo(0.5, 0.04, 0.04), p.x, 0.86, p.z + 0.31);                              // handle bar
+      // Two back wheels: discs with their axle along x.
+      for (const sx of [-0.22, 0.22]) place(P, 'p:rubber', cylGeo(0.05, 0.05, 0.04, 8), p.x + sx, f + 0.05, p.z - 0.2, new THREE.Vector3(1, 0, 0), 0, g, aof);
+    }
     ctx.solidBox(p.x - 0.3, f, p.z - 0.3, p.x + 0.3, f + 1.0, p.z + 0.3);
   });
 

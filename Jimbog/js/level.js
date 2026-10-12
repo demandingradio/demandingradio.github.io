@@ -34,7 +34,7 @@
   const MATP = {
     concrete_floor: { rough: 1.0, metal: 0.0, ns: 0.8 },
     concrete_wall:  { rough: 1.0, metal: 0.0, ns: 0.9 },
-    metal_panel:    { rough: 1.0, metal: 0.15, ns: 0.7 },
+    metal_panel:    { rough: 1.0, metal: 0.15, ns: 0.55 },
     diamond_plate:  { rough: 1.05, metal: 0.18, ns: 1.0 },
     hazard:         { rough: 1.0, metal: 0.1, ns: 0.8 },
     tiles_wall:     { rough: 1.0, metal: 0.0, ns: 0.7 },
@@ -42,7 +42,7 @@
     epoxy_yellow:   { rough: 1.0, metal: 0.0, ns: 0.5 },
     painted_metal:  { rough: 1.0, metal: 0.1, ns: 0.6 },
     rust:           { rough: 1.0, metal: 0.05, ns: 1.0 },
-    ceiling:        { rough: 1.0, metal: 0.05, ns: 0.8 },
+    ceiling:        { rough: 1.0, metal: 0.05, ns: 0.6 },
     crate:          { rough: 0.95, metal: 0.0, ns: 0.7 },
     brick:          { rough: 1.0, metal: 0.0, ns: 1.0 },
     rubber:         { rough: 1.0, metal: 0.0, ns: 0.5 },

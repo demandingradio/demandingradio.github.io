@@ -198,9 +198,10 @@
     }
     S.bump = 2;
   }
-  function gen_court_blue(S, R) { courtGen(S, R, [0.3, 0.43, 0.52], 0.6, false, 0.05); }
-  function gen_court_green(S, R) { courtGen(S, R, [0.3, 0.44, 0.38], 0.6, false, 0.05); }
-  function gen_court_grey(S, R) { courtGen(S, R, [0.6, 0.6, 0.58], 0.7, true, 0.08); }
+  // Faded, greyer paint (CS2-style muted accents): the blue court read as cyan and the grey one as near-white in sun.
+  function gen_court_blue(S, R) { courtGen(S, R, [0.25, 0.37, 0.46], 0.6, false, 0.05); }
+  function gen_court_green(S, R) { courtGen(S, R, [0.27, 0.4, 0.35], 0.6, false, 0.05); }
+  function gen_court_grey(S, R) { courtGen(S, R, [0.5, 0.5, 0.48], 0.7, true, 0.08); }
 
   // ---------- 7-8. face brick, stretcher bond: 8 bricks x 24 courses per tile ----------
   // Worn brick: soot and grime running down from the course above, pale efflorescence near the mortar,
@@ -300,7 +301,8 @@
   }
   function gen_cladding_white(S, R) { genPanels(S, R, [0.78, 0.78, 0.75], 0.45, 2, 1, 0.04, 0.12); }
   function gen_cladding_bluegrey(S, R) { genPanels(S, R, [0.46, 0.52, 0.57], 0.45, 2, 1, 0.04, 0.12); }
-  function gen_panel_green(S, R) { genPanels(S, R, [0.4, 0.53, 0.47], 0.5, 2, 2, 0.02, 0.1); }
+  // Faded painted green (hue ~108, like the reference #5d8a5c), not the old teal-grey, so the band reads green in shade.
+  function gen_panel_green(S, R) { genPanels(S, R, [0.46, 0.61, 0.43], 0.5, 2, 2, 0.02, 0.1); }
 
   // ---------- 13. flat roof membrane: dirty bitumen, ponding stains, granules, sheet seams ----------
   function gen_roof_membrane(S, R) {

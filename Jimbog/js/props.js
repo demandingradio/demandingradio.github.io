@@ -46,7 +46,8 @@
       'p:led_green': { basic: true, params: { color: new THREE.Color(0x30ff60).multiplyScalar(2.5) } },
       'p:led_amber': { basic: true, params: { color: new THREE.Color(0xffa020).multiplyScalar(2.5) } },
       'p:highbay': { basic: true, params: { color: new THREE.Color(0xffd9a8).multiplyScalar(3.0) } },
-      'p:glassware': { params: { color: 0x9fe0d0, roughness: 0.05, metalness: 0.3 } }
+      'p:glassware': { params: { color: 0x9fe0d0, roughness: 0.05, metalness: 0.3 } },
+      'p:concrete_plinth': { params: { color: 0xc2c0b8, roughness: 0.92 }, tex: 'concrete_wall' }
     };
   }
 
@@ -83,30 +84,41 @@
     };
 
     // ---------------------------------------------------------------- builders
+    // Shelf boards (above the floor) of the steel rack model, and the cartons that sit on the first three.
+    const SHELF_Y = [0.7, 1.26, 1.83];
     function BUILD_shelf(p) {
       const [x0, z0, x1, z1] = p.r, f = P.floorAt((x0 + x1) / 2, (z0 + z1) / 2), g = P.groupAt((x0 + x1) / 2, (z0 + z1) / 2);
-      const h = 2.4, ao = aoFor(f);
-      const post = (x, z) => P.boxGeo('p:blue_steel', x - 0.04, f, z - 0.04, x + 0.04, f + h, z + 0.04, g, 'tnsew', 1);
-      post(x0 + 0.04, z0 + 0.04); post(x1 - 0.04, z0 + 0.04); post(x0 + 0.04, z1 - 0.04); post(x1 - 0.04, z1 - 0.04);
-      const longX = x1 - x0 > z1 - z0;
-      if (longX) for (let x = x0 + 1.2; x < x1 - 0.5; x += 1.2) { post(x, z0 + 0.04); post(x, z1 - 0.04); }
-      else for (let z = z0 + 1.2; z < z1 - 0.5; z += 1.2) { post(x0 + 0.04, z); post(x1 - 0.04, z); }
-      for (let k = 0; k < 4; k++) {
-        const y = f + 0.15 + k * 0.62;
-        P.boxGeo('p:steel_dark', x0, y, z0, x1, y + 0.04, z1, g, 'tbnsew', 1);
-        // cartons on the shelf
-        if (k < 3) {
-          let a = longX ? x0 + 0.1 : z0 + 0.1;
-          const end = longX ? x1 - 0.1 : z1 - 0.1;
-          while (a < end - 0.3) {
-            const w = 0.3 + rng() * 0.45, hh = 0.2 + rng() * 0.3;
-            if (rng() < 0.82 && a + w < end) {
-              const key = rng() < 0.75 ? 'p:cardboard' : (rng() < 0.5 ? 'p:barrel_blue' : 'p:white');
-              if (longX) P.boxGeo(key, a, y + 0.04, z0 + 0.06, a + w, y + 0.04 + hh, z1 - 0.06, g, 'tnsew', 0.85);
-              else P.boxGeo(key, x0 + 0.06, y + 0.04, a, x1 - 0.06, y + 0.04 + hh, a + w, g, 'tnsew', 0.85);
-            }
-            a += w + 0.05;
+      const h = 2.4, ao = aoFor(f), longX = x1 - x0 > z1 - z0;
+      const model = !!(JB.Models && JB.Models.has('shelves'));
+      if (model) {
+        // The rack is 2.4 m tall and stretched to the rect's length; two back to back when the rect is deep.
+        const S = JB.Models.size('shelves'), L = longX ? x1 - x0 : z1 - z0, D = longX ? z1 - z0 : x1 - x0;
+        const rows = D >= 1 ? 2 : 1, kl = L / S.x, ky = h / S.y, kd = (D / rows) / S.z;
+        const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, ry = longX ? 0 : Math.PI / 2;
+        for (let r = 0; r < rows; r++) {
+          const off = rows === 1 ? 0 : (r === 0 ? -1 : 1) * D / 4;
+          JB.Models.put(put, 'shelves', cx + (longX ? 0 : off), f, cz + (longX ? off : 0), ry + (r ? Math.PI : 0), g, ao, 0, 0, [kl, ky, kd]);
+        }
+      } else {
+        const post = (x, z) => P.boxGeo('p:blue_steel', x - 0.04, f, z - 0.04, x + 0.04, f + h, z + 0.04, g, 'tnsew', 1);
+        post(x0 + 0.04, z0 + 0.04); post(x1 - 0.04, z0 + 0.04); post(x0 + 0.04, z1 - 0.04); post(x1 - 0.04, z1 - 0.04);
+        if (longX) for (let x = x0 + 1.2; x < x1 - 0.5; x += 1.2) { post(x, z0 + 0.04); post(x, z1 - 0.04); }
+        else for (let z = z0 + 1.2; z < z1 - 0.5; z += 1.2) { post(x0 + 0.04, z); post(x1 - 0.04, z); }
+        for (let k = 0; k < 4; k++) P.boxGeo('p:steel_dark', x0, f + 0.15 + k * 0.62, z0, x1, f + 0.15 + k * 0.62 + 0.04, z1, g, 'tbnsew', 1);
+      }
+      // cartons on the first three shelves
+      for (let k = 0; k < 3; k++) {
+        const top = model ? f + SHELF_Y[k] : f + 0.15 + k * 0.62 + 0.04;
+        let a = longX ? x0 + 0.1 : z0 + 0.1;
+        const end = longX ? x1 - 0.1 : z1 - 0.1;
+        while (a < end - 0.3) {
+          const w = 0.3 + rng() * 0.45, hh = 0.2 + rng() * 0.3;
+          if (rng() < 0.82 && a + w < end) {
+            const key = rng() < 0.75 ? 'p:cardboard' : (rng() < 0.5 ? 'p:barrel_blue' : 'p:white');
+            if (longX) P.boxGeo(key, a, top, z0 + 0.06, a + w, top + hh, z1 - 0.06, g, 'tnsew', 0.85);
+            else P.boxGeo(key, x0 + 0.06, top, a, x1 - 0.06, top + hh, a + w, g, 'tnsew', 0.85);
           }
+          a += w + 0.05;
         }
       }
       solidBox(x0, f, z0, x1, f + h, z1);
@@ -211,11 +223,33 @@
     }
 
     function crate(x, z, s, y, g, ry) {
-      const ao = aoFor(P.floorAt(x, z));
-      put('p:wood', boxG(s, s, s), x, y + s / 2, z, ry, g, ao);
-      // edge frame
-      const e = 0.07, hs = s / 2;
-      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) put('p:pallet', boxG(e, s + 0.01, e), x + dx * (hs - e / 2 + 0.005), y + s / 2, z + dz * (hs - e / 2 + 0.005), ry, g, ao);
+      const ao = aoFor(P.floorAt(x, z)), hs = s / 2;
+      if (JB.Models && JB.Models.has('crate_a')) {
+        // The cube is two layers, each two crate units side by side: the long side spans s, the wide side s/2 per unit
+        // (the models are low boxes, so one layer would leave the collider's top half empty). The top layer is a
+        // cardboard box on half of the crates. Visual choices use their own seeded rng: the level's rng also places
+        // collider offsets (BUILD_crates), so it must run exactly as it does without models.
+        const vr = U.rng(Math.round(x * 1000) * 31 + Math.round(z * 1000) * 17 + Math.round(y * 1000) * 7 + 1);
+        const name = vr() < 0.5 ? 'crate_a' : 'crate_b', S = JB.Models.size(name), hL = s / 2;
+        const crateA = name === 'crate_a', turn = crateA ? 0 : Math.PI / 2;
+        // scale in the model's own axes (before the turn): long side -> s, wide side -> s/2, height -> s/2
+        const sc = crateA ? [s / S.x, hL / S.y, hL / S.z] : [hL / S.x, hL / S.y, s / S.z];
+        const topBox = vr() < 0.5;
+        for (let l = 0; l < 2; l++) {
+          const yl = y + l * hL;
+          if (l === 1 && topBox) {
+            const C = JB.Models.size('cardboard'), kc = 0.7 * s / C.z;
+            JB.Models.put(put, 'cardboard', x, yl, z, ry, g, ao, 0, 0, [kc, kc, kc]);
+            break;
+          }
+          for (const d of [-hL / 2, hL / 2]) JB.Models.put(put, name, x + d * Math.sin(ry), yl, z + d * Math.cos(ry), ry + turn, g, ao, 0, 0, sc);
+        }
+      } else {
+        put('p:wood', boxG(s, s, s), x, y + s / 2, z, ry, g, ao);
+        // edge frame
+        const e = 0.07;
+        for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) put('p:pallet', boxG(e, s + 0.01, e), x + dx * (hs - e / 2 + 0.005), y + s / 2, z + dz * (hs - e / 2 + 0.005), ry, g, ao);
+      }
       solidBox(x - hs, y, z - hs, x + hs, y + s, z + hs);
     }
     function BUILD_crates(p) {
@@ -254,10 +288,15 @@
         const r = rng();
         const key = r < 0.6 ? 'p:barrel_blue' : (r < 0.82 ? 'p:barrel_red' : 'p:barrel_yellow');
         const h = 0.9, rad = 0.3;
-        put(key, cyl(rad, rad, h, 18), x, f + h / 2, z, rng() * 6, g, ao);
-        for (const ry of [0.18, 0.5, 0.82]) put('p:steel_dark', cyl(rad + 0.012, rad + 0.012, 0.035, 18, true), x, f + h * ry, z, 0, g, ao);
-        put('p:steel_dark', cyl(rad - 0.02, rad - 0.02, 0.01, 18), x, f + h + 0.004, z, 0, g);
-        put('p:steel', cyl(0.035, 0.035, 0.025, 8), x + 0.14, f + h + 0.015, z + 0.05, 0, g);
+        if (JB.Models && JB.Models.has('drum_a')) {
+          const name = r < 0.5 ? 'drum_a' : 'drum_b', S = JB.Models.size(name), k = 2 * rad / Math.max(S.x, S.z);
+          JB.Models.put(put, name, x, f, z, rng() * 6, g, ao, 0, 0, [k, h / S.y, k]);
+        } else {
+          put(key, cyl(rad, rad, h, 18), x, f + h / 2, z, rng() * 6, g, ao);
+          for (const ry of [0.18, 0.5, 0.82]) put('p:steel_dark', cyl(rad + 0.012, rad + 0.012, 0.035, 18, true), x, f + h * ry, z, 0, g, ao);
+          put('p:steel_dark', cyl(rad - 0.02, rad - 0.02, 0.01, 18), x, f + h + 0.004, z, 0, g);
+          put('p:steel', cyl(0.035, 0.035, 0.025, 8), x + 0.14, f + h + 0.015, z + 0.05, 0, g);
+        }
         solidBox(x - rad, f, z - rad, x + rad, f + h, z + rad);
       }
     }
@@ -412,10 +451,39 @@
       dyn.push({ t: 'fan', x: p.x, y: f - 0.15, z: p.z });
     }
 
+    // Decorative CC0 model: { t: 'model', m: name, x, z, rot?, s?, stack?, flat?, plinth?, solid? }.
+    // The collider and nav footprint come from the measured size table (JB.Models.size), so they are the same
+    // whether or not the model loaded. flat: lie it on its face (tyres); stack: n copies up; plinth: a concrete base.
+    function BUILD_model(p) {
+      const S = JB.Models && JB.Models.size(p.m);
+      if (!S) return;
+      const s = p.s || 1, n = Math.max(1, p.stack || 1), ry = p.rot || 0, flat = !!p.flat, pl = p.plinth || 0;
+      const f = P.floorAt(p.x, p.z), g = P.groupAt(p.x, p.z), ao = aoFor(f);
+      // footprint and height as they stand (flat: the model's y becomes depth and its z becomes height)
+      const unit = flat ? S.z : S.y;   // height of one copy as it stands
+      const wx = S.x * s, wz = (flat ? S.y : S.z) * s, hgt = unit * n * s;
+      const c = Math.abs(Math.cos(ry)), sn = Math.abs(Math.sin(ry));
+      const ex = (wx * c + wz * sn) / 2, ez = (wx * sn + wz * c) / 2;
+      let x0 = p.x - ex, x1 = p.x + ex, z0 = p.z - ez, z1 = p.z + ez;
+      if (pl) { const hp = Math.max(ex, ez) + 0.1; x0 = p.x - hp; x1 = p.x + hp; z0 = p.z - hp; z1 = p.z + hp; }
+      const top = f + pl + hgt;
+      if (pl) P.boxGeo('p:concrete_plinth', x0, f, z0, x1, f + pl, z1, g, 'tnsew', 1);
+      if (JB.Models.has(p.m)) {
+        // a flat model is centred by moving its origin back along its rotated local +y, and lifted by half its thickness
+        const back = flat ? S.y * s / 2 : 0, lift = flat ? S.z * s / 2 : 0;
+        for (let i = 0; i < n; i++) {
+          const y = f + pl + lift + i * unit * s;
+          JB.Models.put(put, p.m, p.x - back * Math.sin(ry), y, p.z - back * Math.cos(ry), ry, g, ao, flat ? Math.PI / 2 : 0, 0, [s, s, s]);
+        }
+      }
+      if (p.solid !== false) solidBox(x0, f, z0, x1, top, z1);
+    }
+
     const BUILD = {
       shelf: BUILD_shelf, desk: BUILD_desk, cabinet: BUILD_cabinet, lockers: BUILD_lockers, machine: BUILD_machine,
       crates: BUILD_crates, pipes: BUILD_pipes, barrels: BUILD_barrels, tanks: BUILD_tanks, conveyor: BUILD_conveyor,
-      forklift: BUILD_forklift, pallets: BUILD_pallets, sinks: BUILD_sinks, stalls: BUILD_stalls, vents: BUILD_vents
+      forklift: BUILD_forklift, pallets: BUILD_pallets, sinks: BUILD_sinks, stalls: BUILD_stalls, vents: BUILD_vents,
+      model: BUILD_model
     };
     const ctx = { P, put, boxG, cyl, sph, solidBox, rng, aoFor, dyn, U };
     for (const p of list) {
@@ -440,9 +508,11 @@
 
   // Extra prop builders from other files: fn(p, ctx) where ctx has the level
   // API (P) and the helpers above. Extra materials: { 'p:name': { params, tex, basic } }.
-  const EXTRA = {}, EXTRA_MATS = {};
+  const EXTRA = {};
+  // One live table. The levels read it when they load (level.js, level2.js), and models are registered
+  // later, at boot, so they must go into this same object.
+  const MATS = materials();
   function register(type, fn) { EXTRA[type] = fn; }
-  function addMaterials(m) { Object.assign(EXTRA_MATS, m); }
-  const baseMaterials = materials;
-  JB.Props = { build, materials: () => Object.assign(baseMaterials(), EXTRA_MATS), highbay, register, addMaterials };
+  function addMaterials(m) { Object.assign(MATS, m); }
+  JB.Props = { build, materials: () => MATS, highbay, register, addMaterials };
 })();
