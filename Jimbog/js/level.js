@@ -762,6 +762,9 @@
       if (!mat.userData.noBake) {
         const bake = new Float32Array(n * 4);
         const isCeil = key === 'ceil';
+        // Stair treads sit in the dark part of their stairwell and use a dark diamond-plate albedo, so they get a lift
+        // (they read near black otherwise). Treads are the only vertical-travel surface, so they must stay readable.
+        const bakeK = key === 'stair' ? 8 : 1;
         for (let v = 0; v < n; v++) {
           lightAt(b.pos[v * 3], b.pos[v * 3 + 1], b.pos[v * 3 + 2], b.nor[v * 3], b.nor[v * 3 + 1], b.nor[v * 3 + 2], b.grp[v], lc);
           if (isCeil || b.nor[v * 3 + 1] < -0.7) {
@@ -772,7 +775,7 @@
               lc[0] += lc2[0] * 0.32; lc[1] += lc2[1] * 0.3; lc[2] += lc2[2] * 0.28;
             }
           }
-          bake[v * 4] = lc[0]; bake[v * 4 + 1] = lc[1]; bake[v * 4 + 2] = lc[2]; bake[v * 4 + 3] = b.ao[v];
+          bake[v * 4] = lc[0] * bakeK; bake[v * 4 + 1] = lc[1] * bakeK; bake[v * 4 + 2] = lc[2] * bakeK; bake[v * 4 + 3] = b.ao[v];
         }
         geo.setAttribute('bake', new THREE.BufferAttribute(bake, 4));
       }

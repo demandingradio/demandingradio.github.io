@@ -12,7 +12,7 @@
   const BOX = [14, 6, 14];                // dust lives in a box around the camera and wraps
   const SKY_DEPTH = 0.7;                  // skylight well depth, as in level.js buildShafts
   // Smoke sun term (see JB.GrenadeFX.setSun): interiors get less sun than the open campus.
-  const SMOKE_SUN = { facility: 0.16, campus: 0.5 };
+  const SMOKE_SUN = { facility: 0.12, campus: 0.3 };
 
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -127,7 +127,7 @@
     '  w += 0.06 * vec3(sin(uTime * 0.31 + aSeed.y), sin(uTime * 0.23 + aSeed.z), cos(uTime * 0.27 + aSeed.y * 1.7));',
     '  vec4 mv = viewMatrix * vec4(w, 1.0);',
     '  float depth = max(-mv.z, 0.05);',
-    '  gl_PointSize = clamp(aSeed.x * uPx / depth, 1.5, 4.0);',
+    '  gl_PointSize = clamp(aSeed.x * uPx / depth, 2.0, 4.5);',
     '  gl_Position = projectionMatrix * mv;',
     // sunlight: a mote is lit if the ray towards the sun passes through an opening;
     // motes just inside an opening catch some of its glow.
@@ -161,7 +161,7 @@
     '  float edge = clamp(min(min(e.x, e.y), e.z) / 1.2, 0.0, 1.0);',   // hide the wrap seam
     '  float near = smoothstep(0.2, 1.0, depth);',                    // no blobs in front of the lens
     '  vLit = clamp(max(sun, uOut * 0.3), 0.0, 1.0);',
-    '  vA = aSeed.w * edge * near * (0.3 + 0.7 * max(sun, 0.25)) * mix(1.0, 0.5, uOut);',
+    '  vA = aSeed.w * edge * near * (0.3 + 0.7 * sun) * mix(1.0, 0.5, uOut);',              // unlit motes are barely there; lit ones catch the beam
     '}'
   ].join('\n');
 
@@ -173,7 +173,7 @@
     'void main() {',
     '  vec2 q = gl_PointCoord - 0.5;',
     '  float r2 = dot(q, q) * 4.0;',
-    '  float a = (1.0 - smoothstep(0.15, 1.0, r2)) * vA * 0.4;',
+    '  float a = (1.0 - smoothstep(0.0, 1.0, r2)) * vA * 0.32;',
     '  if (a < 0.003) discard;',
     '  vec3 col = mix(uShadeC, uSunC, vLit);',
     '  gl_FragColor = vec4(col * a, 1.0);',                 // additive: specks catch light
@@ -324,7 +324,7 @@
       bgeo.setAttribute('uv', new THREE.Float32BufferAttribute(g.uv, 2));
       bgeo.setIndex(g.ind);
       const bmat = new THREE.ShaderMaterial({
-        uniforms: { uTime: U.uTime, uColor: { value: new THREE.Color(1.0, 0.9, 0.72) }, uStrength: { value: 0.1 } },
+        uniforms: { uTime: U.uTime, uColor: { value: new THREE.Color(1.0, 0.9, 0.72) }, uStrength: { value: 0.12 } },
         vertexShader: SHAFT_VERT,
         fragmentShader: SHAFT_FRAG,
         transparent: true,

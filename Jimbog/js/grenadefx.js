@@ -69,7 +69,7 @@
         const r = Math.hypot(u - 0.5, v - 0.5) * 2;               // 0 centre, 1 edge
         const fall = 1 - smooth(clamp((r - 0.3) / 0.7, 0, 1));
         const a = clamp(0.25 + (f - 0.35) * 2.6, 0, 1) * fall;
-        const sh = Math.round(255 * clamp(0.9 + (f - 0.5) * 0.4, 0, 1));
+        const sh = Math.round(255 * clamp(0.86 + (f - 0.5) * 0.6, 0, 1));
         const k = (y * N + x) * 4;
         px[k] = px[k + 1] = px[k + 2] = sh;
         px[k + 3] = Math.round(255 * a);
@@ -86,6 +86,16 @@
     color: { value: new THREE.Color(1.0, 0.93, 0.8) },
     k: { value: 0.35 }
   };
+
+  // The colour the room gives the smoke (tint, from combat.js, is dim: 0.06..0.45) is
+  // kept in hue but lifted to a display brightness: dim interiors give darker grey,
+  // open sunlit ground gives light grey smoke that stays under the bloom threshold.
+  function smokeVisualTint(t) {
+    const lum = 0.2126 * t.r + 0.7152 * t.g + 0.0722 * t.b;
+    const B = 0.4 + 0.3 * clamp((lum - 0.06) / 0.39, 0, 1);
+    const k = B / Math.max(lum, 0.02);
+    return new THREE.Color(clamp(t.r * k, 0, 1), clamp(t.g * k, 0, 1), clamp(t.b * k, 0, 1));
+  }
 
   // Billboarded instanced quads. aOffset is a world position; the corner is
   // offset in view space so every puff always faces the camera.
@@ -113,7 +123,7 @@
     '  vTop = position.y + 0.5;',                         // screen-up, so the light does not spin with the puff
     '  vec4 mv = viewMatrix * modelMatrix * vec4(aOffset, 1.0);',
     '  vec3 sunV = normalize((viewMatrix * vec4(uSunTo, 0.0)).xyz);',
-    '  vScat = pow(max(0.0, dot(normalize(-mv.xyz), sunV)), 5.0);',   // forward scatter: glows when looking into the sun
+    '  vScat = pow(max(0.0, dot(normalize(mv.xyz), sunV)), 5.0);',    // forward scatter: glows when looking into the sun
     '  float c = cos(aRot), s = sin(aRot);',
     '  vec2 corner = vec2(position.x * c - position.y * s, position.x * s + position.y * c);',
     '  mv.xy += corner * aSize;',
@@ -141,10 +151,10 @@
     '  float occ = (texture2D(uPuff, vUv + vSunUV * 0.09).a',
     '    + texture2D(uPuff, vUv + vSunUV * 0.21).a',
     '    + texture2D(uPuff, vUv + vSunUV * 0.36).a) * (1.0 / 3.0);',   // smoke between this point and the sun
-    '  float T = exp(-3.2 * occ);',                       // sunlight that reaches this point
-    '  vec3 sky = mix(vec3(0.46, 0.5, 0.58), vec3(0.96, 0.97, 1.0), vTop * vTop) * (0.94 + 0.12 * t.r);',   // cool sky fill: dark underside, bright top
-    '  vec3 light = sky + uSunC * uSunK * T * (0.25 + 0.75 * vTop);',
-    '  vec3 col = uTint * light * vShade + uSunC * vScat * 0.25 * T;',
+    '  float T = exp(-4.0 * occ);',                       // sunlight that reaches this point: lumps shade each other
+    '  vec3 sky = mix(vec3(0.4, 0.44, 0.52), vec3(0.95, 0.96, 0.98), vTop * vTop) * (0.94 + 0.12 * t.r);',   // cool sky fill: dark underside, bright top
+    '  vec3 light = sky + uSunC * uSunK * T * (0.2 + 0.8 * vTop);',
+    '  vec3 col = uTint * light * vShade + uSunC * vScat * 0.18 * T;',
     '  gl_FragColor = vec4(min(col, vec3(1.0)), a);',
     '}'
   ].join('\n');
@@ -270,7 +280,7 @@
 
       this.tex = makePuffTexture(seed ^ 0x9e3779b9);
       this.mat = new THREE.ShaderMaterial({
-        uniforms: { uPuff: { value: this.tex }, uTint: { value: this.tint }, uSunTo: SUN.to, uSunC: SUN.color, uSunK: SUN.k },
+        uniforms: { uPuff: { value: this.tex }, uTint: { value: smokeVisualTint(this.tint) }, uSunTo: SUN.to, uSunC: SUN.color, uSunK: SUN.k },
         vertexShader: VERT,
         fragmentShader: FRAG,
         transparent: true,

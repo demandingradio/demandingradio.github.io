@@ -352,7 +352,7 @@
       let m = this.scorches.length < 12 ? null : this.scorches.shift();
       if (!m) m = new THREE.Mesh(this.scorchGeo[0], this.scorchMat);
       m.geometry = this.scorchGeo[Math.random() < 0.5 ? 0 : 1];
-      const s = 0.75 + Math.random() * 0.6;
+      const s = 0.6 + Math.random() * 0.4;   // soot about 1.8 to 3 m across (the plane is 3 m)
       m.scale.set(s * (0.85 + Math.random() * 0.3), s, 1);
       m.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28);
       m.position.set(p.x, p.y + 0.01, p.z);

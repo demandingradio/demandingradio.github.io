@@ -20,6 +20,11 @@
   const BOTTOM = -9;       // floors are solid down to here
   const INF = 1000;        // "open sky"
   const DOOR_H = 2.3;
+  // Share of the realtime sky fill (hemisphere light) that still reaches indoor surfaces. Outdoors is unchanged.
+  const INDOOR_KEEP = 0.4;
+  // Gain on the campus lamp light (baked, and the cats' probe). Lamps at the walls made the rooms as bright as the sunlit
+  // facades; this brings interiors about a stop and a half under the sun while the lamp pools stay visible.
+  const LAMP_GAIN = 0.55;
 
   const LIGHTS = Object.assign({}, JB.Level.LIGHTS, {
     outdoor:  { c: 0xbcd6f2, i: 0, r: 0, s: 99, fx: 'none', bounce: 0.4 },
@@ -848,7 +853,7 @@
         const f = 1 - d2 / (Lt.r * Lt.r);
         const lobe = Lt.beacon ? 1 : 0.3 + 0.7 * U.clamp(dy / d, 0, 1);
         const att = (f * f) / (1 + 0.35 * d2) * 4.0;
-        const k2 = Lt.i * lam * att * lobe;
+        const k2 = Lt.i * lam * att * lobe * LAMP_GAIN;
         r += Lt.c.r * k2; gg += Lt.c.g * k2; b += Lt.c.b * k2;
       }
       out[0] = r; out[1] = gg; out[2] = b;
@@ -860,9 +865,11 @@
     const tex = (name) => JB.Tex.make(name, texSize);
     const bakedPatch = (m) => {
       m.onBeforeCompile = (shader) => {
-        shader.vertexShader = 'attribute vec4 bake;\nvarying vec4 vBake;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvBake = bake;');
-        shader.fragmentShader = 'varying vec4 vBake;\n' + shader.fragmentShader
-          .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n\tirradiance += vBake.rgb * PI;\n\tfloat bakeLum = dot(vBake.rgb, vec3(0.3, 0.59, 0.11));\n\tfloat envK = clamp(bakeLum * 1.6 + 0.06, 0.0, 1.2);\n\tradiance *= envK; iblIrradiance *= envK;')
+        // indoor (1) / outdoor (0) per vertex. A missing attribute reads as 0, so unbaked meshes are untouched.
+        shader.vertexShader = 'attribute vec4 bake;\nattribute float indoor;\nvarying vec4 vBake;\nvarying float vIndoor;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvBake = bake;\n\tvIndoor = indoor;');
+        // Indoors, the realtime sky fill (hemisphere light, unshadowed) is cut to INDOOR_KEEP so rooms read darker than the sunlit outside.
+        shader.fragmentShader = 'varying vec4 vBake;\nvarying float vIndoor;\n' + shader.fragmentShader
+          .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n\t#if NUM_HEMI_LIGHTS > 0\n\tirradiance -= getHemisphereLightIrradiance(hemisphereLights[0], geometry.normal) * vIndoor * ' + (1 - INDOOR_KEEP).toFixed(3) + ';\n\t#endif\n\tirradiance += vBake.rgb * PI;\n\tfloat bakeLum = dot(vBake.rgb, vec3(0.3, 0.59, 0.11));\n\tfloat envK = clamp(bakeLum * 1.6 + 0.06, 0.0, 1.2);\n\tradiance *= envK; iblIrradiance *= envK;')
           .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= vBake.a;\n\treflectedLight.indirectSpecular *= vBake.a;\n\treflectedLight.directDiffuse *= mix(1.0, vBake.a, 0.35);');
       };
       m.customProgramCacheKey = () => 'jb-baked';
@@ -949,6 +956,9 @@
           bake[v * 4] = lc[0]; bake[v * 4 + 1] = lc[1]; bake[v * 4 + 2] = lc[2]; bake[v * 4 + 3] = b.ao[v];
         }
         geo.setAttribute('bake', new THREE.BufferAttribute(bake, 4));
+        const indoor = new Float32Array(n);
+        for (let v = 0; v < n; v++) indoor[v] = b.grp[v] === outGi ? 0 : 1;
+        geo.setAttribute('indoor', new THREE.BufferAttribute(indoor, 1));
       }
       geo.setIndex(n > 65535 ? new THREE.Uint32BufferAttribute(b.idx, 1) : new THREE.Uint16BufferAttribute(b.idx, 1));
       geo.computeBoundingSphere();

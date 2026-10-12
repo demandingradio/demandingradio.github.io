@@ -240,7 +240,12 @@
         if (JB.GrenadeFX && JB.GrenadeFX.FlashOverlay) this.flashFX = new JB.GrenadeFX.FlashOverlay(this.canvas);
       } else this.R.setLevel(this.level, map.env);
       this.R.scene.add(this.level.group);
-      this.decals = JB.Decals ? JB.Decals.build({ level: this.level, data, scene: this.R.scene, quality: q, mapId: map.id }) : null;
+      // decals and trim (js/decals.js): optional, so a failure never stops the map loading
+      this.decals = null;
+      if (JB.Decals) {
+        try { this.decals = JB.Decals.build({ level: this.level, data, scene: this.R.scene, quality: q, mapId: map.id }); }
+        catch (e) { console.error('Jimbog: decals failed', e); this.decals = null; }
+      }
       this.shafts = this.level.group.getObjectByName('shafts');
       // atmosphere: dust motes and campus sun shafts (js/atmos.js); optional
       this.atmos = null;

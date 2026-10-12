@@ -112,7 +112,7 @@
 
   function create(canvas, qualityName, level, envCfg) {
     const Q = QUALITY[qualityName] || QUALITY.medium;
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: !Q.bloom, powerPreference: 'high-performance', stencil: false });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
     const dpr = window.devicePixelRatio || 1;
     renderer.setPixelRatio(Math.min(dpr, Q.ratio));
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -198,7 +198,7 @@
     vmScene.add(vmHemi, vmKey, vmFlash);
 
     let composer = null, finalPass = null, bloomPass = null;
-    if (Q.bloom && THREE.EffectComposer) {
+    if (THREE.EffectComposer) {   // every quality gets the grade, FXAA and damage/flash/heal pass; bloom only where Q.bloom
       try {
         const size = renderer.getDrawingBufferSize(new THREE.Vector2());
         let rt;
@@ -215,8 +215,10 @@
         vmPass.clear = false; vmPass.clearDepth = true;
         composer.addPass(vmPass);
         // Bloom only catches lamps, the sun disc and the bright sky (threshold above the horizon).
-        bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.45, 0.86);
-        composer.addPass(bloomPass);
+        if (Q.bloom) {
+          bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.45, 0.86);
+          composer.addPass(bloomPass);
+        }
         finalPass = new THREE.ShaderPass(FinalShader);
         composer.addPass(finalPass);
       } catch (e) {

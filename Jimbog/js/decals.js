@@ -37,6 +37,11 @@
   }
   const smooth = (t) => t * t * (3 - 2 * t);
   const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
+  // sRGB channel (0..1, as the reference hex values read) to linear. The engine's vertex colours
+  // are linear, so a palette colour is decoded first and then displays as the hex it names.
+  const lin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  // a reference colour, decoded and pulled 25% toward its luma (paint in sun reads faded, not neon)
+  const faded = (k) => { const c = k.map(lin), Y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; return c.map((v) => v + (Y - v) * 0.25); };
 
   // ------------------------------------------------------------ procedural atlases
   // Each atlas cell is drawn in canvas space: canvas bottom is v = 0 (the floor
@@ -138,37 +143,62 @@
     c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = s * 0.03; c.stroke();
   }
 
+  // Fades a cell's alpha to zero over a band at its edges, so no decal shows a hard
+  // rectangle (blobs cut by the cell, seams where neighbouring quads meet).
+  // edge: 'x' left and right, 'y' top and bottom, 't' canvas top only (drips start there).
+  // ramp is a fraction of the cell. Runs inside put(), so the context is cell-local.
+  function feather(c, cell, m, edge, ramp) {
+    const W = cell - 2 * m, r = ramp * cell;
+    const bands = [];
+    if (edge.indexOf('x') >= 0) bands.push(['h', r, r]);
+    if (edge.indexOf('y') >= 0) bands.push(['v', r, r]);
+    if (edge.indexOf('t') >= 0) bands.push(['v', r, 0]);
+    c.globalCompositeOperation = 'destination-in';
+    for (const [dir, a, b] of bands) {
+      const g = dir === 'h' ? c.createLinearGradient(m, 0, m + W, 0) : c.createLinearGradient(0, m, 0, m + W);
+      g.addColorStop(0, a > 0 ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,1)');
+      if (a > 0) g.addColorStop(a / W, 'rgba(0,0,0,1)');
+      if (b > 0) g.addColorStop(1 - b / W, 'rgba(0,0,0,1)');
+      g.addColorStop(1, b > 0 ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,1)');
+      c.fillStyle = g; c.fillRect(m, m, W, W);
+    }
+    c.globalCompositeOperation = 'source-over';
+  }
+
   // Darkening atlas: alpha is coverage, RGB is unused (the tint is a vertex attribute).
   function makeMulAtlas(S) {
     const cv = document.createElement('canvas'); cv.width = cv.height = S;
     const c = cv.getContext('2d');
     const cell = S / 4, rnd = U.rng(5150), rect = {};
-    const put = (name, col, row, blur, draw) => {
+    const put = (name, col, row, blur, draw, edge, ramp) => {
       const x0 = col * cell, y0 = row * cell, m = Math.max(2, Math.round(cell * 0.03));
       c.save();
       c.beginPath(); c.rect(x0 + m, y0 + m, cell - 2 * m, cell - 2 * m); c.clip();
       c.translate(x0, y0);
       c.filter = blur ? 'blur(' + (blur * cell / 128).toFixed(2) + 'px)' : 'none';
       draw(cell);
+      c.filter = 'none';
+      feather(c, cell, m, edge, ramp);
       c.restore();
       rect[name] = [(x0 + m) / S, 1 - (y0 + cell - m) / S, (x0 + cell - m) / S, 1 - (y0 + m) / S];
     };
-    put('grimeA', 0, 0, 0.5, (s) => drawGrime(c, s, rnd));
-    put('grimeB', 1, 0, 0.5, (s) => drawGrime(c, s, rnd));
-    put('grimeC', 2, 0, 0.7, (s) => { drawGrime(c, s, rnd); drawGrime(c, s, rnd); });
-    put('streakA', 3, 0, 0.6, (s) => drawStreak(c, s, rnd, false));
-    put('streakB', 0, 1, 0.6, (s) => drawStreak(c, s, rnd, false));
-    put('streakThin', 1, 1, 0.5, (s) => drawStreak(c, s, rnd, true));
-    put('stainA', 2, 1, 1.4, (s) => drawStain(c, s, rnd));
-    put('stainB', 3, 1, 1.4, (s) => drawStain(c, s, rnd));
-    put('oilA', 0, 2, 1.8, (s) => drawOil(c, s, rnd));
-    put('oilB', 1, 2, 1.8, (s) => drawOil(c, s, rnd));
-    put('crackA', 2, 2, 0, (s) => drawCrack(c, s, rnd));
-    put('crackB', 3, 2, 0, (s) => drawCrack(c, s, rnd));
-    put('scuffA', 0, 3, 1.0, (s) => drawScuff(c, s, rnd));
-    put('tyreA', 1, 3, 1.2, (s) => drawTyre(c, s, rnd));
-    put('patchA', 2, 3, 0.8, (s) => drawPatch(c, s, rnd));
-    put('dustA', 3, 3, 2.0, (s) => drawStain(c, s, rnd));
+    // wall grime: fades at the sides and the top (the floor end stays strong)
+    put('grimeA', 0, 0, 0.5, (s) => drawGrime(c, s, rnd), 'xt', 0.16);
+    put('grimeB', 1, 0, 0.5, (s) => drawGrime(c, s, rnd), 'xt', 0.16);
+    put('grimeC', 2, 0, 0.7, (s) => { drawGrime(c, s, rnd); drawGrime(c, s, rnd); }, 'xt', 0.16);
+    put('streakA', 3, 0, 0.6, (s) => drawStreak(c, s, rnd, false), 'x', 0.1);
+    put('streakB', 0, 1, 0.6, (s) => drawStreak(c, s, rnd, false), 'x', 0.1);
+    put('streakThin', 1, 1, 0.5, (s) => drawStreak(c, s, rnd, true), 'x', 0.1);
+    put('stainA', 2, 1, 1.4, (s) => drawStain(c, s, rnd), 'xy', 0.16);
+    put('stainB', 3, 1, 1.4, (s) => drawStain(c, s, rnd), 'xy', 0.16);
+    put('oilA', 0, 2, 1.8, (s) => drawOil(c, s, rnd), 'xy', 0.16);
+    put('oilB', 1, 2, 1.8, (s) => drawOil(c, s, rnd), 'xy', 0.16);
+    put('crackA', 2, 2, 0, (s) => drawCrack(c, s, rnd), 'xy', 0.12);
+    put('crackB', 3, 2, 0, (s) => drawCrack(c, s, rnd), 'xy', 0.12);
+    put('scuffA', 0, 3, 1.0, (s) => drawScuff(c, s, rnd), 'xy', 0.14);
+    put('tyreA', 1, 3, 1.2, (s) => drawTyre(c, s, rnd), 'x', 0.12);
+    put('patchA', 2, 3, 0.8, (s) => drawPatch(c, s, rnd), 'xy', 0.16);
+    put('dustA', 3, 3, 2.0, (s) => drawStain(c, s, rnd), 'xy', 0.16);
     const tex = new THREE.CanvasTexture(cv);
     return { tex, rect };
   }
@@ -195,13 +225,14 @@
     return { tex, rect };
   }
 
-  // Painted-band grain: mid-light speckle that multiplies the band colour.
+  // Painted-band grain: a speckle that multiplies the band colour. Mean near 0.92, so the
+  // paint keeps its palette colour. Tiles once per metre (the band UVs are in metres).
   function makeBandTex() {
     const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S;
     const c = cv.getContext('2d'), rnd = U.rng(4242);
-    c.fillStyle = '#e4e4e0'; c.fillRect(0, 0, S, S);
+    c.fillStyle = '#f0efec'; c.fillRect(0, 0, S, S);
     for (let i = 0; i < 700; i++) {
-      const v = Math.round(150 + rnd() * 100);
+      const v = Math.round(200 + rnd() * 55);
       c.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',0.5)';
       const r = 0.6 + rnd() * 1.6;
       c.fillRect(rnd() * S, rnd() * S, r, r);
@@ -228,21 +259,26 @@
   }
 
   // Bakes the level's patch into a MeshStandardMaterial (copied from level.js bakedPatch,
-  // so these materials share the wall shader program).
-  function bakedPatch(m) {
+  // so these materials share the wall shader program). Campus trim also gets level2's
+  // indoor cut of the sky fill (level2.js INDOOR_KEEP = 0.4), via the `indoor` attribute,
+  // so a kick strip reads the same as the wall it sits on.
+  function bakedPatch(m, indoorCut) {
+    const cut = !!indoorCut;
     m.onBeforeCompile = (shader) => {
-      shader.vertexShader = 'attribute vec4 bake;\nvarying vec4 vBake;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvBake = bake;');
-      shader.fragmentShader = 'varying vec4 vBake;\n' + shader.fragmentShader
-        .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n\tirradiance += vBake.rgb * PI;\n\tfloat bakeLum = dot(vBake.rgb, vec3(0.3, 0.59, 0.11));\n\tfloat envK = clamp(bakeLum * 1.6 + 0.06, 0.0, 1.2);\n\tradiance *= envK; iblIrradiance *= envK;')
+      shader.vertexShader = 'attribute vec4 bake;\n' + (cut ? 'attribute float indoor;\nvarying float vIndoor;\n' : '') +
+        'varying vec4 vBake;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvBake = bake;' + (cut ? '\n\tvIndoor = indoor;' : ''));
+      const hemiCut = cut ? '\n\t#if NUM_HEMI_LIGHTS > 0\n\tirradiance -= getHemisphereLightIrradiance(hemisphereLights[0], geometry.normal) * vIndoor * 0.6;\n\t#endif' : '';
+      shader.fragmentShader = 'varying vec4 vBake;\n' + (cut ? 'varying float vIndoor;\n' : '') + shader.fragmentShader
+        .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>' + hemiCut + '\n\tirradiance += vBake.rgb * PI;\n\tfloat bakeLum = dot(vBake.rgb, vec3(0.3, 0.59, 0.11));\n\tfloat envK = clamp(bakeLum * 1.6 + 0.06, 0.0, 1.2);\n\tradiance *= envK; iblIrradiance *= envK;')
         .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= vBake.a;\n\treflectedLight.indirectSpecular *= vBake.a;\n\treflectedLight.directDiffuse *= mix(1.0, vBake.a, 0.35);');
     };
-    m.customProgramCacheKey = () => 'jb-baked';
+    m.customProgramCacheKey = () => (cut ? 'jb-baked-indoor' : 'jb-baked');
     return m;
   }
 
   // ------------------------------------------------------------ geometry accumulators
   class Acc {
-    constructor(kind) { this.kind = kind; this.pos = []; this.nor = []; this.uv = []; this.col = []; this.bake = []; this.tint = []; this.idx = []; this.quads = 0; }
+    constructor(kind) { this.kind = kind; this.pos = []; this.nor = []; this.uv = []; this.col = []; this.bake = []; this.ind = []; this.tint = []; this.idx = []; this.quads = 0; }
     get n() { return this.pos.length / 3; }
   }
   const UV4 = (r) => [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]];
@@ -319,7 +355,9 @@
       if (ce < INF / 2) ao *= 1 - 0.3 * (1 - smooth(clamp01(dt / 0.6)));
       return ao;
     }
-    return { lightAt, aoAt };
+    // 1 indoors, 0 outdoors: the same test as level2.js (the outdoor region group is 0).
+    const indoorOf = (g) => (campus && g === outGi ? 0 : 1);
+    return { lightAt, aoAt, indoorOf };
   }
 
   // Lit quad: colour per vertex plus the level's bake (light rgb + AO in alpha).
@@ -332,6 +370,7 @@
       const lc = L.lightAt(q[0], q[1], q[2], n[0], n[1], n[2], gi);
       const ao = fl === null ? 0.9 : L.aoAt(q[1], fl, ce);
       acc.bake.push(lc[0], lc[1], lc[2], ao);
+      acc.ind.push(L.indoorOf(gi));
     }
   }
   function litBox(acc, b, col, gi, fl, ce, L) {
@@ -358,9 +397,19 @@
     };
     const bldAt = new Int16Array(W * H).fill(-1);
     (data.buildings || []).forEach((b, k) => (b.rects || []).forEach((r) => forCells(r, (c) => { bldAt[c] = k; })));
+    // Campus cells can hold openings on several storeys (a ground and an upstairs door on the
+    // same cells), so each cell keeps a list and a wall takes the opening on its own floor.
     const doorAt = new Map(), winAt = new Map();
-    (data.doors || []).forEach((d) => forCells(d.r, (c) => doorAt.set(c, d)));
-    (data.windows || []).forEach((w) => forCells(w.r, (c) => winAt.set(c, w)));
+    const addAt = (map, c, o) => { const list = map.get(c); if (list) list.push(o); else map.set(c, [o]); };
+    (data.doors || []).forEach((d) => forCells(d.r, (c) => addAt(doorAt, c, d)));
+    (data.windows || []).forEach((w) => forCells(w.r, (c) => addAt(winAt, c, w)));
+    const pick = (map, c, y) => {
+      const list = map.get(c);
+      if (!list) return null;
+      if (!campus) return list[0];
+      for (const o of list) if (Math.abs((o.y || 0) - y) < 0.5) return o;
+      return null;
+    };
 
     const walls = [], floors = [], cornerMask = new Uint8Array(W * H);
     const colTop = (c2) => {
@@ -421,8 +470,8 @@
         if (!wallHere) continue;
         const cx = x0 + CS / 2, cz = z0 + CS / 2;
         const line = d.edge(x0, z0);
-        const door = doorAt.get(c) && doorAt.get(c) === doorAt.get(c2) ? doorAt.get(c) : null;
-        const win = winAt.get(c) || winAt.get(c2) || null;
+        const dA = pick(doorAt, c, y), door = dA && dA === pick(doorAt, c2, y) ? dA : null;
+        const win = pick(winAt, c, y) || pick(winAt, c2, y) || null;
         if (top - y < 0.3) continue;
         walls.push({
           axis: d.axis, line, a0: d.axis === 'x' ? x0 : z0, a1: d.axis === 'x' ? x0 + CS : z0 + CS,
@@ -477,7 +526,7 @@
       mulQuad(mulAcc, [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)], UV4(R[cell]), [0, 1, 0], tint, str);
     };
     const tuftAt = (x, y, z, gi, scale) => {
-      const s = scale || 1, col = [0.42 + rnd() * 0.12, 0.47 + rnd() * 0.1, 0.27 + rnd() * 0.06];
+      const s = scale || 1, col = [lin(0.42 + rnd() * 0.12), lin(0.47 + rnd() * 0.1), lin(0.27 + rnd() * 0.06)];   // faded olive-green #6e7a49, sRGB
       const cell = T.grass.rect[Math.floor(rnd() * 4)];
       for (let k = 0; k < 2; k++) {
         const a = rnd() * Math.PI + k * Math.PI / 2, hw = 0.2 * s, hh = 0.2 * s + rnd() * 0.08 * s;
@@ -489,7 +538,9 @@
 
     // Chipped painted lower band along one wall run. The top edge is a wobbly
     // line with notches where the paint has come off; a thin grey render lip sits above.
-    const bandPalette = [[0.365, 0.541, 0.361], [0.369, 0.557, 0.522], [0.482, 0.557, 0.624]];
+    // faded green #5d8a5c, teal #5e8e85, grey-blue #7b8e9f (sRGB, decoded above)
+    // Decoded, then pulled 25% toward its luma: faded paint, not the saturated linear read of the hex.
+    const bandPalette = [[0.365, 0.541, 0.361], [0.369, 0.557, 0.522], [0.482, 0.557, 0.624]].map(faded);
     const bandRun = (w, a0, a1, bh, col, k) => {
       const seg = 0.125;
       for (let a = a0; a < a1 - 1e-6; a += seg) {
@@ -497,8 +548,9 @@
         const ta = edgeTop(a, bh, k), tb = edgeTop(b, bh, k);
         const shade = 0.93 + 0.12 * hash(Math.floor(a * 8), k);
         const c2 = [col[0] * shade, col[1] * shade, col[2] * shade];
-        litQuad(bandAcc, [wallP(w, a, w.y0), wallP(w, b, w.y0), wallP(w, b, tb), wallP(w, a, ta)], UV_UNIT, wallN(w), c2, w.gi, w.y0, w.y1, Lt);
-        litQuad(bandAcc, [wallP(w, a, ta), wallP(w, b, tb), wallP(w, b, tb + 0.03, 0), wallP(w, a, ta + 0.03, 0)], UV_UNIT, wallN(w), [0.70, 0.69, 0.65], w.gi, w.y0, w.y1, Lt);
+        // UVs are in metres (u along the wall, v height), so the grain is not stretched over the 1.3 m band
+        litQuad(bandAcc, [wallP(w, a, w.y0), wallP(w, b, w.y0), wallP(w, b, tb), wallP(w, a, ta)], [[a, w.y0], [b, w.y0], [b, tb], [a, ta]], wallN(w), c2, w.gi, w.y0, w.y1, Lt);
+        litQuad(bandAcc, [wallP(w, a, ta), wallP(w, b, tb), wallP(w, b, tb + 0.03, 0), wallP(w, a, ta + 0.03, 0)], [[a, ta], [b, tb], [b, tb + 0.03], [a, ta + 0.03]], wallN(w), [0.70, 0.69, 0.65], w.gi, w.y0, w.y1, Lt);
       }
     };
     const edgeTop = (s, bh, k) => {
@@ -507,7 +559,7 @@
       for (let q2 = cell - 1; q2 <= cell + 1; q2++) {
         if (hash(q2, k) < 0.45) continue;
         const cx = (q2 + 0.2 + 0.6 * hash(q2, k + 1)) * 1.6;
-        const wd = 0.18 + 0.4 * hash(q2, k + 2), dp = 0.06 + 0.2 * hash(q2, k + 3);
+        const wd = 0.18 + 0.4 * hash(q2, k + 2), dp = 0.05 + 0.16 * hash(q2, k + 3);
         const d = Math.abs(s - cx) / wd;
         if (d < 1) dip = Math.max(dip, dp * (1 - d * d));
       }
@@ -538,7 +590,7 @@
       const pGrime = w.ext ? 0.88 : corr ? 0.92 : 0.6;
       if (rnd() < pGrime * dens) {
         const hg = Math.min(h, w.ext ? 0.5 + rnd() * 0.45 : 0.32 + rnd() * 0.3);
-        const grow = (rnd() - 0.5) * 0.1;
+        const grow = 0.04;   // a little overlap: the atlas fades at its sides, so neighbours blend
         const cell = pick(['grimeA', 'grimeB', 'grimeC']);
         const str = w.ext ? 0.85 + rnd() * 0.15 : 0.55 + rnd() * 0.3;
         wallMul(w, cell, w.a0 - grow, w.a1 + grow, w.y0, w.y0 + hg, mulColour.grime, str);
@@ -551,21 +603,22 @@
       }
       // plaster stains (interior)
       if (!w.ext && h > 1.2 && rnd() < 0.05 * dens) {
-        const x = w.a0 + along * (0.2 + 0.6 * rnd()), yy = w.y0 + 0.9 + rnd() * 1.2, hw = 0.25 + rnd() * 0.22, hh = 0.2 + rnd() * 0.25;
-        wallMul(w, rnd() < 0.5 ? 'stainA' : 'stainB', x - hw, x + hw, yy - hh, yy + hh, mulColour.stain, 0.5 + rnd() * 0.3);
+        const x = w.a0 + along * (0.2 + 0.6 * rnd()), hw = 0.25 + rnd() * 0.22, hh = 0.2 + rnd() * 0.25;
+        const yy = Math.min(w.y0 + 0.9 + rnd() * 1.2, y1 - hh - 0.05);   // stays on this wall (short walls, window walls)
+        if (yy - hh > w.y0 + 0.1) wallMul(w, rnd() < 0.5 ? 'stainA' : 'stainB', x - hw, x + hw, yy - hh, yy + hh, mulColour.stain, 0.5 + rnd() * 0.3);
       }
       // water running down from a window sill
       if (w.win && rnd() < 0.85 * dens) {
         const base = campus && w.win.y !== undefined ? w.win.y : w.y0;
         const sill = base + w.win.sill, len = 0.8 + rnd() * 1.1;
-        if (sill > w.y0 + 0.3) wallMul(w, 'streakThin', w.a0 + along * 0.1, w.a1 - along * 0.1, sill - len, sill, mulColour.water, 0.7);
+        if (sill > w.y0 + 0.3) wallMul(w, 'streakThin', w.a0 + along * 0.1, w.a1 - along * 0.1, Math.max(w.y0, sill - len), sill, mulColour.water, 0.7);
       }
       // bands (campus outside walls, a few corridor walls in the Facility)
       if (!inDoor) {
         const bandOK = campus ? (w.ext && w.outdoorRoom && !w.roofFace && (hash(w.bld, 11) < 0.72)) : (corr && hash(w.reg.index, 19) < 0.3);
         const bh = campus ? 1.05 + hash(w.bld, 13) * 0.35 : 1.05 + rnd() * 0.25;
         if (bandOK && y1 - w.y0 > bh + 0.25) {
-          const col = campus ? bandPalette[Math.floor(hash(w.bld, 3) * 3)] : [0.463, 0.522, 0.353];
+          const col = campus ? bandPalette[Math.floor(hash(w.bld, 3) * 3)] : faded([0.463, 0.522, 0.353]);   // faded olive #76855a
           bandRun(w, w.a0, w.a1, w.y0 + bh, col, Math.round(w.a0 * 37 + w.line * 11) | 0);
           nBand++;
         }
@@ -616,13 +669,11 @@
     }
 
     // ------------------------------------------------------------ door kick plates and scuffs
-    const doneDoors = new Set();
-    for (const [c, d] of doorAt) {
-      if (doneDoors.has(d)) continue;
-      doneDoors.add(d);
+    // Each door once, on its own floor (campus doors carry y: upper storeys, the pergola step).
+    for (const d of data.doors || []) {
       const r = d.r, alongX = r[2] - r[0] >= r[3] - r[1];
       const midX = (r[0] + r[2]) / 2, midZ = (r[1] + r[3]) / 2;
-      const yFloor = level.floorAt(midX, midZ, 0);
+      const yFloor = level.floorAt(midX, midZ, campus && d.y ? d.y : 0);
       const fl = yFloor === null || yFloor === undefined ? 0 : yFloor;
       const reg = level.regionAt(midX, midZ, fl + 0.5);
       if (!reg) continue;
@@ -738,6 +789,7 @@
         geo.setAttribute('normal', new THREE.Float32BufferAttribute(acc.nor, 3));
         geo.setAttribute('color', new THREE.Float32BufferAttribute(acc.col, 3));
         geo.setAttribute('bake', new THREE.Float32BufferAttribute(acc.bake, 4));
+        if (campus) geo.setAttribute('indoor', new THREE.Float32BufferAttribute(acc.ind, 1));
       }
       geo.setIndex(acc.n > 65535 ? new THREE.Uint32BufferAttribute(acc.idx, 1) : new THREE.Uint16BufferAttribute(acc.idx, 1));
       geo.computeBoundingSphere();
@@ -765,7 +817,7 @@
     });
     const mulMesh = meshOf(mulAcc, mulMat, false);
     if (mulMesh) mulMesh.renderOrder = 2;
-    const litStd = (extra) => bakedPatch(new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, side: THREE.DoubleSide }, extra)));
+    const litStd = (extra) => bakedPatch(new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, side: THREE.DoubleSide }, extra)), campus);
     const bandMesh = meshOf(bandAcc, litStd({ map: T.band, roughness: 0.82, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }), true);
     const trimMesh = meshOf(trimAcc, litStd({ roughness: 0.7, metalness: 0.05 }), true);
     const metalMesh = meshOf(metalAcc, litStd({ roughness: 0.38, metalness: 0.55 }), true);
