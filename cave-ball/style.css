@@ -190,3 +190,6 @@ html, body {
   background: #05060a;
 }
 #error[hidden] { display: none; }
+
+#loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #9fd6ff; font: 600 20px system-ui, sans-serif; letter-spacing: 0.1em; background: #05060a; z-index: 20; }
+#loading[hidden] { display: none; }
