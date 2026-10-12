@@ -35,7 +35,7 @@
     concrete_floor: { rough: 1.0, metal: 0.0, ns: 0.6 },
     concrete_wall:  { rough: 1.0, metal: 0.0, ns: 0.9 },
     metal_panel:    { rough: 1.0, metal: 0.15, ns: 0.7 },
-    diamond_plate:  { rough: 1.05, metal: 0.35, ns: 1.0 },
+    diamond_plate:  { rough: 1.05, metal: 0.18, ns: 1.0 },
     hazard:         { rough: 1.0, metal: 0.1, ns: 0.6 },
     tiles_wall:     { rough: 1.0, metal: 0.0, ns: 0.5 },
     tiles_floor:    { rough: 1.0, metal: 0.0, ns: 0.6 },

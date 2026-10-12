@@ -372,8 +372,8 @@
       const d = Math.abs(a - Math.floor(a) - 0.5) + Math.abs(b - Math.floor(b) - 0.5);   // 0 centre .. 1 corner
       const top = sstep(0.5, 0.36, d);
       const dA = sstep(0.45, 0.75, grime[i] * 0.6 + dust[i] * 0.4) * 0.55;   // dirt layer
-      const topC = (0.56 + 0.05 * wear[i]) * (1 - 0.12 * dA);   // polished, worn tops (mid grey, so treads do not read black)
-      const gapC = (0.24 + 0.03 * grime[i]) * (1 - 0.2 * dA);
+      const topC = (0.6 + 0.05 * wear[i]) * (1 - 0.12 * dA);   // polished, worn tops (mid grey, so treads do not read black)
+      const gapC = (0.3 + 0.03 * grime[i]) * (1 - 0.2 * dA);
       let r = lerp(gapC, topC, top), g = lerp(gapC, topC * 0.99, top), b2 = lerp(gapC * 0.94, topC * 0.97, top);
       r = lerp(r, 0.3, dA * 0.6); g = lerp(g, 0.27, dA * 0.6); b2 = lerp(b2, 0.22, dA * 0.6);
       C[i * 3] = r; C[i * 3 + 1] = g; C[i * 3 + 2] = b2;
@@ -400,7 +400,7 @@
       chip[i] = ch;
       const fd = 0.2 + 0.4 * fade[i], gg = 0.9 + 0.2 * grime[i];
       const yR = lerp(0.62, 0.56, fd), yG = lerp(0.52, 0.5, fd), yB = lerp(0.2, 0.34, fd);
-      const bR = lerp(0.09, 0.22, fd), bG = lerp(0.09, 0.21, fd), bB = lerp(0.085, 0.2, fd);
+      const bR = lerp(0.15, 0.24, fd), bG = lerp(0.145, 0.23, fd), bB = lerp(0.14, 0.22, fd);   // charcoal, not black: stays readable in shade
       const pr = lerp(bR, yR, yel) * gg, pg = lerp(bG, yG, yel) * gg, pb = lerp(bB, yB, yel) * gg;
       const mt = 0.42 * (0.85 + 0.3 * metal[i]);
       C[i * 3] = lerp(pr, mt, ch); C[i * 3 + 1] = lerp(pg, mt, ch); C[i * 3 + 2] = lerp(pb, mt * 1.02, ch);
@@ -566,9 +566,9 @@
     for (let i = 0; i < N * N; i++) {
       const pit = sstep(0.2, 0.09, pits[i]);
       const q = sstep(0.3, 0.7, m1[i] * 0.7 + m2[i] * 0.3);
-      let r = lerp(0.18, 0.34, q), g = lerp(0.13, 0.2, q), b = lerp(0.1, 0.13, q);
+      let r = lerp(0.2, 0.33, q), g = lerp(0.16, 0.2, q), b = lerp(0.14, 0.14, q);   // greyer base: less saturation than before
       const o = sstep(0.6, 0.8, m2[i]) * 0.4;
-      r = lerp(r, 0.46, o); g = lerp(g, 0.29, o); b = lerp(b, 0.18, o);
+      r = lerp(r, 0.42, o); g = lerp(g, 0.29, o); b = lerp(b, 0.21, o);
       const k = (0.85 + 0.3 * fine[i]) * (1 - 0.4 * pit);
       C[i * 3] = r * k; C[i * 3 + 1] = g * k; C[i * 3 + 2] = b * k;
       H[i] = 0.5 + (m2[i] - 0.5) * 0.25 + (fine[i] - 0.5) * 0.12 - pit * 0.3;
@@ -687,7 +687,7 @@
       const tn = tone[bi];
       const sootA = sstep(0.5, 0.85, soot[i]) * 0.35;
       const k = (0.9 + 0.2 * mot[i]) * (0.94 + 0.12 * fine[i]) * (1 - sootA);
-      let r = lerp(0.44, 0.36, tn) * k, g = lerp(0.26, 0.22, tn) * k, b = lerp(0.21, 0.19, tn) * k;
+      let r = lerp(0.4, 0.33, tn) * k, g = lerp(0.28, 0.24, tn) * k, b = lerp(0.24, 0.21, tn) * k;   // muted red-brown, not orange
       const ef = sstep(0.82, 0.88, eff[i]) * 0.15;
       r = lerp(r, 0.66, ef); g = lerp(g, 0.64, ef); b = lerp(b, 0.6, ef);
       const mk = (0.9 + 0.15 * fine[i]) * (1 - 0.35 * sstep(0.5, 0.9, soot[i]));
