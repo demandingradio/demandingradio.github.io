@@ -100,7 +100,7 @@
 
   function materials() {
     const M = {};
-    M.grass = stdMat('grass', { fb: 0x7f9f5a, vc: true, nb: 0.5, r: 0.95 });
+    M.grass = stdMat('grass', { fb: 0x626b3f, vc: true, nb: 0.5, r: 0.95 });
     // The lawn sits 3 cm under the map ground (y = 0). Push it back so the map ground wins
     // wherever the two overlap, at any distance, instead of z-fighting.
     M.grass.polygonOffset = true; M.grass.polygonOffsetFactor = 2; M.grass.polygonOffsetUnits = 4;
@@ -123,7 +123,8 @@
     M.leaf = lambertMat('leaves_gum', { fb: 0x6f8f5a, at: 0.5, side: THREE.DoubleSide });
     // Unlit and unfogged on purpose: a flat, distant silhouette. Lit by the 3.0 sun it blows out to white,
     // and fog would hide it entirely at this range.
-    M.hill = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.58, 0.67, 0.70), side: THREE.DoubleSide, fog: false, toneMapped: false });
+    // Pale blue-grey, a step darker than HORIZON: the hills read as distant haze, not a hard edge.
+    M.hill = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.63, 0.71, 0.74), side: THREE.DoubleSide, fog: false, toneMapped: false });
     return M;
   }
 

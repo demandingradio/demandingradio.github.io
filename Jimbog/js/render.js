@@ -8,21 +8,23 @@
   // multisampled target's colour after every render() into it, so drawing
   // the world and then the view-model into one MSAA target leaves black on
   // real GPUs (software GL ignores the invalidate, which hid the bug).
+  // radius: PCF tap spacing in shadow-map texels. Small values keep the sun edges crisp.
   const QUALITY = {
-    low:    { ratio: 0.75, shadow: 1024, bloom: false, tex: 256 },
-    medium: { ratio: 1.25, shadow: 2048, bloom: true, tex: 512 },
-    high:   { ratio: 2.0, shadow: 4096, bloom: true, tex: 512 }
+    low:    { ratio: 0.75, shadow: 1024, bloom: false, tex: 256, radius: 1.0 },
+    medium: { ratio: 1.25, shadow: 2048, bloom: true, tex: 512, radius: 1.5 },
+    high:   { ratio: 2.0, shadow: 4096, bloom: true, tex: 512, radius: 1.5 }
   };
 
   const FinalShader = {
     uniforms: {
       tDiffuse: { value: null }, uTime: { value: 0 }, uDamage: { value: 0 }, uFlash: { value: 0 },
       uRes: { value: new THREE.Vector2(1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1024, 1 / 768) },
-      uSat: { value: 1.08 }, uVignette: { value: 0.55 }, uHeal: { value: 0 }
+      uSat: { value: 1.08 }, uVignette: { value: 0.22 }, uHeal: { value: 0 }
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: [
       'uniform sampler2D tDiffuse; uniform float uTime, uDamage, uFlash, uSat, uVignette, uHeal; uniform vec2 uRes, uTexel; varying vec2 vUv;',
+      // Grade: uSat is set by the game (1.08 alive, 0.25 dead); 0.82 brings the base to about 0.89.
       'vec3 toSRGB(vec3 c){ c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }',
       // FXAA (Lottes, PC-lite). Luma uses sqrt() because the input is linear.
       'vec3 fxaa(vec2 uv){',
@@ -46,16 +48,18 @@
       '  if (uDamage > 0.01) { vec2 off = dir * uDamage * 0.007; col.r = texture2D(tDiffuse, vUv + off).r; col.b = texture2D(tDiffuse, vUv - off).b; }',
       '  col = toSRGB(col);',
       '  float l = dot(col, vec3(0.299, 0.587, 0.114));',
-      '  col = mix(vec3(l), col, uSat);',
-      '  col += vec3(-0.012, 0.004, 0.02) * (1.0 - l) + vec3(0.025, 0.012, -0.02) * l;',
-      '  col = (col - 0.5) * 1.07 + 0.5;',
+      '  col = mix(vec3(l), col, uSat * 0.82);',
+      '  col += vec3(-0.008, 0.0, 0.016) * (1.0 - l) + vec3(0.016, 0.008, -0.012) * l;',   // cool shadows, warm highlights
+      '  col = clamp(col, 0.0, 1.0);',
+      '  col = mix(col, col * col * (3.0 - 2.0 * col), 0.3);',                              // gentle filmic S-curve
+      '  col = (col - 0.5) * 1.03 + 0.5;',
       '  float v = smoothstep(0.92, 0.2, length(dir * vec2(1.0, 0.8)));',
       '  col *= mix(1.0, v, uVignette);',
       '  float edge = smoothstep(0.3, 0.78, length(dir));',
       '  col = mix(col, vec3(0.55, 0.02, 0.03), edge * clamp(uDamage, 0.0, 1.0) * 0.75);',
       '  col = mix(col, col + vec3(0.05, 0.25, 0.12), edge * uHeal);',
       '  float n = fract(sin(dot(vUv * uRes + fract(uTime) * 61.0, vec2(12.9898, 78.233))) * 43758.5453);',
-      '  col += (n - 0.5) * 0.022;',
+      '  col += (n - 0.5) * 0.012;',
       '  gl_FragColor = vec4(col + uFlash, 1.0);',
       '}'
     ].join('\n')
@@ -73,10 +77,11 @@
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(k), side: THREE.DoubleSide }));
       m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, 0); s.add(m);
     };
-    for (let i = -2; i <= 2; i++) panel(1.5, 6, i * 5, 5.9, 0, 0, Math.PI / 2, 0xffe2bd, 3.2);
-    panel(20, 3, 0, 2, -14.9, 0, 0, 0x9ec8ff, 1.2);
-    panel(10, 2.5, 14.9, 0, 4, -Math.PI / 2, 0, 0xffb070, 1.4);
-    panel(8, 2, -14.9, -1, -3, Math.PI / 2, 0, 0xd8f0ff, 1.0);
+    // Panel strengths are kept modest: the factory reflections should be muted, not mirror-bright.
+    for (let i = -2; i <= 2; i++) panel(1.5, 6, i * 5, 5.9, 0, 0, Math.PI / 2, 0xffe2bd, 2.3);
+    panel(20, 3, 0, 2, -14.9, 0, 0, 0x9ec8ff, 0.8);
+    panel(10, 2.5, 14.9, 0, 4, -Math.PI / 2, 0, 0xffb070, 1.0);
+    panel(8, 2, -14.9, -1, -3, Math.PI / 2, 0, 0xd8f0ff, 0.7);
     const pm = new THREE.PMREMGenerator(renderer);
     const rt = pm.fromScene(s, 0.035);
     pm.dispose();
@@ -92,12 +97,12 @@
     for (let i = 0; i < p.count; i++) {
       const y = p.getY(i) / 30;
       const c = y > 0 ? new THREE.Color(0xcfe2f0).lerp(new THREE.Color(0x4f8fd0), Math.pow(y, 0.6)) : new THREE.Color(0x5d6b4a).lerp(new THREE.Color(0x3a4030), -y);
-      c.multiplyScalar(y > 0 ? 0.75 : 0.45);
+      c.multiplyScalar(y > 0 ? 0.62 : 0.4);
       col.push(c.r, c.g, c.b);
     }
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     s.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
-    const sunM = new THREE.Mesh(new THREE.SphereGeometry(2.5, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4e0).multiplyScalar(6) }));
+    const sunM = new THREE.Mesh(new THREE.SphereGeometry(2.5, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4e0).multiplyScalar(4) }));
     sunM.position.set(-11, 25, -13); s.add(sunM);
     const pm = new THREE.PMREMGenerator(renderer);
     const rt = pm.fromScene(s, 0.02);
@@ -115,7 +120,8 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Plain PCF with a small radius: crisp sun edges (PCFSoft ignores radius and blurs them).
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0d10);
@@ -132,7 +138,7 @@
     const sun = new THREE.DirectionalLight(0xfff0d6, 2.6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(Q.shadow, Q.shadow);
-    sun.shadow.radius = 2.5;
+    sun.shadow.radius = Q.radius;
     scene.add(sun); scene.add(sun.target);
 
     // Per-map lighting, sky and shadow coverage (called again on map change).
@@ -148,8 +154,10 @@
       sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.near = 10; sc.far = 260;
       sc.updateProjectionMatrix();   // three only reads the frustum through the projection matrix
       const texel = half * 2 / Q.shadow;
-      sun.shadow.bias = -0.0004;
-      sun.shadow.normalBias = 0.02 + texel * 0.6;
+      // bias: small negative (acne-free on lit floors); normalBias: about 0.4 texels of offset,
+      // enough to stop acne on walls and steps without lifting shadows off their contact points.
+      sun.shadow.bias = -0.0002;
+      sun.shadow.normalBias = 0.015 + texel * 0.4;
       if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
       const sn = e.sun || [0xfff0d6, 2.6];
       sun.color.setHex(sn[0]); sun.intensity = sn[1];
@@ -206,7 +214,8 @@
         const vmPass = new THREE.RenderPass(vmScene, vmCamera);
         vmPass.clear = false; vmPass.clearDepth = true;
         composer.addPass(vmPass);
-        bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.5, 0.82);
+        // Bloom only catches lamps, the sun disc and the bright sky (threshold above the horizon).
+        bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.45, 0.86);
         composer.addPass(bloomPass);
         finalPass = new THREE.ShaderPass(FinalShader);
         composer.addPass(finalPass);

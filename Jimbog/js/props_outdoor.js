@@ -18,39 +18,39 @@
     // fence at range or fills the holes up close. Blending gives a faint mesh far off and crisp wire near.
     'p:chainlink':   { params: { color: hasTex('chainlink') ? 0xffffff : 0x9aa2aa, alphaTest: 0.08, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.5 }, tex: 'chainlink' },
     // Nets are blended for the same reason as the chain-link (see below): no speckle at range.
-    'p:net_white':   { params: { color: hasTex('net_white') ? 0xffffff : 0xe8ecef, alphaTest: 0.08, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.8 }, tex: 'net_white' },
+    'p:net_white':   { params: { color: hasTex('net_white') ? 0xffffff : 0xd2d6d8, alphaTest: 0.08, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.8 }, tex: 'net_white' },
     'p:net_dark':    { params: { color: 0x2a2e33, alphaTest: 0.08, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.8 }, tex: 'net_white' },
-    'p:timber':      { params: { color: hasTex('timber') ? 0xffffff : 0x8a6d4e, roughness: 0.85 }, tex: 'timber' },
-    'p:brick_tan':   { params: { color: hasTex('brick_tan') ? 0xffffff : 0xdcbd90, roughness: 0.9 }, tex: 'brick_tan' },
-    'p:soil':        { params: { color: hasTex('soil') ? 0xffffff : 0x6b5239, roughness: 1.0 }, tex: 'soil' },
-    'p:galv':        { params: { color: 0xb9bfc6, roughness: 0.45, metalness: 0.6 } },
-    'p:galv_dark':   { params: { color: 0x7d8790, roughness: 0.5, metalness: 0.6 } },
+    'p:timber':      { params: { color: hasTex('timber') ? 0xffffff : 0x6f6253, roughness: 0.85 }, tex: 'timber' },
+    'p:brick_tan':   { params: { color: hasTex('brick_tan') ? 0xffffff : 0xa58b6b, roughness: 0.92 }, tex: 'brick_tan' },
+    'p:soil':        { params: { color: hasTex('soil') ? 0xffffff : 0x5a4a38, roughness: 1.0 }, tex: 'soil' },
+    'p:galv':        { params: { color: 0x9ea5ab, roughness: 0.5, metalness: 0.6 } },
+    'p:galv_dark':   { params: { color: 0x6a737b, roughness: 0.55, metalness: 0.6 } },
     'p:frame_dark':  { params: { color: 0x2b2f35, roughness: 0.5, metalness: 0.6 } },
-    'p:post_white':  { params: { color: 0xf2f3f4, roughness: 0.4, metalness: 0.2 } },
+    'p:post_white':  { params: { color: 0xc9cbca, roughness: 0.45, metalness: 0.15 } },
     'p:glass_dark':  { params: { color: 0x1d2a33, roughness: 0.08, metalness: 0.4 } },
     'p:lamp_head':   { basic: true, params: { color: new THREE.Color(0xfff2d0).multiplyScalar(1.8) } },
     'p:lamp_tail':   { basic: true, params: { color: new THREE.Color(0xff2a1a).multiplyScalar(1.6) } },
-    'p:canopy_glass':{ params: { color: 0x7fa38d, roughness: 0.2, metalness: 0.0, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false } },
-    'p:hoop_orange': { params: { color: 0xe0661c, roughness: 0.55 } },
-    'p:bin_green':   { params: { color: 0x2f5a3c, roughness: 0.6, metalness: 0.1 } },
-    'p:grape':       { params: { color: 0x5b2a6e, roughness: 0.35 } },
-    'p:wheel_rim':   { params: { color: 0xc4c9ce, roughness: 0.3, metalness: 0.9 } },
-    'p:wood_table':  { params: { color: hasTex('timber') ? 0xffffff : 0x9a7452, roughness: 0.8 }, tex: 'timber' },
+    'p:canopy_glass':{ params: { color: 0x6f8f7d, roughness: 0.2, metalness: 0.0, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false } },
+    'p:hoop_orange': { params: { color: 0xb06a3e, roughness: 0.6 } },
+    'p:bin_green':   { params: { color: 0x3b5646, roughness: 0.65, metalness: 0.1 } },
+    'p:grape':       { params: { color: 0x4d3a5c, roughness: 0.4 } },
+    'p:wheel_rim':   { params: { color: 0xa9afb4, roughness: 0.35, metalness: 0.9 } },
+    'p:wood_table':  { params: { color: hasTex('timber') ? 0xffffff : 0x7d6a55, roughness: 0.85 }, tex: 'timber' },
     // Dark grey posts (not p:steel_dark, which is near black without an environment map).
     'p:post_grey':   { params: { color: 0x4b525a, roughness: 0.55, metalness: 0.25 } },
     // Net tape is a single strip: double sided so it shows from either side.
-    'p:tape_white':  { params: { color: 0xf4f4f2, roughness: 0.6, side: THREE.DoubleSide } }
+    'p:tape_white':  { params: { color: 0xd4d3cd, roughness: 0.65, side: THREE.DoubleSide } }
   };
   JB.Props.addMaterials(MATS);
   JB.Props.addMaterials({
-    'p:cladding_white': { params: { color: hasTex('cladding_white') ? 0xffffff : 0xeef3f6, roughness: 0.4, metalness: 0.05, side: THREE.DoubleSide }, tex: 'cladding_white' },
+    'p:cladding_white': { params: { color: hasTex('cladding_white') ? 0xffffff : 0xc9ced0, roughness: 0.45, metalness: 0.05, side: THREE.DoubleSide }, tex: 'cladding_white' },
     'p:solar': { params: { color: 0x1f2e4a, roughness: 0.25, metalness: 0.35 } },
     // Campus sign returns (cream edges and back of the board).
-    'p:sign_edge': { params: { color: 0xefe6cf, roughness: 0.5 } }
+    'p:sign_edge': { params: { color: 0xd3cab3, roughness: 0.55 } }
   });
 
   // Car body palette: muted tones, each its own material key so the bucket colour is right.
-  const CAR_COLOURS = [0xe9ebec, 0x9ea4aa, 0x7a2a2a, 0x1f3a5c, 0x2f5a46, 0xb9a88a, 0x3a3f46, 0x6e8aa3];
+  const CAR_COLOURS = [0xc6c9c9, 0x8c9297, 0x6b3c38, 0x34475d, 0x3d5a4a, 0x9d8e74, 0x3d4247, 0x647a8c];
   const carKey = (c) => 'p:car_' + ('000000' + c.toString(16)).slice(-6);
   const carMats = {};
   CAR_COLOURS.forEach((c) => { carMats[carKey(c)] = { params: { color: c, roughness: 0.35, metalness: 0.15 }, tex: hasTex('car_paint') ? 'car_paint' : undefined }; });
@@ -687,10 +687,10 @@
     cv.width = cv.height = N;
     const cx = cv.getContext('2d');
     cx.setTransform(N / 3.2, 0, 0, N / 1.4, 0, 0);
-    cx.fillStyle = '#efe6cf'; cx.fillRect(0, 0, 3.2, 1.4);
-    cx.fillStyle = '#1d3557'; cx.fillRect(0.12, 0.12, 2.96, 1.16);
+    cx.fillStyle = '#d8cfb8'; cx.fillRect(0, 0, 3.2, 1.4);
+    cx.fillStyle = '#2b3b4c'; cx.fillRect(0.12, 0.12, 2.96, 1.16);
     // Teal wave logo: circle with three white wave lines.
-    cx.fillStyle = '#2a9d8f'; cx.beginPath(); cx.arc(0.62, 0.7, 0.3, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = '#4f7f76'; cx.beginPath(); cx.arc(0.62, 0.7, 0.3, 0, Math.PI * 2); cx.fill();
     cx.strokeStyle = '#ffffff'; cx.lineWidth = 0.035; cx.lineCap = 'round';
     for (let k = 0; k < 3; k++) {
       cx.beginPath();

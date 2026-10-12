@@ -8,7 +8,8 @@
     facility: {
       id: 'facility', name: 'Facility', tagline: 'Facility deathmatch · factory interiors',
       builder: 'grid', data: () => JB.MapData,
-      env: { background: 0x0b0d10, fog: [0x15191e, 0.0085], hemi: [0xa9bfd6, 0x2b241d, 0.32], sun: [0xfff0d6, 2.6], exposure: 1.05, envMap: 'factory', far: 260 },
+      // Interiors sit about a stop under the campus sun: dim cool skylight fill, warm bounce, light dusty haze.
+      env: { background: 0x0b0d10, fog: [0x262420, 0.0095], hemi: [0x9fb0bd, 0x3a2e22, 0.2], sun: [0xffe6c4, 3.1], exposure: 1.0, envMap: 'factory', far: 260 },
       menuShots: [
         { a: [86, -2.2, 37.5], b: [70, -2.4, 50], look: [80, -1.0, 44] },
         { a: [94, -2.6, 21.5], b: [107, -2.6, 20], look: [101, -2.5, 15] },
@@ -21,7 +22,8 @@
     campus: {
       id: 'campus', name: 'Research Campus', tagline: 'Research Campus · fields, labs and a two-storey wing',
       builder: 'spans', data: () => JB.MapCampus,
-      env: { background: null, sky: true, fog: [0xb3c7cc, 0.0032], hemi: [0xcfe3ff, 0x5a6a3a, 0.2], sun: [0xfff1dc, 2.75], exposure: 0.95, envMap: 'outdoor', envIntensity: 0.45, far: 950 },
+      // Fog colour is the sky horizon (JB.Sky.HORIZON); the density gives pale aerial haze on the far trees and houses.
+      env: { background: null, sky: true, fog: [0xb3c7cc, 0.0040], hemi: [0xc9dcf2, 0x6b6a58, 0.24], sun: [0xfff1dc, 2.8], exposure: 0.92, envMap: 'outdoor', envIntensity: 0.28, far: 950 },
       menuShots: null   // from the map data
     }
   };

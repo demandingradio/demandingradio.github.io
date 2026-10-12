@@ -88,14 +88,16 @@
   }
 
   // Inject a per-character light probe so cats pick up the room's lighting.
+  // Readability: the probe has a brightness floor, so cats never sink into a dark interior corner,
+  // and a faint cool rim (view-facing edges only) separates their silhouettes from bright plaster.
   function probeMaterial(mat, probe) {
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uProbe = probe.color;
       shader.uniforms.uProbeEnv = probe.env;
       shader.uniforms.uFlashCol = probe.flash;
       shader.fragmentShader = 'uniform vec3 uProbe; uniform float uProbeEnv; uniform vec3 uFlashCol;\n' + shader.fragmentShader
-        .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n\tirradiance += uProbe * PI;\n\tradiance *= uProbeEnv; iblIrradiance *= uProbeEnv;')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += uFlashCol;');
+        .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n\tirradiance += max(uProbe, vec3(0.13)) * PI;\n\tradiance *= uProbeEnv; iblIrradiance *= uProbeEnv;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += uFlashCol;\n\tfloat rim = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);\n\ttotalEmissiveRadiance += vec3(0.5, 0.58, 0.68) * rim * 0.06 * (0.4 + uProbeEnv);');
     };
     mat.customProgramCacheKey = () => 'jb-probe';
     return mat;

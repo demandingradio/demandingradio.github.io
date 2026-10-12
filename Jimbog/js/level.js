@@ -19,35 +19,35 @@
 
   // Light presets: colour, intensity, range, spacing, fixture style.
   const LIGHTS = {
-    office:   { c: 0xeef3ff, i: 1.05, r: 8.5, s: 4.5, fx: 'panel', bounce: 0.10 },
-    lab:      { c: 0xe4f6ff, i: 1.15, r: 8, s: 4, fx: 'panel', bounce: 0.12 },
-    corridor: { c: 0xfff0d8, i: 0.95, r: 7, s: 4.5, fx: 'strip', bounce: 0.08 },
-    hall:     { c: 0xffc27e, i: 2.2, r: 15, s: 7.5, fx: 'highbay', bounce: 0.10 },
-    barrel:   { c: 0xffc994, i: 1.7, r: 10, s: 6, fx: 'highbay', bounce: 0.09 },
-    tunnel:   { c: 0xffad66, i: 1.0, r: 6.5, s: 6, fx: 'cage', bounce: 0.05 },
-    wash:     { c: 0xd8ffe6, i: 0.95, r: 6.5, s: 3.5, fx: 'panel', bounce: 0.10 },
-    duct:     { c: 0xff7a44, i: 0.8, r: 5, s: 5, fx: 'cage', bounce: 0.04 },
-    stair:    { c: 0xf0f2ff, i: 0.95, r: 6.5, s: 3.5, fx: 'strip', bounce: 0.08 }
+    office:   { c: 0xf6ecdc, i: 0.7, r: 8.5, s: 4.5, fx: 'panel', bounce: 0.065 },
+    lab:      { c: 0xeef4ea, i: 0.78, r: 8, s: 4, fx: 'panel', bounce: 0.07 },
+    corridor: { c: 0xffe2b8, i: 0.62, r: 7, s: 4.5, fx: 'strip', bounce: 0.05 },
+    hall:     { c: 0xffc27e, i: 1.5, r: 15, s: 7.5, fx: 'highbay', bounce: 0.065 },
+    barrel:   { c: 0xffc994, i: 1.15, r: 10, s: 6, fx: 'highbay', bounce: 0.06 },
+    tunnel:   { c: 0xffad66, i: 0.7, r: 6.5, s: 6, fx: 'cage', bounce: 0.035 },
+    wash:     { c: 0xe4f2dc, i: 0.62, r: 6.5, s: 3.5, fx: 'panel', bounce: 0.065 },
+    duct:     { c: 0xff7a44, i: 0.6, r: 5, s: 5, fx: 'cage', bounce: 0.03 },
+    stair:    { c: 0xf4eee4, i: 0.62, r: 6.5, s: 3.5, fx: 'strip', bounce: 0.055 }
   };
 
   // Material parameters per texture.
   const MATP = {
-    concrete_floor: { rough: 0.9, metal: 0.0, ns: 0.6 },
-    concrete_wall:  { rough: 0.95, metal: 0.0, ns: 0.8 },
-    metal_panel:    { rough: 0.7, metal: 0.55, ns: 0.7 },
-    diamond_plate:  { rough: 0.65, metal: 0.7, ns: 1.0 },
-    hazard:         { rough: 0.8, metal: 0.2, ns: 0.6 },
-    tiles_wall:     { rough: 0.55, metal: 0.0, ns: 0.6 },
-    tiles_floor:    { rough: 0.8, metal: 0.0, ns: 0.6 },
-    epoxy_yellow:   { rough: 0.7, metal: 0.0, ns: 0.5 },
-    painted_metal:  { rough: 0.6, metal: 0.35, ns: 0.6 },
-    rust:           { rough: 1.0, metal: 0.3, ns: 1.0 },
-    ceiling:        { rough: 0.9, metal: 0.3, ns: 0.8 },
-    crate:          { rough: 0.9, metal: 0.0, ns: 0.7 },
-    brick:          { rough: 0.95, metal: 0.0, ns: 1.0 },
+    concrete_floor: { rough: 1.0, metal: 0.0, ns: 0.6 },
+    concrete_wall:  { rough: 1.0, metal: 0.0, ns: 0.9 },
+    metal_panel:    { rough: 1.0, metal: 0.15, ns: 0.7 },
+    diamond_plate:  { rough: 1.05, metal: 0.35, ns: 1.0 },
+    hazard:         { rough: 1.0, metal: 0.1, ns: 0.6 },
+    tiles_wall:     { rough: 1.0, metal: 0.0, ns: 0.5 },
+    tiles_floor:    { rough: 1.0, metal: 0.0, ns: 0.6 },
+    epoxy_yellow:   { rough: 1.0, metal: 0.0, ns: 0.5 },
+    painted_metal:  { rough: 1.0, metal: 0.1, ns: 0.6 },
+    rust:           { rough: 1.0, metal: 0.05, ns: 1.0 },
+    ceiling:        { rough: 1.0, metal: 0.05, ns: 0.8 },
+    crate:          { rough: 0.95, metal: 0.0, ns: 0.7 },
+    brick:          { rough: 1.0, metal: 0.0, ns: 1.0 },
     rubber:         { rough: 1.0, metal: 0.0, ns: 0.5 },
-    lab_white:      { rough: 0.5, metal: 0.0, ns: 0.5 },
-    grate:          { rough: 0.6, metal: 0.7, ns: 0.8 }
+    lab_white:      { rough: 1.0, metal: 0.0, ns: 0.5 },
+    grate:          { rough: 1.0, metal: 0.45, ns: 0.8 }
   };
 
   // Sun direction (from the sky toward the ground).
@@ -823,7 +823,9 @@
     };
   }
 
-  // Additive light shafts under skylights, slanted along the sun.
+  // Additive light shafts under skylights, slanted along the sun. Dusty and soft:
+  // brightness drifts with slow noise, the side edges and the floor end fade out,
+  // and the shaft fades with distance from the camera. Kept faint so cats stay readable.
   function buildShafts(shafts) {
     const pos = [], uv = [], ind = [];
     const sd = SUN_DIR;
@@ -832,13 +834,13 @@
       const t = h / -sd.y;
       const ox = sd.x * t, oz = sd.z * t;
       const top = [[s.x0, s.z0], [s.x1, s.z0], [s.x1, s.z1], [s.x0, s.z1]];
-      const base = pos.length / 3;
-      for (const [x, z] of top) { pos.push(x, s.top, z); uv.push(0, 1); }
-      for (const [x, z] of top) { pos.push(x + ox, s.bottom, z + oz); uv.push(0, 0); }
-      // four side faces (double-sided material)
+      // four side faces, each with its own vertices so uv.x runs 0..1 across it
       for (let k = 0; k < 4; k++) {
-        const a = base + k, b = base + ((k + 1) % 4), c = b + 4, d = a + 4;
-        ind.push(a, b, c, a, c, d);
+        const a = top[k], b = top[(k + 1) % 4];
+        const base = pos.length / 3;
+        pos.push(a[0], s.top, a[1], b[0], s.top, b[1], b[0] + ox, s.bottom, b[1] + oz, a[0] + ox, s.bottom, a[1] + oz);
+        uv.push(0, 1, 1, 1, 1, 0, 0, 0);
+        ind.push(base, base + 1, base + 2, base, base + 2, base + 3);
       }
     }
     const geo = new THREE.BufferGeometry();
@@ -848,9 +850,26 @@
     const mat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0xfff0d0) } },
       vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-      fragmentShader: 'uniform float uTime; uniform vec3 uColor; varying vec2 vUv; varying vec3 vW;\n' +
-        'void main(){ float n = 0.65 + 0.35 * sin(vW.x * 1.7 + vW.z * 1.3 + uTime * 0.4) * sin(vW.y * 0.9 - uTime * 0.25);\n' +
-        ' float a = smoothstep(0.0, 0.35, vUv.y) * (0.55 + 0.45 * vUv.y) * n * 0.085; gl_FragColor = vec4(uColor * a, 1.0); }',
+      fragmentShader: [
+        'uniform float uTime; uniform vec3 uColor; varying vec2 vUv; varying vec3 vW;',
+        'float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }',
+        'float vnoise(vec3 p) {',
+        '  vec3 i = floor(p), f = fract(p);',
+        '  f = f * f * (3.0 - 2.0 * f);',
+        '  float a = mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);',
+        '  float b = mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0, 1.0, 1.0)), f.x), f.y);',
+        '  return mix(a, b, f.z);',
+        '}',
+        'void main(){',
+        '  float n = vnoise(vW * 1.3 + vec3(uTime * 0.05, -uTime * 0.12, uTime * 0.03));',
+        '  n = clamp(0.4 + 1.2 * (n - 0.5) + 0.15 * sin(vW.x * 2.1 - uTime * 0.6 + vW.y * 1.7), 0.0, 1.4);',
+        '  float ex = smoothstep(0.0, 0.22, vUv.x) * smoothstep(1.0, 0.78, vUv.x);',      // soft side edges
+        '  float ey = smoothstep(0.0, 0.35, vUv.y) * (0.55 + 0.45 * vUv.y);',              // brighter near the skylight
+        '  float fd = 1.0 - smoothstep(12.0, 40.0, length(vW - cameraPosition));',          // fade with distance
+        '  float a = ex * ey * n * fd * 0.042;',
+        '  gl_FragColor = vec4(uColor * a, 1.0);',
+        '}'
+      ].join('\n'),
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
     });
     const m = new THREE.Mesh(geo, mat);

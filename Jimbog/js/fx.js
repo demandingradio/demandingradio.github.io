@@ -99,6 +99,130 @@
     }
   }
 
+  // ------------------------------------------------------------ bullet holes and scorch
+  // Hole atlas: one 256 px canvas, a 128 px quadrant per surface kind.
+  function holeConcrete(c, rnd) {
+    const ring = c.createRadialGradient(64, 64, 14, 64, 64, 62);
+    ring.addColorStop(0, 'rgba(206,200,190,0)'); ring.addColorStop(0.2, 'rgba(206,200,190,0.5)');
+    ring.addColorStop(0.45, 'rgba(196,190,180,0.3)'); ring.addColorStop(1, 'rgba(196,190,180,0)');
+    c.fillStyle = ring; c.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 26; i++) {               // pale dust flecks on the ring
+      const a = rnd() * 6.2832, d = 22 + rnd() * 30;
+      c.fillStyle = 'rgba(214,208,198,' + (0.2 + rnd() * 0.3).toFixed(2) + ')';
+      c.fillRect(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1 + rnd() * 2, 1 + rnd() * 2);
+    }
+    const core = c.createRadialGradient(64, 64, 0, 64, 64, 28);   // chipped dark crater
+    core.addColorStop(0, 'rgba(8,7,6,1)'); core.addColorStop(0.45, 'rgba(20,17,15,0.95)');
+    core.addColorStop(0.8, 'rgba(40,36,32,0.55)'); core.addColorStop(1, 'rgba(40,36,32,0)');
+    c.fillStyle = core; c.beginPath(); c.arc(64, 64, 28, 0, 6.2832); c.fill();
+    c.strokeStyle = 'rgba(16,13,11,0.75)'; c.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {                // short radial cracks
+      const a = (i / 8) * 6.2832 + rnd() * 0.5, r0 = 12 + rnd() * 6, r1 = 30 + rnd() * 24;
+      c.lineWidth = 0.8 + rnd() * 1.2;
+      c.beginPath(); c.moveTo(64 + Math.cos(a) * r0, 64 + Math.sin(a) * r0);
+      c.lineTo(64 + Math.cos(a + (rnd() - 0.5) * 0.25) * r1, 64 + Math.sin(a + (rnd() - 0.5) * 0.25) * r1); c.stroke();
+    }
+  }
+  function holeMetal(c, rnd) {
+    const dent = c.createRadialGradient(60, 58, 4, 64, 64, 42);   // the dent: dark inside, lighter outside
+    dent.addColorStop(0, 'rgba(18,19,21,0.95)'); dent.addColorStop(0.55, 'rgba(70,74,80,0.6)'); dent.addColorStop(1, 'rgba(120,124,130,0)');
+    c.fillStyle = dent; c.beginPath(); c.arc(64, 64, 42, 0, 6.2832); c.fill();
+    c.lineCap = 'round';
+    c.strokeStyle = 'rgba(238,240,244,0.9)'; c.lineWidth = 3.2;   // bright rim on the lit side
+    c.beginPath(); c.arc(64, 64, 26, Math.PI * 1.1, Math.PI * 1.85); c.stroke();
+    c.strokeStyle = 'rgba(190,196,202,0.55)'; c.lineWidth = 2;
+    c.beginPath(); c.arc(64, 64, 36, Math.PI * 1.05, Math.PI * 1.7); c.stroke();
+    c.fillStyle = 'rgba(6,6,7,1)'; c.beginPath(); c.arc(64, 64, 7 + rnd() * 2, 0, 6.2832); c.fill();
+    c.strokeStyle = 'rgba(30,32,36,0.6)'; c.lineWidth = 1.2;
+    for (let i = 0; i < 5; i++) {
+      const a = rnd() * 6.2832;
+      c.beginPath(); c.moveTo(64 + Math.cos(a) * 10, 64 + Math.sin(a) * 10);
+      c.lineTo(64 + Math.cos(a) * (26 + rnd() * 12), 64 + Math.sin(a) * (26 + rnd() * 12)); c.stroke();
+    }
+  }
+  function holeWood(c, rnd) {
+    c.fillStyle = 'rgba(26,15,8,0.96)'; c.beginPath();      // ragged dark hole
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * 6.2832, r = 12 + rnd() * 7, x = 64 + Math.cos(a) * r, y = 64 + Math.sin(a) * r * 0.8;
+      if (i) c.lineTo(x, y); else c.moveTo(x, y);
+    }
+    c.closePath(); c.fill();
+    for (let i = 0; i < 16; i++) {                           // splinters pointing away from the hole
+      const a = rnd() * 6.2832, r0 = 12, r1 = 26 + rnd() * 30, w = 1.2 + rnd() * 2.2;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      c.fillStyle = rnd() < 0.6 ? 'rgba(214,182,132,0.85)' : 'rgba(120,80,44,0.85)';
+      c.beginPath(); c.moveTo(64 + ca * r0 - sa * w, 64 + sa * r0 + ca * w); c.lineTo(64 + ca * r1, 64 + sa * r1);
+      c.lineTo(64 + ca * r0 + sa * w, 64 + sa * r0 - ca * w); c.closePath(); c.fill();
+    }
+    c.strokeStyle = 'rgba(60,36,18,0.45)'; c.lineWidth = 1;  // grain
+    for (let i = 0; i < 5; i++) { const y = 20 + rnd() * 88; c.beginPath(); c.moveTo(10, y); c.lineTo(118, y + (rnd() - 0.5) * 6); c.stroke(); }
+  }
+  function holeGlass(c, rnd) {
+    c.fillStyle = 'rgba(30,40,46,0.9)'; c.beginPath(); c.arc(64, 64, 5 + rnd() * 2, 0, 6.2832); c.fill();
+    c.strokeStyle = 'rgba(240,248,252,0.9)'; c.lineWidth = 1.1; c.lineCap = 'round';
+    for (let i = 0; i < 9; i++) {                            // radial cracks
+      let a = (i / 9) * 6.2832 + rnd() * 0.3, r = 7;
+      c.beginPath(); c.moveTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r);
+      for (let k = 0; k < 4; k++) { r += 8 + rnd() * 10; a += (rnd() - 0.5) * 0.25; c.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r); }
+      c.stroke();
+    }
+    c.strokeStyle = 'rgba(120,150,166,0.65)'; c.lineWidth = 0.8;   // broken rings
+    for (let k = 0; k < 3; k++) {
+      const r = 18 + k * 14;
+      for (let n = 0; n < 3; n++) { const a0 = rnd() * 6.2832; c.beginPath(); c.arc(64, 64, r, a0, a0 + 0.8 + rnd() * 1.4); c.stroke(); }
+    }
+  }
+  function holeAtlas() {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+    const c = cv.getContext('2d'), rnd = U.rng(2024), rect = {};
+    const cells = { concrete: [0, 0, holeConcrete], metal: [128, 0, holeMetal], wood: [0, 128, holeWood], glass: [128, 128, holeGlass] };
+    for (const k of Object.keys(cells)) {
+      const [x0, y0, fn] = cells[k];
+      c.save(); c.beginPath(); c.rect(x0, y0, 128, 128); c.clip(); c.translate(x0, y0);
+      fn(c, rnd);
+      c.restore();
+      rect[k] = [x0 / 256, 1 - (y0 + 128) / 256, (x0 + 128) / 256, 1 - y0 / 256];
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
+    return { tex, rect };
+  }
+  // A plane whose uv covers one atlas rectangle [u0, v0, u1, v1].
+  function quadrantPlane(r, size) {
+    const g = new THREE.PlaneGeometry(size, size), uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, r[0] + uv.getX(i) * (r[2] - r[0]), r[1] + uv.getY(i) * (r[3] - r[1]));
+    uv.needsUpdate = true;
+    return g;
+  }
+  // Scorch atlas: two soot blotches side by side (256 x 128).
+  function scorchAtlas() {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+    const c = cv.getContext('2d'), rnd = U.rng(88);
+    for (let v = 0; v < 2; v++) {
+      c.save(); c.beginPath(); c.rect(v * 128, 0, 128, 128); c.clip(); c.translate(v * 128, 0);
+      const cx = 64 + (rnd() - 0.5) * 10, cy = 64 + (rnd() - 0.5) * 10;
+      let g = c.createRadialGradient(cx, cy, 0, cx, cy, 62);
+      g.addColorStop(0, 'rgba(12,10,8,0.85)'); g.addColorStop(0.45, 'rgba(18,15,12,0.55)');
+      g.addColorStop(0.8, 'rgba(18,15,12,0.18)'); g.addColorStop(1, 'rgba(18,15,12,0)');
+      c.fillStyle = g; c.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 16; i++) {                           // ragged blotches
+        const a = rnd() * 6.2832, d = rnd() * 34, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d, r = 6 + rnd() * 16;
+        g = c.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, 'rgba(8,6,5,0.5)'); g.addColorStop(1, 'rgba(8,6,5,0)');
+        c.fillStyle = g; c.fillRect(x - r, y - r, 2 * r, 2 * r);
+      }
+      for (let i = 0; i < 14; i++) {                           // soot streaks
+        const a = rnd() * 6.2832, r0 = 16 + rnd() * 10, r1 = 40 + rnd() * 22;
+        c.strokeStyle = 'rgba(10,8,6,' + (0.12 + rnd() * 0.18).toFixed(2) + ')'; c.lineWidth = 1 + rnd() * 3;
+        c.beginPath(); c.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); c.lineTo(cx + Math.cos(a + 0.05) * r1, cy + Math.sin(a + 0.05) * r1); c.stroke();
+      }
+      c.restore();
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
   class FX {
     constructor(R) {
       this.R = R;
@@ -120,35 +244,23 @@
         scene.add(m);
         this.tracers.push({ m, life: 0, max: 0.07 });
       }
-      // bullet holes
-      const dcv = document.createElement('canvas'); dcv.width = dcv.height = 64;
-      const dc = dcv.getContext('2d');
-      const dg = dc.createRadialGradient(32, 32, 0, 32, 32, 30);
-      dg.addColorStop(0, 'rgba(8,6,5,1)'); dg.addColorStop(0.22, 'rgba(20,16,14,0.95)'); dg.addColorStop(0.4, 'rgba(40,34,30,0.55)'); dg.addColorStop(1, 'rgba(40,34,30,0)');
-      dc.fillStyle = dg; dc.fillRect(0, 0, 64, 64);
-      dc.strokeStyle = 'rgba(15,12,10,0.6)'; dc.lineWidth = 1.2;
-      for (let i = 0; i < 7; i++) { const a = i / 7 * 6.28 + 0.3; dc.beginPath(); dc.moveTo(32 + Math.cos(a) * 6, 32 + Math.sin(a) * 6); dc.lineTo(32 + Math.cos(a) * (14 + (i % 3) * 5), 32 + Math.sin(a) * (14 + (i % 3) * 5)); dc.stroke(); }
-      const dtex = new THREE.CanvasTexture(dcv);
-      dtex.encoding = THREE.sRGBEncoding;
-      const dmat = new THREE.MeshStandardMaterial({ map: dtex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, roughness: 0.9 });
-      const dgeo = new THREE.PlaneGeometry(0.13, 0.13);
+      // bullet holes: one atlas, a quadrant per surface kind (concrete chip, metal dent, wood splinters, glass crack)
+      const hole = holeAtlas();
+      this.holeTex = hole.tex;
+      const dmat = new THREE.MeshStandardMaterial({ map: hole.tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, roughness: 0.9 });
+      this.holeGeo = {};
+      for (const k of Object.keys(hole.rect)) this.holeGeo[k] = quadrantPlane(hole.rect[k], 0.13);
       this.decals = [];
       for (let i = 0; i < 90; i++) {
-        const m = new THREE.Mesh(dgeo, dmat);
+        const m = new THREE.Mesh(this.holeGeo.concrete, dmat);
         m.visible = false; m.renderOrder = 1;
         scene.add(m);
         this.decals.push(m);
       }
       this.decalI = 0;
-      // scorch marks
-      const scv = document.createElement('canvas'); scv.width = scv.height = 128;
-      const sc = scv.getContext('2d');
-      const sg = sc.createRadialGradient(64, 64, 0, 64, 64, 62);
-      sg.addColorStop(0, 'rgba(10,8,6,0.9)'); sg.addColorStop(0.5, 'rgba(20,16,12,0.5)'); sg.addColorStop(1, 'rgba(20,16,12,0)');
-      sc.fillStyle = sg; sc.fillRect(0, 0, 128, 128);
-      const stex = new THREE.CanvasTexture(scv);
-      stex.encoding = THREE.sRGBEncoding;
-      this.scorchMat = new THREE.MeshBasicMaterial({ map: stex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      // scorch marks: soot blotches, two variants, random size and turn
+      this.scorchMat = new THREE.MeshBasicMaterial({ map: scorchAtlas(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      this.scorchGeo = [quadrantPlane([0, 0, 0.5, 1], 3), quadrantPlane([0.5, 0, 1, 1], 3)];
       this.scorches = [];
       this.time = 0;
       this._m = new THREE.Matrix4(); this._x = new THREE.Vector3(); this._y = new THREE.Vector3(); this._z = new THREE.Vector3();
@@ -187,23 +299,25 @@
       t.m.material.color.setHex(color || 0xffd9a0);
       t.m.visible = true;
     }
-    decal(p, nx, ny, nz) {
+    decal(p, nx, ny, nz, kind) {
       const m = this.decals[this.decalI++ % this.decals.length];
+      m.geometry = this.holeGeo[kind] || this.holeGeo.concrete;
       m.position.set(p.x + nx * 0.004, p.y + ny * 0.004, p.z + nz * 0.004);
       this._x.set(p.x + nx, p.y + ny, p.z + nz);
       m.up.set(Math.abs(ny) > 0.9 ? 1 : 0, Math.abs(ny) > 0.9 ? 0 : 1, 0);
       m.lookAt(this._x);
       m.rotateZ(Math.random() * 6.28);
-      const s = 0.7 + Math.random() * 0.5;
-      m.scale.set(s, s, s);
+      const s = (kind === 'wood' ? 1.0 : 0.75) + Math.random() * 0.5;
+      m.scale.set(s * (0.85 + Math.random() * 0.3), s, s);
       m.visible = true;
     }
     impact(hit, surface) {
       const nx = hit.nx || 0, ny = hit.ny || 0, nz = hit.nz || 0;
-      const metal = surface === 'metal';
-      this.sparks(hit, null, nx, ny, nz, metal ? 7 : 3, false);
-      this.dust(hit, nx, ny, nz, metal ? 1 : 3, 0.55, 0.52, 0.48);
-      this.decal(hit, nx, ny, nz);
+      const kind = JB.Decals && JB.Decals.holeKind ? JB.Decals.holeKind(hit, surface) : (surface === 'metal' ? 'metal' : 'concrete');
+      const metal = kind === 'metal', soft = kind === 'wood' || kind === 'glass';
+      this.sparks(hit, null, nx, ny, nz, metal ? 7 : soft ? 0 : 3, false);
+      this.dust(hit, nx, ny, nz, metal ? 1 : 3, kind === 'wood' ? 0.6 : 0.55, kind === 'wood' ? 0.5 : 0.52, kind === 'wood' ? 0.4 : 0.48);
+      this.decal(hit, nx, ny, nz, kind);
     }
     explosion(p) {
       for (let i = 0; i < 26; i++) {
@@ -236,7 +350,10 @@
     scorch(p, ny) {
       if (ny < 0.7) return;
       let m = this.scorches.length < 12 ? null : this.scorches.shift();
-      if (!m) m = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), this.scorchMat);
+      if (!m) m = new THREE.Mesh(this.scorchGeo[0], this.scorchMat);
+      m.geometry = this.scorchGeo[Math.random() < 0.5 ? 0 : 1];
+      const s = 0.75 + Math.random() * 0.6;
+      m.scale.set(s * (0.85 + Math.random() * 0.3), s, 1);
       m.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28);
       m.position.set(p.x, p.y + 0.01, p.z);
       this.R.scene.add(m);

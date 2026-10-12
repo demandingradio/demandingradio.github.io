@@ -79,44 +79,72 @@
     return new THREE.CanvasTexture(cv);
   }
 
+  // Sun shared by every cloud (set per map by JB.Atmos through JB.GrenadeFX.setSun).
+  // to: unit vector towards the sun; color: sunlight; k: how strongly sun lights the smoke.
+  const SUN = {
+    to: { value: new THREE.Vector3(-0.35, 0.84, -0.42).normalize() },
+    color: { value: new THREE.Color(1.0, 0.93, 0.8) },
+    k: { value: 0.35 }
+  };
+
   // Billboarded instanced quads. aOffset is a world position; the corner is
   // offset in view space so every puff always faces the camera.
+  // Lighting (CS2-style smoke): the sun shines from above, so the top of each
+  // puff is lit and the underside sits in its own shadow. Three texture taps
+  // walk from each pixel towards the sun to measure how much smoke lies in
+  // between (self-shadowing), so dense cores go dark and rims facing the sun glow.
   const VERT = [
     'attribute vec3 aOffset;',
     'attribute float aSize;',
     'attribute float aRot;',
     'attribute float aAlpha;',
     'attribute float aShade;',
+    'uniform vec3 uSunTo;',
     'varying vec2 vUv;',
     'varying float vAlpha;',
     'varying float vShade;',
     'varying float vTop;',
+    'varying vec2 vSunUV;',
+    'varying float vScat;',
     'void main() {',
     '  vUv = uv;',
     '  vAlpha = aAlpha;',
     '  vShade = aShade;',
     '  vTop = position.y + 0.5;',                         // screen-up, so the light does not spin with the puff
     '  vec4 mv = viewMatrix * modelMatrix * vec4(aOffset, 1.0);',
+    '  vec3 sunV = normalize((viewMatrix * vec4(uSunTo, 0.0)).xyz);',
+    '  vScat = pow(max(0.0, dot(normalize(-mv.xyz), sunV)), 5.0);',   // forward scatter: glows when looking into the sun
     '  float c = cos(aRot), s = sin(aRot);',
     '  vec2 corner = vec2(position.x * c - position.y * s, position.x * s + position.y * c);',
     '  mv.xy += corner * aSize;',
     '  gl_Position = projectionMatrix * mv;',
+    // sun direction in the sprite's own (unrotated) frame, so the taps follow the puff
+    '  vSunUV = vec2(c * sunV.x + s * sunV.y, -s * sunV.x + c * sunV.y);',
     '}'
   ].join('\n');
 
   const FRAG = [
     'uniform sampler2D uPuff;',
     'uniform vec3 uTint;',
+    'uniform vec3 uSunC;',
+    'uniform float uSunK;',
     'varying vec2 vUv;',
     'varying float vAlpha;',
     'varying float vShade;',
     'varying float vTop;',
+    'varying vec2 vSunUV;',
+    'varying float vScat;',
     'void main() {',
     '  vec4 t = texture2D(uPuff, vUv);',
     '  float a = min(1.0, t.a * vAlpha);',
     '  if (a < 0.003) discard;',
-    '  float top = mix(0.88, 1.12, vTop);',               // tops of puffs catch more light
-    '  vec3 col = uTint * vShade * top * (0.94 + 0.12 * t.r);',
+    '  float occ = (texture2D(uPuff, vUv + vSunUV * 0.09).a',
+    '    + texture2D(uPuff, vUv + vSunUV * 0.21).a',
+    '    + texture2D(uPuff, vUv + vSunUV * 0.36).a) * (1.0 / 3.0);',   // smoke between this point and the sun
+    '  float T = exp(-3.2 * occ);',                       // sunlight that reaches this point
+    '  vec3 sky = mix(vec3(0.46, 0.5, 0.58), vec3(0.96, 0.97, 1.0), vTop * vTop) * (0.94 + 0.12 * t.r);',   // cool sky fill: dark underside, bright top
+    '  vec3 light = sky + uSunC * uSunK * T * (0.25 + 0.75 * vTop);',
+    '  vec3 col = uTint * light * vShade + uSunC * vScat * 0.25 * T;',
     '  gl_FragColor = vec4(min(col, vec3(1.0)), a);',
     '}'
   ].join('\n');
@@ -242,7 +270,7 @@
 
       this.tex = makePuffTexture(seed ^ 0x9e3779b9);
       this.mat = new THREE.ShaderMaterial({
-        uniforms: { uPuff: { value: this.tex }, uTint: { value: this.tint } },
+        uniforms: { uPuff: { value: this.tex }, uTint: { value: this.tint }, uSunTo: SUN.to, uSunC: SUN.color, uSunK: SUN.k },
         vertexShader: VERT,
         fragmentShader: FRAG,
         transparent: true,
@@ -276,7 +304,7 @@
         const y = lerp(q.sy, q.ty, e) + 0.5 * wob * Math.sin(age * q.fy + q.py) + rise;
         const z = lerp(q.sz, q.tz, e) + wob * Math.cos(age * q.fz + q.pz);
         X[i] = x; Y[i] = y; Z[i] = z;
-        S[i] = q.size * (0.35 + 0.65 * e) * grow;
+        S[i] = q.size * (0.35 + 0.65 * e) * grow * (1 + 0.03 * Math.sin(age * 0.35 + q.px));   // slow breathing
         A[i] = q.alpha * clamp(p * 1.6, 0, 1) * fadeMul;
         R[i] = q.rot + q.spin * age;
         H[i] = q.shade;
@@ -548,5 +576,12 @@
     }
   }
 
-  JB.GrenadeFX = { SmokeCloud: SmokeCloud, FlashOverlay: FlashOverlay };
+  // Sets the sun the smoke is lit by (all clouds share it). toward: direction to the sun.
+  function setSun(toward, color, k) {
+    if (toward) SUN.to.value.copy(toward).normalize();
+    if (color) SUN.color.value.copy(color);
+    if (typeof k === 'number' && isFinite(k)) SUN.k.value = Math.max(0, k);
+  }
+
+  JB.GrenadeFX = { SmokeCloud: SmokeCloud, FlashOverlay: FlashOverlay, setSun: setSun };
 })();

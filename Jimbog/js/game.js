@@ -240,7 +240,14 @@
         if (JB.GrenadeFX && JB.GrenadeFX.FlashOverlay) this.flashFX = new JB.GrenadeFX.FlashOverlay(this.canvas);
       } else this.R.setLevel(this.level, map.env);
       this.R.scene.add(this.level.group);
+      this.decals = JB.Decals ? JB.Decals.build({ level: this.level, data, scene: this.R.scene, quality: q, mapId: map.id }) : null;
       this.shafts = this.level.group.getObjectByName('shafts');
+      // atmosphere: dust motes and campus sun shafts (js/atmos.js); optional
+      this.atmos = null;
+      if (JB.Atmos) {
+        try { this.atmos = JB.Atmos.build({ level: this.level, data, scene: this.R.scene, renderer: this.R.renderer, quality: q, mapId: map.id }); }
+        catch (e) { console.warn('Jimbog: atmosphere failed', e); this.atmos = null; }
+      }
       this.sky = null;
       if (map.env.sky && JB.Sky && data.backdrop) {
         try {
@@ -279,6 +286,8 @@
       const scene = this.R.scene;
       scene.remove(this.level.group);
       disposeTree(this.level.group);
+      if (this.decals) { this.decals.dispose(); this.decals = null; }
+      if (this.atmos) { this.atmos.dispose(); this.atmos = null; }
       if (this.sky) { scene.remove(this.sky.group); disposeTree(this.sky.group); this.sky = null; }
       for (const f of this.fans || []) { scene.remove(f); disposeTree(f); }
       this.fans = [];
@@ -887,6 +896,7 @@
       this.R.update(dt, performance.now() / 1000);
       if (this.sky && this.sky.update) this.sky.update(dt, this.R.camera);
       if (this.shafts) this.shafts.userData.shaft.uniforms.uTime.value = performance.now() / 1000;
+      if (this.atmos) this.atmos.update(dt, this.R.camera);
       this.fx.update(dt, this.R.camera);
       this.R.render();
       // a flashbang went off: freeze this frame as the after-image, then white out

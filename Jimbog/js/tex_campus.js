@@ -66,102 +66,129 @@
     }
   }
 
-  // ---------- 1. grass: mown lawn ----------
+  // ---------- 1. grass: muted olive lawn, dry yellow-green patches, bare earth, straw flecks ----------
+  // wdist: periodic distance between two coordinates on the unit tile (0..0.5).
+  const wdist = (a, b) => { const d = Math.abs(a - b); return Math.min(d, 1 - d); };
   function gen_grass(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const big = fbmN(N, 6, 6, 3, R), med = fbmN(N, 14, 14, 3, R);
-    const fine = vnoise(N, 300, 300, R), fib = vnoise(N, 180, 70, R);
+    const big = fbmN(N, 5, 5, 3, R), med = fbmN(N, 14, 14, 3, R), dry = fbmN(N, 11, 11, 3, R), bare = fbmN(N, 9, 9, 2, R);
+    const fine = vnoise(N, 300, 300, R), blade = vnoise(N, 170, 60, R);   // blade: thin across u, long down w
     each(N, (i) => {
-      const lp = sstep(0.6, 0.85, big[i]), dp = sstep(0.4, 0.15, big[i]);
-      const k = 1 + (med[i] - 0.5) * 0.12 + (fine[i] - 0.5) * 0.24 + (fib[i] - 0.5) * 0.2;
-      let r = lerp(0.44, 0.55, lp * 0.35), g = lerp(0.6, 0.69, lp * 0.35), b = lerp(0.28, 0.34, lp * 0.35);
-      r = lerp(r, 0.37, dp * 0.3); g = lerp(g, 0.52, dp * 0.3); b = lerp(b, 0.24, dp * 0.3);
+      const pb = sstep(0.6, 0.8, dry[i]) * 0.75;                // dry yellow-green patches
+      const bb = sstep(0.82, 0.92, bare[i]) * 0.45;                // worn bare earth
+      const lo = sstep(0.4, 0.7, big[i]) * 0.12;                 // deeper olive in patches
+      const k = 1 + (med[i] - 0.5) * 0.16 + (fine[i] - 0.5) * 0.22 + (blade[i] - 0.5) * 0.24;
+      let r = lerp(0.4 - lo, 0.56, pb), g = lerp(0.44 - lo, 0.56, pb), b = lerp(0.25 - lo * 0.5, 0.36, pb);
+      r = lerp(r, 0.44, bb); g = lerp(g, 0.39, bb); b = lerp(b, 0.27, bb);
       setC(C, i, r * k, g * k, b * k);
-      Hh[i] = 0.5 + (fine[i] - 0.5) * 0.12 + (fib[i] - 0.5) * 0.1 + (med[i] - 0.5) * 0.04;
+      Hh[i] = 0.5 + (fine[i] - 0.5) * 0.12 + (blade[i] - 0.5) * 0.1 + (med[i] - 0.5) * 0.04;
       RO[i] = 0.95 + (fine[i] - 0.5) * 0.03;
     });
-    for (let k = 0; k < 16; k++) {            // clover: small clusters of pale dots
-      const cu = R(), cw = R();
-      for (let d = 0; d < 3; d++) stamp(N, cu + (R() - 0.5) * 0.006, cw + (R() - 0.5) * 0.006, 1.3 / N, (i) => tintC(C, i, 0.66, 0.74, 0.5, 0.8));
-    }
-    for (let k = 0; k < 40; k++) {            // dry flecks
-      stamp(N, R(), R(), 0.9 / N, (i) => tintC(C, i, 0.66, 0.58, 0.33, 0.85));
-    }
+    for (let k = 0; k < 40; k++) stamp(N, R(), R(), 0.9 / N, (i) => tintC(C, i, 0.6, 0.55, 0.35, 0.8));   // straw flecks
+    for (let k = 0; k < 12; k++) stamp(N, R(), R(), 1.2 / N, (i) => tintC(C, i, 0.3, 0.27, 0.18, 0.6));  // dead tufts
     S.bump = 1.2;
   }
 
-  // ---------- 2. paving: 0.5 m concrete slabs, 4 x 4 per tile ----------
+  // ---------- 2. paving: big cracked concrete slabs (two bands of ~1 m, each split once) with grass in the joints ----------
   function gen_paving(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const tone = new Float32Array(16);
-    for (let k = 0; k < 16; k++) tone[k] = (R() - 0.5) * 0.07;
+    const hB = 0.5 + (R() - 0.5) * 0.16;                       // w of the joint between the two bands
+    const oB = [0.3 + R() * 0.4, 0.3 + R() * 0.4];            // u of the joint that splits each band
+    const tone = new Float32Array(4);
+    for (let k = 0; k < 4; k++) tone[k] = (R() - 0.5) * 0.08;
     const mot = fbmN(N, 3, 3, 3, R), agg = vnoise(N, 300, 300, R), blot = fbmN(N, 6, 6, 3, R);
+    const tuftA = vnoise(N, 200, 200, R), tuftB = fbmN(N, 24, 24, 2, R);
+    const CR = new Float32Array(N * N);                        // cracks: max over walks, applied once
+    for (let k = 0; k < 10; k++) {
+      walk(N, R, R(), R(), 60 + ((R() * 50) | 0), 0.0017, 1.2 / N, 0.35, undefined, (i, t) => { const f = 1 - t; if (f > CR[i]) CR[i] = f; });
+    }
     each(N, (i, u, w) => {
-      const su = u * 4, sw = w * 4, iu = Math.floor(su), iw = Math.floor(sw);
-      const dj = Math.min(Math.min(su - iu, iu + 1 - su), Math.min(sw - iw, iw + 1 - sw)) / 4;
-      const joint = 1 - sstep(1.0 / N, 2.2 / N, dj);
-      const k = (1 + tone[iw * 4 + iu]) * (1 + (mot[i] - 0.5) * 0.07) * (1 + (agg[i] - 0.5) * 0.09);
-      const st = sstep(0.6, 0.8, blot[i]) * 0.06;
-      const m = k * (1 - st);
-      setC(C, i, lerp(0.7 * m, 0.4, joint), lerp(0.68 * m, 0.39, joint), lerp(0.635 * m * (1 - 0.5 * st), 0.36, joint));
-      Hh[i] = 0.5 + (agg[i] - 0.5) * 0.04 + 0.08 * sstep(0, 3 / N, dj) - 0.12 * joint;
-      RO[i] = 0.7 + (mot[i] - 0.5) * 0.1 + 0.2 * joint;
+      const band = w < hB ? 0 : 1, ou = oB[band];
+      const dj = Math.min(Math.min(w, 1 - w, Math.abs(w - hB)), Math.min(u, 1 - u, Math.abs(u - ou)));
+      const joint = 1 - sstep(0.0038 + 0.0016 * tuftB[i], 0.0068 + 0.0016 * tuftB[i], dj);
+      const rim = (1 - sstep(0.0075, 0.02, dj)) * (1 - joint);
+      const slab = band * 2 + (u >= ou ? 1 : 0);
+      const tu = tuftA[i] * 0.6 + tuftB[i] * 0.4;
+      const tAmt = sstep(0.56, 0.8, tu);                       // where grass grows
+      const k = (1 + tone[slab]) * (1 + (mot[i] - 0.5) * 0.08) * (1 + (agg[i] - 0.5) * 0.1) * (1 - 0.12 * sstep(0.6, 0.82, blot[i]));
+      const cr = CR[i];
+      const dk = (1 - 0.35 * cr) * (1 - 0.1 * rim);
+      let sr = 0.55 * k * dk, sg = 0.54 * k * dk, sb = 0.5 * k * dk;
+      const wd = Math.max(cr * 0.8, rim * 0.6) * tAmt;         // weeds in cracks and at the rim
+      sr = lerp(sr, 0.4, wd); sg = lerp(sg, 0.44, wd); sb = lerp(sb, 0.25, wd);
+      const jt = tAmt * (0.6 + 0.4 * tuftA[i]);                // joints: dark dirt with grass tufts
+      setC(C, i, lerp(sr, lerp(0.3, 0.38, jt), joint), lerp(sg, lerp(0.29, 0.44, jt), joint), lerp(sb, lerp(0.22, 0.24, jt), joint));
+      Hh[i] = 0.55 + (agg[i] - 0.5) * 0.05 - 0.28 * joint - 0.08 * rim - 0.2 * cr;
+      RO[i] = 0.86 + (mot[i] - 0.5) * 0.08 + 0.08 * joint;
     });
     S.bump = 4;
   }
 
-  // ---------- 3. asphalt ----------
+  // ---------- 3. asphalt: faded road, tar patches with sealed rings, cracks, aggregate chips ----------
   function gen_asphalt(S, R) {
-    const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const mot = fbmN(N, 4, 4, 3, R), fine = vnoise(N, 380, 380, R), agg = vnoise(N, 180, 180, R);
-    const thr = quant(agg, 0.9);                       // about 10% of pixels are aggregate chips
-    each(N, (i) => {
-      const chip = sstep(thr - 0.015, thr + 0.015, agg[i]);
-      const base = 0.16 * (1 + (mot[i] - 0.5) * 0.35) * (1 + (fine[i] - 0.5) * 0.4);
-      const v = lerp(base, 0.34 * (0.9 + 0.2 * fine[i]), chip);
-      setC(C, i, v * 0.98, v, v * 1.04);
-      Hh[i] = 0.4 + 0.12 * chip + (fine[i] - 0.5) * 0.12;
-      RO[i] = lerp(0.9 + (mot[i] - 0.5) * 0.1, 0.7, chip);
+    const N = S.N, C = S.c, Hh = S.h, RO = S.r, NP = 4;
+    const mot = fbmN(N, 4, 4, 3, R), fine = vnoise(N, 380, 380, R), agg = vnoise(N, 180, 180, R), fade = fbmN(N, 3, 3, 2, R), rag = vnoise(N, 60, 60, R);
+    const thr = quant(agg, 0.94);                              // about 6% of pixels are aggregate chips
+    const PC = new Float32Array(NP * 4), TONE = new Float32Array(NP);   // patch: centre u, w, half width, half height
+    for (let p = 0; p < NP; p++) {
+      PC[p * 4] = R(); PC[p * 4 + 1] = R(); PC[p * 4 + 2] = 0.05 + R() * 0.09; PC[p * 4 + 3] = 0.04 + R() * 0.07;
+      TONE[p] = 0.72 + R() * 0.16;
+    }
+    each(N, (i, u, w) => {
+      let pm = 0, pt = 1, ring = 0;
+      for (let p = 0; p < NP; p++) {
+        const dx = wdist(u, PC[p * 4]) / PC[p * 4 + 2], dy = wdist(w, PC[p * 4 + 1]) / PC[p * 4 + 3];
+        const d = Math.max(dx, dy) + (rag[i] - 0.5) * 0.3;     // ragged patch edge
+        const inside = 1 - sstep(0.94, 1.0, d);
+        if (inside > pm) { pm = inside; pt = TONE[p]; }
+        ring = Math.max(ring, 1 - sstep(0.012, 0.04, Math.abs(d - 0.95)));
+      }
+      const base = 0.29 * (1 + (mot[i] - 0.5) * 0.3) * (1 + (fine[i] - 0.5) * 0.3) * (1 + 0.14 * sstep(0.55, 0.78, fade[i]));
+      const chip = sstep(thr - 0.01, thr + 0.01, agg[i]);
+      let v = lerp(base, 0.4 * (0.9 + 0.2 * fine[i]), chip * 0.6);
+      v *= 1 - pm * (1 - pt);                                  // tar patches are darker
+      v *= 1 - 0.3 * ring;                                     // sealed rings
+      setC(C, i, v * 0.98, v * 0.99, v * 1.04);
+      Hh[i] = 0.45 + 0.1 * chip + 0.04 * pm - 0.08 * ring + (fine[i] - 0.5) * 0.12;
+      RO[i] = lerp(lerp(0.92 + (mot[i] - 0.5) * 0.1, 0.78, pm * 0.5), 0.6, chip * 0.6);
     });
-    const CR = new Float32Array(N * N);                // crack field: max over stamps, applied once
-    for (let k = 0; k < 5; k++) {                      // faint cracks, ~2 px wide and continuous
-      walk(N, R, R(), R(), 150 + ((R() * 100) | 0), 0.0016, 1.0 / N, 1.1, undefined, (i, t) => {
-        const f = 1 - t; if (f > CR[i]) CR[i] = f;
-      });
+    const CR = new Float32Array(N * N);                        // faint cracks, ~2 px wide and continuous
+    for (let k = 0; k < 6; k++) {
+      walk(N, R, R(), R(), 120 + ((R() * 80) | 0), 0.0016, 1.0 / N, 1.1, undefined, (i, t) => { const f = 1 - t; if (f > CR[i]) CR[i] = f; });
     }
     for (let i = 0; i < N * N; i++) if (CR[i] > 0) { shadeC(C, i, 1 - 0.4 * CR[i]); Hh[i] -= 0.15 * CR[i]; }
-    for (let k = 0; k < 7; k++) {                      // oil spots (softer than before)
+    for (let k = 0; k < 4; k++) {                              // oil spots
       stamp(N, R(), R(), 0.02 + R() * 0.035, (i, t) => {
-        const f = (1 - t * t) * 0.4; shadeC(C, i, 1 - f); RO[i] = lerp(RO[i], 0.35, f * 0.8);
+        const f = (1 - t * t) * 0.3; shadeC(C, i, 1 - f); RO[i] = lerp(RO[i], 0.35, f * 0.8);
       });
     }
     S.bump = 3;
   }
 
-  // ---------- 4-6. sports courts ----------
+  // ---------- 4-6. sports courts: sun-faded acrylic with worn scuffs ----------
   function courtGen(S, R, base, rough, trowel, mottle) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const grit = vnoise(N, 420, 420, R), grit2 = vnoise(N, 200, 200, R), mot = fbmN(N, 3, 3, 3, R);
+    const grit = vnoise(N, 420, 420, R), grit2 = vnoise(N, 200, 200, R), mot = fbmN(N, 3, 3, 3, R), wear = fbmN(N, 9, 9, 3, R);
     each(N, (i) => {
       const g = grit[i] * 0.6 + grit2[i] * 0.4;
-      const k = (1 + (mot[i] - 0.5) * mottle) * (1 + (g - 0.5) * 0.22);
-      setC(C, i, base[0] * k, base[1] * k, base[2] * k);
+      const fd = sstep(0.56, 0.8, wear[i]) * 0.22;              // sun-faded: lighter and greyer
+      const k = (1 + (mot[i] - 0.5) * mottle) * (1 + (g - 0.5) * 0.2);
+      setC(C, i, lerp(base[0], 0.55, fd) * k, lerp(base[1], 0.55, fd) * k, lerp(base[2], 0.54, fd) * k);
       Hh[i] = 0.5 + (g - 0.5) * 0.25;
-      RO[i] = rough + (g - 0.5) * 0.12;
+      RO[i] = rough + (g - 0.5) * 0.12 + 0.05 * fd;
     });
-    // Wear arcs and trowel sweeps are accumulated into one additive field first (walk() stamps
-    // a pixel many times, so applying the shade per stamp would compound), then applied once.
-    const F = new Float32Array(N * N);
-    for (let k = 0; k < 2; k++) {                      // very faint wear arcs
-      walk(N, R, R(), R(), 90, 0.005, 0.03, 0.4, undefined, (i, t) => { const f = 1 - t; if (f > F[i]) F[i] = f; });
-    }
+    // Wear arcs (lighter) and scuffs (darker) are accumulated into fields first (walk() stamps a pixel many
+    // times), then applied once.
+    const F = new Float32Array(N * N), D = new Float32Array(N * N);
+    for (let k = 0; k < 3; k++) walk(N, R, R(), R(), 90, 0.005, 0.03, 0.4, undefined, (i, t) => { const f = 1 - t; if (f > F[i]) F[i] = f; });
+    for (let k = 0; k < 6; k++) walk(N, R, R(), R(), 60, 0.004, 0.01, 0.6, undefined, (i, t) => { const f = 1 - t; if (f > D[i]) D[i] = f; });
     for (let i = 0; i < N * N; i++) {
-      shadeC(C, i, 1 + 0.02 * F[i]);
-      RO[i] -= 0.03 * F[i];
+      shadeC(C, i, (1 + 0.04 * F[i]) * (1 - 0.07 * D[i]));
+      RO[i] += 0.04 * D[i] - 0.03 * F[i];
     }
     if (trowel) {
       const T = new Float32Array(N * N);
-      for (let k = 0; k < 40; k++) {                   // trowel sweeps
+      for (let k = 0; k < 40; k++) {                           // trowel sweeps
         const sg = R() < 0.5 ? 1 : -1;
         walk(N, R, R(), R(), 30, 0.008, 2.2 / N, 0.3, R() * TAU, (i, t) => { T[i] += sg * (1 - t) * 0.5; });
       }
@@ -169,17 +196,21 @@
     }
     S.bump = 2;
   }
-  function gen_court_blue(S, R) { courtGen(S, R, [0.231, 0.435, 0.659], 0.55, false, 0.05); }
-  function gen_court_green(S, R) { courtGen(S, R, [0.247, 0.49, 0.353], 0.55, false, 0.05); }
-  function gen_court_grey(S, R) { courtGen(S, R, [0.68, 0.675, 0.665], 0.7, true, 0.08); }
+  function gen_court_blue(S, R) { courtGen(S, R, [0.3, 0.43, 0.52], 0.6, false, 0.05); }
+  function gen_court_green(S, R) { courtGen(S, R, [0.3, 0.44, 0.38], 0.6, false, 0.05); }
+  function gen_court_grey(S, R) { courtGen(S, R, [0.6, 0.6, 0.58], 0.7, true, 0.08); }
 
   // ---------- 7-8. face brick, stretcher bond: 8 bricks x 24 courses per tile ----------
-  function genBrick(S, R, lo, hi, mortarC) {
+  // Worn brick: soot and grime running down from the course above, pale efflorescence near the mortar,
+  // chips that break through to the clay, and a few missing chunks.
+  function genBrick(S, R, lo, hi, mortarC, clayC) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r, ROWS = 24, COLS = 8;
     const tone = new Float32Array(ROWS * COLS), tint = new Float32Array(ROWS * COLS);
-    for (let k = 0; k < tone.length; k++) { tone[k] = R(); tint[k] = (R() - 0.5) * 0.03; }
+    for (let k = 0; k < tone.length; k++) { tone[k] = R(); tint[k] = (R() - 0.5) * 0.04; }
     const mot = fbmN(N, 16, 16, 3, R), fine = vnoise(N, 150, 150, R), soot = fbmN(N, 3, 3, 3, R);
-    const pit = vnoise(N, 260, 260, R), pitT = quant(pit, 0.97);
+    const pit = vnoise(N, 260, 260, R), pitT = quant(pit, 0.975);
+    const streak = vnoise(N, 110, 5, R);                      // long streaks down the wall (narrow in u, long in w)
+    const bloom = fbmN(N, 8, 8, 3, R);
     each(N, (i, u, w) => {
       const rw = w * ROWS, row = Math.floor(rw), fy = rw - row;
       const off = (row & 1) ? 0.5 : 0;
@@ -189,67 +220,88 @@
       const bevel = sstep(0.0028, 0.0075, e);
       const bi = row * COLS + wrapI(col, COLS);
       const t = tone[bi];
-      const sootA = sstep(0.6, 0.9, soot[i]) * 0.08;
-      const k = (1 + tint[bi]) * (0.94 + 0.12 * mot[i]) * (0.97 + 0.06 * fine[i]) * (1 - sootA);
-      const pk = sstep(pitT, pitT + 0.02, pit[i]) * 0.25;
+      const sootA = sstep(0.5, 0.85, soot[i]) * 0.14 + sstep(0.6, 0.9, streak[i]) * 0.12;
+      const k = (1 + tint[bi]) * (0.92 + 0.14 * mot[i]) * (0.96 + 0.08 * fine[i]) * (1 - sootA);
+      const bl = sstep(0.66, 0.85, bloom[i]) * (1 - sstep(0.004, 0.01, e)) * 0.45;   // salt bloom at the arrises
       let r = lerp(lo[0], hi[0], t) * k, g = lerp(lo[1], hi[1], t) * k, b = lerp(lo[2], hi[2], t) * k;
-      r *= 1 - pk; g *= 1 - pk; b *= 1 - pk;
-      const mk = 0.92 + 0.1 * fine[i];
+      r = lerp(r, 0.8, bl * 0.5); g = lerp(g, 0.78, bl * 0.5); b = lerp(b, 0.72, bl * 0.5);
+      const pk = sstep(pitT, pitT + 0.01, pit[i]);              // chips: the clay shows through
+      r = lerp(r, clayC[0], pk * 0.8); g = lerp(g, clayC[1], pk * 0.8); b = lerp(b, clayC[2], pk * 0.8);
+      const mk = (0.8 + 0.1 * fine[i]) * (1 - 0.2 * sootA);     // mortar: pale grey, grimy
       setC(C, i, lerp(r, mortarC[0] * mk, mort), lerp(g, mortarC[1] * mk, mort), lerp(b, mortarC[2] * mk, mort));
-      Hh[i] = lerp(0.55 + 0.12 * bevel + (mot[i] - 0.5) * 0.04 + (fine[i] - 0.5) * 0.03, 0.22, mort);
-      RO[i] = lerp(0.8 + (fine[i] - 0.5) * 0.12 + (soot[i] - 0.5) * 0.1, 0.95, mort);
+      Hh[i] = lerp(0.55 + 0.12 * bevel + (mot[i] - 0.5) * 0.04 + (fine[i] - 0.5) * 0.03 - 0.2 * pk, 0.22, mort);
+      RO[i] = lerp(0.82 + (fine[i] - 0.5) * 0.12 + (soot[i] - 0.5) * 0.1 + 0.08 * pk, 0.95, mort);
     });
+    // a few missing chunks: irregular holes showing the clay
+    for (let k = 0; k < 4; k++) {
+      stamp(N, R(), R(), 0.006 + R() * 0.005, (i, t) => {
+        if (t < 0.8 + 0.25 * (fine[i] - 0.5)) { setC(C, i, clayC[0] * 0.9, clayC[1] * 0.9, clayC[2] * 0.9); Hh[i] = 0.3; RO[i] = 0.95; }
+      });
+    }
     S.bump = 3;
   }
-  function gen_brick_tan(S, R) { genBrick(S, R, [0.851, 0.692, 0.47], [0.941, 0.806, 0.604], [0.77, 0.77, 0.75]); }
-  function gen_brick_dark(S, R) { genBrick(S, R, [0.562, 0.402, 0.226], [0.742, 0.552, 0.346], [0.74, 0.73, 0.7]); }
+  function gen_brick_tan(S, R) { genBrick(S, R, [0.54, 0.45, 0.35], [0.7, 0.6, 0.47], [0.6, 0.58, 0.54], [0.42, 0.32, 0.25]); }
+  function gen_brick_dark(S, R) { genBrick(S, R, [0.38, 0.3, 0.24], [0.5, 0.41, 0.31], [0.5, 0.48, 0.45], [0.3, 0.22, 0.17]); }
 
-  // ---------- 9. render ----------
+  // ---------- 9. render: sun-bleached cream plaster with peeled grey patches, stains and cracks ----------
   function gen_render_cream(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const mot = fbmN(N, 4, 4, 3, R), trow = vnoise(N, 300, 300, R), streak = vnoise(N, 70, 3, R);
+    const mot = fbmN(N, 4, 4, 3, R), trow = vnoise(N, 300, 300, R), streak = vnoise(N, 70, 3, R), wash = fbmN(N, 2, 2, 2, R);
+    const patch = fbmN(N, 8, 8, 4, R), pfine = vnoise(N, 200, 200, R), stain = vnoise(N, 40, 2, R);
+    const pthr = quant(patch, 0.93);                            // about 7% of the wall is peeled back to the grey coat
     each(N, (i) => {
-      const st = sstep(0.6, 0.78, streak[i]) * 0.05;       // rain streaks, running down
-      const k = (1 + (mot[i] - 0.5) * 0.03 + (trow[i] - 0.5) * 0.012) * (1 - st);
-      setC(C, i, 0.949 * k, 0.926 * k, 0.866 * k * (1 - 0.5 * st));
-      Hh[i] = 0.5 + (trow[i] - 0.5) * 0.03;
-      RO[i] = 0.9 + (trow[i] - 0.5) * 0.06;
+      const st = sstep(0.6, 0.78, streak[i]) * 0.04 + sstep(0.62, 0.85, stain[i]) * 0.03;   // rain streaks
+      const pm = sstep(pthr - 0.01, pthr + 0.01, patch[i] + (pfine[i] - 0.5) * 0.05);       // peeled patches
+      const k = (1 + (mot[i] - 0.5) * 0.05 + (trow[i] - 0.5) * 0.03 + (wash[i] - 0.5) * 0.06) * (1 - st);
+      let r = 0.78 * k, g = 0.745 * k, b = 0.665 * k * (1 - 0.5 * st);
+      const pv = 0.9 + 0.2 * pfine[i];
+      r = lerp(r, 0.6 * pv, pm * 0.85); g = lerp(g, 0.58 * pv, pm * 0.85); b = lerp(b, 0.55 * pv, pm * 0.85);
+      setC(C, i, r, g, b);
+      Hh[i] = 0.5 + (trow[i] - 0.5) * 0.03 - 0.12 * pm;
+      RO[i] = lerp(0.88 + (trow[i] - 0.5) * 0.06, 0.95, pm);
     });
-    for (let k = 0; k < 30; k++) {                        // trowel marks, very low contrast
+    const CR = new Float32Array(N * N);                         // hairline cracks, applied once
+    for (let k = 0; k < 6; k++) {
+      walk(N, R, R(), R(), 80, 0.0016, 1.0 / N, 0.8, undefined, (i, t) => { const f = 1 - t; if (f > CR[i]) CR[i] = f; });
+    }
+    for (let i = 0; i < N * N; i++) if (CR[i] > 0) { shadeC(C, i, 1 - 0.3 * CR[i]); Hh[i] -= 0.2 * CR[i]; }
+    for (let k = 0; k < 30; k++) {                              // trowel marks, very low contrast
       const sg = R() < 0.5 ? 1 : -1;
       walk(N, R, R(), R(), 25, 0.008, 2 / N, 0.3, R() * TAU, (i, t) => { shadeC(C, i, 1 + sg * 0.01 * (1 - t)); });
     }
     S.bump = 1.5;
   }
 
-  // ---------- 10-12. panels (cladding, spandrel) ----------
-  // nv / nh = number of panels across u / w per tile. Joints are shadowed grooves.
-  function genPanels(S, R, base, rough, nv, nh, wave) {
+  // ---------- 10-12. panels (cladding, spandrel): weathered, with grime streaks and sun fade ----------
+  // nv / nh = number of panels across u / w per tile. Joints are shadowed grooves. grime = streak and dirt strength.
+  function genPanels(S, R, base, rough, nv, nh, wave, grime) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
     const tint = new Float32Array(nv * nh);
-    for (let k = 0; k < tint.length; k++) tint[k] = (R() - 0.5) * 0.02;
+    for (let k = 0; k < tint.length; k++) tint[k] = (R() - 0.5) * 0.03;
     const mot = fbmN(N, 2, 2, 2, R), fine = vnoise(N, 240, 240, R), dim = fbmN(N, 4, 4, 2, R);
+    const streak = vnoise(N, 90, 4, R), dirt = fbmN(N, 5, 5, 3, R);
     each(N, (i, u, w) => {
       const du = Math.abs(sdist(u, nv)), dw = Math.abs(sdist(w, nh));
       const dj = Math.min(du, dw);
       const joint = 1 - sstep(1.2 / N, 2.6 / N, dj);
       const pidx = Math.floor(w * nh) * nv + Math.floor(u * nv);
       const sheen = 1 + 0.012 * Math.cos(TAU * u * nv);
-      const k = (1 + tint[pidx]) * (1 + (mot[i] - 0.5) * 0.03) * (1 + (fine[i] - 0.5) * 0.012) * sheen * (1 - 0.42 * joint);
+      const gs = grime * sstep(0.56, 0.8, streak[i]) + grime * 0.6 * sstep(0.6, 0.85, dirt[i]);   // run-off and dirt
+      const k = (1 + tint[pidx]) * (1 + (mot[i] - 0.5) * 0.03) * (1 + (fine[i] - 0.5) * 0.012) * sheen * (1 - 0.42 * joint) * (1 - gs * 0.45);
       setC(C, i, base[0] * k, base[1] * k, base[2] * k);
       Hh[i] = 0.5 + (dim[i] - 0.5) * wave - 0.3 * joint + 0.06 * sstep(0, 3 / N, dj);
-      RO[i] = rough + (fine[i] - 0.5) * 0.05 + 0.25 * joint;
+      RO[i] = rough + (fine[i] - 0.5) * 0.05 + 0.25 * joint + 0.1 * gs;
     });
     S.bump = 2;
   }
-  function gen_cladding_white(S, R) { genPanels(S, R, [0.945, 0.966, 0.978], 0.4, 2, 1, 0.04); }
-  function gen_cladding_bluegrey(S, R) { genPanels(S, R, [0.632, 0.699, 0.779], 0.4, 2, 1, 0.04); }
-  function gen_panel_green(S, R) { genPanels(S, R, [0.773, 0.836, 0.809], 0.45, 2, 2, 0.02); }
+  function gen_cladding_white(S, R) { genPanels(S, R, [0.78, 0.78, 0.75], 0.45, 2, 1, 0.04, 0.12); }
+  function gen_cladding_bluegrey(S, R) { genPanels(S, R, [0.46, 0.52, 0.57], 0.45, 2, 1, 0.04, 0.12); }
+  function gen_panel_green(S, R) { genPanels(S, R, [0.4, 0.53, 0.47], 0.5, 2, 2, 0.02, 0.1); }
 
-  // ---------- 13. flat roof membrane ----------
+  // ---------- 13. flat roof membrane: dirty bitumen, ponding stains, granules, sheet seams ----------
   function gen_roof_membrane(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const mot = fbmN(N, 3, 3, 3, R), dirt = fbmN(N, 7, 7, 3, R), fine = vnoise(N, 250, 250, R), peb = vnoise(N, 170, 170, R);
+    const mot = fbmN(N, 3, 3, 3, R), dirt = fbmN(N, 7, 7, 3, R), fine = vnoise(N, 250, 250, R), peb = vnoise(N, 170, 170, R), pud = fbmN(N, 4, 4, 2, R);
     const pthr = quant(peb, 0.96);
     each(N, (i, u, w) => {
       // overlapping sheet seams every 1 m: a shadow just before each seam and a dark seam line
@@ -259,63 +311,75 @@
       const edU = 1 - sstep(0.0008, 0.0022, Math.abs(su)), edW = 1 - sstep(0.0008, 0.0022, Math.abs(sw));
       const shadow = Math.max(shU, shW), edge = Math.max(edU, edW);
       const pb = sstep(pthr, pthr + 0.02, peb[i]);
-      const dA = sstep(0.6, 0.85, dirt[i]) * 0.08;
-      let v = 0.56 * (1 + (mot[i] - 0.5) * 0.05) * (1 - dA) * (1 - 0.12 * shadow) * (1 - 0.3 * edge);
-      v = lerp(v, 0.44 + 0.2 * fine[i], pb * 0.8);
+      const dA = sstep(0.55, 0.85, dirt[i]) * 0.14;
+      const pd = sstep(0.6, 0.8, pud[i]) * 0.1;
+      let v = 0.4 * (1 + (mot[i] - 0.5) * 0.06) * (1 - dA) * (1 - pd) * (1 - 0.12 * shadow) * (1 - 0.3 * edge);
+      v = lerp(v, 0.5 + 0.1 * fine[i], pb * 0.45);
       setC(C, i, v, v * 0.995, v * 0.98);
       Hh[i] = 0.5 + (fine[i] - 0.5) * 0.08 + 0.2 * pb - 0.1 * edge;
-      RO[i] = 0.72 + (mot[i] - 0.5) * 0.08 + 0.1 * edge;
+      RO[i] = 0.74 + (mot[i] - 0.5) * 0.08 + 0.1 * edge;
     });
     S.bump = 2.5;
   }
 
-  // ---------- 14. zincalume corrugated roof: 26 ribs per tile running along v ----------
+  // ---------- 14. zincalume corrugated roof: 26 ribs per tile running along v; weathered, with rust patches ----------
   function gen_roof_metal(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r, RIBS = 26;
-    const mot = fbmN(N, 4, 4, 3, R), fine = vnoise(N, 260, 260, R), streak = vnoise(N, 60, 4, R), spot = vnoise(N, 120, 120, R);
+    const mot = fbmN(N, 4, 4, 3, R), fine = vnoise(N, 260, 260, R), streak = vnoise(N, 60, 4, R), spot = vnoise(N, 120, 120, R), rust = fbmN(N, 6, 6, 3, R);
     each(N, (i, u) => {
       const t = u * RIBS, ph = t - Math.floor(t);
       const prof = Math.sin(TAU * ph);
       const top = (prof + 1) * 0.5;
-      const k = (0.92 + (mot[i] - 0.5) * 0.12) * (0.93 + (fine[i] - 0.5) * 0.2) * (0.85 + 0.25 * top) * (1 - 0.06 * sstep(0.6, 0.8, streak[i]));
-      setC(C, i, 0.66 * k, 0.69 * k, 0.72 * k);
+      const rs = sstep(0.7, 0.86, rust[i]) * 0.6;              // rust-brown patches
+      const k = (0.92 + (mot[i] - 0.5) * 0.12) * (0.93 + (fine[i] - 0.5) * 0.2) * (0.85 + 0.25 * top) * (1 - 0.12 * sstep(0.55, 0.8, streak[i]));
+      let r = 0.56 * k, g = 0.59 * k, b = 0.62 * k;
+      r = lerp(r, 0.5 * k, rs); g = lerp(g, 0.4 * k, rs); b = lerp(b, 0.34 * k, rs);
+      setC(C, i, r, g, b);
       Hh[i] = 0.5 + 0.25 * prof + (spot[i] - 0.5) * 0.02;
-      RO[i] = 0.34 + (fine[i] - 0.5) * 0.08 + (mot[i] - 0.5) * 0.08;
+      RO[i] = 0.4 + (fine[i] - 0.5) * 0.08 + (mot[i] - 0.5) * 0.08 + 0.2 * rs;
     });
     S.bump = 5;
   }
 
-  // ---------- 15. carpet tiles: 0.5 m, 4 per tile ----------
+
+
+  // ---------- 15. carpet tiles: 0.5 m, 4 per tile; worn lanes, stains ----------
   function gen_carpet_grey(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const mot = fbmN(N, 4, 4, 3, R), fib = vnoise(N, 300, 300, R), nap = vnoise(N, 240, 60, R);
+    const mot = fbmN(N, 4, 4, 3, R), fib = vnoise(N, 300, 300, R), nap = vnoise(N, 240, 60, R), wear = fbmN(N, 3, 3, 2, R), stain = fbmN(N, 6, 6, 3, R);
     each(N, (i, u, w) => {
       const du = Math.abs(sdist(u, 4)), dw = Math.abs(sdist(w, 4));
       const seam = 1 - sstep(0.5 / N, 1.6 / N, Math.min(du, dw));
-      const k = (1 + (mot[i] - 0.5) * 0.08) * (0.93 + (fib[i] - 0.5) * 0.14) * (0.95 + (nap[i] - 0.5) * 0.1) * (1 - 0.04 * seam);
-      setC(C, i, 0.36 * k, 0.4 * k, 0.45 * k);
+      const wr = sstep(0.55, 0.8, wear[i]) * 0.1;               // trodden lanes, slightly lighter
+      const st = sstep(0.66, 0.86, stain[i]) * 0.12;            // dark stains
+      const k = (1 + (mot[i] - 0.5) * 0.08) * (0.93 + (fib[i] - 0.5) * 0.14) * (0.95 + (nap[i] - 0.5) * 0.1) * (1 - 0.04 * seam) * (1 + wr) * (1 - st);
+      setC(C, i, 0.34 * k, 0.37 * k, 0.41 * k);
       Hh[i] = 0.5 + (fib[i] - 0.5) * 0.08 + (nap[i] - 0.5) * 0.05 - 0.05 * seam;
       RO[i] = 0.95 + (fib[i] - 0.5) * 0.04;
     });
     S.bump = 2;
   }
 
-  // ---------- 16. vinyl: pale speckled, 6 x 6 faint seams per tile (0.33 m) ----------
+  // ---------- 16. vinyl: grimy off-white, faint seams, scuffs and chips, 6 x 6 tiles per tile (0.33 m) ----------
   function gen_lino(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
-    const mot = fbmN(N, 3, 3, 3, R), fine = vnoise(N, 260, 260, R);
+    const mot = fbmN(N, 3, 3, 3, R), fine = vnoise(N, 260, 260, R), dirt = fbmN(N, 5, 5, 3, R);
     each(N, (i, u, w) => {
       const du = Math.abs(sdist(u, 6)), dw = Math.abs(sdist(w, 6));
       const seam = 1 - sstep(0.5 / N, 1.3 / N, Math.min(du, dw));
-      const k = (1 + (mot[i] - 0.5) * 0.06) * (1 + (fine[i] - 0.5) * 0.04) * (1 - 0.06 * seam);
-      setC(C, i, 0.8 * k, 0.8 * k, 0.78 * k);
+      const dA = sstep(0.55, 0.85, dirt[i]) * 0.1;              // grime
+      const k = (1 + (mot[i] - 0.5) * 0.06) * (1 + (fine[i] - 0.5) * 0.04) * (1 - 0.06 * seam) * (1 - dA);
+      setC(C, i, 0.72 * k, 0.71 * k, 0.67 * k);
       Hh[i] = 0.5 + (fine[i] - 0.5) * 0.03 - 0.05 * seam;
-      RO[i] = 0.4 + (fine[i] - 0.5) * 0.08 + 0.1 * seam;
+      RO[i] = 0.42 + (fine[i] - 0.5) * 0.08 + 0.1 * seam + 0.06 * dA * 10;
     });
-    const chips = [[0.25, 0.45, 0.6], [0.62, 0.36, 0.26], [0.3, 0.5, 0.36], [0.36, 0.34, 0.32], [0.86, 0.8, 0.5], [0.52, 0.3, 0.45]];
-    for (let k = 0; k < 420; k++) {
+    const SC = new Float32Array(N * N);                         // scuff arcs: max over walks, applied once
+    for (let k = 0; k < 14; k++) walk(N, R, R(), R(), 40, 0.006, 0.9 / N, 0.5, undefined, (i, t) => { const f = 1 - t; if (f > SC[i]) SC[i] = f; });
+    for (let i = 0; i < N * N; i++) if (SC[i] > 0) shadeC(C, i, 1 - 0.1 * SC[i]);
+    const chips = [[0.4, 0.5, 0.55], [0.55, 0.42, 0.36], [0.45, 0.5, 0.4], [0.5, 0.48, 0.46], [0.66, 0.62, 0.45], [0.5, 0.42, 0.5]];
+    for (let k = 0; k < 160; k++) {
       const c = chips[(R() * chips.length) | 0], rad = (1.8 + R() * 3.2) / N;
-      stamp(N, R(), R(), rad, (i, t) => { tintC(C, i, c[0], c[1], c[2], 0.4 * (1 - 0.4 * t * t)); Hh[i] = 0.5 + 0.03 * (1 - t); });
+      stamp(N, R(), R(), rad, (i, t) => { tintC(C, i, c[0], c[1], c[2], 0.22 * (1 - 0.4 * t * t)); Hh[i] = 0.5 + 0.03 * (1 - t); });
     }
     S.bump = 1.5;
   }
@@ -342,22 +406,22 @@
       const endJ = 1 - sstep(0.5 / N, 1.3 / N, du);
       const kk = (1 + btint[k]) * (0.93 + 0.1 * g1[i]) * (0.96 + 0.12 * (g2[i] - 0.5)) * (1 + (fine[i] - 0.5) * 0.03);
       const dk = 1 - 0.35 * Math.max(seam, endJ);
-      setC(C, i, 0.95 * kk * dk, 0.76 * kk * dk, 0.52 * kk * dk);
+      setC(C, i, 0.82 * kk * dk, 0.67 * kk * dk, 0.5 * kk * dk);
       Hh[i] = 0.6 + (g1[i] - 0.5) * 0.04 - 0.15 * seam - 0.1 * endJ;
-      RO[i] = 0.35 + (g1[i] - 0.5) * 0.08 + 0.2 * seam;
+      RO[i] = 0.38 + (g1[i] - 0.5) * 0.08 + 0.2 * seam;
     });
     S.bump = 3;
   }
 
-  // ---------- 18. weathered outdoor timber: 14 planks per tile, grain along v ----------
+  // ---------- 18. weathered outdoor timber: 14 planks per tile, grain along v; grey-brown, bleached, split ----------
   function gen_timber(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r, NP = 14;
     const grain = vnoise(N, 70, 3, R), grain2 = vnoise(N, 180, 6, R), weather = fbmN(N, 4, 4, 3, R), fine = vnoise(N, 220, 220, R);
     each(N, (i, u) => {
       const seam = 1 - sstep(1.0 / N, 2.4 / N, Math.abs(sdist(u, NP)));
-      const bleach = sstep(0.5, 0.75, weather[i]) * 0.3;
+      const bleach = sstep(0.5, 0.75, weather[i]) * 0.35;
       const k = (0.92 + (grain[i] - 0.5) * 0.24 + (grain2[i] - 0.5) * 0.12) * (0.94 + (fine[i] - 0.5) * 0.1) * (1 - 0.5 * seam);
-      setC(C, i, lerp(0.44, 0.6, bleach) * k, lerp(0.4, 0.57, bleach) * k, lerp(0.34, 0.52, bleach) * k);
+      setC(C, i, lerp(0.42, 0.6, bleach) * k, lerp(0.38, 0.57, bleach) * k, lerp(0.33, 0.53, bleach) * k);
       Hh[i] = 0.5 + (grain[i] - 0.5) * 0.08 - 0.2 * seam;
       RO[i] = 0.85 + (fine[i] - 0.5) * 0.1 + 0.1 * seam;
     });
@@ -368,6 +432,12 @@
     }
     S.bump = 3;
   }
+
+
+
+
+
+
 
   // ---------- 19. eucalyptus bark: cream/grey-white with peeling pink/orange/grey patches ----------
   function gen_bark_gum(S, R) {
@@ -584,7 +654,7 @@
     each(N, (i) => {
       const dome = clamp01(1 - d[i] / 0.62);
       const k = (0.78 + 0.44 * mot[i]) * (0.92 + 0.16 * fine[i]) * (0.88 + 0.24 * dark[i]) * (0.86 + 0.28 * dome);
-      setC(C, i, 0.36 * k, 0.26 * k, 0.17 * k);
+      setC(C, i, 0.32 * k, 0.27 * k, 0.2 * k);
       Hh[i] = 0.3 + 0.5 * Math.sqrt(dome) + (fine[i] - 0.5) * 0.05;
       RO[i] = 0.95;
     });
@@ -598,7 +668,7 @@
       });
     }
     for (let k = 0; k < 16; k++) {                            // dry leaves
-      const lc = [0.56 + R() * 0.06, 0.42 + R() * 0.05, 0.22];
+      const lc = [0.5 + R() * 0.05, 0.4 + R() * 0.05, 0.25];
       ellipse(N, R(), R(), 0.012 + R() * 0.006, 0.004 + R() * 0.002, R() * PI, (i, t, X, Y) => {
         const vein = sstep(0.02, 0.0, Math.abs(Y));
         const m = (1 - 0.25 * t * t) * (1 - 0.2 * vein);
@@ -610,7 +680,7 @@
     S.bump = 4;
   }
 
-  // ---------- 26. gravel: Voronoi stones, 50 per tile ----------
+  // ---------- 26. gravel: Voronoi stones, 50 per tile; muted greys ----------
   function gen_gravel(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r, K = 50;
     const fx = new Float32Array(K * K), fy = new Float32Array(K * K), rad = new Float32Array(K * K), tone = new Float32Array(K * K);
@@ -629,9 +699,9 @@
         if (d2 < best) { best = d2; bk = k; }
       }
       const dn = Math.sqrt(best) / rad[bk];                  // 0 at stone centre, 1 at its edge
-      if (dn >= 1) { setC(C, i, 0.26, 0.26, 0.25); Hh[i] = 0.12; RO[i] = 0.9; return; }
+      if (dn >= 1) { setC(C, i, 0.24, 0.24, 0.23); Hh[i] = 0.12; RO[i] = 0.9; return; }
       const dome = Math.sqrt(1 - dn * dn);
-      const v = 0.8 * tone[bk] * (1 - 0.25 * dn * dn) * (1 + (mot[i] - 0.5) * 0.06) * (1 + (fine[i] - 0.5) * 0.06);
+      const v = 0.66 * tone[bk] * (1 - 0.25 * dn * dn) * (1 + (mot[i] - 0.5) * 0.06) * (1 + (fine[i] - 0.5) * 0.06);
       setC(C, i, v, v * 0.98, v * 0.95);
       Hh[i] = 0.2 + 0.7 * dome;
       RO[i] = 0.75 + (fine[i] - 0.5) * 0.1;
@@ -639,18 +709,22 @@
     S.bump = 5;
   }
 
-  // ---------- 27. car paint: near-white, very subtle ----------
+  // ---------- 27. car paint: faded near-white base (the body colour multiplies it), very subtle ----------
   function gen_car_paint(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
     const fine = vnoise(N, 400, 400, R), peel = vnoise(N, 180, 180, R), mot = fbmN(N, 3, 3, 3, R);
     each(N, (i) => {
-      const k = (1 + (mot[i] - 0.5) * 0.01) * (1 + (fine[i] - 0.5) * 0.01);
-      setC(C, i, 0.955 * k, 0.955 * k, 0.96 * k);
+      const k = (1 + (mot[i] - 0.5) * 0.02) * (1 + (fine[i] - 0.5) * 0.015);
+      setC(C, i, 0.8 * k, 0.8 * k, 0.805 * k);
       Hh[i] = 0.5 + (peel[i] - 0.5) * 0.06;
       RO[i] = 0.28 + (fine[i] - 0.5) * 0.03 + (mot[i] - 0.5) * 0.02;
     });
     S.bump = 1.2;
   }
+
+
+
+
 
   // ---------- registration ----------
   const GENS = {

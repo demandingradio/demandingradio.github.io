@@ -22,11 +22,11 @@
   const DOOR_H = 2.3;
 
   const LIGHTS = Object.assign({}, JB.Level.LIGHTS, {
-    outdoor:  { c: 0xbcd6f2, i: 0, r: 0, s: 99, fx: 'none', bounce: 0.46 },
-    library:  { c: 0xfff1dc, i: 1.0, r: 8, s: 4, fx: 'panel', bounce: 0.11 },
-    gym:      { c: 0xf4f6ff, i: 1.7, r: 13, s: 6, fx: 'highbay', bounce: 0.12 },
-    shed:     { c: 0xffd9a8, i: 0.8, r: 6, s: 4, fx: 'cage', bounce: 0.07 },
-    hall:     { c: 0xfff0dc, i: 1.4, r: 11, s: 5, fx: 'panel', bounce: 0.12 }
+    outdoor:  { c: 0xbcd6f2, i: 0, r: 0, s: 99, fx: 'none', bounce: 0.4 },
+    library:  { c: 0xfff1dc, i: 0.7, r: 8, s: 4, fx: 'panel', bounce: 0.065 },
+    gym:      { c: 0xf4f6ff, i: 1.15, r: 13, s: 6, fx: 'highbay', bounce: 0.07 },
+    shed:     { c: 0xffd9a8, i: 0.6, r: 6, s: 4, fx: 'cage', bounce: 0.04 },
+    hall:     { c: 0xfff0dc, i: 0.95, r: 11, s: 5, fx: 'panel', bounce: 0.07 }
   });
 
   const MATP = {
@@ -35,13 +35,13 @@
     tiles_wall: { rough: 0.55, metal: 0.0, ns: 0.6 }, tiles_floor: { rough: 0.8, metal: 0.0, ns: 0.6 },
     lab_white: { rough: 0.5, metal: 0.0, ns: 0.5 }, ceiling: { rough: 0.9, metal: 0.3, ns: 0.8 },
     brick: { rough: 0.95, metal: 0.0, ns: 1.0 }, hazard: { rough: 0.8, metal: 0.2, ns: 0.6 },
-    grass: { rough: 0.97, metal: 0.0, ns: 0.8 }, paving: { rough: 0.85, metal: 0.0, ns: 0.7 },
-    asphalt: { rough: 0.92, metal: 0.0, ns: 0.8 }, court_blue: { rough: 0.75, metal: 0.0, ns: 0.4 },
+    grass: { rough: 0.97, metal: 0.0, ns: 0.6 }, paving: { rough: 0.87, metal: 0.0, ns: 0.8 },
+    asphalt: { rough: 0.9, metal: 0.0, ns: 0.9 }, court_blue: { rough: 0.75, metal: 0.0, ns: 0.4 },
     court_green: { rough: 0.75, metal: 0.0, ns: 0.4 }, court_grey: { rough: 0.8, metal: 0.0, ns: 0.4 },
     brick_tan: { rough: 0.92, metal: 0.0, ns: 1.0 }, brick_dark: { rough: 0.92, metal: 0.0, ns: 1.0 },
-    render_cream: { rough: 0.88, metal: 0.0, ns: 0.5 }, cladding_white: { rough: 0.45, metal: 0.25, ns: 0.6 },
-    cladding_bluegrey: { rough: 0.45, metal: 0.25, ns: 0.6 }, panel_green: { rough: 0.5, metal: 0.1, ns: 0.5 },
-    roof_membrane: { rough: 0.9, metal: 0.0, ns: 0.8 }, roof_metal: { rough: 0.4, metal: 0.65, ns: 1.0 },
+    render_cream: { rough: 0.88, metal: 0.0, ns: 0.5 }, cladding_white: { rough: 0.5, metal: 0.12, ns: 0.6 },
+    cladding_bluegrey: { rough: 0.5, metal: 0.12, ns: 0.6 }, panel_green: { rough: 0.55, metal: 0.05, ns: 0.5 },
+    roof_membrane: { rough: 0.9, metal: 0.0, ns: 0.8 }, roof_metal: { rough: 0.42, metal: 0.5, ns: 1.0 },
     carpet_grey: { rough: 0.98, metal: 0.0, ns: 0.6 }, lino: { rough: 0.55, metal: 0.0, ns: 0.4 },
     timber_floor: { rough: 0.38, metal: 0.0, ns: 0.5 }, timber: { rough: 0.85, metal: 0.0, ns: 0.8 },
     soil: { rough: 1.0, metal: 0.0, ns: 1.0 }, gravel: { rough: 0.95, metal: 0.0, ns: 1.0 }
