@@ -48,7 +48,7 @@
     // --- Cave streaming ---
     chunkSize:     40,
     viewChunks:    2,
-    floorSeg:      18,
+    floorSeg:      32,         // (HD) finer floor mesh — smooth-shaded under real textures
 
     // --- Terrain (fractal, domain-warped) ---
     floorFreq:     0.045,      // base hill frequency
@@ -249,10 +249,122 @@
   const floorMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: floorTex, roughness: 0.95, metalness: 0, flatShading: true });
   const ceilMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: floorTex, roughness: 1.0, metalness: 0, flatShading: true, side: THREE.DoubleSide });
   const rockMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: rockTex, roughness: 0.9, metalness: 0, flatShading: true });
+
+  // -------------------------------------------------------------------------
+  // HD ASSETS (Poly Haven, CC0): photo-scanned PBR textures for floor/ceiling
+  // and photo-scanned rock models. Loaded before the first run; if anything
+  // fails (e.g. opened over file://) the procedural look above is kept.
+  // -------------------------------------------------------------------------
+  const HD = { ready: false, rocks: null };     // rocks: { boulder, slab } each { geo, mat }
+  function loadTexSet(loader, base, repeat) {
+    function t(suffix, srgb) {
+      const tx = loader.load('assets/' + base + '_' + suffix + '.jpg');
+      tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(repeat, repeat);
+      tx.anisotropy = renderer.capabilities.getMaxAnisotropy ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 1;
+      if (srgb) tx.encoding = THREE.sRGBEncoding;
+      return tx;
+    }
+    return { map: t('Diffuse', true), normalMap: t('nor_gl'), roughnessMap: t('arm') };   // arm: G = roughness
+  }
+
+  // Cut a dense photo-scan down to game-friendly size by vertex clustering.
+  // Positions snap to a per-cell average (so no cracks); UVs are clustered per
+  // (cell, uv-island) so texture seams survive. Fine detail lives on in the normal map.
+  function simplifyGeo(src, cells) {
+    const g = src.index ? src : src.toNonIndexed();
+    const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, I = g.index;
+    g.computeBoundingBox();
+    const bb = g.boundingBox, size = new THREE.Vector3(); bb.getSize(size);
+    const cs = Math.max(size.x, size.y, size.z) / cells;
+    const cellOf = new Int32Array(P.count), cellMap = new Map(), cellSum = [];
+    for (let i = 0; i < P.count; i++) {
+      const k = Math.floor((P.getX(i) - bb.min.x) / cs) + ',' + Math.floor((P.getY(i) - bb.min.y) / cs) + ',' + Math.floor((P.getZ(i) - bb.min.z) / cs);
+      let c = cellMap.get(k);
+      if (c === undefined) { c = cellSum.length; cellMap.set(k, c); cellSum.push([0, 0, 0, 0]); }
+      const s = cellSum[c]; s[0] += P.getX(i); s[1] += P.getY(i); s[2] += P.getZ(i); s[3]++;
+      cellOf[i] = c;
+    }
+    const outMap = new Map(), remap = new Int32Array(P.count), acc = [];
+    for (let i = 0; i < P.count; i++) {
+      const k = cellOf[i] + '|' + Math.round(U.getX(i) * 48) + ',' + Math.round(U.getY(i) * 48);
+      let o = outMap.get(k);
+      if (o === undefined) { o = acc.length; outMap.set(k, o); acc.push({ c: cellOf[i], n: [0, 0, 0], u: [0, 0], k: 0 }); }
+      const a = acc[o]; a.n[0] += N.getX(i); a.n[1] += N.getY(i); a.n[2] += N.getZ(i); a.u[0] += U.getX(i); a.u[1] += U.getY(i); a.k++;
+      remap[i] = o;
+    }
+    const pos = new Float32Array(acc.length * 3), nor = new Float32Array(acc.length * 3), uv = new Float32Array(acc.length * 2);
+    for (let o = 0; o < acc.length; o++) {
+      const a = acc[o], s = cellSum[a.c];
+      pos[o * 3] = s[0] / s[3]; pos[o * 3 + 1] = s[1] / s[3]; pos[o * 3 + 2] = s[2] / s[3];
+      const nl = Math.hypot(a.n[0], a.n[1], a.n[2]) || 1;
+      nor[o * 3] = a.n[0] / nl; nor[o * 3 + 1] = a.n[1] / nl; nor[o * 3 + 2] = a.n[2] / nl;
+      uv[o * 2] = a.u[0] / a.k; uv[o * 2 + 1] = a.u[1] / a.k;
+    }
+    const idx = [];
+    for (let t = 0; t < I.count; t += 3) {
+      const a = I.getX(t), b = I.getX(t + 1), c = I.getX(t + 2);
+      if (cellOf[a] === cellOf[b] || cellOf[b] === cellOf[c] || cellOf[a] === cellOf[c]) continue;   // collapsed
+      idx.push(remap[a], remap[b], remap[c]);
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    out.setAttribute('uv2', new THREE.BufferAttribute(uv, 2));    // for the AO map
+    out.setIndex(idx);
+    // Normalise to a unit box centred on the origin, so instances scale by (2r, h, 2r)
+    out.computeBoundingBox();
+    const c = new THREE.Vector3(), sz = new THREE.Vector3();
+    out.boundingBox.getCenter(c); out.boundingBox.getSize(sz);
+    out.translate(-c.x, -c.y, -c.z); out.scale(1 / sz.x, 1 / sz.y, 1 / sz.z);
+    out.computeBoundingSphere();
+    return out;
+  }
+
+  function loadHD() {
+    return new Promise(function (resolve) {
+      if (!THREE.GLTFLoader || location.protocol === 'file:') { resolve(); return; }
+      const mgr = new THREE.LoadingManager();
+      const texLoader = new THREE.TextureLoader(mgr), gltf = new THREE.GLTFLoader(mgr);
+      const floorSet = loadTexSet(texLoader, 'rocks_ground_02', 5);
+      const wallSet  = loadTexSet(texLoader, 'rock_face_03', 4);
+      const rocks = {};
+      function model(name, rotX, cells, key) {
+        gltf.load('assets/' + name + '/' + name + '.gltf', function (res) {
+          let mesh = null; res.scene.traverse(function (o) { if (o.isMesh && !mesh) mesh = o; });
+          if (!mesh) return;
+          const geo = mesh.geometry.clone();
+          if (rotX) geo.rotateX(rotX);               // stand a flat slab on its edge
+          const sg = simplifyGeo(geo, cells);
+          const mat = mesh.material;
+          mat.color.setRGB(0.52, 0.52, 0.58);         // cool the sun-baked albedo for a cave
+          mat.envMapIntensity = 0;
+          rocks[key] = { geo: sg, mat: mat, tris: sg.index.count / 3 };
+        });
+      }
+      model('namaqualand_boulder_03', 0, 26, 'boulder');
+      model('rock_09', Math.PI / 2, 30, 'slab');
+      mgr.onLoad = function () {
+        try {
+          [[floorMat, floorSet], [ceilMat, wallSet], [rockMat, wallSet]].forEach(function (p) {
+            const m = p[0], s = p[1];
+            m.map = s.map; m.normalMap = s.normalMap; m.roughnessMap = s.roughnessMap;
+            m.roughness = 1; m.flatShading = false; m.normalScale.set(1.4, 1.4);
+            m.needsUpdate = true;
+          });
+          if (rocks.boulder && rocks.slab) HD.rocks = rocks;
+          HD.ready = true;
+        } catch (e) { console.warn('HD assets failed, using procedural look', e); }
+        resolve();
+      };
+      mgr.onError = function (u) { console.warn('HD asset failed to load:', u); };
+    });
+  }
   const ballMat  = new THREE.MeshStandardMaterial({ color: CFG.ballColor, emissive: CFG.ballEmissive, emissiveIntensity: CFG.ballEmissiveInt, roughness: 0.3, metalness: 0.15 });
-  const crystalMat = new THREE.MeshBasicMaterial({ color: CFG.crystalColor });
+  // (HD) faceted, lit gem that still glows enough to bloom
+  const crystalMat = new THREE.MeshStandardMaterial({ color: CFG.crystalColor, emissive: 0xff9a20, emissiveIntensity: 1.1, metalness: 0.2, roughness: 0.15, flatShading: true });
   const glowMat  = new THREE.MeshBasicMaterial({ color: CFG.glowClusterColor });
-  const crystalGeo = new THREE.OctahedronGeometry(CFG.crystalSize, 0);
+  const crystalGeo = new THREE.OctahedronGeometry(CFG.crystalSize, 0).scale(0.8, 1.5, 0.8);
   const glowGeo  = new THREE.OctahedronGeometry(CFG.glowCrystalSize, 0);
   const popGeo   = new THREE.IcosahedronGeometry(0.5, 0);
 
@@ -366,10 +478,12 @@
   function floorColor(wx, h, wz) {
     const t = clamp01((h + HRANGE) / (2 * HRANGE));         // height 0..1
     const m = 0.82 + vnoise(wx * 0.25, wz * 0.25) * 0.36;   // mottle
+    if (HD.ready) { const k = (0.32 + 0.4 * t) * m; return [k * 0.9, k * 0.92, k]; }
     return [(0.16 + 0.16 * t) * m, (0.15 + 0.15 * t) * m, (0.20 + 0.17 * t) * m];
   }
   function ceilColor(wx, h, wz) {
     const m = 0.85 + vnoise(wx * 0.2 + 4, wz * 0.2 + 4) * 0.3;
+    if (HD.ready) return [0.34 * m, 0.33 * m, 0.38 * m];
     return [0.12 * m, 0.11 * m, 0.15 * m];
   }
 
@@ -426,15 +540,44 @@
         geo = new THREE.CylinderGeometry(r * 0.7, r, h, 7);
         cr = r * 0.85; top = baseY + h; tint = 0.02;
       }
-      paint(geo, 0, 0, function (lx, ly, lz) {
-        const u = clamp01((ly + h / 2) / h);      // base → tip
-        const m = (0.55 + 0.45 * u) * (0.9 + (rnd0(lx, lz)) * 0.2);
-        return [(0.30 + tint) * m, (0.28 + tint) * m, (0.34 + tint) * m];
-      });
-      const rock = new THREE.Mesh(geo, rockMat);
-      rock.position.set(wx, baseY + h / 2, wz);
-      rock.rotation.y = rnd() * TAU;
-      if (ty < 0.46 || (ty >= 0.68 && ty < 0.88)) rock.position.y = baseY + h / 2;
+      let rock;
+      if (HD.rocks) {
+        // Photo-scanned rock, stretched to the same footprint/height as the collider.
+        // Spires use the standing slab; everything else the big boulder.
+        // Tall shapes are built as a STACK of rocks tapering upward — stretching a
+        // single scan more than ~1.6x tall smears its texture into "wooden logs".
+        geo.dispose();
+        rock = new THREE.Group();
+        const isSpire = ty >= 0.68 && ty < 0.88, isBoulder = ty >= 0.46 && ty < 0.68;
+        const w0 = cr * 2.3, H = isBoulder ? h * 1.1 : h * 1.05;
+        const n = isBoulder ? 1 : Math.max(1, Math.ceil(H / (w0 * 1.5)));
+        let y = -h * 0.08, seedA = rnd0(wx, wz);
+        for (let k = 0; k < n; k++) {
+          const f = n === 1 ? 0 : k / (n - 1);
+          const taper = ty >= 0.88 ? 1 - 0.25 * f : 1 - 0.6 * f;        // columns barely taper
+          const ph = (H / n) * 1.35;                                      // overlap pieces
+          const src = (isSpire && k % 2 === 0) || rnd0(seedA * 7 + k, wz) < 0.25 ? HD.rocks.slab : HD.rocks.boulder;
+          const piece = new THREE.Mesh(src.geo, src.mat);
+          piece.userData.sharedGeo = true;
+          const ww = w0 * taper * (0.85 + rnd0(k + seedA, wx) * 0.3);
+          piece.scale.set(ww, Math.min(ph, ww * 1.6), ww * (0.8 + rnd0(wx, k) * 0.4));
+          piece.position.y = y + piece.scale.y / 2;
+          piece.rotation.set(rnd0(k, seedA) < 0.5 ? Math.PI : 0, rnd0(seedA, k) * TAU, (rnd0(wz, k) - 0.5) * 0.25);
+          rock.add(piece);
+          y += Math.min(ph, ww * 1.6) * 0.72;
+        }
+        rock.position.set(wx, baseY, wz);
+        rock.rotation.y = rnd() * TAU;
+      } else {
+        paint(geo, 0, 0, function (lx, ly, lz) {
+          const u = clamp01((ly + h / 2) / h);      // base → tip
+          const m = (0.55 + 0.45 * u) * (0.9 + (rnd0(lx, lz)) * 0.2);
+          return [(0.30 + tint) * m, (0.28 + tint) * m, (0.34 + tint) * m];
+        });
+        rock = new THREE.Mesh(geo, rockMat);
+        rock.position.set(wx, baseY + h / 2, wz);
+        rock.rotation.y = rnd() * TAU;
+      }
       group.add(rock);
       colliders.push({ x: wx, z: wz, r: cr, top: top });
     }
@@ -478,12 +621,21 @@
     for (let i = 0; i < CFG.stalactites; i++) {
       const wx = ox + (rnd() - 0.5) * S, wz = oz + (rnd() - 0.5) * S;
       const r = 0.6 + rnd() * 1.3, h = 2 + rnd() * 5;
-      const geo = new THREE.ConeGeometry(r, h, 6);
-      paint(geo, 0, 0, function (lx, ly, lz) { const m = 0.7 + rnd0(lx, lz) * 0.2; return [0.24 * m, 0.22 * m, 0.28 * m]; });
-      const spike = new THREE.Mesh(geo, rockMat);
       const cyY = ceilingHeight(wx, wz);
-      spike.position.set(wx, cyY - h / 2, wz);
-      spike.rotation.x = Math.PI;
+      let spike;
+      if (HD.rocks) {
+        spike = new THREE.Mesh(HD.rocks.boulder.geo, HD.rocks.boulder.mat);
+        spike.userData.sharedGeo = true;
+        spike.scale.set(r * 2.2, h * 1.3, r * 2.2);
+        spike.position.set(wx, cyY - h * 0.5, wz);
+        spike.rotation.set(Math.PI, rnd0(wx, wz) * TAU, 0);
+      } else {
+        const geo = new THREE.ConeGeometry(r, h, 6);
+        paint(geo, 0, 0, function (lx, ly, lz) { const m = 0.7 + rnd0(lx, lz) * 0.2; return [0.24 * m, 0.22 * m, 0.28 * m]; });
+        spike = new THREE.Mesh(geo, rockMat);
+        spike.position.set(wx, cyY - h / 2, wz);
+        spike.rotation.x = Math.PI;
+      }
       group.add(spike);
     }
 
@@ -788,8 +940,12 @@
   // -------------------------------------------------------------------------
   // Boot
   // -------------------------------------------------------------------------
-  startRun();
-  requestAnimationFrame(frame);
+  loadHD().then(function () {
+    const n = el('loading'); if (n) n.hidden = true;
+    startRun();
+    last = performance.now();
+    requestAnimationFrame(frame);
+  });
   setTimeout(function () { const h = el('controls-hint'); if (h) h.classList.add('fade'); }, 7000);
 
   window.__caveball = {
@@ -800,6 +956,7 @@
     grounded: function () { return grounded; }, jumpsUsed: function () { return jumpsUsed; },
     camYaw: function () { return camYaw; },
     bloom: function () { return useBloom; },
+    hd: function () { return { ready: HD.ready, rocks: HD.rocks && { boulderTris: HD.rocks.boulder.tris, slabTris: HD.rocks.slab.tris } }; },
     sample: function (x, z) { return { floor: +floorHeight(x, z).toFixed(2), ceil: +ceilingHeight(x, z).toFixed(2), region: +region(x, z).toFixed(3) }; },
     startRun: startRun, die: die,
     nearestCrystal: function () {
