@@ -373,7 +373,7 @@
       const top = sstep(0.5, 0.36, d);
       const dA = sstep(0.45, 0.75, grime[i] * 0.6 + dust[i] * 0.4) * 0.55;   // dirt layer
       const topC = (0.6 + 0.05 * wear[i]) * (1 - 0.12 * dA);   // polished, worn tops (mid grey, so treads do not read black)
-      const gapC = (0.3 + 0.03 * grime[i]) * (1 - 0.2 * dA);
+      const gapC = (0.34 + 0.03 * grime[i]) * (1 - 0.2 * dA);   // gaps lifted a little: the lozenge pattern must not read as a busy checkerboard
       let r = lerp(gapC, topC, top), g = lerp(gapC, topC * 0.99, top), b2 = lerp(gapC * 0.94, topC * 0.97, top);
       r = lerp(r, 0.3, dA * 0.6); g = lerp(g, 0.27, dA * 0.6); b2 = lerp(b2, 0.22, dA * 0.6);
       C[i * 3] = r; C[i * 3 + 1] = g; C[i * 3 + 2] = b2;
@@ -402,7 +402,8 @@
       const yR = lerp(0.62, 0.56, fd), yG = lerp(0.52, 0.5, fd), yB = lerp(0.2, 0.34, fd);
       const bR = lerp(0.15, 0.24, fd), bG = lerp(0.145, 0.23, fd), bB = lerp(0.14, 0.22, fd);   // charcoal, not black: stays readable in shade
       const pr = lerp(bR, yR, yel) * gg, pg = lerp(bG, yG, yel) * gg, pb = lerp(bB, yB, yel) * gg;
-      const mt = 0.42 * (0.85 + 0.3 * metal[i]);
+      // chips show bare steel: a lighter grey than the paint (a dark grey read as black splotches up close)
+      const mt = 0.52 * (0.9 + 0.2 * metal[i]);
       C[i * 3] = lerp(pr, mt, ch); C[i * 3 + 1] = lerp(pg, mt, ch); C[i * 3 + 2] = lerp(pb, mt * 1.02, ch);
       H[i] = lerp(0.62, 0.36, ch) + (chipB[i] - 0.5) * 0.02;
       RO[i] = lerp(0.6 + 0.1 * (grime[i] - 0.5), 0.4 + 0.1 * metal[i], ch);
@@ -411,7 +412,7 @@
       const gx = chip[y * N + wrapI(x + 1, N)] - chip[y * N + wrapI(x - 1, N)];
       const gy = chip[wrapI(y + 1, N) * N + x] - chip[wrapI(y - 1, N) * N + x];
       const e = Math.min(1, Math.abs(gx) + Math.abs(gy));
-      if (e > 0) shadeC(C, y * N + x, 1 - 0.3 * e);
+      if (e > 0) shadeC(C, y * N + x, 1 - 0.12 * e);   // thin paint edge, not a black outline
     }
     for (let k = 0; k < 9; k++) {   // boot scuffs
       walk(N, R, R(), R(), 14 + ((R() * 16) | 0), 0.004, 1.0 / N, 1.0, undefined, (i, t) => {
@@ -428,7 +429,7 @@
     const N = S.N, C = S.c, H = S.h, RO = S.r, T = 13, GH = 0.0015;
     const tint = new Float32Array(T * T), warm = new Float32Array(T * T), miss = new Uint8Array(T * T), chipM = new Float32Array(N * N);
     for (let k = 0; k < T * T; k++) { tint[k] = (R() - 0.5) * 0.05; warm[k] = (R() - 0.5) * 0.02; }
-    for (let k = 0; k < 4; k++) miss[(R() * T * T) | 0] = 1;
+    for (let k = 0; k < 2; k++) miss[(R() * T * T) | 0] = 1;   // a few missing tiles, not a checkerboard
     const glz = fbmN(N, 3, 3, 3, R), gm = vnoise(N, 180, 180, R), grime = fbmN(N, 6, 6, 3, R), streak = vnoise(N, 52, 6, R);
     for (let k = 0; k < 14; k++) {   // chipped corners
       const ti = (R() * T) | 0, tj = (R() * T) | 0;
@@ -451,7 +452,7 @@
       let gg = lerp(0.49 * gr, 0.72 * g * gr, face);
       let b = lerp(0.46 * gr, (0.7 * g - warm[bi]) * gr, face);
       r = lerp(r, 0.56, ch); gg = lerp(gg, 0.52, ch); b = lerp(b, 0.48, ch);
-      if (ms) { const sb = 0.4 + 0.08 * glz[i]; r = sb * 1.04; gg = sb; b = sb * 0.94; }
+      if (ms) { const sb = 0.5 + 0.06 * glz[i]; r = sb * 1.04; gg = sb; b = sb * 0.94; }   // bare plaster behind a missing tile
       C[i * 3] = Math.min(r, 0.8); C[i * 3 + 1] = Math.min(gg, 0.8); C[i * 3 + 2] = Math.min(b, 0.8);
       H[i] = ms ? 0.2 + 0.03 * (gm[i] - 0.5) : 0.2 + 0.45 * Math.sqrt(face) + (glz[i] - 0.5) * 0.02 - 0.12 * ch;
       const roG = 0.18 + 0.08 * glz[i] + 0.3 * sstep(0.55, 0.85, grime[i]) + 0.2 * sk;
@@ -675,6 +676,7 @@
     const tone = new Float32Array(CO * BC);
     for (let k = 0; k < tone.length; k++) tone[k] = R();
     const mot = fbmN(N, 16, 16, 3, R), fine = vnoise(N, 140, 140, R), soot = fbmN(N, 3, 3, 3, R), eff = vnoise(N, 22, 22, R);
+    const runs = vnoise(N, 44, 3, R);   // thin soot runs down the wall (not a repeating horizontal band)
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const i = y * N + x, u = (x + 0.5) / N, w = (y + 0.5) / N;
       const rw = w * CO, row = Math.floor(rw), fy = rw - row;
@@ -685,7 +687,7 @@
       const face = sstep(0.0025, 0.009, e);
       const bi = row * BC + wrapI(col, BC);
       const tn = tone[bi];
-      const sootA = sstep(0.5, 0.85, soot[i]) * 0.35;
+      const sootA = sstep(0.5, 0.85, soot[i] * 0.5 + runs[i] * 0.5) * 0.3;
       const k = (0.9 + 0.2 * mot[i]) * (0.94 + 0.12 * fine[i]) * (1 - sootA);
       let r = lerp(0.4, 0.33, tn) * k, g = lerp(0.28, 0.24, tn) * k, b = lerp(0.24, 0.21, tn) * k;   // muted red-brown, not orange
       const ef = sstep(0.82, 0.88, eff[i]) * 0.15;
@@ -889,28 +891,36 @@
     if (reals[name]) return reals[name];
     const M = window.JB && window.JB.TexManifest, spec = M && M[name];
     if (!spec) return null;
-    const R = (reals[name] = { imgs: {}, users: { map: [], normalMap: [], roughnessMap: [] } });
+    const R = (reals[name] = { imgs: {}, users: { map: [], normalMap: [], roughnessMap: [] }, k: spec.tile > 0 ? 2 / spec.tile : 1 });
     for (const [key, slot] of SLOTS) {
       if (!spec[key]) continue;
       const img = new Image();
       img.onload = () => {
         R.imgs[slot] = img;
-        for (const t of R.users[slot]) { t.image = img; t.needsUpdate = true; }
+        for (const t of R.users[slot]) useReal(R, t, img);
       };
       img.onerror = () => { /* keep the procedural canvas */ };
       img.src = spec[key];
     }
     return R;
   }
+  // A real image covers `tile` metres, a procedural one 2 m: scale the repeat once per texture.
+  // Clones copy the repeat (and so the scaling) of the texture they were made from.
+  const scaled = new WeakSet();
+  function useReal(R, t, img) {
+    if (!scaled.has(t)) { scaled.add(t); if (R.k !== 1) t.repeat.multiplyScalar(R.k); }
+    t.image = img; t.needsUpdate = true;
+  }
   function attachReal(R, slot, tex) {
     R.users[slot].push(tex);
     const base = tex.clone;
     tex.clone = function () {
       const c = base.call(this);
+      if (scaled.has(this)) scaled.add(c);
       R.users[slot].push(c);
       return c;
     };
-    if (R.imgs[slot]) { tex.image = R.imgs[slot]; tex.needsUpdate = true; }
+    if (R.imgs[slot]) useReal(R, tex, R.imgs[slot]);
   }
 
   const cache = {};

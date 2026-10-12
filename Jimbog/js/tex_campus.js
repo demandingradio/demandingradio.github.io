@@ -73,19 +73,21 @@
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
     const big = fbmN(N, 5, 5, 3, R), med = fbmN(N, 14, 14, 3, R), dry = fbmN(N, 11, 11, 3, R), bare = fbmN(N, 9, 9, 2, R);
     const fine = vnoise(N, 300, 300, R), blade = vnoise(N, 170, 60, R);   // blade: thin across u, long down w
+    // Muted olive: green only a little above red, blue well below (no lime). Dry patches go to a
+    // straw-olive, not yellow. Albedo mean is about (0.30, 0.32, 0.20), which renders as olive under the campus sun.
     each(N, (i) => {
-      const pb = sstep(0.6, 0.8, dry[i]) * 0.75;                // dry yellow-green patches
-      const bb = sstep(0.82, 0.92, bare[i]) * 0.45;                // worn bare earth
-      const lo = sstep(0.4, 0.7, big[i]) * 0.12;                 // deeper olive in patches
-      const k = 1 + (med[i] - 0.5) * 0.16 + (fine[i] - 0.5) * 0.22 + (blade[i] - 0.5) * 0.24;
-      let r = lerp(0.4 - lo, 0.56, pb), g = lerp(0.44 - lo, 0.56, pb), b = lerp(0.25 - lo * 0.5, 0.36, pb);
-      r = lerp(r, 0.44, bb); g = lerp(g, 0.39, bb); b = lerp(b, 0.27, bb);
+      const pb = sstep(0.62, 0.84, dry[i]) * 0.5;               // dry straw-olive patches
+      const bb = sstep(0.82, 0.92, bare[i]) * 0.4;               // worn bare earth
+      const lo = sstep(0.4, 0.7, big[i]) * 0.09;                 // deeper olive in patches
+      const k = 1 + (med[i] - 0.5) * 0.2 + (fine[i] - 0.5) * 0.22 + (blade[i] - 0.5) * 0.24;
+      let r = lerp(0.285 - lo, 0.36, pb), g = lerp(0.315 - lo, 0.37, pb), b = lerp(0.195 - lo * 0.6, 0.23, pb);
+      r = lerp(r, 0.34, bb); g = lerp(g, 0.32, bb); b = lerp(b, 0.21, bb);
       setC(C, i, r * k, g * k, b * k);
       Hh[i] = 0.5 + (fine[i] - 0.5) * 0.12 + (blade[i] - 0.5) * 0.1 + (med[i] - 0.5) * 0.04;
       RO[i] = 0.95 + (fine[i] - 0.5) * 0.03;
     });
-    for (let k = 0; k < 40; k++) stamp(N, R(), R(), 0.9 / N, (i) => tintC(C, i, 0.6, 0.55, 0.35, 0.8));   // straw flecks
-    for (let k = 0; k < 12; k++) stamp(N, R(), R(), 1.2 / N, (i) => tintC(C, i, 0.3, 0.27, 0.18, 0.6));  // dead tufts
+    for (let k = 0; k < 40; k++) stamp(N, R(), R(), 0.9 / N, (i) => tintC(C, i, 0.44, 0.42, 0.28, 0.6));   // straw flecks
+    for (let k = 0; k < 12; k++) stamp(N, R(), R(), 1.2 / N, (i) => tintC(C, i, 0.26, 0.24, 0.17, 0.6));  // dead tufts
     S.bump = 1.2;
   }
 
@@ -113,11 +115,11 @@
       const k = (1 + tone[slab]) * (1 + (mot[i] - 0.5) * 0.08) * (1 + (agg[i] - 0.5) * 0.1) * (1 - 0.12 * sstep(0.6, 0.82, blot[i]));
       const cr = CR[i];
       const dk = (1 - 0.35 * cr) * (1 - 0.1 * rim);
-      let sr = 0.55 * k * dk, sg = 0.54 * k * dk, sb = 0.5 * k * dk;
-      const wd = Math.max(cr * 0.8, rim * 0.6) * tAmt;         // weeds in cracks and at the rim
-      sr = lerp(sr, 0.4, wd); sg = lerp(sg, 0.44, wd); sb = lerp(sb, 0.25, wd);
+      let sr = 0.5 * k * dk, sg = 0.49 * k * dk, sb = 0.455 * k * dk;   // slightly lower than before: sunlit slabs were near white
+      const wd = Math.max(cr * 0.8, rim * 0.6) * tAmt;         // weeds in cracks and at the rim (muted olive)
+      sr = lerp(sr, 0.32, wd); sg = lerp(sg, 0.34, wd); sb = lerp(sb, 0.2, wd);
       const jt = tAmt * (0.6 + 0.4 * tuftA[i]);                // joints: dark dirt with grass tufts
-      setC(C, i, lerp(sr, lerp(0.3, 0.38, jt), joint), lerp(sg, lerp(0.29, 0.44, jt), joint), lerp(sb, lerp(0.22, 0.24, jt), joint));
+      setC(C, i, lerp(sr, lerp(0.27, 0.32, jt), joint), lerp(sg, lerp(0.27, 0.34, jt), joint), lerp(sb, lerp(0.2, 0.2, jt), joint));
       Hh[i] = 0.55 + (agg[i] - 0.5) * 0.05 - 0.28 * joint - 0.08 * rim - 0.2 * cr;
       RO[i] = 0.86 + (mot[i] - 0.5) * 0.08 + 0.08 * joint;
     });
@@ -240,7 +242,9 @@
     }
     S.bump = 3;
   }
-  function gen_brick_tan(S, R) { genBrick(S, R, [0.54, 0.45, 0.35], [0.7, 0.6, 0.47], [0.6, 0.58, 0.54], [0.42, 0.32, 0.25]); }
+  // Light, worn tan: a little lighter than the first pass (the shaded faces of the campus sit at about a quarter
+  // of albedo under the current fill, so they read dark whatever the tan), with pale mortar so the courses show.
+  function gen_brick_tan(S, R) { genBrick(S, R, [0.56, 0.47, 0.37], [0.72, 0.63, 0.5], [0.67, 0.65, 0.61], [0.46, 0.36, 0.28]); }
   function gen_brick_dark(S, R) { genBrick(S, R, [0.38, 0.3, 0.24], [0.5, 0.41, 0.31], [0.5, 0.48, 0.45], [0.3, 0.22, 0.17]); }
 
   // ---------- 9. render: sun-bleached cream plaster with peeled grey patches, stains and cracks ----------
@@ -353,7 +357,7 @@
       const wr = sstep(0.55, 0.8, wear[i]) * 0.1;               // trodden lanes, slightly lighter
       const st = sstep(0.66, 0.86, stain[i]) * 0.12;            // dark stains
       const k = (1 + (mot[i] - 0.5) * 0.08) * (0.93 + (fib[i] - 0.5) * 0.14) * (0.95 + (nap[i] - 0.5) * 0.1) * (1 - 0.04 * seam) * (1 + wr) * (1 - st);
-      setC(C, i, 0.34 * k, 0.37 * k, 0.41 * k);
+      setC(C, i, 0.4 * k, 0.42 * k, 0.46 * k);   // lighter than the first pass: interior carpet read near black in the shade
       Hh[i] = 0.5 + (fib[i] - 0.5) * 0.08 + (nap[i] - 0.5) * 0.05 - 0.05 * seam;
       RO[i] = 0.95 + (fib[i] - 0.5) * 0.04;
     });
@@ -447,7 +451,7 @@
     const tA = quant(pf, 0.7), tB = quant(pf2, 0.8);
     each(N, (i) => {
       const k = (1 + (streak[i] - 0.5) * 0.08) * (1 + (fine[i] - 0.5) * 0.04);
-      let r = 0.86 * k, g = 0.84 * k, b = 0.78 * k;
+      let r = 0.8 * k, g = 0.78 * k, b = 0.72 * k;                // kept under the 0.8 albedo ceiling
       const jit = (fine[i] - 0.5) * 0.05;                         // ragged edges, not ruler-straight
       const p1 = sstep(tA - 0.03, tA + 0.03, pf[i] + jit);        // pink peel, soft edge
       r = lerp(r, 0.8, p1 * 0.6); g = lerp(g, 0.7, p1 * 0.6); b = lerp(b, 0.66, p1 * 0.6);
@@ -506,10 +510,11 @@
   function gen_leaves_round(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
     const A = S.a = new Float32Array(N * N);
-    for (let i = 0; i < N * N; i++) { setC(C, i, 0.42, 0.66, 0.26); Hh[i] = 0.5; RO[i] = 0.6; }
+    // Muted: an olive-green crown, not the lime of the first pass.
+    for (let i = 0; i < N * N; i++) { setC(C, i, 0.34, 0.5, 0.25); Hh[i] = 0.5; RO[i] = 0.6; }
     let cnt = 0;
     const target = 0.65 * N * N;
-    const deep = [0.3, 0.56, 0.2], mid = [0.42, 0.68, 0.26], light = [0.58, 0.8, 0.34];
+    const deep = [0.25, 0.4, 0.2], mid = [0.33, 0.48, 0.24], light = [0.45, 0.58, 0.31];
     for (let c = 0; c < 3000 && cnt < target; c++) {
       const cu = R(), cw = R(), a = 0.03 + R() * 0.02, b = a * (0.7 + R() * 0.25), phi = R() * PI;
       const tone = R();
@@ -546,7 +551,7 @@
   function gen_vine(S, R) {
     const N = S.N, C = S.c, Hh = S.h, RO = S.r;
     const A = S.a = new Float32Array(N * N);
-    for (let i = 0; i < N * N; i++) { setC(C, i, 0.37, 0.6, 0.23); Hh[i] = 0.5; RO[i] = 0.6; }
+    for (let i = 0; i < N * N; i++) { setC(C, i, 0.33, 0.48, 0.22); Hh[i] = 0.5; RO[i] = 0.6; }
     // 5-lobe outline as a function of angle, tabulated once (1024 steps per turn) to keep the pixel loop cheap.
     const LOBE_N = 1024, LOBE = new Float32Array(LOBE_N);
     for (let k = 0; k < LOBE_N; k++) LOBE[k] = 0.64 + 0.36 * Math.pow(Math.abs(Math.cos(2.5 * (k + 0.5) / LOBE_N * TAU)), 0.7);
@@ -574,7 +579,7 @@
         const edge = r / lim;
         const m = tone * (1 - 0.14 * sstep(0.8, 1.0, edge)) * (1 - 0.14 * vein);
         const hi = 0.5 * lt * 0.3;
-        setC(C, idx, lerp(0.37, 0.5, hi) * m, lerp(0.6, 0.72, hi) * m, lerp(0.23, 0.3, hi) * m);
+        setC(C, idx, lerp(0.33, 0.44, hi) * m, lerp(0.48, 0.6, hi) * m, lerp(0.22, 0.28, hi) * m);
         Hh[idx] = 0.55 + 0.1 * (1 - edge * edge);
         RO[idx] = 0.5;
       }
@@ -638,7 +643,7 @@
       const near = Math.min(pu, pw);
       const sh = 0.94 + 0.06 * clamp01(1 - 2 * near / wpx);
       const k = sh * (0.97 + 0.03 * (mot[i] - 0.5) * 2) * (0.98 + 0.02 * (fine[i] - 0.5) * 2);
-      setC(C, i, 0.93 * k, 0.94 * k, 0.93 * k);
+      setC(C, i, 0.8 * k, 0.81 * k, 0.8 * k);                     // sports net: near white but under the 0.8 albedo ceiling
       A[i] = cov;
       Hh[i] = 0.5 + 0.2 * clamp01(1 - 2 * near / wpx) * cov;
       RO[i] = 0.6;

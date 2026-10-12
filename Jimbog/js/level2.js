@@ -880,7 +880,7 @@
       if (texName && JB.Tex.list.includes(texName)) {
         let t = tex(texName);
         if (repeat && repeat !== 1) {
-          const cl = (tx) => { const c = tx.clone(); c.repeat.set(repeat, repeat); c.needsUpdate = true; return c; };
+          const cl = (tx) => { const c = tx.clone(); c.repeat.multiplyScalar(repeat); c.needsUpdate = true; return c; };
           t = { map: cl(t.map), normalMap: cl(t.normalMap), roughnessMap: cl(t.roughnessMap) };
         }
         const mp = MATP[texName] || { rough: 0.8, metal: 0, ns: 0.6 };

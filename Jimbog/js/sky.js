@@ -100,7 +100,7 @@
 
   function materials() {
     const M = {};
-    M.grass = stdMat('grass', { fb: 0x626b3f, vc: true, nb: 0.5, r: 0.95 });
+    M.grass = stdMat('grass', { fb: 0x4c5233, vc: true, nb: 0.5, r: 0.95 });   // same olive as the grass tile (tex_campus.js), so the lawn past the map edge matches
     // The lawn sits 3 cm under the map ground (y = 0). Push it back so the map ground wins
     // wherever the two overlap, at any distance, instead of z-fighting.
     M.grass.polygonOffset = true; M.grass.polygonOffsetFactor = 2; M.grass.polygonOffsetUnits = 4;

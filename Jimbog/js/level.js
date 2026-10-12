@@ -32,12 +32,12 @@
 
   // Material parameters per texture.
   const MATP = {
-    concrete_floor: { rough: 1.0, metal: 0.0, ns: 0.6 },
+    concrete_floor: { rough: 1.0, metal: 0.0, ns: 0.8 },
     concrete_wall:  { rough: 1.0, metal: 0.0, ns: 0.9 },
     metal_panel:    { rough: 1.0, metal: 0.15, ns: 0.7 },
     diamond_plate:  { rough: 1.05, metal: 0.18, ns: 1.0 },
-    hazard:         { rough: 1.0, metal: 0.1, ns: 0.6 },
-    tiles_wall:     { rough: 1.0, metal: 0.0, ns: 0.5 },
+    hazard:         { rough: 1.0, metal: 0.1, ns: 0.8 },
+    tiles_wall:     { rough: 1.0, metal: 0.0, ns: 0.7 },
     tiles_floor:    { rough: 1.0, metal: 0.0, ns: 0.6 },
     epoxy_yellow:   { rough: 1.0, metal: 0.0, ns: 0.5 },
     painted_metal:  { rough: 1.0, metal: 0.1, ns: 0.6 },
@@ -701,7 +701,7 @@
       if (texName) {
         let t = tex(texName);
         if (repeat && repeat !== 1) {
-          const cl = (tx) => { const c = tx.clone(); c.repeat.set(repeat, repeat); c.needsUpdate = true; return c; };
+          const cl = (tx) => { const c = tx.clone(); c.repeat.multiplyScalar(repeat); c.needsUpdate = true; return c; };
           t = { map: cl(t.map), normalMap: cl(t.normalMap), roughnessMap: cl(t.roughnessMap) };
         }
         const mp = MATP[texName] || { rough: 0.8, metal: 0, ns: 0.6 };

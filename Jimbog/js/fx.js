@@ -202,8 +202,9 @@
       c.save(); c.beginPath(); c.rect(v * 128, 0, 128, 128); c.clip(); c.translate(v * 128, 0);
       const cx = 64 + (rnd() - 0.5) * 10, cy = 64 + (rnd() - 0.5) * 10;
       let g = c.createRadialGradient(cx, cy, 0, cx, cy, 62);
-      g.addColorStop(0, 'rgba(12,10,8,0.85)'); g.addColorStop(0.45, 'rgba(18,15,12,0.55)');
-      g.addColorStop(0.8, 'rgba(18,15,12,0.18)'); g.addColorStop(1, 'rgba(18,15,12,0)');
+      // a dense core that reads as soot from a distance (the soft edge is what fades)
+      g.addColorStop(0, 'rgba(12,10,8,0.92)'); g.addColorStop(0.45, 'rgba(18,15,12,0.8)');
+      g.addColorStop(0.8, 'rgba(18,15,12,0.3)'); g.addColorStop(1, 'rgba(18,15,12,0)');
       c.fillStyle = g; c.fillRect(0, 0, 128, 128);
       for (let i = 0; i < 16; i++) {                           // ragged blotches
         const a = rnd() * 6.2832, d = rnd() * 34, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d, r = 6 + rnd() * 16;
@@ -220,6 +221,8 @@
     }
     const tex = new THREE.CanvasTexture(cv);
     tex.encoding = THREE.sRGBEncoding;
+    // no mip averaging: mips of this soft blotch thinned it to a faint grey at distance
+    tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
     return tex;
   }
 

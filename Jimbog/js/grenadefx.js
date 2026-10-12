@@ -109,10 +109,12 @@
     'attribute float aRot;',
     'attribute float aAlpha;',
     'attribute float aShade;',
+    'attribute float aHt;',                              // height of this puff in the cloud, 0 floor .. 1 top
     'uniform vec3 uSunTo;',
     'varying vec2 vUv;',
     'varying float vAlpha;',
     'varying float vShade;',
+    'varying float vHt;',
     'varying float vTop;',
     'varying vec2 vSunUV;',
     'varying float vScat;',
@@ -120,6 +122,7 @@
     '  vUv = uv;',
     '  vAlpha = aAlpha;',
     '  vShade = aShade;',
+    '  vHt = aHt;',
     '  vTop = position.y + 0.5;',                         // screen-up, so the light does not spin with the puff
     '  vec4 mv = viewMatrix * modelMatrix * vec4(aOffset, 1.0);',
     '  vec3 sunV = normalize((viewMatrix * vec4(uSunTo, 0.0)).xyz);',
@@ -141,6 +144,7 @@
     'varying vec2 vUv;',
     'varying float vAlpha;',
     'varying float vShade;',
+    'varying float vHt;',
     'varying float vTop;',
     'varying vec2 vSunUV;',
     'varying float vScat;',
@@ -152,8 +156,11 @@
     '    + texture2D(uPuff, vUv + vSunUV * 0.21).a',
     '    + texture2D(uPuff, vUv + vSunUV * 0.36).a) * (1.0 / 3.0);',   // smoke between this point and the sun
     '  float T = exp(-4.0 * occ);',                       // sunlight that reaches this point: lumps shade each other
-    '  vec3 sky = mix(vec3(0.4, 0.44, 0.52), vec3(0.95, 0.96, 0.98), vTop * vTop) * (0.94 + 0.12 * t.r);',   // cool sky fill: dark underside, bright top
-    '  vec3 light = sky + uSunC * uSunK * T * (0.2 + 0.8 * vTop);',
+    // height in the whole cloud (vHt) plus the sprite's own top (vTop), so every puff is lit
+    // from above and the cloud as a whole is bright on top and dark underneath
+    '  float ly = clamp(vHt + (vTop - 0.5) * 0.5, 0.0, 1.0);',
+    '  vec3 sky = mix(vec3(0.36, 0.4, 0.48), vec3(0.97, 0.98, 1.0), ly * ly) * (0.94 + 0.12 * t.r);',   // cool sky fill: dark underside, bright top
+    '  vec3 light = sky + uSunC * uSunK * T * (0.25 + 0.75 * ly);',
     '  vec3 col = uTint * light * vShade + uSunC * vScat * 0.18 * T;',
     '  gl_FragColor = vec4(min(col, vec3(1.0)), a);',
     '}'
@@ -242,7 +249,7 @@
           bdur: BLOOM_TIME * (0.85 + 0.3 * rnd()),
           size: (2.1 + 1.0 * rnd()) * k * sm * (1 + 0.25 * edge),   // edge puffs are wider to close the rim
           alpha: (0.6 + 0.15 * rnd()) * (1 - 0.1 * edge) * am, // outer puffs are a little fainter (soft edge)
-          shade: 0.98 + 0.34 * ht + (rnd() - 0.5) * 0.1,    // lit from above, darker below
+          shade: 1.0 + (rnd() - 0.5) * 0.1,                 // small per-puff variation (height light is in the shader)
           rot: rnd() * TAU,
           spin: (rnd() - 0.5) * 0.3,
           wob: 0.06 + 0.12 * rnd(),                         // churn amplitude (m); stays inside the 0.3 m clip margin
@@ -254,6 +261,7 @@
       this._x = new Float32Array(n); this._y = new Float32Array(n); this._z = new Float32Array(n);
       this._s = new Float32Array(n); this._r = new Float32Array(n);
       this._a = new Float32Array(n); this._h = new Float32Array(n);
+      this._t = new Float32Array(n);                    // height in the cloud (0..1), for the light
       this._d = new Float32Array(n);
       this._ord = [];
       for (let i = 0; i < n; i++) this._ord.push(i);
@@ -271,12 +279,13 @@
       const inst = (size) => new THREE.InstancedBufferAttribute(new Float32Array(n * size), size)
         .setUsage(THREE.DynamicDrawUsage);
       this.aOffset = inst(3); this.aSize = inst(1); this.aRot = inst(1);
-      this.aAlpha = inst(1); this.aShade = inst(1);
+      this.aAlpha = inst(1); this.aShade = inst(1); this.aHt = inst(1);
       geo.setAttribute('aOffset', this.aOffset);
       geo.setAttribute('aSize', this.aSize);
       geo.setAttribute('aRot', this.aRot);
       geo.setAttribute('aAlpha', this.aAlpha);
       geo.setAttribute('aShade', this.aShade);
+      geo.setAttribute('aHt', this.aHt);
 
       this.tex = makePuffTexture(seed ^ 0x9e3779b9);
       this.mat = new THREE.ShaderMaterial({
@@ -303,6 +312,7 @@
       const grow = 1 + 0.12 * clamp(age / dur, 0, 1);
       const P = this.puffs, n = P.length, cam = this._cam;
       const X = this._x, Y = this._y, Z = this._z, S = this._s, R = this._r, A = this._a, H = this._h, D = this._d;
+      const HT = this._t, topH = Math.max(0.5, this.cy + this.ru - this.pos.y);   // cloud top above the floor
 
       for (let i = 0; i < n; i++) {
         const q = P[i];
@@ -318,6 +328,7 @@
         A[i] = q.alpha * clamp(p * 1.6, 0, 1) * fadeMul;
         R[i] = q.rot + q.spin * age;
         H[i] = q.shade;
+        HT[i] = clamp((y - this.pos.y) / topH, 0, 1);
         const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
         D[i] = dx * dx + dy * dy + dz * dz;
       }
@@ -325,12 +336,13 @@
       const ord = this._ord;
       ord.sort(function (a, b) { return D[b] - D[a]; });     // farthest first (back-to-front)
       const aO = this.aOffset.array, aS = this.aSize.array, aR = this.aRot.array;
-      const aA = this.aAlpha.array, aH = this.aShade.array;
+      const aA = this.aAlpha.array, aH = this.aShade.array, aT = this.aHt.array;
       for (let k = 0; k < n; k++) {
         const i = ord[k];
         aO[k * 3] = X[i]; aO[k * 3 + 1] = Y[i]; aO[k * 3 + 2] = Z[i];
-        aS[k] = S[i]; aR[k] = R[i]; aA[k] = A[i]; aH[k] = H[i];
+        aS[k] = S[i]; aR[k] = R[i]; aA[k] = A[i]; aH[k] = H[i]; aT[k] = HT[i];
       }
+      this.aHt.needsUpdate = true;
       this.aOffset.needsUpdate = true;
       this.aSize.needsUpdate = true;
       this.aRot.needsUpdate = true;

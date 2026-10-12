@@ -31,9 +31,9 @@
     'p:lamp_head':   { basic: true, params: { color: new THREE.Color(0xfff2d0).multiplyScalar(1.8) } },
     'p:lamp_tail':   { basic: true, params: { color: new THREE.Color(0xff2a1a).multiplyScalar(1.6) } },
     'p:canopy_glass':{ params: { color: 0x6f8f7d, roughness: 0.2, metalness: 0.0, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false } },
-    'p:hoop_orange': { params: { color: 0xb06a3e, roughness: 0.6 } },
-    'p:bin_green':   { params: { color: 0x3b5646, roughness: 0.65, metalness: 0.1 } },
-    'p:grape':       { params: { color: 0x4d3a5c, roughness: 0.4 } },
+    'p:hoop_orange': { params: { color: 0x9c6e4f, roughness: 0.65 } },
+    'p:bin_green':   { params: { color: 0x44584c, roughness: 0.7, metalness: 0.1 } },
+    'p:grape':       { params: { color: 0x4f4458, roughness: 0.4 } },
     'p:wheel_rim':   { params: { color: 0xa9afb4, roughness: 0.35, metalness: 0.9 } },
     'p:wood_table':  { params: { color: hasTex('timber') ? 0xffffff : 0x7d6a55, roughness: 0.85 }, tex: 'timber' },
     // Dark grey posts (not p:steel_dark, which is near black without an environment map).
@@ -44,13 +44,13 @@
   JB.Props.addMaterials(MATS);
   JB.Props.addMaterials({
     'p:cladding_white': { params: { color: hasTex('cladding_white') ? 0xffffff : 0xc9ced0, roughness: 0.45, metalness: 0.05, side: THREE.DoubleSide }, tex: 'cladding_white' },
-    'p:solar': { params: { color: 0x1f2e4a, roughness: 0.25, metalness: 0.35 } },
+    'p:solar': { params: { color: 0x2a3446, roughness: 0.25, metalness: 0.35 } },
     // Campus sign returns (cream edges and back of the board).
     'p:sign_edge': { params: { color: 0xd3cab3, roughness: 0.55 } }
   });
 
   // Car body palette: muted tones, each its own material key so the bucket colour is right.
-  const CAR_COLOURS = [0xc6c9c9, 0x8c9297, 0x6b3c38, 0x34475d, 0x3d5a4a, 0x9d8e74, 0x3d4247, 0x647a8c];
+  const CAR_COLOURS = [0xc0c3c2, 0x8a9094, 0x64504c, 0x414e5b, 0x46554c, 0x948a7a, 0x3d4145, 0x6a7782];
   const carKey = (c) => 'p:car_' + ('000000' + c.toString(16)).slice(-6);
   const carMats = {};
   CAR_COLOURS.forEach((c) => { carMats[carKey(c)] = { params: { color: c, roughness: 0.35, metalness: 0.15 }, tex: hasTex('car_paint') ? 'car_paint' : undefined }; });

@@ -22,7 +22,7 @@
   // Presets the campus adds to the Facility light table (level2.js LIGHTS). Only
   // the bounce values are needed here; the colours are the same as level2's.
   const CAMPUS_LIGHTS = {
-    outdoor: { c: 0xbcd6f2, bounce: 0.46 },
+    outdoor: { c: 0xbcd6f2, bounce: 0.4 },
     library: { c: 0xfff1dc, bounce: 0.065 },
     gym: { c: 0xf4f6ff, bounce: 0.07 },
     shed: { c: 0xffd9a8, bounce: 0.04 },
