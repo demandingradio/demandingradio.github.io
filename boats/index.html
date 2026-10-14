@@ -36955,7 +36955,6 @@ function frameInner(ts){
   if(started && !mapOpen){ worldTint(); slGlow(); seasGlow(); crGlow(); seasAmbGlow(); seasRoamGlow(); if(SAGA) sagaBeacon(); if(!scnCine()) drawHUD(); if(SCN || SCN_TB) scnOverlay(); }   // (INTROSTORY C2: a scene's letterbox in the HUD's place) · (slGlow: the lands' lava, caps & crystal glow through the night · crGlow: the sea creatures' — lures, embers, ghost-lights, the White's halo)
   if(started && mapOpen) fmFrame(ts);   // (CH Q1: the chart repaints once still)
 }
-requestAnimationFrame(frame);
 
 /* ============================ tuning panel ============================ */
 const TUNE_DEF=[
@@ -37787,6 +37786,7 @@ try{ if(localStorage.getItem(PLOG_IMG)) plogDb(); }catch(e){}   // (PT2 X2) olde
 // build an initial world so the buffer isn't empty if they peek — (SD7 FIX SD7VB-3) once the title has shown: the title draws its own sea, and the first
 // cold V4 build (60–190 ms) no longer stands between the page and its title · the Proving Grounds' door builds it first if pressed sooner (ptBoot)
 function titlePeek(){ if(started || cores.length) return; buildWorld(12345); boat.x=spawn.x; boat.y=spawn.y; camX=boat.x; camY=boat.y; }
+requestAnimationFrame(frame);
 requestAnimationFrame(()=>setTimeout(titlePeek,0)); setTimeout(titlePeek,400);   // (after the title's first frame · or soon anyway — a hidden tab runs no frames)
 
 addEventListener('keydown',e=>{ if(e.key==='Escape'){ mapOpen=false; imapOpen=false; } });
