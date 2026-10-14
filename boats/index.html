@@ -34849,13 +34849,6 @@ function buildLvlTune(){ const host=document.getElementById('tuneLvlRows'); if(!
 <script src="js/debug/proving_dev.js?v=1"></script>
 <script>
 "use strict";
-document.getElementById('inNext').onclick=e=>{ if(e) e.stopPropagation(); introPress('click'); };   // (PT2F: the button waits for the words — disabled till they're read, and a press begun before ▼ doesn't count)
-document.getElementById('intro').addEventListener('pointerdown',()=>{ if(INTY) INTY.downT=INTY.t; },true);   // (PT2F: when this press began, on the card's own clock)
-document.getElementById('intro').addEventListener('click',e=>{ if(!introOpen || !e.target.closest || e.target.closest('button,input,a,.inx') || !e.target.closest('.inbx')) return;   // (PT2F: a click on a plain card's words goes on — once they're read · the kit & her papers want their own buttons)
-  const c=introCards[introIx]; if(c && (c.kit || c.ship || c.choose)) return; introPress('click'); });   // (C5: the choice card answers on its own buttons)
-document.getElementById('ptestBtn').onclick=()=>{ ptBoot(); ptNewChar(); enterPort(PT_HARBOUR); document.getElementById('title').classList.add('hidden'); paused=false; last=performance.now(); };   // the title → the Proving Harbour (the kit card over it)
-document.getElementById('ptBack').onclick=()=>ptBoardBack();
-
 /* ============================ main loop ============================ */
 let last=0;
 /* atmospheric overlays — day/night tint, storm gloom, rain, lightning (over the sea, under the HUD) */
@@ -35199,6 +35192,13 @@ function begin(fresh){ if(fresh){ const w=saveWg(); if(w!=null && w!==WGEN.V) ti
   seasStart();   // (SEAS SE2: the seas from where she lies — no band for the water you wake in)
 }
 addEventListener('pointerdown',musGesture,true); addEventListener('keydown',musGesture,true);
+document.getElementById('inNext').onclick=e=>{ if(e) e.stopPropagation(); introPress('click'); };   // (PT2F: the button waits for the words — disabled till they're read, and a press begun before ▼ doesn't count)
+document.getElementById('intro').addEventListener('pointerdown',()=>{ if(INTY) INTY.downT=INTY.t; },true);   // (PT2F: when this press began, on the card's own clock)
+document.getElementById('intro').addEventListener('click',e=>{ if(!introOpen || !e.target.closest || e.target.closest('button,input,a,.inx') || !e.target.closest('.inbx')) return;   // (PT2F: a click on a plain card's words goes on — once they're read · the kit & her papers want their own buttons)
+  const c=introCards[introIx]; if(c && (c.kit || c.ship || c.choose)) return; introPress('click'); });   // (C5: the choice card answers on its own buttons)
+document.getElementById('ptestBtn').onclick=()=>{ ptBoot(); ptNewChar(); enterPort(PT_HARBOUR); document.getElementById('title').classList.add('hidden'); paused=false; last=performance.now(); };   // the title → the Proving Harbour (the kit card over it)
+document.getElementById('ptBack').onclick=()=>ptBoardBack();
+
 document.getElementById('startBtn').onclick=titleNewVoyage;
 document.getElementById('tMusBtn').onclick=()=>musToggle(1); musTitleBtn();   // (PT1 M2a) the music on/off before you sail (a device setting)
 document.getElementById('contBtn').onclick=()=>{ if(loadSave()){ begin(false); return; }
