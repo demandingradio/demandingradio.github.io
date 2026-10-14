@@ -4370,7 +4370,6 @@ function musUpdate(dt){ if(!actx) return;
 function musUnlock(){ if(!actx) initAudio(); if(!actx) return false; if(actx.state==='suspended' && SNDP.on && document.visibilityState!=='hidden') try{ actx.resume().catch(()=>{}); }catch(e){}
   if(SNDP.on && SNDP.musOn) musInit(); MUS.evT=0; return true; }                           // (musInit's convolver set-up, ≈ 24 ms, lands on the click — a quiet moment)
 function musGesture(){ removeEventListener('pointerdown',musGesture,true); removeEventListener('keydown',musGesture,true); if(titleBGOn()) musUnlock(); }
-addEventListener('pointerdown',musGesture,true); addEventListener('keydown',musGesture,true);
 function musToggle(q){ musUnlock(); SNDP.musOn=SNDP.musOn?0:1; sndPrefsSave(); sndApplyVol(); if(!SNDP.musOn) musHalt(); else if(actx){ musBankBuild(); musInit(); } MUS.evT=0;
   sndBlockRefresh(); musTitleBtn(); if(!q) toast(SNDP.musOn?'🎵  Music on':'🎵  Music off','Shift+P · Esc → 🎮 Options for volumes'); return SNDP.musOn; }
 function musTitleBtn(){ const b=document.getElementById('tMusBtn'); if(b) b.textContent='🎵 Music: '+(SNDP.musOn?'On':'Off'); }
@@ -35395,6 +35394,7 @@ function begin(fresh){ if(fresh){ const w=saveWg(); if(w!=null && w!==WGEN.V) ti
   else { SAGA_MUTE++; const w=introResume(); SAGA_MUTE=0; if(!w && !introOn()) toast('Set a heading','W to raise sail, M for your chart'); sagaResume(); }   // (PT2F: a voyage saved mid-welcome resumes it, in her home port · INTROSTORY C4a: the saved step re-armed)
   seasStart();   // (SEAS SE2: the seas from where she lies — no band for the water you wake in)
 }
+addEventListener('pointerdown',musGesture,true); addEventListener('keydown',musGesture,true);
 document.getElementById('startBtn').onclick=titleNewVoyage;
 document.getElementById('tMusBtn').onclick=()=>musToggle(1); musTitleBtn();   // (PT1 M2a) the music on/off before you sail (a device setting)
 document.getElementById('contBtn').onclick=()=>{ if(loadSave()){ begin(false); return; }
