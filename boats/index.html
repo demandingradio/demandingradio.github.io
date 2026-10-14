@@ -4525,6 +4525,7 @@ function landColor(e){
 const SAVE_KEY='mj_boats_v5';   // v5 = PT1 (the new sea: fewer isles, the harbours, town reputation …) — a fresh start, no migration · v4 CRAWL 2.0 · v3 RPG overhaul · v2 streamed world
 const OLD_SAVE_KEYS=['mj_boats_v4','mj_boats_v3','mj_boats_v2'];   // (never loaded: the title chip describes the newest, and a new voyage deletes them all)
 const DEFAULT_TUNE={ baseSpeed:96, accel:1.4, glide:0.42, turn:1.5, windSpread:0.55, windDrift:1.0, zoom:1.9,
+  chSettle:150, chNotchWait:500, chZoom:1.15, chUnder:1, chEase:0.06, chGlide:0.22, chKeyV:1, chPadV:0.9, chCoast:1,   // (CH Q1 · CH F1 · CH R1) THE CHART: repaint once still for (ms) · after a lone wheel notch, wait (ms) · × a wheel notch · the blurry underlay · zoom glide τ (s) · drag coast τ (s) · key / stick pan (charts a second) · the grid coastline (R1; 1 = the owner's pick, 2026-10-14)
   seaLand:1, seaProps:1, seaTree:0.36, seaHill:1, seaTex:1, seaGlow:1, seaBudget:1.5,
   seaPix:1, fishSize:1, shoalTell:1, gulls:1, creatGlow:1, creatBudget:2, whaleMem:6,
   townPix:1, townRows:200, townBiome:0, townLight:1, townNight:0.46, townLamp:64, townWin:1, townDecal:1, townTree:1, townLife:1, townBudget:1.5, roomNight:0.42, roomLight:1 };   // TOWNS IN PIXELS (w3): on (0 = the old smooth towns) · texel rows · force a biome (0 = the harbour's own) · lamps & night on · midnight ambient · lamp reach · lit windows × · ground detail × · tree size × · ambient life × · pre-bake budget · rooms' night ambient · hearth & candle ×   // FISH & WHALES IN PIXELS (w2): on (0 = the old smooth drawing) · fish size × · a school's shimmer & glow × · gulls · night glow × · whale bake budget (ms/frame) · whale looks kept (M texels)   // THE LANDS FROM THE SEA (w1): biome lands on (0 = the old flat bands) · props × · their size × · hill shade × · texture × · night glow × · pre-bake budget (ms/frame)
@@ -4544,18 +4545,33 @@ let audioOn=true, lastSave=0;
 // the chart is drawn LIVE from `explored` + the height field (no giant canvas), so it scales to any world size
 let mmCanvas=null, mmCtx=null, mmImg=null;   // minimap offscreen
 let fmCanvas=null, fmCtx=null, fmCX=0, fmCY=0, fmSpan=1, fmDirty=true, fmDrag=null, fmRX=0, fmRY=0, fmRSpan=1, fmRenderTs=-1e9;   // full-map: view + drag + last-rendered view (smooth pan/zoom)
+const FMV={ts:null, iv:[], ivs:new Float64Array(15), vEst:16.67, dt:0, rp:0, mvF:0, mvTs:-1e9, ref:{cx:0,cy:0,s:1}, nw:0, nwP:0, sd:500, stF:0, st:-1e9, pg:0, rel:null, rlTs:-1e9, hv:0, U:[0,0,0], Ud:0, wl:[], allT:0, setT:0,   // (CH Q1 · CH F1: the next line · CH2V-B1: pg = the gap before the last step) the chart's motion clock: frame ts · intervals → the display's (vEst) · moved (mvF) & when (mvTs) · the last view change was a step (nw) & its wait (sd) · a drag's release (rlTs) & a free pointer over the chart (hv) · the wheel's notch per deltaMode (U), learned at this devicePixelRatio (Ud) & its last events (wl)
+  k:new Set(), ko:new Set(), kc:{}, kh:{}, kv:{x:0,y:0}, kx:{arrowleft:-1,a:-1,arrowright:1,d:1}, ky:{arrowup:-1,w:-1,arrowdown:1,s:1}, pv:{x:0,y:0}, pz:0, z:{t:null,ax:null,ay:null,ls:0}, gv:{x:0,y:0}, gt:-1, ps:new Float64Array(96), pn:0, px:-1, py:-1, rb:{x:0,y:0}, cur:''};   // (CH F1) held chart keys in press order (k), pan keys owed the rest of 0.1 s (ko), hold times from frame dt (kh), key velocity in charts/s (kv) · the stick & triggers this frame (pv, pz) · the ease: ln target, anchor, the span it last wrote (z) · the glide px/s (gv) & its start (gt) · pointer samples [ts,x,y] ×32 ring (ps, pn) & the pointer (px, py) · the rubber pull, fractions of the span (rb) · the cursor shown (cur)
+const FMU={N:512, k:EXP*512/WORLD, cv:null, g:null, img:null, cov:null, rep:null, tx:null, ty:null, dirty:[],   // (CH Q1) the underlay: 512² over the world, a texel painted from its first charted cell (rep), so moving never shows blank parchment over charted water (CH R1: its coverage marked by exAdd as cells arrive, started over by exRebuild — no walk on open)
+  on(){ const U=FMU; if(!U.cov){ U.cv=document.createElement('canvas'); U.cv.width=U.cv.height=512; U.g=U.cv.getContext('2d'); U.img=U.g.createImageData(512,512); U.cov=new Uint8Array(512*512); U.rep=new Int32Array(512*512);
+      U.tx=new Int32Array(EGW); U.ty=new Int32Array(EGW); for(let g=0;g<EGW;g++){ const t=Math.min(511,((g+0.5)*U.k)|0); U.tx[g]=t; U.ty[g]=t*512; } }   // (a cell column / row → its texel, looked up — the open's walk stays cheap)
+    return U; } };   // (CH R1) allocate once, kept for the session
+const EXS={b:null, n:0, gx0:0, gx1:-1, gy0:0, gy1:-1, ex:null, rb:0, hm:null,   // (CH R1) the charted cells as bits (b, 4.29 MB) · how many (n) · the running box in cells (gx0…gy1) · the Set they mirror (ex) · rebuilds a mismatch forced (rb — stays 0) · the coast memo (hm, chCoast 1)
+  ok(){ const E=EXS; if(E.ex!==explored || E.n!==explored.size){ if(E.ex) E.rb++; exRebuild(); } } };   // (CH R1) self-healing: a writer that went round exAdd (or a Set swapped in) is caught here — it costs one walk, never a blank chart
 let SHIP=null, DK=null, helmUW=0, deckNight=0;   // (PT1 B1) the ship's record (saved as ship) · the deck's runtime (never saved) · seconds under way at the helm (the deck's hint chip) · (B5b) 1 while the night passes in your bunk — sounds hushed, the night's toasts kept for the dawn
 let COURSE=null, fmNote=null, padMapCross=false;   // (PT1 W5) THE COURSE MARKER {x,y,k:'port'|'isle'|'mark'|'sign'|'buoy'|'spot',ci?,label} (saved as course) · the chart's own one-line note · the pad's crosshair is up
 
 function revealR(){ return Math.round(8+crewRep('carto')*0.9); }   // (PT1 W7) the masthead's sight, in chart cells — a good Cartographer sees further (batch 3's unknown-music probe reuses it)
 let revN=0;   // (PT1 M2a) every cell reveal() has newly charted — the director's "sailing into the unknown" rate reads it (no extra Set work)
+function exAdd(k){ const E=EXS; if(E.ex!==explored || E.n!==explored.size) E.ok(); const i=k>>3, m=1<<(k&7); if(E.b[i]&m) return; E.b[i]|=m; E.n++; explored.add(k);   // (CH R1) THE one writer of `explored`: the Set · its bit · the count · the running box · the underlay's coverage (in step with the Set, a clear bit means a new cell)
+  const gx=k%EGW, gy=(k/EGW)|0; if(gx<E.gx0)E.gx0=gx; if(gx>E.gx1)E.gx1=gx; if(gy<E.gy0)E.gy0=gy; if(gy>E.gy1)E.gy1=gy;   // (CH R1)
+  const U=FMU, t=U.ty[gy]+U.tx[gx]; if(t>=0 && !U.cov[t]){ U.cov[t]=1; U.rep[t]=k; U.dirty.push(t); } }   // (CH R1)
+function exRebuild(){ const E=EXS, U=FMU.on(); if(!E.b) E.b=new Uint8Array(Math.ceil(EGW*EGW/8)); else E.b.fill(0);   // (CH R1) after `explored` is reassigned (a load · a new voyage), or caught out of step: one walk of the Set → the bits, the box & the underlay's coverage
+  U.cov.fill(0); U.img.data.fill(0); U.g.clearRect(0,0,512,512); U.dirty.length=0; const B=E.b, C=U.cov, RP=U.rep, D=U.dirty, TX=U.tx, TY=U.ty; let n=0, x0=EGW, x1=-1, y0=EGW, y1=-1;   // (CH R1)
+  for(const k of explored){ B[k>>3]|=1<<(k&7); n++; const gx=k%EGW, gy=(k/EGW)|0; if(gx<x0)x0=gx; if(gx>x1)x1=gx; if(gy<y0)y0=gy; if(gy>y1)y1=gy; const t=TY[gy]+TX[gx]; if(t>=0 && !C[t]){ C[t]=1; RP[t]=k; D.push(t); } }   // (CH R1)
+  E.ex=explored; E.n=n; E.gx0=x0; E.gx1=x1; E.gy0=y0; E.gy1=y1; }   // (CH R1)
 function reveal(){
   const cgx=Math.floor(boat.x/EXP), cgy=Math.floor(boat.y/EXP), n0=explored.size;
   const R=revealR();
   for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
     if(dx*dx+dy*dy>R*R) continue;
     const gx=cgx+dx, gy=cgy+dy; if(gx<0||gy<0||gx>=EGW||gy>=EGW) continue;
-    explored.add(gx+gy*EGW);
+    exAdd(gx+gy*EGW);   // (CH R1)
   }
   revN+=explored.size-n0;
 }
@@ -4765,9 +4781,9 @@ function loadSave(){
     (s.tleads||[]).forEach(idx=>{ if(cores[idx]) cores[idx].forceBuried=true; });
     (s.scout||[]).forEach(idx=>{ if(cores[idx]) cores[idx].scouted=true; });   // (older saves: none scouted)
     (s.pv||[]).forEach(idx=>{ if(cores[idx]) cores[idx].visitedPort=true; });
-    explored=expUnpack(s.explored,new Set());
+    explored=expUnpack(s.explored,new Set()); exRebuild();   // (CH R1: the bits, the box & the underlay's coverage, from the loaded Set)
     if(s.expd && cores[s.expd.ci]){                       // the survey finished while you were away
-      for(const k of islandLandCells(cores[s.expd.ci])) explored.add(k); cores[s.expd.ci].scouted=true;
+      for(const k of islandLandCells(cores[s.expd.ci])) exAdd(k); cores[s.expd.ci].scouted=true;   // (CH R1)
       toast('⛺  The survey finished while you were away','the isle is charted — the haul was lost to the tide'); }
     camX=boat.x; camY=boat.y;
     return true;
@@ -4779,6 +4795,7 @@ function tunePrune(o,D){ for(const k in o) if(!(k in D)) delete o[k]; return o; 
 const keys={};
 addEventListener('keydown',e=>{
   const k=e.key.toLowerCase(); inDev='kb';
+  if(!mapOpen && FMV.k.size) fmReset(1);                          // (CH2C-2) the chart just shut another way (Esc, the pad's B / Start, a docking click): its held keys wait for their keyup before the frame does — an OS repeat never sails or walks
   if(dndKey(k,e)) return;                                         // (PT1 W10) a drag in the air / the salvage confirm: Esc lets go of it — never the panel
   if(k===']' && ptMode && !e.repeat && !renaming && !(e.target&&e.target.tagName==='INPUT')){ metersOn=!metersOn; return; }   // the DEV meters & scorecard overlay (the crawl — CRAWL 2.0 §13) · RC fix: the Proving Grounds only
   if(k==='`' && !e.repeat && started && ptMode && !renaming){ devShow(!devOn); return; }                                // the Proving Grounds' DEV panel (§13 — the pad: both sticks)
@@ -4805,7 +4822,7 @@ addEventListener('keydown',e=>{
   if(menuOpen){ if(k==='escape') closeMenu(); else if(k==='t') switchMenuTab('tuning'); else if(k==='q' && !e.repeat && !(e.target && e.target.tagName==='INPUT' && e.target.type==='text')) quitPress(); return; }   // (PT2 X1: Q — ⏏ Save & quit to title, pressed twice)
   if(flogOpen){ if(k==='l'||k==='escape'||k==='e') closeFlog(); return; }
   if(koOpen){ if(k==='enter'||k==='e'||k==='escape'||k===' ') hideKO(); return; }
-  if(imapOpen){ if(k==='m'||k==='escape'||k==='e'){ imapOpen=false; } return; }
+  if(imapOpen){ if((k==='m'&&!e.repeat)||k==='escape'||k==='e'){ imapOpen=false; } return; }   // (CH F1: a held M no longer flickers the isle map)
   if(shopOpen){ if(k==='escape' && shopBack()) return; if(k==='escape'||(k==='e'&&!e.repeat)) closeShop(); else if(k==='arrowleft'||k==='arrowright') shopTabStep(k==='arrowright'?1:-1); return; }   // (C7b: Esc first lets go of the forge's picked piece · ← → flip the market's & the forge's tabs)
   if(journalOpen){ if(k==='j'||k==='escape'||k==='e') closeJournal(); return; }
   if(caveOpen){ if(!e.repeat) caveKey(k); return; }            // the cave mouth's descent card
@@ -4821,7 +4838,7 @@ addEventListener('keydown',e=>{
     else if(k>='1' && k<='4'){ if(!e.repeat) castSlot(+k+1); return; }   // THE SKILL BAR (§4.1): 1-4 = slots 3-6
     else if(k===' ') dashPress(e.repeat);                       // (PT2 X2: the player's dash — again just as it lands = THE PERFECT DASH)
     else if(k==='q'||k==='h'){ if(!e.repeat) drinkFlask(); return; }   // the flask (H: the old key, an alias) — empty, it drinks a carried draught
-    else if(k==='m'){ imapOpen=true; return; }
+    else if(k==='m'){ if(!e.repeat) imapOpen=true; return; }   // (CH F1: once a press)
     else if(k==='e'){ doInteract(); }
     else if(k==='i'){ openInv(); return; }
     if(k==='w'||k==='a'||k==='s'||k==='d'||k.startsWith('arrow')) mouseAcc=0;   // walking on the keys: a slow mouse drift can't add up to a switch
@@ -4829,17 +4846,8 @@ addEventListener('keydown',e=>{
   }
   if(mode==='port'){                            // ---- ashore in town ----
     if(PRT && PRT.core.ptHarbour && (k==='m'||k==='j')) return;   // (the Proving Harbour: no chart, no contracts)
-    if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
-    if(mapOpen){
-      if(k==='='||k==='+') zoomMap(0.8,null);
-      else if(k==='-'||k==='_') zoomMap(1.25,null);
-      else if(k==='arrowleft'||k==='a') panMap(-0.14,0);
-      else if(k==='arrowright'||k==='d') panMap(0.14,0);
-      else if(k==='arrowup'||k==='w') panMap(0,-0.14);
-      else if(k==='arrowdown'||k==='s') panMap(0,0.14);
-      else if(k==='backspace'||k==='delete'){ e.preventDefault(); if(COURSE) courseClear('⚑  Course cleared'); }   // (PT1 W5) the course, cleared
-      return;
-    }
+    if(k==='m'){ fmToggle(e); return; }   // (CH Q1: a held M opens once)
+    if(mapOpen){ fmKey(k,e); return; }   // (CH F1) the chart's keys — held arrows / WASD glide, +/- zoom, Backspace / Delete clear the course (PT1 W5): fmKey
     if(k==='e'){ doPortInteract(); return; }
     if(k==='j'){ openJournal(); return; }
     keys[k]=true; return;
@@ -4850,17 +4858,8 @@ addEventListener('keydown',e=>{
     keys[k]=true; return;
   }
   if(mode==='deck'){ deckKey(k,e); return; }    // ---- on your own deck (PT1 B1) ----
-  if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
-  if(mapOpen){   // while the chart is open, arrows pan and +/- zoom it · Backspace / Delete clear the course (PT1 W5)
-    if(k==='='||k==='+') zoomMap(0.8,null);
-    else if(k==='-'||k==='_') zoomMap(1.25,null);
-    else if(k==='arrowleft'||k==='a') panMap(-0.14,0);
-    else if(k==='arrowright'||k==='d') panMap(0.14,0);
-    else if(k==='arrowup'||k==='w') panMap(0,-0.14);
-    else if(k==='arrowdown'||k==='s') panMap(0,0.14);
-    else if(k==='backspace'||k==='delete'){ e.preventDefault(); if(COURSE) courseClear('⚑  Course cleared'); }
-    return;
-  }
+  if(k==='m'){ fmToggle(e); return; }   // (CH Q1: a held M opens once)
+  if(mapOpen){ fmKey(k,e); return; }   // while the chart is open, arrows pan and +/- zoom it · Backspace / Delete clear the course (PT1 W5) · (CH F1: held keys glide — fmKey)
   if(k==='h'){ if(!e.repeat) leaveHelm(); return; }           // (PT1 B1) leave the helm — walk your deck (the Master takes the wheel)
   if(k==='b' && shipGuns()>0){ if(!e.repeat) shipFire(); return; }   // PIRATES HOOK (owner 2026-10-02): her broadsides fire from HERE, at the helm — B reads shipGuns() (0 today: no combat built — see SHIP_STG's note)
   if(k==='f'){ netKey(); return; }                            // pay out / reel in the cork-line
@@ -4882,18 +4881,25 @@ addEventListener('keydown',e=>{
   else if(k==='-'||k==='_'){ TUNE.zoom=clamp(TUNE.zoom-0.12,0.6,1.9); syncTune(); }
   keys[k]=true;
 });
-addEventListener('keyup',e=>{ const k=e.key.toLowerCase(); keys[k]=false; SCN_HELD.delete(k); SCN_LATCH.delete(k); SCN_OUT.delete(k); });   // (INTROSTORY C2: a key released is free again)
-addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; fmDrag=null; mouseL=false; mouseR=false; SCN_HELD.clear(); SCN_LATCH.clear(); SCN_OUT.clear(); player.hv=null; });   // (PX H1) a lost focus drops a charge — it never fires as the keys clear
+addEventListener('keyup',e=>{ const k=e.key.toLowerCase(), kq=(e.code&&FMV.kc[e.code])||k; if(e.code) delete FMV.kc[e.code]; keys[k]=false; SCN_HELD.delete(k); SCN_LATCH.delete(k); SCN_LATCH.delete(kq); SCN_OUT.delete(k); if(FMV.k.size) fmKey(kq,e);   // (INTROSTORY C2: a key released is free again · CH F1: and off the chart's held set — canonical, the tap rule · CH CRC-1: kq = the key it was held as, by its physical key)
+  const kc=kq==='+'?'=':kq==='_'?'-':kq==='='?'+':kq==='-'?'_':null; if(kc) SCN_LATCH.delete(kc); });   // (CH2C-1) its Shift twin too: = held, released as + (or - as _), is free again
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; fmDrag=null; mouseL=false; mouseR=false; SCN_HELD.clear(); SCN_LATCH.clear(); SCN_OUT.clear(); player.hv=null; FMV.k.clear(); FMV.ko.clear(); FMV.kc={}; });   // (PX H1) a lost focus drops a charge — it never fires as the keys clear (CH F1: the chart's held keys too)
 // full-map zoom (scroll) + pan (drag) with the mouse — a clean tap sets the course (or docks at a port in reach)
-addEventListener('wheel',e=>{ if(!started||!mapOpen) return; e.preventDefault();
-  const r=mapRect(); zoomMap(e.deltaY>0?1.16:0.86, screenToMapWorld(e.clientX,e.clientY,r)); },{passive:false});
-addEventListener('mousedown',e=>{ if(started&&mapOpen){ inDev='kb'; fmDrag={x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false}; } });   // (the mouse on the chart: its legend, not the pad's crosshair)
-addEventListener('mousemove',e=>{ if(!fmDrag||!mapOpen) return; const sc=mapRect().size/fmSpan;
+addEventListener('wheel',e=>fmWheel(e),{passive:false});   // (CH Q1) notches counted, sideways ignored — fmWheel
+addEventListener('mousedown',e=>{ if(started&&mapOpen&&!GCH.open){ inDev='kb'; const V=FMV, r=mapRect(); fmDrag={x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false, caught:Math.hypot(V.gv.x,V.gv.y)>150, gx:fmCX+(V.rb.x+(e.clientX-r.mx)/r.size-0.5)*fmSpan, gy:fmCY+(V.rb.y+(e.clientY-r.my)/r.size-0.5)*fmSpan};   // (CH F1)
+    V.gv.x=V.gv.y=0; V.px=e.clientX; V.py=e.clientY; V.pn=0; V.nw=0; } });   // (the mouse on the chart: its legend, not the pad's crosshair · CH Q1: never under the Long Chart · CH F1: the grabbed point (raw — with the rubber's pull) stays under the pointer · a press on a fast glide catches it · it stops the glide)
+addEventListener('mousemove',e=>{ const V=FMV; V.px=e.clientX; V.py=e.clientY; if(!mapOpen) return;   // (CH F1) the pointer, for the glide's samples, the ease's anchor under a drag, the cursor (CH2C-6: kept with the chart shut too — a reopen's hand starts true)
+  if(!fmDrag){ if(!e.buttons){ const r=mapRect(); if(e.clientX>=r.mx && e.clientX<=r.mx+r.size && e.clientY>=r.my && e.clientY<=r.my+r.size) V.hv=1; } return; }   // (CH Q1 · CH1-B3 · CH F1) a free pointer over the chart: fmFrame holds the settle if a drag just ended (no time work here)
+  if(e.buttons===0){ V.rel={moved:fmDrag.moved, caught:!!fmDrag.caught}; fmDrag=null; return; }   // (CH Q1 · CH F1) a release we never heard — the drag ends (no tap)
+  const r=mapRect(), s=fmSpan, ox=fmCX, oy=fmCY;   // (CH Q1 · CH F1)
   if(Math.abs(e.clientX-fmDrag.sx)+Math.abs(e.clientY-fmDrag.sy)>5) fmDrag.moved=true;
-  fmCX-=(e.clientX-fmDrag.x)/sc; fmCY-=(e.clientY-fmDrag.y)/sc;
-  fmDrag.x=e.clientX; fmDrag.y=e.clientY; clampMap(); fmDirty=true; });
+  const wx=fmDrag.gx-((e.clientX-r.mx)/r.size-0.5)*s, wy=fmDrag.gy-((e.clientY-r.my)/r.size-0.5)*s;   // (CH F1) the absolute grab: the centre that keeps the grabbed point under the pointer
+  fmCX=clamp(wx,-s*0.1,WORLD+s*0.1); fmCY=clamp(wy,-s*0.1,WORLD+s*0.1); V.rb.x=(wx-fmCX)/s; V.rb.y=(wy-fmCY)/s;   // (CH F1) the view stays legal — past the limit the rest is the rubber's pull, shown squeezed (fmRub)
+  if(Math.abs(V.rb.x)>0.12){ V.rb.x=Math.sign(V.rb.x)*0.12; fmDrag.gx=fmCX+(V.rb.x+(e.clientX-r.mx)/r.size-0.5)*s; } if(Math.abs(V.rb.y)>0.12){ V.rb.y=Math.sign(V.rb.y)*0.12; fmDrag.gy=fmCY+(V.rb.y+(e.clientY-r.my)/r.size-0.5)*s; }   // (CH2V-B2) the raw pull stops at 0.12 (shown 5.2 %) and the grab re-bases there — dragging back answers within ~0.12 of the chart, no dead zone
+  fmDrag.x=e.clientX; fmDrag.y=e.clientY; if(fmCX!==ox||fmCY!==oy){ V.mvF=1; V.nw=0; } });   // (CH Q1 · CH F1: the view moves; the picture waits till it's still)
 addEventListener('mouseup',e=>{
-  if(fmDrag && !fmDrag.moved && started && mapOpen && e.button===0) mapTap(e.clientX,e.clientY);   // (PT1 W5: a known place sets the course · the marker clears · a ⚓ port in reach docks, at sea)
+  if(fmDrag && !fmDrag.moved && !fmDrag.caught && started && mapOpen && e.button===0) mapTap(e.clientX,e.clientY);   // (PT1 W5: a known place sets the course · the marker clears · a ⚓ port in reach docks, at sea · CH F1: a press that caught a glide only stops it)
+  if(fmDrag) FMV.rel={moved:fmDrag.moved, caught:!!fmDrag.caught};   // (CH Q1 · CH F1) the next fmFrame restarts the settle timer and decides the glide (no time here)
   fmDrag=null; });
 // at sea: a click docks at a port (on the chart or the town itself) — otherwise the harpoon flies
 addEventListener('mousedown',e=>{
@@ -5025,13 +5031,12 @@ function padNavHex(P,eL,eR){
   }
   if(P('attack')){ if(cargo.gold>=1) hexAgain(); else hexLeave(); } else if(P('cancel')||P('menu')) hexLeave();
 }
-function padNavMap(lx,ly,P,D,dt){
+function padNavMap(lx,ly,P,D,dt,gp){   // (CH F1: + gp, the raw stick & triggers)
   if(imapOpen){ if(P('map')||P('cancel')||P('interact')||P('menu')) imapOpen=false; return; }
   padMapCross=true;                                  // (PT1 W5) the big chart on the pad: a gold crosshair at its centre — A sets / clears the course there · X clears it
-  if(lx||ly) panMap(lx*0.9*dt, ly*0.9*dt);
-  if(D('zoomin')) zoomMap(1-1.3*dt, null);
-  if(D('zoomout')) zoomMap(1+1.5*dt, null);
-  if(P('attack')) mapTapWorld(fmCX,fmCY,22);
+  { const V=FMV, ax=gp?+gp.axes[0]||0:0, ay=gp?+gp.axes[1]||0:0, m=Math.hypot(ax,ay); let s=0; if(m>0.2){ s=Math.pow((Math.min(m,1)-0.2)/0.8,2)*TUNE.chPadV; if(s<0.012) s=0; } V.pv.x=s?ax/m*s:0; V.pv.y=s?ay/m*s:0;   // (CH F1) the stick, read raw: a round deadzone 0.2, rescaled & squared, the drift floor (< 0.012 charts/s = still) · fmTick moves it on real time · never inDev (pollPad's 0.35 rule stays)
+    const bi=gp&&gp.buttons[PAD.bind.zoomin], bo=gp&&gp.buttons[PAD.bind.zoomout], vi=bi?(+bi.value||(bi.pressed?1:0)):0, vo=bo?(+bo.value||(bo.pressed?1:0)):0; V.pz=1.4*((vo>0.08?vo:0)-(vi>0.08?vi:0)); }   // (CH F1) the triggers, analog: 1.4 ln-units/s × how hard, the same in and out, straight to the span
+  if(P('attack')) mapTapWorld(fmCX+fmRub(FMV.rb.x)*fmSpan, fmCY+fmRub(FMV.rb.y)*fmSpan, 22);   // (CH F1: the centre as shown — where the crosshair sits)
   else if(P('skill2')){ if(COURSE) courseClear('⚑  Course cleared'); }
   if(mapOpen && (P('map')||P('cancel')||P('menu'))) mapOpen=false;
 }
@@ -5110,7 +5115,7 @@ function pollPad(dt){
     if(P('skill4')) shopTabStep(-1); else if(P('interact')) shopTabStep(1);   // (C7b: LB / RB flip the market's & the forge's tabs · B lets go of a picked piece first)
     else padNavList(document.getElementById('shop'),P,eU,eD,eL,eR,()=>{ if(!shopBack()) closeShop(); }); if(P('menu') && shopOpen) closeShop(); padSnap(gp); return; }
   if(journalOpen){ padRelease(); if(P('cancel')||P('interact')||P('menu')) closeJournal(); padSnap(gp); return; }
-  if(mapOpen||imapOpen){ padRelease(); padNavMap(lx,ly,P,D,dt); padSnap(gp); return; }
+  if(mapOpen||imapOpen){ padRelease(); padNavMap(lx,ly,P,D,dt,gp); padSnap(gp); return; }   // (CH F1: the chart reads the raw stick & triggers)
 
   // ---- live gameplay ----
   let mvx=lx, mvy=ly;                                  // the D-pad moves too, not just the stick
@@ -5226,7 +5231,7 @@ function plogKey(e){ const L=PLOG; if(!L) return; const B=L.box;
 function plogNm(c){ return c ? String(c.port ? c.city : (c.customName||c.label||c.name||'an isle')) : '—'; }
 function plogClock(){ const h=((env.dayT||0)*24)%24, m=Math.floor((h%1)*60); return 'Day '+(fDay()+1)+' '+String(Math.floor(h)).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
 function plogBuild(){ let snd='?'; try{ snd=(audioOn?'on':'muted')+' · music '+(SNDP.musOn?'on':'off')+' · samples '+SNDX.st; }catch(e){}
-  return {ver:'PT2', save:SAVE_KEY, sv:SAVE_SV, wg:WGEN.V, url:location.pathname+location.search, mod:document.lastModified, screen:innerWidth+'×'+innerHeight+' @'+(window.devicePixelRatio||1), pad:padIndex!=null?String(padDevName).slice(0,40):'', sound:snd}; }
+  return {ver:'PT2', save:SAVE_KEY, sv:SAVE_SV, wg:WGEN.V, url:location.pathname+location.search, mod:document.lastModified, screen:innerWidth+'×'+innerHeight+' @'+(window.devicePixelRatio||1), pad:padIndex!=null?String(padDevName).slice(0,40):'', sound:snd, wheel:typeof FMV!=='undefined'?{U:FMV.U.map(u=>+u.toFixed(2)), ev:FMV.wl.slice(-8).map(w=>w.dy+'/'+w.mode+'/'+w.ctrl)}:null}; }   // (CH Q1: wheel = the notch per deltaMode + the last 8 events, dy/mode/ctrl)
 function plogUi(){ const D=DK, U=[menuOpen&&'menu: '+menuTab, shopOpen&&'shop', invOpen&&'satchel', mapOpen&&'chart', imapOpen&&'isle map', talkOpen&&'talk', journalOpen&&'contracts', flogOpen&&'fish log', LEDG&&'ledger', koOpen&&'KO card',
     introOpen&&'intro', caveOpen&&'cave card', renaming&&'naming', summaryOpen&&'summary', ptestOpen&&'crawl board', devOn&&'DEV panel', D&&D.edit&&'decorating', D&&D.fish&&'hand-line', D&&D.sleep&&'asleep', D&&D.card&&'deck card', SCN&&'scene '+SCN.id+'#'+SCN.i];   // (IS1 FIX: a note written mid-scene names the scene & its op)
   return U.filter(Boolean).join(' · '); }
@@ -11148,20 +11153,96 @@ function drawMinimap(){
 
 /* full parchment map (M) — the whole world, painted from explored cells on open -- */
 /* full map (M) — pannable/zoomable chart, drawn the same crisp way as the minimap */
+/* ============================ PROJECT SMOOTH CHART (CH) — the chart's motion, its settle-time repaint, its underlay ============================ */
+function fmFrame(ts){ const V=FMV;   // (CH Q1) every chart frame (sea · port · deck): the clock, "moving", the underlay, the ONE repaint once still, the draw
+  let iv=V.ts===null?0:ts-V.ts; if(iv<0){ V.mvTs=Math.min(V.mvTs,ts); V.st=Math.min(V.st,ts); V.rlTs=-1e9; iv=0; }   // (a clock that went back can't hold the repaint off)
+  if(iv>0 && iv<=100 && !V.rp){ V.iv.push(iv); if(V.iv.length>15) V.iv.shift(); const A=V.iv, s=V.ivs, n=A.length; for(let i=0;i<n;i++){ const x=A[i]; let j=i-1; while(j>=0 && s[j]>x){ s[j+1]=s[j]; j--; } s[j+1]=x; } V.vEst=s[n>>1]; }   // the display's interval: median of 15, never after a repaint (CH Q1 · CH1C-1: sorted in place, no per-frame garbage)
+  let dt=Math.min(Math.max(iv/1000,0),0.1); if(V.rp || iv>4*V.vEst) dt=Math.min(dt,V.vEst/1000); V.dt=dt;   // a freeze is never integrated (F1's motions read V.dt)
+  if(iv>1000){ V.gv.x=V.gv.y=0; V.kv.x=V.kv.y=0; }                         // (CH F1) a gap over 1 s (a hidden tab): the glide & the keys' run stop — the ease simply goes on
+  if(V.stF){ const g=ts-V.st, W=Math.max(TUNE.chSettle,TUNE.chNotchWait), P=V.pg, Te=TUNE.chEase>0?1000*TUNE.chEase*Math.log(Math.log(Math.max(TUNE.chZoom,1.01))/0.002):0; V.sd=g<250?clamp(2*g,TUNE.chSettle,W):(TUNE.chNotchWait>0 && P>=250 && P<=1100 && g<=1100 ? clamp(1.3*Math.max(g,P)-Te,W,1100) : W); V.pg=g; V.nw=1; V.st=ts; V.stF=0; }   // (CH Q1 · CH1-B1) a step (a wheel notch) waits by its rhythm: lone (≥ 0.25 s) → 500 ms, else twice its gap (150…500) — notching 0.15–0.25 s apart never repaints between notches (CH2V-B1: two slow gaps in a row, 0.25–1.1 s → the wait covers 1.3 × the longer gap, counted from the end of the notch's glide (Te, 255 ms), 500…1100 ms — a slow series learns its rhythm; ≤ 0.6 s rhythms unchanged · chNotchWait 0 keeps 150)
+  if(V.rel){ const R=V.rel; if(R.moved && !fmDrag && TUNE.chGlide>0 && V.pn>1){ const S=V.ps, l=((V.pn-1)%32)*3, tl=S[l]; let o=l; for(let k=1, N=Math.min(V.pn,32); k<N; k++){ const q=((V.pn-1-k)%32)*3; if(S[q]<tl-80) break; o=q; }   // (CH F1) the glide, decided here on frame time: the pointer's travel over the last 80 ms of its held-frame samples (≥ 50 ms of span)
+      const w=Math.max(tl-S[o],50)/1000, vx=(S[l+1]-S[o+1])/w, vy=(S[l+2]-S[o+2])/w, m=Math.hypot(vx,vy); if(m>=120){ const c=Math.min(1,3000/m); V.gv.x=vx*c; V.gv.y=vy*c; V.gt=ts; } }   // (CH F1: ≥ 120 px/s to start · ≤ 3,000 · a still release or a wobbly click never flings)
+    if(!fmDrag) V.pn=0; V.mvTs=ts; V.rlTs=R.moved?ts:-1e9; V.rel=null; }    // a release restarts the settle timer (CH Q1 · CH1-B3: a drag's release is stamped · CH F1: the samples go)
+  if(fmDrag){ const S=V.ps, j=(V.pn%32)*3; S[j]=ts; S[j+1]=V.px; S[j+2]=V.py; V.pn++; }   // (CH F1) a pointer sample every frame a press is held (a ring — no garbage)
+  if(V.hv){ V.hv=0; if(ts-V.rlTs<600) V.mvTs=ts; }                         // (CH Q1 · CH1-B3) the free pointer moving over the chart ≤ 0.6 s after a drag (re-grabbing) holds the settle — it sharpens once the hand rests
+  const MR=mapRect(); fmTick(dt,ts,MR);                                     // (CH F1) every motion: pad → keys → glide → ease → spring (CH2C-3: one mapRect a frame, shared)
+  if(V.mvF){ const R=V.ref, sz=MR.size, sc=sz/fmSpan;               // moving = ≥ 0.5 CSS px at the chart's edge since the last stamp
+    if(Math.abs(fmCX-R.cx)*sc>=0.5 || Math.abs(fmCY-R.cy)*sc>=0.5 || Math.abs(Math.log(fmSpan/R.s))*sz/2>=0.5){ V.mvTs=ts; R.cx=fmCX; R.cy=fmCY; R.s=fmSpan; } V.mvF=0; }
+  if(V.nwP && !V.nw) V.mvTs=ts;   // (CH CRB-1) a key / the stick / a trackpad / a drag ended a lone step's wait: the settle counts from this frame — never a repaint on a new gesture's first (sub-0.5 px) frame
+  if(TUNE.chUnder>0 && !dev.revealAll) fmUnderSync(1500);
+  if((fmDirty || !fmCanvas || fmViewNe()) && fmSettled(ts)){ renderFullMap(); fmRenderTs=ts; fmDirty=false; V.rp=1; const R=V.ref; R.cx=fmCX; R.cy=fmCY; R.s=fmSpan; } else V.rp=0;   // (CH Q1 · CH1-B4: "moving" is then measured from the painted view)
+  drawFullMap(); fmCursor(MR); V.ts=ts; V.nwP=V.nw; }   // (CH F1: the hand cursor · CH CRB-1: this frame's "a step" kept for the next)
+function fmSettled(ts){ return fmDrag===null && ts-FMV.mvTs>=(FMV.nw?FMV.sd:TUNE.chSettle); }   // (CH Q1) no press held, and still long enough (CH1-B1: after a step, its own wait)
+function fmViewNe(){ if(!fmCanvas) return true; const z=mapRect().size, h=Math.max(fmRSpan/(fmCanvas.width||520)/2, 0.5*fmSpan/z); return Math.abs(fmCX-fmRX)>h || Math.abs(fmCY-fmRY)>h || Math.abs(Math.log(fmSpan/fmRSpan))*z/2>0.5; }   // (CH Q1) the view ≠ the painted one (> half a texel · CH1-B4: and > 0.5 CSS px, the "moving" metric — a sub-pixel nudge never repaints unsettled)
+function fmReset(off){ const V=FMV; V.ts=null; V.mvTs=-1e9; V.mvF=0; V.rp=0; V.nw=0; V.nwP=0; V.sd=500; V.st=-1e9; V.pg=0; V.rel=null; V.rlTs=-1e9; V.hv=0; V.ref={cx:fmCX, cy:fmCY, s:fmSpan}; fmDrag=null;   // (CH Q1 · CH F1: off = the chart shut) every open: the first frame paints at once · a button held from before can't drag the new view
+  if(off) for(const k of V.k) if(!V.ko.has(k)){ SCN_LATCH.add(k); if(k==='=') SCN_LATCH.add('+'); else if(k==='-') SCN_LATCH.add('_'); } V.k.clear(); V.ko.clear(); V.kv.x=V.kv.y=0; V.gv.x=V.gv.y=0; V.pv.x=V.pv.y=0; V.pz=0; V.z.t=null; V.rb.x=V.rb.y=0; V.pn=0; if(V.cur){ cv.style.cursor=''; V.cur=''; } }   // (CH F1) …and every motion stops · shut (off): a key held on the chart waits for its keyup (a W held across M never sails) · the cursor back
+function fmUnderSync(n){ const U=FMU, D=U.dirty; if(!D.length || !U.img) return 0; const d=U.img.data, m=Math.min(n,D.length); let x0=512,y0=512,x1=-1,y1=-1;   // (CH Q1) ≤ n newly covered texels a frame, coloured as renderFullMap colours that cell (no coast ink)
+  for(let i=0;i<m;i++){ const t=D.pop(), key=U.rep[t], wx=(key%EGW+0.5)*EXP, wy=(((key/EGW)|0)+0.5)*EXP, h=rawHeight(wx,wy); let R,G,B;
+    if(h<SEA){ const dp=clamp((SEA-h)/0.5,0,1); if(dp<0.16){R=150;G=178;B=178;} else {R=120;G=150;B=170;} }
+    else { const e=clamp(h/1.1,0,1), q=TUNE.seaLand>0?chartLand(coresNear(wx,wy,620),wx,wy,e):null; if(q){R=q[0];G=q[1];B=q[2];} else if(e<0.06){R=206;G=182;B=128;} else if(e<0.5){R=96;G=140;B=80;} else {R=70;G=104;B=66;} }
+    const o=t*4, tx=t&511, ty=t>>9; d[o]=R; d[o+1]=G; d[o+2]=B; d[o+3]=255; if(tx<x0)x0=tx; if(tx>x1)x1=tx; if(ty<y0)y0=ty; if(ty>y1)y1=ty; }
+  U.g.putImageData(U.img,0,0,x0,y0,x1-x0+1,y1-y0+1); return m; }   // (only the batch's dirty rectangle)
+function fmUnderDraw(mx,my,size,ox,oy,sc){ ctx.fillStyle='rgb(212,201,174)'; ctx.fillRect(mx,my,size,size);   // (CH Q1) the picture doesn't cover the view: beyond-the-world · parchment over the world · the underlay's view rect
+  const x0=Math.max(mx,mx-ox*sc), y0=Math.max(my,my-oy*sc), x1=Math.min(mx+size,mx+(WORLD-ox)*sc), y1=Math.min(my+size,my+(WORLD-oy)*sc); if(!(x1>x0 && y1>y0)) return;
+  ctx.fillStyle='#e9dcc0'; ctx.fillRect(x0,y0,x1-x0,y1-y0); const U=FMU; if(!U.cv) return; const T=WORLD/512;
+  ctx.drawImage(U.cv, ((x0-mx)/sc+ox)/T, ((y0-my)/sc+oy)/T, (x1-x0)/sc/T, (y1-y0)/sc/T, x0, y0, x1-x0, y1-y0); }
+function fmWheel(e){ if(!started || !mapOpen) return; e.preventDefault(); if(GCH.open) return;   // (CH CRC-2: with the M chart open the page never zooms — under the Long Chart too, as before CH) (CH Q1) the wheel: notches counted (×chZoom each, on any screen), small events proportional, Ctrl-pinch, sideways / zero ignored
+  const V=FMV, m=e.deltaMode|0, dy=+e.deltaY||0, dx=+e.deltaX||0; V.wl.push({dy:+dy.toFixed(2), dx:+dx.toFixed(2), mode:m, ctrl:e.ctrlKey?1:0, dpr:window.devicePixelRatio||1}); if(V.wl.length>16) V.wl.shift();
+  if(!dy || Math.abs(dx)>Math.abs(dy)) return;                              // (a tilt wheel, Shift+wheel, a sideways swipe — no longer zooms in)
+  const dpr=window.devicePixelRatio||1; if(V.Ud!==dpr){ V.U[0]=V.U[1]=V.U[2]=0; V.Ud=dpr; }   // (CH Q1 · CH1-B2) the notch is learned per devicePixelRatio: another monitor's scaling or a page zoom starts it over (else the unit only shrinks)
+  const px=dy*(m===1?33.33:m===2?400:1), a=Math.abs(px), L=Math.log(TUNE.chZoom); let dl;
+  if(e.ctrlKey && m===0 && Math.abs(dy)<50){ dl=clamp(0.01*px,-0.4,0.4); V.nw=0; }   // a trackpad pinch: 1:1 with the fingers
+  else if(m!==0 || a>=50){ if(!V.U[m] || a<0.8*V.U[m]) V.U[m]=a; dl=Math.sign(px)*clamp(Math.round(a/V.U[m]),1,3)*L; V.stF=1; }   // a notch: counted against the smallest seen in this deltaMode (≤ 3 an event)
+  else { dl=L/100*clamp(px,-300,300); V.nw=0; }                             // a trackpad / hi-res wheel: by how far it scrolled
+  const r=mapRect(), ax=clamp(e.clientX,r.mx,r.mx+r.size), ay=clamp(e.clientY,r.my,r.my+r.size);   // (over the dark margin: anchored on the square's edge)
+  fmZoomBy(dl,ax,ay); }   // (CH F1: into the ease — it glides there, toward the pointer)
+function fmToggle(e){ if(e && e.repeat) return; if(mapOpen){ mapOpen=false; fmReset(1); } else { mapOpen=true; openFullMap(); } }   // (CH Q1 · Ben M3) M held no longer flickers the chart (CH F1: shut — its held keys wait for their keyup)
+function fmTick(dt,ts,R0){ const V=FMV, r=R0||mapRect(), sz=r.size, x0=fmCX, y0=fmCY, s0=fmSpan;   // (CH F1) every chart motion, on the frame's real elapsed time, integrated exactly (§2.1–2.2): pad → keys → glide → ease → spring
+  if(V.pv.x||V.pv.y){ panMap(V.pv.x*dt, V.pv.y*dt); V.gv.x=V.gv.y=0; }   // the stick: rate × dt (panMap: the hard clamp, nw 0) · it stops a glide
+  if(V.pz){ const os=fmSpan; zoomMap(Math.exp(V.pz*dt), null); if(fmSpan!==os) V.nw=0; } V.pv.x=V.pv.y=0; V.pz=0;   // the triggers straight to the span (they stop the moment they're released) · consumed: a pad that stops reporting stops the chart
+  if((PLOG && PLOG.box) || GCH.open){ V.k.clear(); V.ko.clear(); }          // (the playtest note box, or the Long Chart over the chart: the held keys are released)
+  let tx=0, ty=0, sh=1, cz=0; if(V.k.size) for(const k of V.k){ const a=V.kx[k], b=V.ky[k], h0=V.kh[k]||0; if(a) tx=a; else if(b) ty=b; else if(k==='shift') sh=2.5;   // the last pressed wins on each axis · Shift ×2.5
+    else if(k==='='||k==='-') cz+=(k==='-'?1:-1)*Math.log(2.5)*Math.max(0,h0+dt-Math.max(h0,0.3)); V.kh[k]=h0+dt; }   // (+/- held past 0.3 s: ×2.5 a second · the hold summed from frame dt, never an event clock)
+  if(V.ko.size) for(const k of V.ko) if(V.kh[k]>=0.1){ V.ko.delete(k); V.k.delete(k); }   // (the tap rule: a quick tap is held 0.1 s — every tap the same nudge)
+  { const m=Math.hypot(tx,ty), u=m?TUNE.chKeyV*sh/m:0; let dx=0, dy=0;          // the pan keys: ramp τ 0.07 s to the speed · released τ 0.04 s · diagonals normalised
+    for(let i=0;i<2;i++){ const t=(i?ty:tx)*u, v=i?V.kv.y:V.kv.x, T=t?0.07:0.04, e=Math.exp(-dt/T), d=t*dt+(v-t)*T*(1-e); let nv=t+(v-t)*e; if(!t && Math.abs(nv)<0.03) nv=0; if(i){ dy=d; V.kv.y=nv; } else { dx=d; V.kv.x=nv; } }
+    if(dx||dy) panMap(dx,dy); if(tx||ty) V.gv.x=V.gv.y=0; }
+  if(V.gv.x||V.gv.y){ const tg=TUNE.chGlide, gd=V.gt===ts?0:dt; if(!(tg>0)) V.gv.x=V.gv.y=0; else if(gd>0){ const e=Math.exp(-gd/tg), f=tg*(1-e)*fmSpan/sz, wx=-V.gv.x*f, wy=-V.gv.y*f, lo=-fmSpan*0.1, hi=WORLD+fmSpan*0.1, qx=fmCX+wx-clamp(fmCX+wx,lo,hi), qy=fmCY+wy-clamp(fmCY+wy,lo,hi);   // the glide: coasts τ chGlide from the release (not on its own frame)
+      panMap(wx/fmSpan, wy/fmSpan); const ee=Math.exp(-gd/0.05); if(qx){ V.rb.x+=qx/fmSpan; V.gv.x*=ee; } else V.gv.x*=e; if(qy){ V.rb.y+=qy/fmSpan; V.gv.y*=ee; } else V.gv.y*=e;   // (into the edge: the eaten motion pours into the rubber and dies fast there, τ 0.05)
+      if(Math.hypot(V.gv.x,V.gv.y)<50) V.gv.x=V.gv.y=0; } }                 // (stops below 50 px/s)
+  const Z=V.z; if(cz && (Z.t==null || fmSpan!==Z.ls)){ Z.t=Math.log(fmSpan); Z.ax=Z.ay=null; Z.ls=fmSpan; }   // the ease (a zoom glides to its target, τ chEase): the held +/- run feeds the target and the shown span alike, so it stops on release
+  if(Z.t!=null){ if(fmSpan!==Z.ls) Z.t=null; else { const L0=Math.log(fmSpan), LO=Math.log(1500), HI=Math.log(WORLD*1.06), tau=TUNE.chEase; Z.t=clamp(Z.t+cz,LO,HI);   // (someone else set the span — an open, the trigger, a tool: the ease lets go)
+      let L1=clamp(tau>0 ? L0+cz+(Z.t-L0-cz)*(1-Math.exp(-dt/tau)) : Z.t, LO, HI); if(Math.abs(Z.t-L1)<0.002) L1=Z.t;   // (snapped under 0.002 — never by a long frame)
+      if(L1!==L0){ const ax=fmDrag?V.px:Z.ax, ay=fmDrag?V.py:Z.ay; zoomMap(Math.exp(L1-L0), ax==null?null:screenToMapWorld(ax,ay,r)); if(cz) V.nw=0; }   // (the point under the pointer stays there · under a held drag the anchor follows the pointer)
+      Z.ls=fmSpan; if(L1===Z.t) Z.t=null; } }
+  if((V.rb.x||V.rb.y) && !fmDrag){ const e=Math.exp(-dt/0.07), R=0.06; for(let i=0;i<2;i++){ const d=fmRub(i?V.rb.y:V.rb.x)*e, q=Math.abs(d)*sz<0.5?0:-Math.sign(d)*R*Math.log(1-Math.abs(d)/R); if(i) V.rb.y=q; else V.rb.x=q; } V.mvF=1; V.mvTs=ts; }   // the spring: the shown overshoot back τ 0.07 s, snapped under 0.5 px · never while pressed · it holds the settle off
+  if(fmDrag && (fmCX!==x0 || fmCY!==y0 || fmSpan!==s0)){ fmDrag.gx=fmCX+(V.rb.x+(V.px-r.mx)/sz-0.5)*fmSpan; fmDrag.gy=fmCY+(V.rb.y+(V.py-r.my)/sz-0.5)*fmSpan; } }   // (a zoom / key / stick under a held drag: the grab re-bases on the point now under the pointer)
+function fmZoomBy(dl,ax,ay){ const V=FMV, Z=V.z; V.gv.x=V.gv.y=0;   // (CH F1) a zoom step (the wheel, +/-) moves the ease's target: it may lead the shown span by ≤ 6 notches (×2.31), within the limits · chEase 0 = instant (Q1) · it stops a glide
+  if(!(TUNE.chEase>0)){ zoomMap(Math.exp(dl), ax==null?null:screenToMapWorld(ax,ay,mapRect())); return; }
+  const L=Math.log(fmSpan); if(Z.t==null || fmSpan!==Z.ls) Z.t=L; Z.t=clamp(clamp(Z.t+dl,L-0.839,L+0.839),Math.log(1500),Math.log(WORLD*1.06)); Z.ax=ax; Z.ay=ay; Z.ls=fmSpan; }
+function fmKey(k,e){ const V=FMV; k=k==='+'?'=':k==='_'?'-':k;   // (CH F1) THE chart's keys for sea, port & deck (+ their keyups): held keys live in their own set, in press order — never keys[] · canonical + → =, _ → - (keydown and keyup) · OS repeats change nothing
+  if(e.type==='keyup'){ if(V.k.has(k)){ if((V.kx[k]||V.ky[k]) && (V.kh[k]||0)<0.1) V.ko.add(k); else V.k.delete(k); } return; }   // (a pan key released before 0.1 s is owed the rest — the tap rule)
+  if(k==='backspace'||k==='delete'){ e.preventDefault(); if(COURSE) courseClear('⚑  Course cleared'); return; }   // (PT1 W5) the course, cleared
+  if(e.repeat || e.metaKey) return; if(e.shiftKey && !V.k.has('shift')){ V.k.add('shift'); V.kh.shift=0; }   // (CH2C-5: a key with ⌘ / the Windows key never joins the held set — its keyup may never come)
+  const a=V.kx[k], b=V.ky[k]; if(a||b){ for(const q of V.ko) if((a && V.kx[q]===-a) || (b && V.ky[q]===-b)){ V.ko.delete(q); V.k.delete(q); } }   // (an owed opposite tap gives way)
+  else if(k==='='||k==='-'){ fmZoomBy((k==='-'?1:-1)*Math.log(1.25),null,null); V.stF=1; }   // (a fresh +/- = one eased ×1.25 step — a step for the settle · held past 0.3 s it runs on, in fmTick)
+  else if(k!=='shift') return;
+  V.k.delete(k); V.k.add(k); V.kh[k]=0; V.ko.delete(k); if(e.code) V.kc[e.code]=k; }   // (CH CRC-1) the physical key → the held key it joined as: its keyup frees it on any layout (a QWERTZ Shift+0 = released as 0)
+function fmRub(r){ return r ? Math.sign(r)*0.06*(1-Math.exp(-Math.abs(r)/0.06)) : 0; }   // (CH F1) the rubber edge: the pull past the limit, squeezed to ≤ 6 % of the span (a fraction of it)
+function fmCursor(R0){ const V=FMV, r=R0||mapRect(), w=fmDrag && fmDrag.moved ? 'grabbing' : (!GCH.open && V.px>=r.mx && V.px<=r.mx+r.size && V.py>=r.my && V.py<=r.my+r.size ? 'grab' : ''); if(w!==V.cur){ cv.style.cursor=w; V.cur=w; } }   // (CH F1) a hand over the chart, grabbing while it drags — set only on a change
 function mapRect(){ const size=Math.min(CSSW,CSSH)*0.86; return {size, mx:(CSSW-size)/2, my:(CSSH-size)/2}; }
-function screenToMapWorld(cx,cy,r){ return { x:fmCX+((cx-r.mx)/r.size-0.5)*fmSpan, y:fmCY+((cy-r.my)/r.size-0.5)*fmSpan }; }
+function screenToMapWorld(cx,cy,r){ return { x:fmCX+(fmRub(FMV.rb.x)+(cx-r.mx)/r.size-0.5)*fmSpan, y:fmCY+(fmRub(FMV.rb.y)+(cy-r.my)/r.size-0.5)*fmSpan }; }   // (CH F1: the view as shown — the rubber edge's offset in; bit-equal when it's 0)
 function clampMap(){ fmSpan=clamp(fmSpan,1500,WORLD*1.06);
   fmCX=clamp(fmCX,-fmSpan*0.1,WORLD+fmSpan*0.1); fmCY=clamp(fmCY,-fmSpan*0.1,WORLD+fmSpan*0.1); }
-function zoomMap(factor,cursor){ const ns=clamp(fmSpan*factor,1500,WORLD*1.06);
+function zoomMap(factor,cursor){ const ns=clamp(fmSpan*factor,1500,WORLD*1.06), ox=fmCX, oy=fmCY, os=fmSpan;   // (CH Q1)
   if(cursor){ fmCX=cursor.x-(cursor.x-fmCX)*(ns/fmSpan); fmCY=cursor.y-(cursor.y-fmCY)*(ns/fmSpan); }
-  fmSpan=ns; clampMap(); fmDirty=true; }
-function panMap(fx,fy){ fmCX+=fmSpan*fx; fmCY+=fmSpan*fy; clampMap(); fmDirty=true; }
+  fmSpan=ns; clampMap(); if(fmCX!==ox||fmCY!==oy||fmSpan!==os) FMV.mvF=1; }   // (CH Q1: input moves the view — it never marks the picture dirty; fmFrame repaints once it's still)
+function panMap(fx,fy){ const ox=fmCX, oy=fmCY; fmCX+=fmSpan*fx; fmCY+=fmSpan*fy; clampMap(); if(fmCX!==ox||fmCY!==oy){ FMV.mvF=1; FMV.nw=0; } }   // (CH Q1: keys & the stick — never a lone step)
 function openFullMap(){ if(SAGA) sagaEvent('map');
   if(dev.revealAll){ fmCX=boat.x; fmCY=boat.y; fmSpan=20000; }          // a wide-but-readable default; zoom out for the whole world
   else {
-    let minX=1e18,minY=1e18,maxX=-1e18,maxY=-1e18;
-    explored.forEach(key=>{ const gx=key%EGW, gy=(key/EGW)|0, wx=gx*EXP, wy=gy*EXP;
-      if(wx<minX)minX=wx; if(wx>maxX)maxX=wx; if(wy<minY)minY=wy; if(wy>maxY)maxY=wy; });
+    let minX=1e18,minY=1e18,maxX=-1e18,maxY=-1e18; const E=EXS; E.ok();   // (CH R1: the running box — no walk over the Set · the underlay's coverage comes from exAdd, nothing is painted on open)
+    if(E.n){ minX=E.gx0*EXP; maxX=E.gx1*EXP; minY=E.gy0*EXP; maxY=E.gy1*EXP; }   // (CH R1: exactly the old walk's min / max of gx·EXP, gy·EXP)
     if(minX>maxX){ minX=maxX=boat.x; minY=maxY=boat.y; }
     minX=Math.min(minX,boat.x); maxX=Math.max(maxX,boat.x); minY=Math.min(minY,boat.y); maxY=Math.max(maxY,boat.y);
     for(const mk of allMarks().concat(COURSE?[COURSE]:[])){ if(mk.kind==='home') continue; minX=Math.min(minX,mk.x); maxX=Math.max(maxX,mk.x);   // contracts & rumors (and the course marker) stay on the glass (PT1 B4: a crewmate's home doesn't pull the frame)
@@ -11172,25 +11253,28 @@ function openFullMap(){ if(SAGA) sagaEvent('map');
       for(let k=0;k<2;k++){ const need=sm.x+lw*fmSpan/mapRect().size; if(need<=fmCX+fmSpan/2) break; maxX=Math.max(maxX,need); fmCX=(minX+maxX)/2; fmSpan=Math.max(Math.max(maxX-minX,maxY-minY)*1.25, 2600); } }
   }
   if(SAGA) sagaChartFrame();                                             // (INTROSTORY C7: S3 — her and the Guild's isle on the glass · on a pad the crosshair starts on the isle)
-  clampMap(); fmDirty=true; padMapCross=false; fmNote=null;
+  clampMap(); fmDirty=true; padMapCross=false; fmNote=null; fmReset();   // (CH Q1: the clock & the settle start over — the first frame paints at once)
 }
-function renderFullMap(){
+function renderFullMap(){ EXS.ok();   // (CH R1) the bits in step with `explored` (else one walk, counted in EXS.rb)
   const S = dev.revealAll ? 340 : 520;     // coarser for the whole-world debug reveal, crisp for your charted map
   if(!fmCanvas){ fmCanvas=document.createElement('canvas'); fmCtx=fmCanvas.getContext('2d'); }
   if(fmCanvas.width!==S){ fmCanvas.width=S; fmCanvas.height=S; }
-  const g=fmCtx, img=g.createImageData(S,S), d=img.data, ink=!dev.revealAll;
+  const g=fmCtx, img=g.createImageData(S,S), d=img.data, GC=!dev.revealAll&&TUNE.chCoast>0, ink=!dev.revealAll&&!GC;   // (CH R1: chCoast 1 → the grid coastline, else the classic 4 probes)
   const ox=fmCX-fmSpan/2, oy=fmCY-fmSpan/2, step=fmSpan/S, BK=8, nb=Math.ceil(S/BK), BL=TUNE.seaLand>0?new Array(nb*nb):null;   // (each 8-texel block keeps the isles in reach, fetched when it first meets land)
-  for(let j=0;j<S;j++){ const wy=oy+(j+0.5)*step;
+  const XA=dev.revealAll||FMV.allT, XS=FMV.setT, XB=EXS.b, W=S+12, r=Math.min(6,Math.max(1,Math.round(EXP/step))), HM=GC?(EXS.hm||(EXS.hm=new Float64Array(532*532))):null;   // (CH R1) the charted test hoisted (FMV.allT: all charted, the perf gates · FMV.setT: the Set, a same-page A/B · else the bit) · chCoast 1: probes ±r texels (≈ 14 u), heights memoised on the (S+12)² grid
+  const ph=(ii,jj)=>{ const q=(jj+6)*W+ii+6; let v=HM[q]; if(v!==v) v=HM[q]=rawHeight(ox+(ii+0.5)*step, oy+(jj+0.5)*step); return v; }; let gk=0, gs=0; if(GC) HM.fill(NaN,0,W*W);   // (CH R1) a texel's height, computed once (a charted texel's own, or the true height under the fog / past the picture's edge)
+  for(let j=0;j<S;j++){ const wy=oy+(j+0.5)*step, ky=Math.floor(wy/EXP)*EGW;   // (CH R1: the row's cell offset)
     for(let i=0;i<S;i++){ const wx=ox+(i+0.5)*step, di=(j*S+i)*4;
       let R=233,G=220,B=192;                                  // unknown = blank parchment
       const inW = wx>=0&&wy>=0&&wx<WORLD&&wy<WORLD;
       if(!inW){ R=212;G=201;B=174; }                          // beyond the world's edge
-      else if(dev.revealAll || explored.has(Math.floor(wx/EXP)+Math.floor(wy/EXP)*EGW)){
-        const h=rawHeight(wx,wy);
+      else if(XA || (gk=Math.floor(wx/EXP)+ky, XS ? explored.has(gk) : XB[gk>>3]>>(gk&7)&1)){   // (CH R1) charted? — the bit, same cell index as the Set's
+        const h=GC?ph(i,j):rawHeight(wx,wy);   // (CH R1)
         if(h<SEA){ const dp=clamp((SEA-h)/0.5,0,1); if(dp<0.16){R=150;G=178;B=178;} else {R=120;G=150;B=170;} }
         else { const e=clamp(h/1.1,0,1);
           let q=null; if(BL){ const bi=((j/BK)|0)*nb+((i/BK)|0); let cs=BL[bi]; if(!cs) cs=BL[bi]=coresNear(ox+(((i/BK)|0)+0.5)*BK*step, oy+(((j/BK)|0)+0.5)*BK*step, BK*step*0.75+500); q=chartLand(cs,wx,wy,e); }
           if(q){ R=q[0]; G=q[1]; B=q[2]; } else if(e<0.06){R=206;G=182;B=128;} else if(e<0.5){R=96;G=140;B=80;} else {R=70;G=104;B=66;}
+          if(GC && (r>1 ? (ph(i+r,j)<SEA||ph(i-r,j)<SEA||ph(i,j+r)<SEA||ph(i,j-r)<SEA) : (gs=(ph(i+1,j)<SEA)+(ph(i-1,j)<SEA)+(ph(i,j+1)<SEA)+(ph(i,j-1)<SEA), gs>0&&gs<4))){R=74;G=58;B=36;}   // (CH R1) the grid coastline: a probe ±r texels lands in the sea · at r 1 a lone land texel (no land neighbour) stays land-coloured
           if(ink && (rawHeight(wx+EXP,wy)<SEA||rawHeight(wx-EXP,wy)<SEA||rawHeight(wx,wy+EXP)<SEA||rawHeight(wx,wy-EXP)<SEA)){R=74;G=58;B=36;} }
       }
       d[di]=R;d[di+1]=G;d[di+2]=B;d[di+3]=255;
@@ -11204,9 +11288,9 @@ function drawFullMap(){
   const r=mapRect(), size=r.size, mx=r.mx, my=r.my;
   ctx.fillStyle='#0c1830'; roundRect(mx-12,my-12,size+24,size+24,16); ctx.fill();
   ctx.save(); ctx.beginPath(); roundRect(mx,my,size,size,8); ctx.clip();
-  ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size);
   ctx.imageSmoothingEnabled=true;
-  const ox=fmCX-fmSpan/2, oy=fmCY-fmSpan/2, sc=size/fmSpan;
+  const ox=fmCX+fmRub(FMV.rb.x)*fmSpan-fmSpan/2, oy=fmCY+fmRub(FMV.rb.y)*fmSpan-fmSpan/2, sc=size/fmSpan;   // (CH F1: the centre as shown — the rubber edge's give; bit-equal at rest)
+  if(TUNE.chUnder>0 && !dev.revealAll && (fmViewNe() || FMV.rb.x || FMV.rb.y)) fmUnderDraw(mx,my,size,ox,oy,sc); else { ctx.fillStyle='#e9dcc0'; ctx.fillRect(mx,my,size,size); }   // (CH Q1) moving: the underlay under the picture · covered (settled): today's one fill, pixel for pixel (CH F1: a springing edge shows the world's rim, not parchment)
   // blit the last-rendered canvas positioned for the CURRENT view → pan/zoom slides smoothly between renders
   if(fmCanvas){ const rx0=fmRX-fmRSpan/2, ry0=fmRY-fmRSpan/2;
     ctx.drawImage(fmCanvas, mx+(rx0-ox)*sc, my+(ry0-oy)*sc, fmRSpan*sc, fmRSpan*sc); }
@@ -13299,7 +13383,7 @@ function finishRename(quiet){ if(!renaming) return; { const a=document.activeEle
   if(renaming.ship){ shipRenameDone(quiet===true); return; }   // (PT1 B1: her name, from the map table or the Voyage tab)
   const v=document.getElementById('renameInput').value.trim().slice(0,22);   // quiet===true: leaving anyway — no reminders
   if(v) renaming.customName=v; renaming.cleared=true; if(SAGA) sagaEvent('claim',renaming.idx); if(!ptMode) folkNews('claim',renaming);   // (the wharf hears of it · a request answered — w4)
-  if(!ptMode){ missionEvent('cleared', renaming.idx); for(const k of islandLandCells(renaming)) explored.add(k); fogCache.idx=-1; fmDirty=true; { const p=repNearPort(renaming); if(p) repAdd(p.idx,6,'claim'); } }   // your flag flies — and she's inked on your chart, coast to heart (PT1 W8: the nearest harbour ≤ 8000 u hears of it)
+  if(!ptMode){ missionEvent('cleared', renaming.idx); for(const k of islandLandCells(renaming)) exAdd(k); fogCache.idx=-1; fmDirty=true; { const p=repNearPort(renaming); if(p) repAdd(p.idx,6,'claim'); } }   // your flag flies — and she's inked on your chart, coast to heart (PT1 W8: the nearest harbour ≤ 8000 u hears of it) (CH R1: through exAdd)
   toast('⚑  '+(renaming.customName||renaming.name)+' claimed', ptMode ? 'a trial — the haul comes back to the harbour when you board' : clearedCount+' isle'+(clearedCount===1?'':'s')+' cleared  ·  ⭐ +'+(renaming.ren!=null?renaming.ren:60)+' renown');
   if(renaming.lmk) seasLmkClaim(renaming);   // (SEAS SE5: a landmark claimed — her keepsake & +25, the chart's glyph turns gold)
   if(!ptMode && farNews===renaming.idx){ farNews=-1; toast('🪧  New furthest mark!', '⚔ '+(signs.far?signs.far.dg:ISL_LVL)+'  ·  '+fmtDist(homeDist(renaming))+' from home — the Voyage tab keeps your marks'); }
@@ -28057,13 +28141,8 @@ function deckEsc(){ if(!DK) return false; if(DK.edit){ deckEditToggle(false); re
 function deckKey(k,e){ if(!DK) return;
   if(DK.sleep) return;                                                                                   // (B5b: asleep — the night holds every key till dawn)
   if(DK.edit){ editKey(k,e); return; }                                                                   // (PT1 B6b: decorating — the cursor, E · R · Del · Tab · F)
-  if(k==='m'){ mapOpen=!mapOpen; if(mapOpen) openFullMap(); return; }
-  if(mapOpen){
-    if(k==='='||k==='+') zoomMap(0.8,null); else if(k==='-'||k==='_') zoomMap(1.25,null);
-    else if(k==='arrowleft'||k==='a') panMap(-0.14,0); else if(k==='arrowright'||k==='d') panMap(0.14,0);
-    else if(k==='arrowup'||k==='w') panMap(0,-0.14); else if(k==='arrowdown'||k==='s') panMap(0,0.14);
-    else if(k==='backspace'||k==='delete'){ e.preventDefault(); if(COURSE) courseClear('⚑  Course cleared'); }
-    return; }
+  if(k==='m'){ fmToggle(e); return; }   // (CH Q1: a held M opens once)
+  if(mapOpen){ fmKey(k,e); return; }   // (CH F1) the chart's keys, as at sea and in port — fmKey
   if(DK.card){ if(!e.repeat && (k==='e'||k==='enter')) deckCardYes(); else if(!e.repeat && k===' ' && !DK.card.ask) DK.card=null; else if(!e.repeat && k==='f' && !DK.card.ask){ DK.card=null; deckEditToggle(true); } return; }   // (B5b: a two-choice card's E is its yes — the bunk's sleep or log · G18 FIX: F from a placard decorates — the shelf's "F to decorate")
   if(DK.fish && (k==='e'||k===' ')){ keys[k]=true; if(!e.repeat) fishInput(); return; }                 // (B5b: the line's out — E / Space strike on the bite, and HELD they reel)
   if(k==='e'){ if(!e.repeat) deckInteract(); return; }                                                   // (G15 FIX: a held E acts once — no deck ↔ cabin ping-pong, no windlass rattle, no dock on the wheel's repeat)
@@ -36318,7 +36397,7 @@ function expReveal(){                          // the fog peels around their boo
   const cgx=Math.floor(expd.px/EXP), cgy=Math.floor(expd.py/EXP), R=5;
   for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){ if(dx*dx+dy*dy>R*R) continue;
     const gx=cgx+dx, gy=cgy+dy; if(gx<0||gy<0||gx>=EGW||gy>=EGW) continue;
-    explored.add(gx+gy*EGW); }
+    exAdd(gx+gy*EGW); }   // (CH R1)
 }
 function expLoot(core,rep){                    // a trek's finds → {gold, mats} — C4a §7.4: materials by the isle's danger (the ore of its band, a gem of its cut, the shore's signature)
   const got={gold:3+Math.min(30,((expd?expd.baseDark:300)/120)|0)+(Math.random()*5|0), mats:{}}, dg=core?dangerOf(core):1, bk=core?biomeOf(core).key:'', add=k=>{ got.mats[k]=(got.mats[k]||0)+1; };
@@ -36334,7 +36413,7 @@ function expLoot(core,rep){                    // a trek's finds → {gold, mats
 }
 function finishExpedition(){
   const core=cores[expd.ci];
-  for(const k of expd.cells) explored.add(k);  // the last corners, sketched from the summit
+  for(const k of expd.cells) exAdd(k);  // the last corners, sketched from the summit (CH R1)
   if(core) core.scouted=true;                  // …and her trails: land there and your survey is already drawn (chests & a ✕ marked)
   const got=expLoot(core,expd.rep);
   const banked=[];
@@ -38192,7 +38271,7 @@ function sagaRouteK(ax,ay,c,cap){ const CS=24, R=c.r*1.9+40, st=Math.max(1,Math.
       const nk=nx*4096+ny, ng=g+(dx && dy ? CS*1.4142 : CS); if(ng+h(nx,ny)>lim) continue; const og=G.get(nk); if(og!=null && og<=ng) continue;
       if(!isWater((nx+0.5)*CS,(ny+0.5)*CS)) continue; G.set(nk,ng); push(ng+h(nx,ny),nk); } }
   return false; }
-function sagaIsleMark(ci){ const c=cores[ci]; if(!c || c.port) return; if(!c.found){ c.found=true; discoveredCount++; } if(!c.label){ const sx=SUFF[(Math.abs((c.x*7+c.y*13)|0))%SUFF.length]; c.label=c.name+' '+sx; } fmDirty=true; }   // (known & named, as the Guild's charts name the home waters — her fog left alone)
+function sagaIsleMark(ci){ const c=cores[ci]; if(!c || c.port) return; if(!c.found){ c.found=true; discoveredCount++; } if(!c.label){ const sx=SUFF[(Math.abs((c.x*7+c.y*13)|0))%SUFF.length]; c.label=c.name+' '+sx; } }   // (known & named, as the Guild's charts name the home waters — her fog left alone · CH Q1: overlay only — no repaint)
 function sagaIsleC(){ const S=SAGA, c=S && S.isle>=0 ? cores[S.isle] : null; return c && !c.port ? c : null; }
 function sagaIsleEnsure(){ const S=SAGA; if(S && !sagaIsleC()) S.isle=introPickIsle(); return sagaIsleC(); }   // (an S step armed with no isle yet — a DEV jump past the card, an older log: the Guild picks it now)
 function sagaIsleOK(c){ return !!c && !c.port && isleLandable(c,true); }
@@ -40104,7 +40183,7 @@ function revealDisc(wx,wy,R){
   const R2=R*R;
   for(let gy=g0y;gy<=g1y;gy++) for(let gx=g0x;gx<=g1x;gx++){
     const dx=gx*EXP+EXP/2-wx, dy=gy*EXP+EXP/2-wy;
-    if(dx*dx+dy*dy<=R2) explored.add(gx+gy*EGW);
+    if(dx*dx+dy*dy<=R2) exAdd(gx+gy*EGW);   // (CH R1)
   }
 }
 function segDist(px,py,x1,y1,x2,y2){
@@ -41164,6 +41243,7 @@ function frameInner(ts){
   SEAS_FT0=performance.now();                  // (SEAS SD4 FIX SD4VB-7: when this frame began — the landmarks' bakes stop once 4 ms of it are gone)
   ART.P=null;                                  // (PX1 FIX PX1VC-3: the style pass's profile is this frame's — null on the title & the Maelstrom, where nothing is graded)
   if(dev.throwOnce){ dev.throwOnce=0; throw new Error('DEV: a test frame error'); }   // (the harness's check that the error counter counts: dev.throwOnce=1)
+  if(!mapOpen && (FMV.cur || FMV.k.size)) fmReset(1);   // (CH F1) the chart shut, however (Esc, the pad, a menu…): its held keys wait for their keyup · the hand cursor goes
   const dt=Math.max(0,Math.min(0.05,(ts-last)/1000||0)); last=ts;   // (never backwards — a stale timestamp can't run the world in reverse)
   ambTick(dt);                                // (PT1 A3) the ambience — every mode, the title too: beds, one-shots, emitters, the cave's reverb
   musUpdate(dt);                              // (PT1 M2a) the music's director — every mode, the title too: the muffle, the drone, the 2 Hz state machine
@@ -41217,7 +41297,7 @@ function frameInner(ts){
     ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=false;
     ctx.clearRect(0,0,CSSW,CSSH); scnBlit(IW*IKX,IH*IKY); artScan();   // (PX A2) (the pixel town: exactly PIX per texel · C3: a scene's push-in)
     ctx.imageSmoothingEnabled=true; if(!(townPixOn && TUNE.townLight>0)) worldTint(0.8);   // (the pixel town's light layer does the hour, the storm & the fog in the world itself)
-    if(mapOpen){ if(fmDirty && ts-fmRenderTs>70){ renderFullMap(); fmRenderTs=ts; fmDirty=false; } drawFullMap(); }
+    if(mapOpen){ fmFrame(ts); }   // (CH Q1: the chart repaints once still)
     else if(!scnCine()){ if(SAGA) sagaMarkDraw(); portHUD(); if(SAGA) sagaHudPost(); }   // (INTROSTORY C4b: the goal's marker under the plates · the step's frame over them)
     if(SCN || SCN_TB) scnOverlay();          // (INTROSTORY C2: a scene's letterbox in the HUD's place)
     return;
@@ -41229,7 +41309,7 @@ function frameInner(ts){
     ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=false;
     ctx.clearRect(0,0,CSSW,CSSH); scnBlit(IW*IKX,IH*IKY); artScan();   // (PX A2) (the towns' pixel grid: exactly PIX per texel · C3: a scene's push-in)
     ctx.imageSmoothingEnabled=true; if(!(TUNE.townLight>0)) worldTint(0.8);
-    if(mapOpen){ seasBandOff(); if(fmDirty && ts-fmRenderTs>70){ renderFullMap(); fmRenderTs=ts; fmDirty=false; } drawFullMap(); }   // (SEAS SD2 FIX: a sea's band never plays on over the chart)
+    if(mapOpen){ seasBandOff(); fmFrame(ts); }   // (SEAS SD2 FIX: a sea's band never plays on over the chart · CH Q1: the chart repaints once still)
     else if(!scnCine()){ if(SAGA) sagaMarkDraw(); deckHUD(); if(SAGA) sagaHudPost(); }
     if(SCN || SCN_TB) scnOverlay();          // (INTROSTORY C2: a scene's letterbox in the HUD's place)
     return;
@@ -41246,7 +41326,7 @@ function frameInner(ts){
   if(started){ ctx.clearRect(0,0,CSSW,CSSH); scnBlit(CSSW,CSSH); artScan(); }   // (C3: a scene's push-in · PX A2: the sea through the style pass)
   ctx.imageSmoothingEnabled=true;
   if(started && !mapOpen){ worldTint(); slGlow(); seasGlow(); crGlow(); seasAmbGlow(); seasRoamGlow(); if(SAGA) sagaBeacon(); if(!scnCine()) drawHUD(); if(SCN || SCN_TB) scnOverlay(); }   // (INTROSTORY C2: a scene's letterbox in the HUD's place) · (slGlow: the lands' lava, caps & crystal glow through the night · crGlow: the sea creatures' — lures, embers, ghost-lights, the White's halo)
-  if(started && mapOpen){ if(fmDirty && ts-fmRenderTs>70){ renderFullMap(); fmRenderTs=ts; fmDirty=false; } drawFullMap(); }
+  if(started && mapOpen) fmFrame(ts);   // (CH Q1: the chart repaints once still)
 }
 requestAnimationFrame(frame);
 
@@ -41259,6 +41339,15 @@ const TUNE_DEF=[
   ['windSpread','Wind matters',0,0.85,0.02],
   ['windDrift','Wind shiftiness',0,2.5,0.05],
   ['zoom','Zoom',0.6,1.9,0.02],
+  ['chSettle','Chart: repaint the land once it has been still for (ms)',60,600,10],   // (CH Q1)
+  ['chNotchWait','Chart: after a single wheel notch, wait this long for the next before repainting (ms · 0 = no extra wait)',0,1000,50],   // (CH Q1)
+  ['chZoom','Chart: zoom per mouse-wheel notch ×',1.05,1.5,0.01],   // (CH Q1)
+  ['chUnder','Chart: blurry land under the edges while it moves (1 on · 0 = blank parchment)',0,1,1],   // (CH Q1)
+  ['chEase','Chart: zoom glide (s · 0 = instant steps)',0,0.2,0.01],   // (CH F1)
+  ['chGlide','Chart: coast after a drag (s · 0 = stops dead)',0,0.6,0.01],   // (CH F1)
+  ['chKeyV','Chart: arrow-key pan speed (charts a second)',0.3,3,0.05],   // (CH F1)
+  ['chPadV','Chart: stick pan speed (charts a second)',0.3,3,0.05],   // (CH F1)
+  ['chCoast','Chart: coastline (0 = the classic ink · 1 = the faster grid ink)',0,1,1],   // (CH R1)
   ['seaLand','Lands from the sea: each isle wears her biome (1 = on · 0 = the old flat bands)',0,1,1],
   ['seaProps','Lands from the sea: trees & props ×',0,2,0.05],
   ['seaTree','Lands from the sea: tree size ×',0.2,0.7,0.02],
@@ -42022,7 +42111,7 @@ function begin(fresh){ if(fresh){ const w=saveWg(); if(w!=null && w!==WGEN.V) ti
   SAGA_MUTE=0; scnAbort('begin'); SCN_LAST=''; Object.assign(SAGA_DEVR,{sel:'', msg:'', rsT:0}); SCN_TB=null; SCN_GULL=null; SAGA_RT.drm=0; SAGA_DRM=0; gchClose(1); GCH.L=null; GCH.lk=''; toasts.length=0; TOASTQ.length=0; SAGA_CHT.mkK=''; SAGA_CHT.mk=null; SAGA_RR=''; SCN_LATCH.clear(); SCN_PADL=null; SCN_AFT=0; taughtFish=false; sagaCastReset(); sagaHlClear(); sagaChipHide();       // (INTROSTORY C2: no story scene, band or held key crosses into a voyage · IS2 FIX: nor the old chip & marker · IS3 FIX: nor the last voyage's net lesson — the guided path / a resume sets it again · IS5 FIX: nor its waiting toasts, its chart mark or an open 📖 page)
   if(fresh){ buildWorld((Math.random()*1e9)>>>0); SHIP=ship0(SEED); SEAS_SV=seasNew();   // (PT1 B1: a new sloop — her name waits on the papers · SEAS SE2: a new voyage knows the home sea)
     boat.x=spawn.x; boat.y=spawn.y; boat.a=-Math.PI/2; boat.spd=0; boat.sail=0;
-    camX=boat.x; camY=boat.y; explored=new Set(); discoveredCount=0; portCount=0; clearedCount=0; cargo={gold:0}; POUCH={}; HOLD=hold0(); tripGold=0; pouchVer++; biomesFound=new Set();   // (C4a: coin · an empty pouch & Hold)
+    camX=boat.x; camY=boat.y; explored=new Set(); exRebuild(); discoveredCount=0; portCount=0; clearedCount=0; cargo={gold:0}; POUCH={}; HOLD=hold0(); tripGold=0; pouchVer++; biomesFound=new Set();   // (C4a: coin · an empty pouch & Hold) (CH R1: exRebuild — the bits start over with the Set)
     well={}; flog={}; fed=0; spoils={}; whiteTaken=false; time=0;
     UPG={}; missions=[]; marks=[]; COURSE=null; doneIds=[]; missionsDone=0; hull=hullMaxNow();   // (PT1 W5: no course on a new voyage)
     genCrew(); provisions=20; buoys=[]; crewUnpaid=false; crewHungry=false; seaDayAcc=0;
