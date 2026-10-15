@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poonomics - Monday Jeffrey</title>
+<meta name="description" content="An admin console for the Australian economy: change taxes, spending, housing, the central bank and the world, and watch 30 years play out.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="style.css?v=5">
+</head>
+<body>
+<header class="topbar">
+  <div class="row">
+    <a href="/" class="back-link">&larr; Desktop</a>
+    <div class="brand">POONOMICS<small>Australian economy admin console</small></div>
+    <button class="btn drawer-toggle" id="drawerBtn" type="button">Levers</button>
+    <div class="spacer"></div>
+    <div class="cursor-ctl" title="Year being inspected">
+      <span class="yearbig" id="yearBig">FY27</span>
+      <input type="range" id="cursor" min="0" max="30" value="10" aria-label="Year">
+      <button class="btn small" id="playBtn" type="button">Play</button>
+    </div>
+    <select class="btn" id="presetSel" aria-label="Scenario presets"></select>
+    <button class="btn" id="resetBtn" type="button">Reset all</button>
+  </div>
+  <div class="kpis" id="kpis" aria-live="polite"></div>
+</header>
+
+<div class="layout">
+  <aside class="side" id="side" aria-label="Policy levers">
+    <div class="head">
+      <input type="search" id="leverSearch" placeholder="Find a lever (tax, dental, rate...)" aria-label="Find a lever">
+      <div class="row2" style="margin:0">
+        <span class="pill amber" id="changedPill">0 changed</span>
+        <button class="btn small drawer-close" id="drawerClose" type="button">Close levers</button>
+        <button class="btn small" id="expandBtn" type="button">Expand all</button>
+        <button class="btn small" id="collapseBtn" type="button">Collapse</button>
+      </div>
+    </div>
+    <div id="levers"></div>
+  </aside>
+  <main class="main">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<script src="js/calib.js?v=5"></script>
+<script src="js/model.js?v=5"></script>
+<script src="js/presets.js?v=5"></script>
+<script src="js/charts.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
+</body>
+</html>
