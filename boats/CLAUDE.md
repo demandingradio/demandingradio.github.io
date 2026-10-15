@@ -174,7 +174,7 @@ Each object is a `DEFAULT_*` table plus a live `let` copy made at load. Its vers
 - `tunePrune` (3790) drops retired keys. It is applied to ITUNE, WTUNE, ETUNE, LTUNE and PTUNE, not to TUNE or FTUNE.
 - The live objects are **replaced, not mutated**: by `loadSave`, by `ptQuit` (proving_dev.js:133, which restores ITUNE/LTUNE/PTUNE from `ptBoot`'s snapshot) and by `#tuneReset` (tuning_panels.js:78, TUNE). Never cache one in a const or closure at load.
 - `LF(k,d)` (itune_defaults.js:81) reads a feel knob through `LEGACY_FEEL` (crawl2.js:236) when `ITUNE.legacyFeel>0`.
-- Other knob tables, not saved as tuning: `WGEN` (1473; `V` is saved as `wg`, and changing the recipe reshapes every world, so bump V), `INTRO_K` (20941, never saved), `SCN_TY`/`SCN_PACE` (20216-20217), `FISH_HL` (16013), and `GFX` (style_pass.js:39, device-only).
+- Other knob tables, not saved as tuning: `WGEN` (1473; `V` is saved as `wg`, and changing the recipe reshapes every world, so bump V), `INTRO_K` (20941, never saved), `SCN_TY`/`SCN_PACE` (20216-20217), `FISH_HL` (16013), `GFX` (style_pass.js:39, device-only), and `SEAS_BIRDK` (2026, beside `SEAS_AMBD`; Project Steel, 0.2 = a fifth of the birds at sea, never saved): it thins the home sea's duck rafts (`seasAmbDraw` 2087, at most `round(8×it)` = 2 rafts drawn a frame, 2094), picks the Whale Road footprints that carry seabirds (2100) and sets the gulls over each rare fish school (`drawSchools` sea_creatures.js:165 and `drawSchoolsV` 4706, never below 1; `TUNE.gulls` 0 still hides them in the pixel path). The landmark, wonder, deck, story, title, town and crawl birds don't read it.
 
 ## 8. Known traps (each has broken the game, or can in a split build)
 

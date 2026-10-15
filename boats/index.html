@@ -2023,7 +2023,7 @@ function seasLoad(o){ const S=seasNew(), n=SEAS_RG.length, num=v=>Number.isFinit
 /* (M3) THE AMBIENT SIGNATURE — every sea always looks like itself: ≤ 8 small decals, world-anchored on a 64 u grid (a cell's hash against 0.5 × its sea's weight
    here × the kind's density — borders cross-fade), on open water, at the helm only, never in the Proving Grounds · each baked per buffer scale (SEAS_AMB, ≤ 5 scales) */
 const SEAS_AMB=new Map(), SEAS_AMBU=[], SEAS_AMBL=[], SEAS_AMBP=[], SEAS_GLW=[], SEAS_GLS=[];   // (+ the decal records' pool · this frame's ember glows & the night's pale pass — footprints & mist — drawn over the night)
-const SEAS_AMBD={home:0.22, fog:0.4, squall:0.8, glass:0.9, whale:0.6, shallows:0.7, ember:0.8, rime:0.7, mire:0.75, fold:0.6};   // each kind's density (× 0.5 × its weight here: ≈ 24 cells in view → 3–8 decals, the nearest 8 drawn)
+const SEAS_AMBD={home:0.22, fog:0.4, squall:0.8, glass:0.9, whale:0.6, shallows:0.7, ember:0.8, rime:0.7, mire:0.75, fold:0.6}, SEAS_BIRDK=0.2;   // each kind's density (× 0.5 × its weight here: ≈ 24 cells in view → 3–8 decals, the nearest 8 drawn) · SEAS_BIRDK (Project Steel: the owner asked for about a fifth of the birds at sea; a constant, never saved): × the home sea's duck rafts (and ≤ round(8×it) = 2 drawn a frame), the share of Whale Road footprints with seabirds over them, the gulls over each rare school (never below 1)
 const SEAS_AMBM={whale:0.225, rime:0.10, shallows:0.10, mire:0.10};   // (SD2 FIX) a decal's water margin by kind: footprints only where whales swim (seaCtx depth ≥ 0.45), floes, ripples & weed clear of the beach
 function seasVn(x,y,s){ const x0=Math.floor(x), y0=Math.floor(y), fx=smooth(x-x0), fy=smooth(y-y0), h=(a,b)=>h2i(a*7+s,b*13-s);   // (a seed-free value noise — the decals read the same in every world)
   return lerp(lerp(h(x0,y0),h(x0+1,y0),fx), lerp(h(x0,y0+1),h(x0+1,y0+1),fx), fy); }
@@ -2084,20 +2084,20 @@ function seasAmbDraw(){ const S=SEAS; S.bk=SLS.bakes!==S.lb?1:0; S.lb=SLS.bakes;
   const s=iscale(), u=Math.max(0.5,Math.round(s*10)/10), C=64, hw=IW/2/s, hh=IH/2/s, M=36, L=SEAS_AMBL, P=SEAS_AMBP, sd=SEED&65535, sh=(SEED>>>16)&65535; L.length=0; let np=0;
   for(let j=Math.floor((camY-hh-M)/C); j<=Math.floor((camY+hh+M)/C); j++) for(let i=Math.floor((camX-hw-M)/C); i<=Math.floor((camX+hw+M)/C); i++){
     const h0=h2i(i*7+sd,j*13+sh), x=(i+0.15+0.7*h2i(i*3+sh,j*5+sd))*C, y=(j+0.15+0.7*h2i(i*11+sd,j*3+sh))*C, g=SEAS_RG[seasRgAt(x,y)]; if(!g) continue;
-    const thr=0.5*(SEAS_AMBD[g.k]||0), a=h0<thr ? clamp(((S.aw[g.k]||0)-0.8*h0/thr)/0.2,0,1) : 0; if(a<=0.01) continue;   // (a decal's own share of the weight: all at full alpha in the heart of a sea, thinning & fading one by one across a border)
+    const thr=0.5*(SEAS_AMBD[g.k]||0)*(g.k==='home'?SEAS_BIRDK:1), a=h0<thr ? clamp(((S.aw[g.k]||0)-0.8*h0/thr)/0.2,0,1) : 0; if(a<=0.01) continue;   // (a decal's own share of the weight: all at full alpha in the heart of a sea, thinning & fading one by one across a border · Steel: the home sea's duck rafts × SEAS_BIRDK, the lowest-hash cells keep theirs, so the rafts that stay don't move)
     if(Math.abs(x-camX)>hw+M || Math.abs(y-camY)>hh+M || !seasWet(x,y,SEAS_AMBM[g.k]||0.04)) continue;
     const o=P[np]||(P[np]={}); np++; o.x=x; o.y=y; o.k=g.k; o.h=h2i(i*5+sh,j*7+sd); o.a=a; o.ck=i*100003+j; o.d=(x-camX)**2+(y-camY)**2; L.push(o); }   // (SD2 FIX: pooled records)
-  if(!L.length) return; L.sort((p,q)=>p.d-q.d); const g=pctx, ox=IW/2-camX*s, oy=IH/2-camY*s, wa=wind.a, wx=Math.cos(wa), wy=Math.sin(wa), st=env.storm, dk=0.4+0.6*env.L, t=time; let n=0;
+  if(!L.length) return; L.sort((p,q)=>p.d-q.d); const g=pctx, ox=IW/2-camX*s, oy=IH/2-camY*s, wa=wind.a, wx=Math.cos(wa), wy=Math.sin(wa), st=env.storm, dk=0.4+0.6*env.L, t=time; let n=0, nh=0;
   const put=(o,x,y,a)=>{ if(!o || a<0.01) return; g.globalAlpha=Math.min(1,a); g.drawImage(o.cv,Math.round(x*s+ox)-o.ax,Math.round(y*s+oy)-o.ay); };
   const nt=env.L<0.45, Q=SEAS_GLS, glsP=(o,x,y,a)=>{ if(o && a>0.004) Q.push(o,Math.round(x*s+ox)-o.ax,Math.round(y*s+oy)-o.ay,a); };   // (SD2 FIX: at night the whale road's footprints & the fog's wisps get a pale pass over the dark — seasAmbGlow)
   for(const D of L){ if(n>=8) break; const h=D.h, a0=D.a, v=(h*4)|0; n++;
-    if(D.k==='home'){ seasDucks(D,s,ox,oy,u); continue; }
+    if(D.k==='home'){ if(nh++<Math.round(8*SEAS_BIRDK)) seasDucks(D,s,ox,oy,u); continue; }   // (Steel: the nearest 2 rafts only — zoomed out it used to be 8)
     if(D.k==='fog'){ const T=(t*3.5+h*90)%60, p=T-30; if(!seasWet(D.x+wx*p,D.y+wy*p,0.02)) continue; const o=seasAmbGet('fog',v%3,0,u), af=a0*Math.sin(Math.PI*T/60)*(1-0.7*st); put(o,D.x+wx*p,D.y+wy*p,0.3*af); if(nt) glsP(o,D.x+wx*p,D.y+wy*p,0.15*af); continue; }
     if(D.k==='squall'){ for(let q=0;q<2;q++){ const hs=h2i(D.ck+q*131,q*7+3), P=4.2, T=(t+hs*P*3)%P, f=T<1.5?0:T<2.5?1:T<3.3?2:-1; if(f<0) continue;   // (dark swells rolling downwind, each breaking white in its turn)
         const x=D.x+(h2i(q*19,D.ck)-0.5)*48+wx*T*4, y=D.y+(h2i(D.ck,q*23)-0.5)*28+wy*T*4; if(!seasWet(x,y)) continue; put(seasAmbGet('crest',(hs*3)|0,f,u),x,y,a0*(f===0?Math.min(1,T/0.5)*0.75:0.9)); } continue; }
     if(D.k==='glass'){ put(seasAmbGet('glint',v%3,((t*2.2+h*7)|0)&1,u),D.x,D.y,0.8*a0*(1-st)*dk); continue; }
     if(D.k==='whale'){ const P=13, T=(t+h*P)%P; if(T<7){ const A=T<0.4?T/0.4:Math.max(0,1-(T-0.4)/6); g.globalCompositeOperation='lighter'; put(seasAmbGet('fp',v,0,u),D.x,D.y,0.95*a0*A); g.globalCompositeOperation='source-over'; if(nt) glsP(seasAmbGet('fpn',v,0,u),D.x,D.y,0.18*a0*A);
-        for(let b=0;b<3;b++){ const an=t*(0.9+b*0.17)+b*2.1+h*9, r=(8+b*2.5), o=seasAmbGet('bird',0,((t*6+b*1.7)|0)&1,u); put(o,D.x+Math.cos(an)*r,D.y-7+Math.sin(an)*r*0.55,a0*Math.min(1,A*2.5)); } } continue; }
+        if(h2i(D.ck,577)<SEAS_BIRDK) for(let b=0;b<3;b++){ const an=t*(0.9+b*0.17)+b*2.1+h*9, r=(8+b*2.5), o=seasAmbGet('bird',0,((t*6+b*1.7)|0)&1,u); put(o,D.x+Math.cos(an)*r,D.y-7+Math.sin(an)*r*0.55,a0*Math.min(1,A*2.5)); } } continue; }   // (Steel: seabirds over 1 footprint in 5, chosen by the cell's own hash; every footprint still shows)
     if(D.k==='shallows'){ put(seasAmbGet('rip',v,0,u),D.x,D.y,0.3*a0*(0.85+0.15*Math.sin(t*0.8+h*9))); continue; }
     if(D.k==='ember'){ for(let q=0;q<12;q++){ const hs=h2i(D.ck+q*977,q*31+5), T=(t*5+hs*40)%40, bx=D.x+(h2i(q*13,D.ck)-0.5)*56+wx*(T-20), by=D.y+(h2i(D.ck,q*17)-0.5)*44+wy*(T-20)+T*0.12, hot=q%3===0;   // (ash drifting downwind and settling — every third mote still glowing)
         g.globalAlpha=(hot?0.8:0.6)*a0*Math.sin(Math.PI*T/40); g.fillStyle=hot?(((t*4+q)|0)&1?'#ffb070':'#ff8a4a'):(q&1?'#8a7a70':'#5e524c'); const z=hs>0.55?2:1, X=Math.round(bx*s+ox), Y=Math.round(by*s+oy); g.fillRect(X,Y,z,z); if(hot && env.L<0.6) SEAS_GLW.push(X,Y,z,g.globalAlpha); } continue; }
@@ -4703,7 +4703,7 @@ function drawSchoolsV(){
       pctx.fillRect(fx2+hc*L2*0.4-0.8, fy2+hs*L2*0.4-0.8, 1.6, 1.6); pctx.globalAlpha=1;
     }
     if(sc.sp.tier>=2){                                 // gulls wheel over the richest schools
-      for(let g=0;g<3;g++){ const ga=time*(0.7+g*0.13)+g*2.1, gr=(10+g*5)*s;
+      for(let g=0, ng=Math.max(1,Math.round(3*SEAS_BIRDK)); g<ng; g++){ const ga=time*(0.7+g*0.13)+g*2.1, gr=(10+g*5)*s;   // (Steel: one gull, as drawSchools)
         const gx=sx+Math.cos(ga)*gr, gy=sy-14*s+Math.sin(ga)*gr*0.5+Math.sin(time*3+g)*1.5*s;
         const ww=Math.max(1.6,2.2*s), fl2=Math.sin(time*9+g*1.7)*0.45;
         pctx.strokeStyle='rgba(244,248,252,.9)'; pctx.lineWidth=Math.max(1,1.1*s);

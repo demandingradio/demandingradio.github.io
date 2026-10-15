@@ -161,8 +161,8 @@ function drawSchools(){
       pctx.drawImage(o.cv,Math.round(sx0+Math.cos(aa)*sc.r*0.7*s)-o.ax,Math.round(sy0+Math.sin(aa)*sc.r*0.55*s)-o.ay); } }
     { const gc=(FISH_ART[sp.key]||FA_DEF).glow; if(dk>0.05 && (gc || tier>=1)){ const o=haloSpr(gc||tier>=2?2:1,gc||sp.col), a0=(gc?0.8:tier>=3?0.7:tier>=2?0.5:0.22)*dk*(TUNE.creatGlow||1)*(TUNE.shoalTell||1), st=gc||tier>=2?1:2;   // by night each fish of a rare (or lit) school carries her own small light — a drifting constellation
       for(let fi=0;fi<sc.fish.length;fi+=st){ const f=sc.fish[fi]; if(f.ly===2) continue; const wig=Math.sin(time*3.2+f.ph)*3, rr=(f.d*spread+wig)*s; SCR.gl.push(o.cv,Math.round(sx0+Math.cos(f.a)*rr)-o.ax,Math.round(sy0+Math.sin(f.a)*rr)-o.ay,a0*(0.65+0.35*Math.sin(time*2.3+f.ph*3))); } } }
-    if(tier>=2 && (TUNE.gulls==null||TUNE.gulls>0)){                                          // gulls wheel over the richest schools
-      for(let g=0;g<3;g++){ const ga=time*(0.7+g*0.13)+g*2.1, gr=(10+g*5)*s, gx=Math.round(sx0+Math.cos(ga)*gr), gy=Math.round(sy0-16*s+Math.sin(ga)*gr*0.5+Math.sin(time*3+g)*1.5*s);
+    if(tier>=2 && (TUNE.gulls==null||TUNE.gulls>0)){                                          // gulls wheel over the richest schools (Steel: one, 3 × SEAS_BIRDK but never none: the "good fish here" sign)
+      for(let g=0, ng=Math.max(1,Math.round(3*SEAS_BIRDK)); g<ng; g++){ const ga=time*(0.7+g*0.13)+g*2.1, gr=(10+g*5)*s, gx=Math.round(sx0+Math.cos(ga)*gr), gy=Math.round(sy0-16*s+Math.sin(ga)*gr*0.5+Math.sin(time*3+g)*1.5*s);
         const sh=shdSpr(2,1); pctx.globalAlpha=0.28; pctx.drawImage(sh.cv,gx+2-sh.ax,Math.round(gy+16*s)-sh.ay); pctx.globalAlpha=1;
         const o=gullSpr([0,1,2,1][(Math.floor(time*7+g*1.7))&3]); pctx.drawImage(o.cv,gx-o.ax,gy-o.ay); } }
   }
