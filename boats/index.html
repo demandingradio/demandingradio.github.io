@@ -1461,7 +1461,7 @@ function fbm(x,y,oct){
 }
 
 </script>
-<script src="js/data/crawl2.js?v=1"></script>
+<script src="js/data/crawl2.js?v=2"></script>
 <script>
 "use strict";
 /* ============================ world ============================ */
@@ -4182,11 +4182,11 @@ function renderControlsTab(){
 }
 
 </script>
-<script src="js/debug/playtest_log.js?v=1"></script>
-<script src="js/audio/audio.js?v=1"></script>
-<script src="js/audio/bard.js?v=1"></script>
-<script src="js/audio/songbook.js?v=1"></script>
-<script src="js/audio/director.js?v=1"></script>
+<script src="js/debug/playtest_log.js?v=2"></script>
+<script src="js/audio/audio.js?v=2"></script>
+<script src="js/audio/bard.js?v=2"></script>
+<script src="js/audio/songbook.js?v=2"></script>
+<script src="js/audio/director.js?v=2"></script>
 <script>
 "use strict";
 /* ============================ update ============================ */
@@ -4356,7 +4356,7 @@ function update(dt){
 }
 
 </script>
-<script src="js/render/sea_lands.js?v=1"></script>
+<script src="js/render/sea_lands.js?v=2"></script>
 <script>
 "use strict";
 /* ============================================================ *
@@ -5596,7 +5596,7 @@ function drawHuntHUDV(){
   ctx.textAlign='left';
 }
 </script>
-<script src="js/render/sea_creatures.js?v=1"></script>
+<script src="js/render/sea_creatures.js?v=2"></script>
 <script>
 "use strict";
 /* ---- whaling feel sliders ---- */
@@ -5994,7 +5994,7 @@ function drawVignette(){
   ctx.fillStyle=g; ctx.fillRect(0,0,CSSW,CSSH);
 }
 </script>
-<script src="js/chart/chart.js?v=1"></script>
+<script src="js/chart/chart.js?v=2"></script>
 <script>
 "use strict";
 /* ============================================================ *
@@ -6197,7 +6197,7 @@ function geoFor(d,bk,f){ if(d>=GATHER.geoOmni[0] && Math.random()<GATHER.geoOmni
 function fossilFor(bk,f){ if(f){ if(f>=10 && Math.random()<0.5) return 'f:ichthy'; if(f>=5) return 'f:kraken'; }        // §7.8 a rock's fossil: below ground the Kraken Beak (floor 5+) & the Ichthyosaur Skull (floor 10+) · else the shore's own
   const L=(NODE_B[bk]||NODE_B.tropic).fk; return 'f:'+L[(Math.random()*L.length)|0]; }
 </script>
-<script src="js/data/itune_defaults.js?v=1"></script>
+<script src="js/data/itune_defaults.js?v=2"></script>
 <script>
 "use strict";
 
@@ -6327,7 +6327,7 @@ function onLevelUp(){ const add=PTUNE.hpPerLvl; recalcStats(); player.maxhp=eMax
   if(typeof renderCharTab==='function' && menuOpen && menuTab==='char') renderCharTab(); if(menuOpen && menuTab==='tree') treeRefresh(); }
 function escTab(){ return treePts()>0 && (mode==='island'||lvlNag) ? 'tree' : undefined; }   // Esc / Start: points waiting → straight to ✦ Tree (§15)
 </script>
-<script src="js/audio/sfx.js?v=1"></script>
+<script src="js/audio/sfx.js?v=2"></script>
 <script>
 "use strict";
 
@@ -10647,7 +10647,7 @@ function raiseDrowned(en,p){ const cl=ISL&&ISL.clearings[en.clear]; if(!ISL || (
   packJoin(d,en); enemies.push(d); if(cl) cl.enemyCount++; burst(rx,ry,'#8fe0c0'); burst(rx,ry,'#bfffe6'); sfx('raise'); return true; }   // (a trail pack's raise joins its pack — no clearing to count it)
 
 </script>
-<script src="js/ports/museum.js?v=1"></script>
+<script src="js/ports/museum.js?v=2"></script>
 <script>
 "use strict";
 /* ======================= THE GEAR (CRAWL 2.0 C4b · §6) =======================
@@ -13028,12 +13028,12 @@ function alphaHowl(en){ const H=ATK.alpha[1], R2=H.R*H.R; en.howl=0.7; sfx('howl
     if((en.pk==null || o.pk===en.pk) && (o.x-en.x)*(o.x-en.x)+(o.y-en.y)*(o.y-en.y)<R2){ o.aggro=true; o.hasted=H.haste; } }   // ITS PACK is hastened
   if(ISL && ISL.packs) for(const P of ISL.packs) if(!P.awake && P.m.some(o=>!o.dead && (o.x-en.x)*(o.x-en.x)+(o.y-en.y)*(o.y-en.y)<R2)) packWake(P,'howl'); }   // …and every sleeping pack within 200u WAKES (§8.3 — kill the leader)
 </script>
-<script src="js/render/foe_sprites.js?v=1"></script>
-<script src="js/render/spr2_core.js?v=1"></script>
-<script src="js/render/spr2_templates.js?v=1"></script>
-<script src="js/render/pixkit.js?v=1"></script>
-<script src="js/render/terrain.js?v=1"></script>
-<script src="js/render/crawl_props.js?v=1"></script>
+<script src="js/render/foe_sprites.js?v=2"></script>
+<script src="js/render/spr2_core.js?v=2"></script>
+<script src="js/render/spr2_templates.js?v=2"></script>
+<script src="js/render/pixkit.js?v=2"></script>
+<script src="js/render/terrain.js?v=2"></script>
+<script src="js/render/crawl_props.js?v=2"></script>
 <script>
 "use strict";
 /* ============================================================ *
@@ -13298,7 +13298,7 @@ function updBiomeHaz(dt,curCl){ const I=ISL;
   if(I.ambT && curCl>=0){ let rest=false; for(const e of enemies) if(e.clear===curCl && !e.dead && !e.amb && !e.fodder && !e.rout){ rest=true; break; }   // (C3b §8.5: a hider springs out ambushMax s after the REST of its clearing is down — the gate needs it too)
     I.ambT[curCl]=rest?0:(I.ambT[curCl]||0)+dt; } }
 </script>
-<script src="js/render/crawl_fx.js?v=1"></script>
+<script src="js/render/crawl_fx.js?v=2"></script>
 <script>
 "use strict";
 
@@ -13588,8 +13588,8 @@ function drawIslandWorld(){
   { const T=ISL._T; if(T && T.fade>0 && T.fr<T.fade){ pctx.fillStyle='#000'; pctx.globalAlpha=clamp(1-(T.fr-2)/(T.fade-2),0,1); pctx.fillRect(0,0,IW,IH); pctx.globalAlpha=1; } }   // (a new isle fades in from black while its view bakes)
 }
 </script>
-<script src="js/render/crawl_overlays.js?v=1"></script>
-<script src="js/render/light.js?v=1"></script>
+<script src="js/render/crawl_overlays.js?v=2"></script>
+<script src="js/render/light.js?v=2"></script>
 <script>
 "use strict";
 /* ---- AFTERMATH: the dissolve · the ground marks (baked into the terrain chunks) ---- */
@@ -13755,8 +13755,8 @@ function izUpdate(dt){ let zt=1; const k=Math.max(1,Math.round(PIX_SCALE*DPR)); 
 function drawBossBars(){ const e=LGT.bi; if(!(e>0)) return; const h=Math.round(CSSH*0.075*e); ctx.fillStyle='#05060c'; ctx.fillRect(0,0,CSSW,h); ctx.fillRect(0,CSSH-h,CSSW,h);
   ctx.fillStyle='rgba(231,180,22,'+(0.5*e).toFixed(3)+')'; ctx.fillRect(0,h,CSSW,1); ctx.fillRect(0,CSSH-h-1,CSSW,1); }   // the boss's letterbox (under the HUD)
 </script>
-<script src="js/render/hud_kit.js?v=1"></script>
-<script src="js/debug/meters.js?v=1"></script>
+<script src="js/render/hud_kit.js?v=2"></script>
+<script src="js/debug/meters.js?v=2"></script>
 <script>
 "use strict";
 function islandHUD(){
@@ -15160,7 +15160,7 @@ function shipRenameDone(keep){ const v=document.getElementById('renameInput').va
   if(!keep && v) SHIP.nm=v; document.getElementById('rename').classList.add('hidden'); renaming=null; queueSave();
   if(SHIP.nm!==was){ toast('⛵  '+SHIP.nm, 'fresh gold leaf on her transom'); sfx('ui_ok'); } else sfx('ui_close'); }
 </script>
-<script src="js/boat/deck_art.js?v=1"></script>
+<script src="js/boat/deck_art.js?v=2"></script>
 <script>
 "use strict";
 /* ---- (PT1 B3a) THE CREW ABOARD — "I can talk to all the people": each hand keeps their own day on her deck (pt1_boat §3.7). DK.crew = the agents
@@ -16352,7 +16352,7 @@ function decorRepath(){ if(!DK) return; if(DK.L.top && DK.rolls) DK.rolls=crewRo
 function decorPuff(lv,d,x,y,r){ if(!DK || DK.lv!==lv || !DK.dfx) return; const L=DK.L[lv], fp=decorFp(d.id,r), by=d.lay==='wall'?(lv==='top'?18:4):(y+fp[1])*L.TS-2, x0=x*L.TS, w=fp[0]*L.TS;   // a little dust as it's set down
   for(let i=0;i<9 && DK.dfx.length<40;i++) DK.dfx.push({lv, x:x0+2+Math.random()*(w-4), y:by-Math.random()*3, z:Math.random()*2, vx:(Math.random()-0.5)*26, vz:6+Math.random()*10, t:0, life:0.45+Math.random()*0.3, s:Math.random()<0.4?2:1}); }
 </script>
-<script src="js/data/decor_art.js?v=1"></script>
+<script src="js/data/decor_art.js?v=2"></script>
 <script>
 "use strict";
 /* the stand-in (o.ph=1): a crate in its style's colours with its device on a plate · a rug in them · a framed plaque · a hanging banner (B6b / B7 paint the real thing) */
@@ -17381,8 +17381,8 @@ function drawHexScreen(){
 }
 
 </script>
-<script src="js/render/towns.js?v=1"></script>
-<script src="js/data/townsfolk_text.js?v=1"></script>
+<script src="js/render/towns.js?v=2"></script>
+<script src="js/data/townsfolk_text.js?v=2"></script>
 <script>
 "use strict";
 /* ---- who they are: folkDef(port, slot) — seeded from the harbour & the slot alone, so the same folk stand in the same port
@@ -17894,8 +17894,8 @@ function folkLoad(o){ const out={}; if(!o || typeof o!=='object') return out;
     if(s.sa!=null) out[id].sa=clamp(s.sa|0,0,2); }
   return out; }
 </script>
-<script src="js/render/rooms.js?v=1"></script>
-<script src="js/render/port_smooth.js?v=1"></script>
+<script src="js/render/rooms.js?v=2"></script>
+<script src="js/render/port_smooth.js?v=2"></script>
 <script>
 "use strict";
 function chatBox(P){ const [ix2,iy2]=iw2p(P.x,P.y), sx=ix2*IKX, sy=iy2*IKY;   // a wharf word's plate, over its speaker's head: {bx,by,bw,bh,lines, sx,sy, y0 (unclamped top)} — the draw & the hail's wait share it (G3 FIX)
@@ -24059,7 +24059,7 @@ function buildLvlTune(){ const host=document.getElementById('tuneLvlRows'); if(!
   });
 }
 </script>
-<script src="js/debug/proving_dev.js?v=1"></script>
+<script src="js/debug/proving_dev.js?v=2"></script>
 <script>
 "use strict";
 /* ============================ main loop ============================ */
@@ -24129,7 +24129,7 @@ function frame(ts){
 }
 function frameErr(e){ const n=window.__frameErr=(window.__frameErr|0)+1; if(n<=5) console.error('[frame error '+n+'] '+String(e&&e.stack||e)); }
 </script>
-<script src="js/render/style_pass.js?v=1"></script>
+<script src="js/render/style_pass.js?v=2"></script>
 <script>
 "use strict";
 function frameInner(ts){
@@ -24223,7 +24223,7 @@ function frameInner(ts){
 }
 
 </script>
-<script src="js/debug/tuning_panels.js?v=1"></script>
+<script src="js/debug/tuning_panels.js?v=2"></script>
 <script>
 "use strict";
 document.getElementById('renameBtn').onclick=finishRename;
@@ -24245,7 +24245,7 @@ document.getElementById('flog').addEventListener('click',e=>{ if(e.target.id==='
 document.getElementById('renameInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') finishRename(); else if(e.key==='Escape' && renaming && renaming.ship) shipRenameDone(true); });   // (PT1 B1: Esc — she keeps her name)
 
 </script>
-<script src="js/render/ui_kit.js?v=1"></script>
+<script src="js/render/ui_kit.js?v=2"></script>
 <script>
 "use strict";
 /* ---- THE TITLE: a dusk sea in pixels (sky baked once per size, the sea & the sky's life drawn live — ~0.3 ms), the BOATS
