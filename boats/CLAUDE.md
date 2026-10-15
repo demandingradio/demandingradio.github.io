@@ -166,7 +166,7 @@ Each object is a `DEFAULT_*` table plus a live `let` copy made at load. Its vers
 | `FTUNE` | 4400 → 4401 | `ftune`, `ftuneV:3` | 3718 | `FTUNE_DEF` 4835, `buildFishTune` 4845 | fishing |
 | `WTUNE` | 4889 → 4890 | `wtune`, `wtuneV:3` | 3719 | `WTUNE_DEF` 5603, `buildWhaleTune` 5614 | whaling |
 | `ETUNE` | 14055 → 14108 | `etune`, `etuneV:2` | 3720 | `ETUNE_DEF` 18745, `buildPortTune` 18774 | economy, townsfolk, reputation, deck, crew, explorer |
-| `PTUNE` | 6211 → 6215 | `ptune`, `ptuneV:4` | 3733 | `PTUNE_DEF` 18781, `buildPlayerTune` 18801 | player progression |
+| `PTUNE` | 6211 → 6215 | `ptune`, `ptuneV:5` | 3733 | `PTUNE_DEF` 18781, `buildPlayerTune` 18801 | player progression; the XP curve `xpToNext(L)` = xpBase × L^xpExp (6297) is 100 × L^1.4 since Project Steel (was 55 × L^1.6; 140,372 XP to L30). `loadSave` keeps `plvl`/`pxp` as saved: a banked `pxp` past the new need shows a full bar (e.g. "9300 / 9060 xp") and levels up on the next XP gain (`addXP`'s loop), never on load |
 | `LTUNE` | 23851 → 23860 | `ltune`, `ltuneV:8` | 3721 | `LTUNE_DEF` 24013, `buildLvlTune` 24054 | isle danger, the par model, renown |
 
 - **Changing a `DEFAULT_*` value?** Bump its `*V` in **both** `doSave` (3606) and its `loadSave` line, or old saves keep the old value. The comment at 3606 says so; ETUNE's comment (14058) allows new keys without a bump.
