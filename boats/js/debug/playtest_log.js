@@ -155,7 +155,7 @@ function plogChip(){ const k=document.getElementById('tPlogK'); if(k) k.classLis
   const c=document.getElementById('plChip'); if(!c) return; c.classList.toggle('hidden',!PLOG); if(PLOG) c.textContent='📝 '+plogLoad().notes.length; }
 function plogOpen(src){ const L=PLOG; if(!L || L.box) return; plogDom();
   const B=L.box={src, iso:new Date().toISOString(), shot:plogShot(), ctx:plogCtx(), ev:plogEvents(), perf:plogPerf(), err:{frame:(window.__frameErr|0)-L.fe0, console:L.err.slice()}, fe:window.__frameErr|0, ne:L.err.length, tag:'', sc:0, af:document.activeElement, pf:padFocusEl};
-  for(const k in keys) keys[k]=false; mouseL=false; mouseR=false; fmDrag=null; padRelease(); player.hv=null;   // (nothing held carries on under the box · PX: a charge is dropped)
+  for(const k in keys) keys[k]=false; mouseL=false; mouseR=false; fmDrag=null; padRelease(); hvDrop();   // (nothing held carries on under the box · PX: a charge is dropped · STEEL: hvDrop — its riser stops too)
   const el=document.getElementById('plBox'), ta=document.getElementById('plText'), im=document.getElementById('plImg');
   document.getElementById('plWhere').textContent=B.ctx.where; ta.value=''; if(B.shot){ im.src=B.shot; im.style.display=''; } else { im.removeAttribute('src'); im.style.display='none'; }
   el.classList.remove('hidden'); plogBoxSync(); plogSfx('ui_open');

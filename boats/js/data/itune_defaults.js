@@ -10,7 +10,7 @@ Globals it reads from elsewhere: LEGACY_FEEL (original line 1678 (build 5109cd5)
 Load-time statements (1): let ITUNE=Object.assign({},DEFAULT_ITUNE) (original line 11679 (build 5109cd5)),
   which reads only DEFAULT_ITUNE above it in this file.
 Notes: ITUNE is a let that loadSave (original line 4694 (build 5109cd5)) and ptQuit (original line 40681 (build 5109cd5))
-  replace with a new object, so nothing may keep a reference to it at load. The save version ituneV:24 stays in doSave and
+  replace with a new object, so nothing may keep a reference to it at load. The save version ituneV:25 stays in doSave and
   loadSave in index.html. The doc comments displaced to the end of original line 11677 (build 5109cd5) are left as they were.
 */
 const DEFAULT_ITUNE={ moveSpeed:86, slashRange:26, slashDmg:1, slashCD:0.14, arrowSpeed:300, arrowDmg:1,   // (C2a: slashRange = the sword cone's R (u) · slashCD = the LEGACY feel's swing cooldown · arrowSpeed u/s)
