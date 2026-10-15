@@ -950,11 +950,11 @@ const UQ_BOSS={greatboar:['U01',d=>Math.min(0.12,0.03+0.003*d)], brood:['U02',()
 const PW_ECHO={G02:1, G07:1, G10:1, G11:1, G12:1, G15:1, G18:1, G19:1, G20:1, G22:1, G23:1, G24:1, G28:1, G30:1, G03:'ch', G06:'ch', G16:'ch'};   // (P34 Siren's Last Song) the skills that echo — every one that deals damage (a channel echoes its landing where you stand)
 const PW_BUFF_IC={bar:'shield', free:'tide', anchor:'anchor', mt:'pearl', howl:'g08'};   // the buff row's icons for the powers' buffs (a barrier · a free skill · the anchor · Mermaid's Tear · the King's Howl)
 const UQ_HOARD={frost:[['U05',0.01]], crystal:[['U05',0.01],['U09',0.03]], swamp:[['U06',0.02]], scorch:[['U07',0.03]], volcanic:[['U07',0.03]], mushroom:[['U10',0.03]], dunes:[['U12',0.03]]};   // a surface hoard by its shore (§6.6)
-/* §5 THE PASSIVE TREE (C6a) — 85 nodes on a compass rose: the Helm (the start, free) and eight regions round it (N Steel · NE Storm · E Rigging ·
+/* §5 THE PASSIVE TREE (C6a) — 88 nodes on a compass rose: the Helm (the start, free) and eight regions round it (N Steel · NE Storm · E Rigging ·
    SE Deep · S Hull · SW Tide · W Wake · NW Fortune). Each region: X1 → X2 → X3 (a RULE notable — bespoke code, gold rim) → X4, which forks to
    X5 → X7 and X6 → X8 (bundle notables) → the keystone XK (3 points). The X3s ring each other (the inner ring); each X9 joins X6 to the next
    region's X5 (the outer ring, clockwise); SE10 → RED TIDE and DP10 → LAST LIGHT hang one step further out. A node: [name, effect, fx, rule] —
-   fx = its stat bundle (fractions: .08 = +8% · crm tdm prc mag dashCh summonMax flat), rule = its flag in TR (read where the rule lives). */
+   fx = its stat bundle (fractions: .08 = +8% · crm tdm prc mag dashCh summonMax flat), rule = its flag in TR (read where the rule lives). PROJECT STEEL adds 3 NEW MOVE nodes (kind 'a', hand-placed after the loops). */
 const TREE_REG=[['SE','Steel','#d8dde6'],['SM','Storm','#ffe55a'],['RG','Rigging','#d8b87a'],['DP','Deep','#4fd0c0'],['HL','Hull','#b07a4a'],['TD','Tide','#4a90e8'],['WK','Wake','#e8f4ff'],['FT','Fortune','#ffd86b']];
 const TREE_MAX=35, TREE_KS=3, TREE_KC=3;                                  // the most points you'll ever hold (29 levels + 4 boss firsts + 2 museum) · keystones at most · a keystone's price
 const TREE_ND={
@@ -963,7 +963,7 @@ const TREE_ND={
       ['Barbed Edge','+10% Bleed chance on melee hits',{bldM:.1}], ['Brawler','+6% attack speed with melee weapons',{aspM:.06}],
       ['Bloodletter','+20% physical damage over time · +15% Bleed chance',{dotP:.2, bld:.15}], ['Cleaver’s Arc','melee arcs and radii +20% · +10% melee damage',{marea:.2, mel:.1}],
       ['Boarding Party','+6% melee damage, +4% attack speed',{mel:.06, asp:.04}], ['Red Mist','+8% damage while below 50% life',{lowDmg:.08}]],
-    K:['Corsair’s Creed','your combo NEVER RESETS (idle time, skills and dashes keep its place) · every 3rd connecting melee hit is a HEAVY (knockdown, ×1.5 stagger) · melee hits leech 1% · your projectiles deal 40% less','blade','kCC'],
+    K:['Corsair’s Creed','your combo NEVER RESETS (idle time, skills and dashes keep its place) · every 3rd connecting melee hit lands as a heavy blow (knockdown, ×1.5 stagger) · melee hits leech 1% · your projectiles deal 40% less','blade','kCC'],
     X:['Red Tide','while below 50% life you deal 40% more damage and have +15% attack speed (inside the +30% cap) · your flasks heal 50% less','anger','kRT']},
   SM:{n:[['Static','+10% storm damage',{sto:.1}], ['Keen Eye','+2% crit chance',{crc:.02}],
       ['St Elmo’s Fire','your crits Shock · +0.15 crit multiplier',{crm:.15},'rElmo'], ['Quickening','+5% attack speed',{asp:.05}],
@@ -1008,7 +1008,7 @@ const TREE_ND={
       ['Treasure Hunter','+15% item rarity · +20% gold',{rar:.15, gld:.2}], ['Scholar','+25% skill gem XP · +8% XP',{gmx:.25, xpI:.08}],
       ['Scavenger','+15% flask charge gain, +5% gold',{fkg:.15, gld:.05}]],
     K:['Wrecker’s Fortune','+50% item rarity, +30% gold · picking up a Coral-or-better piece heals 10% of max life and fills 20 Tide · you take 15% more damage','coin','kWF', {rar:.5, gld:.3}]}};
-/* the tree itself: TREE[id] = {id, n, tx, k ('h' the Helm · 's' small · 'r' rule notable · 'b' bundle notable · 'k' keystone), g (its region), c (colour), x, y (tree units — polar:
+/* the tree itself: TREE[id] = {id, n, tx, k ('h' the Helm · 's' small · 'r' rule notable · 'b' bundle notable · 'k' keystone · 'a' a NEW MOVE, Project Steel), g (its region), c (colour), x, y (tree units — polar:
    a region at −90° + 45°·g · X1 70 · X2 120 · X3 170 · X4 220 · X5/X6 275 ∓14° · X7/X8 330 ∓12° · XK 390 · X9 300 between regions · X10 345 · the outer keystones 400), fx, r, ic, l (links)} */
 const TREE=(()=>{ const T={}, P=(r,d)=>[Math.round(r*Math.cos(d*Math.PI/180)), Math.round(r*Math.sin(d*Math.PI/180))];
   const add=(id,o)=>{ T[id]=Object.assign({id, l:[], fx:{}}, o); }, link=(a,b)=>{ T[a].l.push(b); T[b].l.push(a); };
@@ -1021,6 +1021,12 @@ const TREE=(()=>{ const T={}, P=(r,d)=>[Math.round(r*Math.cos(d*Math.PI/180)), M
     link('HELM',p+1); link(p+1,p+2); link(p+2,p+3); link(p+3,p+4); link(p+4,p+5); link(p+4,p+6); link(p+5,p+7); link(p+6,p+8); link(p+7,p+'K'); link(p+8,p+'K');
     link(p+3,q+3); link(p+6,p+9); link(p+9,q+5); });                     // (the inner ring · the outer ring, clockwise)
   link('SE9','SE10'); link('SE10','RTK'); link('DP9','DP10'); link('DP10','LLK');
+  // (PROJECT STEEL) three NEW MOVE nodes in Steel: kind 'a', 1 point each, placed by hand. Each sets a rule flag the combat code reads (TR.aHV · TR.aC4 · TR.aC5) · lt = the line its "learned" toast shows.
+  // ADDITIVE ONLY: new ids and new links, never a changed or removed one (treeLoad hands a saved tree back whole once it stops joining up to the Helm).
+  add('HVY',{n:'THE HEAVY', tx:'a new move — ashore, hold Shift (LT on a pad) to build power; you can’t swing while it builds · when the ring turns white, strike: your weapon’s FINISHER, charged — far harder and wider, double Tide · let go too soon and it fizzles', lt:'ashore, hold Shift (LT) to charge, then strike', r:'aHV', ic:'mvHeavy', k:'a', g:0, c:'#d8dde6', x:41, y:-97});
+  add('CB4',{n:'THE FOURTH BLOW: Low Tide Sweep', tx:'a new move — with a sword or bare fists your chain gains a 4th blow: after the FINISHER, a low back-hand SWEEP that shoves foes into a line', lt:'sword or bare fists: 1 · 2 · FINISHER · SWEEP', r:'aC4', ic:'mvSweep', k:'a', g:0, c:'#d8dde6', x:0, y:-275});
+  add('CB5',{n:'THE FIFTH BLOW: Boarding Lunge', tx:'a new move — …and a 5th: after the SWEEP, a BOARDING LUNGE that drives through the whole line · a second finisher: it floors fresh foes and pays double Tide · sword or bare fists', lt:'sword or bare fists: 1 · 2 · FINISHER · SWEEP · LUNGE', r:'aC5', ic:'mvLunge', k:'a', g:0, c:'#d8dde6', x:0, y:-330});
+  link('SE1','HVY'); link('SE4','CB4'); link('CB4','CB5'); link('CB5','SEK');   // (Honed Edge → THE HEAVY · Sharpened Steel → the 4th blow → the 5th → Corsair’s Creed: a third road to it, at the same 9 points)
   return T; })();
 const TREE_IDS=Object.keys(TREE);
 

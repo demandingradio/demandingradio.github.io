@@ -6275,7 +6275,7 @@ function treeWhy(id){ const N=TREE[id]; if(!N) return 'no such node'; if(TALLOC[
   const c=treeCost(id); if(treePts()<c) return treePts()<=0 ? 'no points to spend — they come with each level' : 'a keystone costs '+c+' points'; return ''; }
 function treeAlloc(id,quiet){ const why=treeWhy(id); if(why){ if(!quiet){ toast('✦  '+(TREE[id]?TREE[id].n:id), why); sfx('nope'); } return why; }
   TALLOC[id]=1; treeChanged(); tutMark('tree'); guildEvent('tree');   // (C7c: the Guild's step 6)
-  if(!quiet){ const N=TREE[id]; sfx(N.k==='k'?'gem_level':'ui_equip',N.k==='k'?0.8:1.15); if(N.k==='k') toast('✦  '+N.n.toUpperCase(), N.tx); } return ''; }
+  if(!quiet){ const N=TREE[id], mv=N.k==='a'; sfx(N.k==='k'||mv?'gem_level':'ui_equip',N.k==='k'?0.8:mv?1:1.15); if(N.k==='k') toast('✦  '+N.n.toUpperCase(), N.tx); else if(mv) toast('✦  '+N.n.split(':')[0]+' — learned', N.lt||N.tx); } return ''; }   // (PROJECT STEEL: a NEW MOVE says how to use it)
 function treeRespecOK(){ return ptMode || helmOpen; }
 function treeRespec(){ if(!treeRespecOK()){ toast('✦  Not here','respec at a HELM STONE — there’s one on every harbour’s square (free)'); sfx('nope'); return false; }
   const n=treeSpent(); TALLOC={HELM:1}; treeChanged(); sfx('ui_ok'); toast('🪨  The sea takes back what it gave', n+' point'+(n===1?'':'s')+' returned — free, as ever'); return true; }
@@ -6289,7 +6289,7 @@ function treeLoad(ids){ TALLOC={HELM:1}; if(!Array.isArray(ids)) return; let bad
   if(bad || treeKeys()>TREE_KS || treeSpent()>treeEarned()) TALLOC={HELM:1}; treeVer++; TSUM=null; }
 /* +n bonus points (a boss's first fall · the museum's milestones — C7c calls treeBonus(1,'museum')) — never past TREE_MAX in all */
 function treeBonus(n,why){ const was=treeEarned(); tpx=Math.max(0,tpx+(n|0)); const got=treeEarned()-was; if(got>0){ toast('✦  +'+got+' passive point'+(got>1?'s':''), (why||'')+' — Esc → ✦ Tree'); if(typeof menuBadges==='function') menuBadges(); queueSave(); } return got; }
-/* the cheapest way to a node: the points it takes along the path from what you hold (Dijkstra — 85 nodes) */
+/* the cheapest way to a node: the points it takes along the path from what you hold (Dijkstra — 88 nodes) */
 function treePathCost(id){ if(TALLOC[id]) return 0; const D={}; for(const k in TALLOC) D[k]=0; const Q=Object.keys(TALLOC), done={};
   while(Q.length){ let bi=0; for(let i=1;i<Q.length;i++) if(D[Q[i]]<D[Q[bi]]) bi=i; const a=Q.splice(bi,1)[0]; if(done[a]) continue; done[a]=1; if(a===id) return D[a];
     for(const b of TREE[a].l){ if(TALLOC[b]) continue; const v=D[a]+treeCost(b); if(D[b]==null || v<D[b]){ D[b]=v; Q.push(b); } } }
@@ -18420,7 +18420,7 @@ function missionDesc(m){
   if(m.t==='gboard') return 'any harbour’s mission board will do';
   if(m.t==='gtemper') return 'any harbour town’s forge (home has one) — its 🔥 Temper tab: ore, a little coin, and your hardest conquest sets the cap';
   if(m.t==='gbrew') return 'a market’s ⚗ Apothecary — two herbs of a kind & a cut gem make an Elixir';
-  if(m.t==='gtree') return 'Esc → ✦ Tree — take any node next to what you hold';
+  if(m.t==='gtree') return 'Esc → ✦ Tree — take any node next to what you hold (try Honed Edge, then THE HEAVY)';
   if(m.t==='gclear'){ const c=m.hint!=null&&cores[m.hint]; return c&&!c.cleared ? 'the Guild suggests '+(c.customName||c.label||c.name)+' — a small isle, ⚔'+dangerOf(c)+' · '+at(c.x,c.y)+' (any wild isle counts)' : 'land on a wild isle (E), clear her, raise your flag'; }   // (a small home isle first — the on-ramp)
   return 'reported '+at(m.x,m.y)+' — the salvage is yours';
 }
@@ -19480,26 +19480,26 @@ function renderCharTab(){
   gearWire(host, renderCharTab); dndMark();
 }
 /* ======================= THE ✦ TREE TAB (CRAWL 2.0 C6a · §5.4) =======================
-   The 85 nodes are DOM buttons (data-fk · data-tip) on one CSS-transformed layer (translate · scale 0.6-2), the edges on a canvas under them —
+   The 88 nodes are DOM buttons (data-fk · data-tip) on one CSS-transformed layer (translate · scale 0.6-2), the edges on a canvas under them —
    1-texel pixel lines, gold once both ends are yours. Pan: drag · the right stick. Zoom: the wheel · LT / RT (the zoomout / zoomin roles).
    The pad's stick / D-pad walks to the NEIGHBOUR closest in angle to the way pressed (else the nearest node that way); A takes it.
    A change re-reads only classes, tips and the edge canvas; a pan or zoom only moves the layer (nothing re-renders — 60 fps while panning).
-   Node art (§5.1): a small node a 10×10 diamond · a notable a 16×16 medallion (a rule notable gold-rimmed) · a keystone a 22×22 octagon with its icon. */
+   Node art (§5.1): a small node a 10×10 diamond · a notable a 16×16 medallion (a rule notable gold-rimmed) · a keystone a 22×22 octagon with its icon · a NEW MOVE (Project Steel) a 16×16 steel-rimmed medallion with its icon. */
 const TV={built:false, x:0, y:0, z:0, vw:0, vh:0, drag:null, dragged:false, fk:'HELM', lay:null, view:null, cv:null, els:{}, sig:''};
-const TREE_W=1000, TREE_C=500, TN_SZ={h:18, s:10, r:16, b:16, k:22};             // the layer (tree units = CSS px at zoom 1) · the Helm at its heart · each kind's art in texels
+const TREE_W=1000, TREE_C=500, TN_SZ={h:18, s:10, r:16, b:16, k:22, a:16};       // the layer (tree units = CSS px at zoom 1) · the Helm at its heart · each kind's art in texels
 const TNART={};
 function tnArt(N,on){ const S=TN_SZ[N.k], key=N.k+'|'+N.c+'|'+(on?1:0)+'|'+(N.ic||'')+'|'+UIK.kd; if(TNART[key]) return TNART[key];   // a node's pixel art (baked once per kind · colour · state)
-  const c0=(S-1)/2, oct=N.k==='k', dia=N.k==='s', rim=N.k==='r'||N.k==='k'||N.k==='h';
+  const c0=(S-1)/2, oct=N.k==='k', dia=N.k==='s', mv=N.k==='a', rim=N.k==='r'||N.k==='k'||N.k==='h'||mv;   // (PROJECT STEEL: a NEW MOVE — a steel rim, a dark line inside it, its icon)
   const inside=(x,y)=>{ const dx=Math.abs(x-c0), dy=Math.abs(y-c0); return dia ? dx+dy<=c0+0.5 : oct ? (dx<=c0+0.4 && dy<=c0+0.4 && dx+dy<=c0*1.42) : dx*dx+dy*dy<=(c0+0.45)*(c0+0.45); };
-  const base=on?N.c:mixHex(N.c,'#0c1830',0.62), hi=mixHex(base,'#ffffff',on?0.45:0.2), lo=mixHex(base,'#000000',on?0.35:0.3), rc=on?'#ffd86b':'#7a5c24';
+  const base=on?N.c:mixHex(N.c,'#0c1830',0.62), hi=mixHex(base,'#ffffff',on?0.45:0.2), lo=mixHex(base,'#000000',on?0.35:0.3), rc=mv?(on?'#e8eef8':'#6b7480'):on?'#ffd86b':'#7a5c24';
   TNART[key]=ukImg(S,S,g=>{ g.imageSmoothingEnabled=false;
     for(let y=0;y<S;y++) for(let x=0;x<S;x++){ if(!inside(x,y)) continue; const edge=!inside(x-1,y)||!inside(x+1,y)||!inside(x,y-1)||!inside(x,y+1);
-      const edge2=!edge && (!inside(x-2,y)||!inside(x+2,y)||!inside(x,y-2)||!inside(x,y+2));
-      g.fillStyle=edge?'#04070e' : (edge2&&rim)?rc : (x+y<c0*0.9)?hi : (x+y>c0*2.6)?lo : base; g.fillRect(x,y,1,1); }
+      const edge2=!edge && (!inside(x-2,y)||!inside(x+2,y)||!inside(x,y-2)||!inside(x,y+2)), edge3=mv && !edge && !edge2 && (!inside(x-3,y)||!inside(x+3,y)||!inside(x,y-3)||!inside(x,y+3));
+      g.fillStyle=edge?'#04070e' : (edge2&&rim)?rc : edge3?'#1c2230' : (x+y<c0*0.9)?hi : (x+y>c0*2.6)?lo : base; g.fillRect(x,y,1,1); }
     const ic=N.ic?pxiCv(N.ic):N.k==='h'?pxiCv('compass'):null;                                // the keystone's icon (the Helm: the compass) — dimmed while it isn't yours
     if(ic){ g.globalAlpha=on?1:0.55; g.drawImage(ic, Math.round(c0+0.5-ic.width/2), Math.round(c0+0.5-ic.height/2)); g.globalAlpha=1; } });
   return TNART[key]; }
-function treeKindName(N){ return N.k==='h'?'the start':N.k==='s'?'small node':N.k==='r'?'RULE notable':N.k==='b'?'notable':'KEYSTONE'; }
+function treeKindName(N){ return N.k==='h'?'the start':N.k==='s'?'small node':N.k==='r'?'RULE notable':N.k==='b'?'notable':N.k==='a'?'NEW MOVE':'KEYSTONE'; }
 function treeTip(id){ const N=TREE[id], reg=N.g>=0?TREE_REG[N.g][1]:'', cost=treeCost(id);   // the tooltip: name · kind · region — its effect — what it takes
   let s=N.n+'  ('+treeKindName(N)+(reg?' · '+reg:'')+')\n'+N.tx+'\n';
   if(TALLOC[id]) return s+'✓ yours';

@@ -249,7 +249,7 @@ Object.assign(PXI_ART,{   // (C5b §12: the skill gems' icons — the HUD kit's 
   g27:{p:{K:'#1a1c22',W:'#f4f8fc',Y:'#ffb84a'}, a:['KK.....KK','KWKK.KKWK','.KWWKWWK.','..KWYWK..','...KKK...']},   // Gull Familiar
   g29:{p:{K:'#140c06',Y:'#ffe55a',W:'#f4ecd8',R:'#d23a2e'}, a:['..KYK..','.KYYYK.','..KKK..','..KWK..','..KRK..','..KWK..','.KWRWK.','.KRWRK.','KWWRWWK','KKKKKKK']},   // Lighthouse Beacon
   g30:{p:{K:'#140c04',W:'#f6eed8',w:'#c8b88e',R:'#d23a2e',B:'#9a6436',b:'#5c3a1c',M:'#6a4a28'}, a:'ship'},          // Broadside
-});
+  mvHeavy:{p:{K:'#12141a',H:'#f4f8fc',S:'#c8d0dc',s:'#76808f',B:'#a8743e',b:'#6a4420',Y:'#ffd23f',W:'#fff6c8'}, a:['......Y..','.KKKKKYWY','KHSSSsKY.','KSSSssK..','.KKBKK...','..KBK....','..KbK....','..KbK....','..KKK....']}, mvSweep:{p:{K:'#0a1420',W:'#eef8ff',C:'#8fd8ff',c:'#3a8ab8'}, a:['.........','.........','.K.......','KWK.....K','KCWK...KC','.KCWKKKCc','..KCCCCcK','...KKKKK.','.........']}, mvLunge:{p:{K:'#1a1404',W:'#fff6c8',S:'#ffd23f',s:'#c8901a',Y:'#ffb84a'}, a:['.........','....KK...','....KWK..','Y.KKKSWK.','YYWWWWWWK','Y.KKKSsK.','....KsK..','....KK...','.........']} });   // (PROJECT STEEL) the ✦ Tree's NEW MOVE icons: THE HEAVY's hammer & spark · the 4th blow's low SWEEP · the 5th's gold LUNGE
 seasLmkPxi();   // (SEAS SE4: the landmarks' own icons — lmArch · lmNeedle · lmBanyan · lmFang, from their shapes)
 const PXI={};
 function pxiCv(n){ let c=PXI[n]; if(c) return c; const A=PXI_ART[n]; if(!A) return null; const rows=typeof A.a==='string'?PXI_ART[A.a].a:A.a, h=rows.length, w=rows.reduce((m,r)=>Math.max(m,r.length),0);
