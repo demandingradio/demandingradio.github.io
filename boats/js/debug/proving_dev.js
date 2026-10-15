@@ -225,7 +225,7 @@ function sndMapCheck(){ const P=[], ids=new Map(), add=(id,w)=>{ if(id && !ids.h
     for(;i<src.length && a.length<240;i++){ const c=src[i]; if(q){ a+=c; if(c==='\\'){ a+=src[++i]; continue; } if(c===q) q=''; continue; } if(c==="'"||c==='"'||c==='`'){ q=c; a+=c; continue; }
       if(c==='('||c==='['||c==='{') d++; else if(c===')'||c===']'||c==='}'){ if(!d) break; d--; } else if(c===',' && !d) break; a+=c; }
     if(/'\s*\+/.test(a)) continue; const lr=/(^\s*|[?:\[,|&]\s*)'([A-Za-z0-9_]+)'/g; let k; while((k=lr.exec(a))) add(k[2],src.slice(0,m.index).split('\n').length); }
-  for(const w in WEAPON){ const W=WEAPON[w]; add(W.swing,'WEAPON'); add(W.draw,'WEAPON'); for(const c of W.combo||[]){ add(c.snd,'WEAPON'); add(c.snd2,'WEAPON'); } }
+  for(const w in WEAPON){ const W=WEAPON[w]; add(W.swing,'WEAPON'); add(W.draw,'WEAPON'); for(const c of comboOf(w,2)){ add(c.snd,'WEAPON'); add(c.snd2,'WEAPON'); } }   // (STEEL: every beat a weapon can have — its ext too)
   for(const e in ELEM) add(ELEM[e].snd,'ELEM'); for(const k in MAT_HIT) add(MAT_HIT[k],'MAT_HIT'); for(const k in BARK_K) add('bark_'+BARK_K[k],'BARK_K');
   for(const k in TELL_A) add(TELL_A[k],'TELL_A'); for(const k in TELL_K) add(TELL_K[k],'TELL_K'); add('tell_click','tellOf'); add('tell_hiss','tellOf'); for(const k of SECURE_V) add(k,'SECURE_V');
   const OLD=['tink','thunk','snap','land','cast','hurt','pop','shoot','heart'];
@@ -483,10 +483,10 @@ function drawDummies(){ let any=false, bt=false; for(const en of enemies) if(en.
     const w=Math.round(ctx.measureText(txt).width+18*U), h=Math.round(20*U); pxPanel(sx-(w>>1), sy-h, w, h, PXP.dim); panTxt(txt, sx, sy-Math.round(h/2)+Math.round(4*U), '#ffe9a6');
     if(!bt && (dev.cmbR!==0 || dev.cmbG) && BEATL.length){ bt=true; beatDraw(sx, sy-h-Math.round(4*U), U); ctx.font='700 '+Math.round(11*U)+'px system-ui'; } }   // (PT1 K2) the COMBO readout (over the first dummy)
   ctx.textAlign='left'; }
-/* (PT1 K2) THE COMBO READOUT over the dummy: a row a beat (1 · 2 · FIN · DS the dash strike), its damage on the dummy, its freeze & its own length (G6 fix) ·
+/* (PT1 K2) THE COMBO READOUT over the dummy: a row a beat (1 · 2 · FIN · STEEL's 4 · FIN2 the LUNGE · DS the dash strike), its damage on the dummy, its freeze & its own length (G6 fix) ·
    ⏱ Beat gaps: the last 2 s as a timeline — a tick a beat (gold the finisher, taller), its freeze as a red bar under it */
 function beatDraw(cx,by,U){ const L=BEATL, n=L.length, lh=Math.round(12*U); let y0=by;
-  if(dev.cmbR!==0){ ctx.font='700 '+Math.round(10*U)+'px system-ui'; const T=L.map(e=>(e.ds?'DS':e.hv?'HVY':e.fin?'FIN':String(e.b+1))+'  ·  '+fmtDmg(e.d*DMG_DISP)+'  ·  '+e.hs+' ms  ·  '+(e.len!=null?e.len.toFixed(2)+' s':'— s')); let w=0; for(const t of T) w=Math.max(w,ctx.measureText(t).width);   // (G6 fix: each row's own length — '—' until the next beat starts)
+  if(dev.cmbR!==0){ ctx.font='700 '+Math.round(10*U)+'px system-ui'; const T=L.map(e=>(e.ds?'DS':e.hv?'HVY':e.fin?(e.b>2?'FIN2':'FIN'):String(e.b+1))+'  ·  '+fmtDmg(e.d*DMG_DISP)+'  ·  '+e.hs+' ms  ·  '+(e.len!=null?e.len.toFixed(2)+' s':'— s')); let w=0; for(const t of T) w=Math.max(w,ctx.measureText(t).width);   // (G6 fix: each row's own length — '—' until the next beat starts)
     w=Math.round(w+16*U); const h=n*lh+Math.round(6*U); y0=by-h; pxPanel(cx-(w>>1), y0, w, h, PXP.dim);
     for(let j=0;j<n;j++) panTxt(T[j], cx, y0+Math.round(3*U)+lh*j+Math.round(lh*0.78), L[j].hv?'#ffe08a':L[j].fin?'#ffd23f':L[j].ds?'#9ff0ff':'#e8eef4'); }   // (PX: HVY — THE HEAVY — in a paler gold)
   if(dev.cmbG){ const W=Math.round(170*U), H=Math.round(22*U), x0=Math.round(cx-W/2), yb=y0-Math.round(4*U)-H, now=last/1000; pxPanel(x0, yb, W, H, PXP.dim);

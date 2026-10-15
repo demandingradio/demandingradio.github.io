@@ -54,12 +54,16 @@ const SCORE_NOTE={ S4:'the last ≤3 foes of a clearing that BEGAN with 8+ (raw.
    a boom, ×1.5 Tide. A beat's own fields: fin · hsK (× its freeze) · tdK (× its Tide) · kb (u) · mw / mr (move ×) · sty (smear: w white · c cool · k warm ·
    h haft · g gold) · snd (its swing sound — else the weapon's) · snd2 (a second sound at the impact) · rep {n, gap s, hands, dirs} (a double strike) ·
    sh2 {L, W, m} (a fissure line from the circle's far edge, × m) · spd (× arrow speed) · lifeK (× flight) · pr.pc (+ pierce) · pit (the swing's pitch) ·
-   xs (a crossing X smear) · bo {sp, life, helix, orb, R, k} (a bolt's speed & flight · the staff's ORB: splash R × k, it always bursts) */
+   xs (a crossing X smear) · bo {sp, life, helix, orb, R, k} (a bolt's speed & flight · the staff's ORB: splash R × k, it always bursts) ·
+   (STEEL) kick (its own screen kick, px) · lp (its impact voice's pitch — else the combo ladder) · ext = beats 4 & 5 after the finisher, the ✦ Tree's
+   THE FOURTH BLOW / THE FIFTH BLOW (the sword & bare fists only — every reader goes through comboOf) */
 const WEAPON={
   sword:{hs:1.2, stag:1.0, th:0.7, tide:6, mw:null, mr:null, pose:'slash', kb:[10,22], swing:'sw_sword', combo:[
     {wind:0.05, act:0.05, rec:0.15, mul:0.85, step:5,  dir:1,  sh:{k:'cone', R:26, H:60}, mw:0.6, mr:0.85, hsK:0.5, tdK:1, kb:10, sty:'w'},          // the slash
     {wind:0.05, act:0.05, rec:0.15, mul:0.85, step:5,  dir:-1, sh:{k:'cone', R:26, H:60}, mw:0.6, mr:0.85, hsK:0.5, tdK:1, kb:10, sty:'c', pit:1.18},   // the back-slash
-    {wind:0.16, act:0.08, rec:0.30, mul:1.9, step:12, dir:1,  sh:{k:'cone', R:34, H:100}, heavy:1, fin:1, mw:0.3, mr:0.6, hsK:1.4, tdK:1.5, kb:26, sty:'g', snd:'sw_sword_fin'}]},   // CRESCENT CLEAVE: a 200° cleave floors the lot
+    {wind:0.16, act:0.08, rec:0.30, mul:1.9, step:12, dir:1,  sh:{k:'cone', R:34, H:100}, heavy:1, fin:1, mw:0.3, mr:0.6, hsK:1.4, tdK:1.5, kb:26, sty:'g', snd:'sw_sword_fin'}],   // CRESCENT CLEAVE: a 200° cleave floors the lot
+    ext:[{wind:0.06, act:0.06, rec:0.16, mul:1.05, step:6, dir:-1, pose:'sweep', sh:{k:'cone', R:32, H:90}, mw:0.6, mr:0.85, hsK:0.6, tdK:1, kb:18, sty:'c', pit:1.3},   // (STEEL) 4 THE SWEEP (Low Tide Sweep): a quick, low 180° back-hand — it shoves them into a line
+    {wind:0.18, act:0.09, rec:0.32, mul:2.4, step:22, pose:'lunge', sh:{k:'line', L:60, W:18}, heavy:1, fin:1, mw:0.3, mr:0.6, hsK:1.6, tdK:2, kb:32, kick:3.8, lp:1, sty:'g', snd:'sw_sword_fin', pit:0.9, snd2:'thrust'}]},   // (STEEL) 5 THE LUNGE (Boarding Lunge): a second finisher — it steps 22u and drives through the whole line (floors fresh foes, ×2 Tide)
   bow:{hs:0.5, stag:0.7, th:0.4, tide:5.5, mw:0.55, mr:0.8, pose:'draw', kb:[8,14], swing:'bow_release', draw:'bow_draw', life:0.93, combo:[   // arrows fly ITUNE.arrowSpeed (300 u/s) × spd for 0.93 s × lifeK (≈ 280u)
     {wind:0.10, act:0.02, rec:0.12, mul:0.8, step:0, pr:{n:1, sp:0}, spd:1.07, lifeK:0.94, mw:0.55, mr:0.85, tdK:1, kb:8},
     {wind:0.10, act:0.02, rec:0.12, mul:0.8, step:0, pr:{n:1, sp:0}, spd:1.07, lifeK:0.94, mw:0.55, mr:0.85, tdK:1, kb:8, pit:1.12},

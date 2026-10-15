@@ -273,9 +273,9 @@ function paintExplorer(g,x,y0,pr,pfa,stride,bob,tvx,tvy,sw,bow,px){
     g.lineTo(bhx+Math.cos(pfa+1.25)*pr*0.85, bhy+Math.sin(pfa+1.25)*pr*0.85); g.stroke();
     g.fillStyle='#e8c39a'; g.beginPath(); g.arc(bhx,bhy,pr*0.26,0,TAU); g.fill(); }
 }
-/* §15 THE POSE CONTRACT (C5a): the basic action's pose (slash · chop · slam · thrust · stab · draw · cast — spin is the Whirl's) + its phase progress →
-   wPose(pfa, prk) = {a: the weapon's angle · lg: its lunge along your facing (texels — prk: the body's own scale) · st: a bow's draw 0-2 · oa / olg: the
-   off-hand's dagger}. The wind cocks it, the ACT is when the blade arrives (its sweep, its thrust, its slam, its loose), the recovery holds it and eases it
+/* §15 THE POSE CONTRACT (C5a): the basic action's pose (slash · chop · slam · thrust · stab · draw · cast — spin is the Whirl's · STEEL: the sword's sweep
+   & lunge) + its phase progress → wPose(pfa, prk) = {a: the weapon's angle · lg: its lunge along your facing (texels — prk: the body's own scale) · st: a
+   bow's draw 0-2 · oa / olg: the off-hand's dagger · STEEL: dy the weapon lower on screen · bd your body down · bl your body along your facing (texels)}. The wind cocks it, the ACT is when the blade arrives (its sweep, its thrust, its slam, its loose), the recovery holds it and eases it
    home. The Legacy feel (no act) plays its act over the first 0.16 s of the recovery, as ever. */
 const W_REST={sword:0.6, axe:0.75, spear:0.3, daggers:0.7, bow:0.9, staff:0.45};   // each type's rest angle off your facing (rad)
 function wPose(pfa,prk){ const A=player.act||(player.hv&&player.hv.A), W=wpnOf(), R={a:pfa+(W_REST[W]||0.6), lg:0, st:0, oa:pfa-0.75, olg:0};
@@ -290,6 +290,9 @@ function wPose(pfa,prk){ const A=player.act||(player.hv&&player.hv.A), W=wpnOf()
     if(h!==1){ R.a=pfa+0.12*dir; R.lg=lg; } if(h>=1){ R.oa=pfa-0.12; R.olg=lg; } }
   else if(pose==='draw'){ R.a=pfa; R.st=wd ? (w<0.5?1:2) : A.ph==='act' ? 2 : 0; }                   // the DRAW: the string comes back to your cheek · loosed in the act
   else if(pose==='cast'){ R.a=wd ? pfa+0.45*(1-w)-0.3*w : A.ph==='act' ? pfa : pfa+0.45*r; R.lg=wd ? -prk*0.2*w : A.ph==='act' ? prk*0.5 : prk*0.5*(1-r); }   // the CAST: raised, thrust at the aim, lowered
+  else if(pose==='sweep'){ const H=c.sh.H*Math.PI/180, s0=pfa-dir*H, lo=Math.round(prk*0.45), e=s0+dir*2*H, q=pfa+(W_REST[W]||0.6), d=Math.atan2(Math.sin(q-e),Math.cos(q-e)), u=(A.ph==='rec' && A.act>0.01)?clamp((r-0.4)/0.6,0,1):0;
+    R.a=wd ? s0-dir*0.6*w : u>0 ? e+d*u*u*(3-2*u) : s0+dir*2*H*p; R.lg=p>0&&p<1 ? Math.sin(p*Math.PI)*prk*0.3 : 0; R.dy=wd ? Math.round(lo*w) : A.ph==='act' ? lo : Math.round(lo*(1-r)); R.bd=(wd ? w>0.5 : A.ph==='act' || r<0.6) ? 1 : 0; }   // (STEEL) the SWEEP (the sword's 4th): a LOW back-hand — wound back across you, swept close over the ground through its whole 180°, then (u) brought back down to your guard, never left raised (dy: the blade drawn lower · bd: you crouch a texel)
+  else if(pose==='lunge'){ const L=prk*1.5, b=prk*0.3; R.a=pfa; R.lg=wd ? -prk*0.5*w : A.ph==='act' ? -prk*0.5+(L+prk*0.5)*p : L*(1-r); R.bl=Math.round(wd ? -b*0.5*w : A.ph==='act' ? b : b*(1-r)); }   // (STEEL) the LUNGE (the sword's 5th): coiled back, then you & the blade drive forward together (bl: your body leans along your facing — the 22u step itself is real, drawExplorerPix trails it), eased home
   return R; }
 /* THE WEAPON LAYER (C5a — §15's split): the body bakes without its weapon; each weapon look is its own little texel sprite per 1/32 turn (WSPR), its
    grip at the anchor, drawn on the grid at your hand · the off-hand's piece (a shield, a quiver on your back, a focus) one sprite per facing, a second
@@ -368,7 +371,7 @@ function drawExplorerSprite(armed){
   if(blink) pctx.globalAlpha=0.4; else if(armed && player.hid) pctx.globalAlpha=0.6;   // grace = a see-through flicker; you never lose your facing or your blade (PT1 K9a: hidden in the grass — see-through)
   paintExplorer(pctx,pxp,pyp0,pr,pfa,stride,bob,tvx,tvy,null,false,false);   // (C5a: the body alone — the weapon is its own layer)
   if(armed){ const S=stats(), look=wLook(S), Wp=(spin && player.spinK==='whirl') ? {a:pfa, lg:0, st:0} : wPose(pfa,pr), ai=((Math.round(Wp.a/(TAU/32))%32)+32)%32, W=wSpr(look,ai,Wp.st,wLen(look,pr,pr),pr,S.el), wa=ai*TAU/32;   // (Graphics LOW: the same weapon sprites at your hand)
-    pctx.drawImage(W.cv, Math.round(pxp+Math.cos(wa)*pr*0.95+pfx*Wp.lg)-W.ax, Math.round(pyp0-bob+Math.sin(wa)*pr*0.95+pfy*Wp.lg)-W.ay); }
+    pctx.drawImage(W.cv, Math.round(pxp+Math.cos(wa)*pr*0.95+pfx*Wp.lg)-W.ax, Math.round(pyp0-bob+Math.sin(wa)*pr*0.95+pfy*Wp.lg+(Wp.dy||0))-W.ay); }   // (STEEL: the sweep's blade low)
   if(armed){
     // subtle aim tick (the old navy arrow, shrunk to a whisper)
     pctx.fillStyle='rgba(255,255,255,.5)';
@@ -419,31 +422,32 @@ function drawExplorerPix(){
   // THE WEAPON (its pose: §15's contract) · the Whirl holds it straight out · the Volley conjures a bow in your hands
   const Wp=(spin && player.spinK==='whirl') ? {a:fa0, lg:0, st:0, oa:pfa-0.75, olg:0} : wPose(pfa,prk); let look=wLook(S), wst=Wp.st;
   if(spin && player.spinK==='volley' && look!=='bow'){ look='bow'; wst=2; Wp.a=fa0; }
-  const ai=((Math.round(Wp.a/(TAU/32))%32)+32)%32, wa=ai*TAU/32, W=wSpr(look,ai,wst,wLen(look,pr,prk),pr,S.el), fcx=Math.cos(pfa), fcy=Math.sin(pfa);
-  const wx=X+Math.round(Math.cos(wa)*pr*0.95+fcx*Wp.lg), wy=Y-bob+Math.round(Math.sin(wa)*pr*0.95+fcy*Wp.lg);
-  const T3=ITUNE.artSpr>0, ol=offLook(), ohx=X+Math.round(fcy*pr-fcx*stride*0.5+(T3?fcx*pr*0.5:0)), ohy=Y-bob+Math.round(-fcx*pr*(T3?0.35:1)-fcy*stride*0.5);   // your OFF hand (the far side) · (PX A2) on the 3/4 pixel body it sits at the chest, a little toward your facing — never over your head (or at your boots)
+  const ai=((Math.round(Wp.a/(TAU/32))%32)+32)%32, wa=ai*TAU/32, W=wSpr(look,ai,wst,wLen(look,pr,prk),pr,S.el), fcx=Math.cos(pfa), fcy=Math.sin(pfa), bX=X+Math.round(fcx*(Wp.bl||0)), bY=Y+Math.round(fcy*(Wp.bl||0))+(Wp.bd||0);   // (STEEL) bX, bY: your body — the lunge leans it along your facing, the sweep crouches it a texel (else X, Y)
+  const wx=bX+Math.round(Math.cos(wa)*pr*0.95+fcx*Wp.lg), wy=bY-bob+Math.round(Math.sin(wa)*pr*0.95+fcy*Wp.lg)+(Wp.dy||0);
+  const T3=ITUNE.artSpr>0, ol=offLook(), ohx=bX+Math.round(fcy*pr-fcx*stride*0.5+(T3?fcx*pr*0.5:0)), ohy=bY-bob+Math.round(-fcx*pr*(T3?0.35:1)-fcy*stride*0.5);   // your OFF hand (the far side) · (PX A2) on the 3/4 pixel body it sits at the chest, a little toward your facing — never over your head (or at your boots)
   let O=null, ox=0, oy=0; if(ol==='dagger'){ const oi=((Math.round(Wp.oa/(TAU/32))%32)+32)%32; O=wSpr('dagger',oi,0,wLen('dagger',pr,prk),pr,''); ox=ohx+Math.round(fcx*Wp.olg); oy=ohy+Math.round(fcy*Wp.olg); }
-  else if(ol){ O=wSpr('o:'+ol,fi,0,0,pr,''); if(ol==='quiver'){ ox=X; oy=Y-bob; } else { ox=ohx; oy=ohy; } }
+  else if(ol){ O=wSpr('o:'+ol,fi,0,0,pr,''); if(ol==='quiver'){ ox=bX; oy=bY-bob; } else { ox=ohx; oy=ohy; } }
   const gy=Y+Math.round(pr*0.6), SHD=islShd(), sh=shadowSprC(Math.round(pr*1.02),Math.max(1,Math.round(pr*0.5)),SHD[0],Math.min(0.5,SHD[1]+0.05));
   pctx.drawImage(sh.cv,X-sh.ax,gy-sh.ay);                                                                         // your shadow (the ground's own shade)
   youRing(false);                                                                                                 // YOUR ring: cream, crisp — over every foe, under you (you're found at a glance)
-  let crowd=false; if(ITUNE.pXray>0 && C!==PIX_NONE){ const x0=X+C.ox, y0=Y+C.oy, x1=x0+C.w, y1=y0+C.h;          // a foe's look over yours → an x-ray rim: your silhouette in cream round the sprite
+  let crowd=false; if(ITUNE.pXray>0 && C!==PIX_NONE){ const x0=bX+C.ox, y0=bY+C.oy, x1=x0+C.w, y1=y0+C.h;          // a foe's look over yours → an x-ray rim: your silhouette in cream round the sprite
     for(const en of IEVIS){ const E=en._C; if(!E || E===PIX_NONE || en._ex==null || en.dead) continue; const ex=en._ex+E.ox, ey=en._ey+E.oy; if(ex<x1 && ex+E.w>x0 && ey<y1 && ey+E.h>y0){ crowd=true; break; } } }
   const blink=((player.invul>0 || player.invulH>0) && !spin && Math.floor(itime*18)%2);   // (only heavy-hit / dash grace — swarm chip never blinks; the special's spin doesn't flicker)
-  pctx.imageSmoothingEnabled=false; PSPR.lc=C; PSPR.lx=X; PSPR.ly=Y; PSPR.lb=blink;   // (the hero rim redraws this look over the dark — heroRim)
+  pctx.imageSmoothingEnabled=false; PSPR.lc=C; PSPR.lx=bX; PSPR.ly=bY; PSPR.lb=blink;   // (the hero rim redraws this look over the dark — heroRim)
   if(player.dashT>0 && player.pdFree){ const cr=creamOf(C).cv, ddx=(player.dashX||0)*pr*0.55, ddy=(player.dashY||0)*pr*0.55;   // (PT2 X2) THE PERFECT DASH: three bright cream after-images, longer
     pctx.globalAlpha=0.62; pctx.drawImage(cr, Math.round(X-ddx*2)+C.ox, Math.round(Y-ddy*2)+C.oy); pctx.globalAlpha=0.4; pctx.drawImage(cr, Math.round(X-ddx*4)+C.ox, Math.round(Y-ddy*4)+C.oy);
     pctx.globalAlpha=0.2; pctx.drawImage(cr, Math.round(X-ddx*6.5)+C.ox, Math.round(Y-ddy*6.5)+C.oy); pctx.globalAlpha=1; }
   else if(player.dashT>0){ for(const [k,a] of [[2,0.34],[4,0.16]]){ pctx.globalAlpha=a; pctx.drawImage(C.cv, Math.round(X-(player.dashX||0)*k*pr*0.55)+C.ox, Math.round(Y-(player.dashY||0)*k*pr*0.55)+C.oy); } pctx.globalAlpha=1; }   // the dash: two see-through after-images trail you (whole texels)
-  if(crowd){ const cr=creamOf(C); pctx.globalAlpha=(blink?0.4:1)*0.92; for(const q of XR4) pctx.drawImage(cr.cv, X+C.ox+q[0], Y+C.oy+q[1]); }
+  else { const A=player.act, g=(A && A.lx!=null && A.c && A.c.pose==='lunge') ? (A.ph==='act' ? 1 : A.ph==='rec' ? clamp(1-A.t/0.12,0,1) : 0) : 0; if(g>0){ for(const [q,a] of [[0.3,0.16],[0.65,0.34]]){ const P2=iw2p(A.lx+(player.x-A.lx)*q, A.ly+(player.y-A.ly)*q); pctx.globalAlpha=a*g; pctx.drawImage(C.cv, Math.round(P2[0])+C.ox, Math.round(P2[1])+C.oy); } pctx.globalAlpha=1; } }   // (STEEL) the LUNGE: two see-through after-images down the 22u it just stepped (the dash's look), gone 0.12 s into its recovery
+  if(crowd){ const cr=creamOf(C); pctx.globalAlpha=(blink?0.4:1)*0.92; for(const q of XR4) pctx.drawImage(cr.cv, bX+C.ox+q[0], bY+C.oy+q[1]); }
   pctx.globalAlpha=blink?0.4:player.hid?0.6:1;                                                                    // (PT1 K9a: hidden in the tall grass — see-through)
   const back=ITUNE.artSpr>0 && fi>=11 && fi<=13 && Math.sin(wa)<-0.2;                                           // (PX A2) seen from behind (the U view) with the weapon raised up-screen: it rides BEHIND your back (the 0.2: no flicker at the horizontal)
   if(O && ol==='quiver') pctx.drawImage(O.cv, ox-O.ax, oy-O.ay);                                                  // (C5a) a quiver rides your back — under you
   const oB=back || (T3 && (fi>=14 || fi<=2));                                                                     // (PX A2) …and in the right profile the far hand is behind you: its piece draws under you
   if(O && ol!=='quiver' && oB) pctx.drawImage(O.cv, ox-O.ax, oy-O.ay);
   if(back) pctx.drawImage(W.cv, wx-W.ax, wy-W.ay);                                                                 // (PX A2) …the weapon under you
-  pctx.drawImage(C.cv, X+C.ox, Y+C.oy);
-  if(player.pdFree && player.dashT>0 && itime-player.pdT<0.09){ const ga=pctx.globalAlpha; pctx.globalAlpha=0.85*(1-(itime-player.pdT)/0.09); pctx.drawImage(creamOf(C).cv, X+C.ox, Y+C.oy); pctx.globalAlpha=ga; }   // (PT2 X2) the perfect dash's flash: you, lit cream for a breath
+  pctx.drawImage(C.cv, bX+C.ox, bY+C.oy);
+  if(player.pdFree && player.dashT>0 && itime-player.pdT<0.09){ const ga=pctx.globalAlpha; pctx.globalAlpha=0.85*(1-(itime-player.pdT)/0.09); pctx.drawImage(creamOf(C).cv, bX+C.ox, bY+C.oy); pctx.globalAlpha=ga; }   // (PT2 X2) the perfect dash's flash: you, lit cream for a breath
   if(O && ol!=='quiver' && !oB) pctx.drawImage(O.cv, ox-O.ax, oy-O.ay);                                            // the off-hand's piece on your far arm (a shield, a focus, a second dagger)
   if(!back) pctx.drawImage(W.cv, wx-W.ax, wy-W.ay);                                                                // THE WEAPON in your hand, posed (whole texels, never baked into you)
   pctx.globalAlpha=1;

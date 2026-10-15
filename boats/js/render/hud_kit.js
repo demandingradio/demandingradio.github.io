@@ -772,10 +772,10 @@ function drawYou(L){ const U=L.U, k=L.k, P=L.pc, x=P.x, y=P.y, w=P.w, h=P.h, u=v
   if(killStreak>=ITUNE.streakMin && killStreakT>0){ const pop=1+0.45*Math.max(0,1-(itime-streakPopT)/0.3), fsz=Math.round(u(13+Math.min(9,killStreak*0.22))*pop);
     ctx.textAlign='right'; panTxt('×'+killStreak,right,r4+1,killStreak>=18?'#ff4d2e':'#ff7a3d','900 '+fsz+'px system-ui'); const sw=ctx.measureText('×'+killStreak).width;
     panTxt('streak',right-sw-u(4),r4+u(2),'#c98a5a','800 '+u(8.5)+'px system-ui'); right-=sw+u(4)+ctx.measureText('streak').width+u(8); ctx.textAlign='left'; }
-  if(player.combo>0 && (player.comboT>0 || player.act)){ const dr=u(4), step=dr*2+u(4);   // 1-2 lit = the chain is live · the 3rd blinking gold = your NEXT swing is the finisher
-    for(let i=0;i<3;i++){ const on=i<player.combo, prime=i===2&&player.combo===2, px=right-(2-i)*step-dr;
-      pxDia(px,r4,dr, on?'#ffd23f':(prime?(Math.sin(itime*16)>0?'#fff6c8':'#b8861a'):'#2a3450'),'#04070e'); }
-    right-=3*step+u(6); }
+  if(player.combo>0 && (player.comboT>0 || player.act)){ const dr=u(4), step=dr*2+u(4), CB=comboOf(wpnOf()), N=CB.length;   // a diamond a blow of the chain you have (3 · 4 · 5 — STEEL comboOf) · lit = the chain is live · a FINISHER's is bigger & gold (dim till it's lit) — blinking = your NEXT swing is it
+    for(let i=0;i<N;i++){ const on=i<player.combo, fin=!!CB[i].fin, prime=fin&&i===player.combo, px=right-(N-1-i)*step-dr;
+      pxDia(px,r4,fin?dr+u(1):dr, on?'#ffd23f':(prime?(Math.sin(itime*16)>0?'#fff6c8':'#b8861a'):fin?'#5a4618':'#2a3450'),'#04070e'); }
+    right-=N*step+u(6); }
   const DQ=draughtPlate(k,U), dW=DQ?DQ.w:0;                                  // the draughts behind the flask (a baked plate: their icons & counts)
   const room=right-cx-u(8)-pgw-dW; let kk=k; if(cap2*(pxiW('flask',k)+Math.max(1,u(2)))>room && k>1) kk=k-1;
   const fw2=pxiW('flask',kk), st=fw2+Math.max(1,u(2)), dry=flask.ch<=0 && !DQ; let tx=cx;
