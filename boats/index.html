@@ -3792,7 +3792,7 @@ function tunePrune(o,D){ for(const k in o) if(!(k in D)) delete o[k]; return o; 
 /* ============================ input ============================ */
 const keys={};
 addEventListener('keydown',e=>{
-  const k=e.key.toLowerCase(); inDev='kb';
+  const k=e.key.toLowerCase(); inDev='kb'; if(k==='shift') padHold.k=true;   // (STEEL) Shift as it physically is (padHold.k), whoever has the keys — a pause, a panel, a scene: THE HEAVY's release latch reads it (hvHeld(1))
   if(!mapOpen && FMV.k.size) fmReset(1);                          // (CH2C-2) the chart just shut another way (Esc, the pad's B / Start, a docking click): its held keys wait for their keyup before the frame does — an OS repeat never sails or walks
   if(dndKey(k,e)) return;                                         // (PT1 W10) a drag in the air / the salvage confirm: Esc lets go of it — never the panel
   if(k===']' && ptMode && !e.repeat && !renaming && !(e.target&&e.target.tagName==='INPUT')){ metersOn=!metersOn; return; }   // the DEV meters & scorecard overlay (the crawl — CRAWL 2.0 §13) · RC fix: the Proving Grounds only
@@ -3840,7 +3840,7 @@ addEventListener('keydown',e=>{
     else if(k==='e'){ doInteract(); }
     else if(k==='i'){ openInv(); return; }
     if(k==='w'||k==='a'||k==='s'||k==='d'||k.startsWith('arrow')) mouseAcc=0;   // walking on the keys: a slow mouse drift can't add up to a switch
-    keys[k]=true; return;
+    if(!(k==='shift' && e.repeat && !keys[k])) keys[k]=true; return;   // (STEEL) Windows' key repeat never makes a Shift held: one first pressed under a pause, a panel, a fade or in another window lands only on a fresh press — never THE HEAVY's charge by itself
   }
   if(mode==='port'){                            // ---- ashore in town ----
     if(PRT && PRT.core.ptHarbour && (k==='m'||k==='j')) return;   // (the Proving Harbour: no chart, no contracts)
@@ -3879,9 +3879,9 @@ addEventListener('keydown',e=>{
   else if(k==='-'||k==='_'){ TUNE.zoom=clamp(TUNE.zoom-0.12,0.6,1.9); syncTune(); }
   keys[k]=true;
 });
-addEventListener('keyup',e=>{ const k=e.key.toLowerCase(), kq=(e.code&&FMV.kc[e.code])||k; if(e.code) delete FMV.kc[e.code]; keys[k]=false; SCN_HELD.delete(k); SCN_LATCH.delete(k); SCN_LATCH.delete(kq); SCN_OUT.delete(k); if(FMV.k.size) fmKey(kq,e);   // (INTROSTORY C2: a key released is free again · CH F1: and off the chart's held set — canonical, the tap rule · CH CRC-1: kq = the key it was held as, by its physical key)
+addEventListener('keyup',e=>{ const k=e.key.toLowerCase(), kq=(e.code&&FMV.kc[e.code])||k; if(e.code) delete FMV.kc[e.code]; keys[k]=false; if(k==='shift') padHold.k=false; SCN_HELD.delete(k); SCN_LATCH.delete(k); SCN_LATCH.delete(kq); SCN_OUT.delete(k); if(FMV.k.size) fmKey(kq,e);   // (INTROSTORY C2: a key released is free again · CH F1: and off the chart's held set — canonical, the tap rule · CH CRC-1: kq = the key it was held as, by its physical key)
   const kc=kq==='+'?'=':kq==='_'?'-':kq==='='?'+':kq==='-'?'_':null; if(kc) SCN_LATCH.delete(kc); });   // (CH2C-1) its Shift twin too: = held, released as + (or - as _), is free again
-addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; fmDrag=null; mouseL=false; mouseR=false; SCN_HELD.clear(); SCN_LATCH.clear(); SCN_OUT.clear(); hvDrop(); FMV.k.clear(); FMV.ko.clear(); FMV.kc={}; });   // (PX H1) a lost focus drops a charge — it never fires as the keys clear, its riser stops (STEEL: hvDrop) (CH F1: the chart's held keys too)
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; padHold.k=false; fmDrag=null; mouseL=false; mouseR=false; SCN_HELD.clear(); SCN_LATCH.clear(); SCN_OUT.clear(); hvDrop(); FMV.k.clear(); FMV.ko.clear(); FMV.kc={}; });   // (PX H1) a lost focus drops a charge — it never fires as the keys clear, its riser stops (STEEL: hvDrop · a Shift still down when focus comes back repeats, but a repeat never holds it: a fresh press charges) (CH F1: the chart's held keys too)
 // full-map zoom (scroll) + pan (drag) with the mouse — a clean tap sets the course (or docks at a port in reach)
 addEventListener('wheel',e=>fmWheel(e),{passive:false});   // (CH Q1) notches counted, sideways ignored — fmWheel
 addEventListener('mousedown',e=>{ if(started&&mapOpen&&!GCH.open){ inDev='kb'; const V=FMV, r=mapRect(); fmDrag={x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false, caught:Math.hypot(V.gv.x,V.gv.y)>150, gx:fmCX+(V.rb.x+(e.clientX-r.mx)/r.size-0.5)*fmSpan, gy:fmCY+(V.rb.y+(e.clientY-r.my)/r.size-0.5)*fmSpan};   // (CH F1)
@@ -6030,7 +6030,7 @@ function elixTick(dt){ if(!elix) return; elix.t-=dt; if(elix.t<=0) elixEnd(false
 function topDg(){ return ptMode ? ptTopDg : (signs.top ? signs.top.dg|0 : 0); }                   // (C7b) the hardest danger you've conquered — the Temper cap & Deepsteel's craft IP read it
 let mouseX=0, mouseY=0, cvMX=-1, cvMY=-1;        // cursor, for mouse-aimed sword & bow · (G8 fix) its last spot over the game itself (cvMX/Y: a panel's button never moves it)
 let aimDev='key', mouseAcc=0, mouseL=false, mouseR=false;   // who aims: 'mouse' | 'key' | 'pad' (last used) · mouse buttons: tap = the chain · held = the auto-chain (STEEL: THE HEAVY charges on Shift, not on a held strike)
-let padAimOn=false, padAimX=0, padAimY=1; const padHold={s:false, e:false, h:false, r:false};   // pad right-stick aim (twin-stick) · the held strike button · the held interact button (quick-equip, C4b) · (STEEL) h: the held heavy button (LT) — Shift's twin · r: LT as it physically is, every frame, a pause or a panel too (hvHeld(1): a charge after one waits for its release)
+let padAimOn=false, padAimX=0, padAimY=1; const padHold={s:false, e:false, h:false, r:false, k:false};   // pad right-stick aim (twin-stick) · the held strike button · the held interact button (quick-equip, C4b) · (STEEL) h: the held heavy button (LT) — Shift's twin · r: LT as it physically is, every frame, a pause or a panel too (hvHeld(1): a charge after one waits for its release) · k: r's twin for the keys — Shift as it physically is (its keydown, a repeat too, & keyup, whoever has the keys; cleared by a lost focus)
 const SLASH_HALF=1.05, SLASH_BODY=1.3, LAVA_R=18;   // the swing's half-arc (rad) & how far past en.r a body counts as struck — drawn wedge, sword & hitbox all share these · lava flare radius
 let hitStop=0, iShake=0, killStreak=0, killStreakT=0, streakF=null;   // ARPG clear-feel: tiny world freeze on BIG hits only, screen-kick size, kill-streak ramp
 let iKX=0, iKY=0;               // screen kick (buffer px) — shoved along the hit, springs back; never random jitter
@@ -7791,11 +7791,11 @@ function actTick(dt,frozen){ const A=player.act, k=(player.spore>0)?ITUNE.sporeA
     if(player.dashT>0){ player.dsQ=1; return; }                                               // (mid-dash: the strike waits for its end — the DASH STRIKE)
     if(!(itime-player.dashEnd<=0.15 && dashStrike())) actStart('basic'); } }
 /* (PROJECT STEEL — S1, from PX H1) THE HEAVY: a NEW MOVE, learned on the ✦ Tree (HVY · TR.aHV · hvLive). A FRESH press of SHIFT (the pad's LT, role 'heavy') starts the CHARGE — mid-blow it
-   WAITS for the blade to land, then skips that blow's recovery (actTick · never THE HEAVY's own); a Shift still down after a heavy, a fizzle or a drop waits for its release (hvInput · hvDrop).
+   WAITS for the blade to land, then skips that blow's recovery (actTick · never THE HEAVY's own); a Shift still down after a heavy, a fizzle or a drop waits for its release (hvInput · hvDrop), as does one pressed or held under a pause, a fade or a scene (read raw: padHold.k / .r), a Windows key repeat included.
    CHARGING: the ring fills over hvTime s (a riser, gold motes drawn in), every strike press is swallowed (a soft tick) — one in its last inputBuffer s is KEPT and fires as it fills · you walk × hvMove,
    your facing held on the keys. FULL: white (a ting, a white pulse, a cream flash, a nudge) — a strike (LMB · J · the pad's A, pressed or held) fires it · × hvMoveF · Shift let go: hvGrace s of GRACE.
    Let go early, a grace run out or full for hvMax s: it FIZZLES (no blow, no cost) · a dash, a skill, a stun, a KO, a weapon swap, a pause, a lost focus, a new floor DROP it · no node (hvOn 0 · Legacy): no heavy at all. */
-function hvLive(){ return ITUNE.hvOn>0 && !(ITUNE.legacyFeel>0) && !!TR.aHV; }   function hvT(){ return Math.max(0.05,+ITUNE.hvTime||0.6); }   function hvHeld(p){ return !!(keys['shift'] || padHold.h || (p && padHold.r)); }   function hvFaceHold(){ return hvLive() ? !!player.hv : !!keys['shift']; }   // (the gate · the fill · Shift or LT down — p: or LT physically down while a pause or a panel has the pad (padHold.r), for the release latch hvP only · the keys' facing holds while you charge — before the node, while Shift is down: its old job)
+function hvLive(){ return ITUNE.hvOn>0 && !(ITUNE.legacyFeel>0) && !!TR.aHV; }   function hvT(){ return Math.max(0.05,+ITUNE.hvTime||0.6); }   function hvHeld(p){ return !!(keys['shift'] || padHold.h || (p && (padHold.r || padHold.k))); }   function hvFaceHold(){ return hvLive() ? !!player.hv : !!keys['shift']; }   // (the gate · the fill · Shift or LT down — p: or LT physically down while a pause or a panel has the pad (padHold.r), or Shift while one has the keys (padHold.k), for the release latch hvP only · the keys' facing holds while you charge — before the node, while Shift is down: its old job)
 function hvInput(){ const h=hvHeld(), e=h && !player.hvP; player.hvP=hvHeld(1); if(!hvLive()){ player.hvW=0; if(player.hv) hvDrop(); return; } if(!h) player.hvW=0; else if(e && !player.hv) player.hvW=1; }   function hvDrop(){ player.hv=null; player.hvW=0; player.hvP=hvHeld(1); if(actx) for(const v of SFXV.slice()) if(v.id==='hv_charge') sfxKill(v,actx.currentTime); }   // (a FRESH press wants a charge — it starts once nothing is in flight · a DROP: the ring just vanishes, its riser stops, a Shift or LT still down waits for its release — every drop goes through here: a dash, a skill, a stun, a KO, a pause, a blur, a weapon or feel swap, a new floor, the shore, Shift+P)
 function hvBeatOf(c0){ const k=Math.max(1,+ITUNE.hvReach||1), c=Object.assign({},c0,{wind:0.06, mul:c0.mul*(+ITUNE.hvMul||1), hsK:+ITUNE.hvHs||1.4, tdK:+ITUNE.hvTide||1.5, kb:(c0.kb!=null?c0.kb:20)*(+ITUNE.hvKb||1), heavy:1, fin:1, hvy:1, kick:ITUNE.hvKick!=null?+ITUNE.hvKick:5.5, pit:(c0.pit||1)*0.85});   // (STEEL: its own kick · the finisher's swing a breath lower)
   if(c0.sh) c.sh=Object.assign({},c0.sh, c0.sh.k==='line'?{L:c0.sh.L*k}:{R:c0.sh.R*k}); if(c0.R2) c.R2=c0.R2*k;
@@ -20321,7 +20321,7 @@ function scnTear(S){ scnGullOut(); const b=scnEl('scn'); b.classList.add('hidden
 function scnEnd(){ const S=SCN; if(!S || S.st==='out') return; S.st='out'; S.L=null; if(S.cam && S.cam.on && S.cam.m!=='back') scnCamBackOp({t:0.4},0); else if(S.cam) S.cam.zt=0; if((!S.cine || SCN_DEV.auto || S.lb<=0) && !scnCamBusy()) scnFinish(); }   // the letterbox eases out, then it's over (C3: a camera still away eases home with it, 0.4 s)
 function scnFinish(){ const S=SCN; if(!S) return; SCN=null; scnTear(S);
   for(const k of SCN_HELD) SCN_LATCH.add(k); SCN_HELD.clear(); scnPadLatch(); SCN_AFT=SCN_TY.after;   // (a key — or a pad button — held through the last line waits to be released: a Space never drops her sail, an E never docks)
-  for(const k of SCN_OUT){ if(k==='mouse0' || k==='mouse2'){ if(mode==='island'){ if(k==='mouse0'){ mouseL=true; doSlash(); } else mouseR=true; } } else { keys[k]=true; if(k==='j' && mode==='island') doSlash(); } } SCN_OUT.clear();   // (IS1 FIX: a key first pressed while the letterbox eased out, still down — held for real now: she walks the moment it's gone · PX: pressed for real — it strikes, and held the chain runs on · STEEL: a Shift let through here is a fresh press — THE HEAVY's charge, once learned)
+  for(const k of SCN_OUT){ if(k==='mouse0' || k==='mouse2'){ if(mode==='island'){ if(k==='mouse0'){ mouseL=true; doSlash(); } else mouseR=true; } } else { keys[k]=true; if(k==='j' && mode==='island') doSlash(); } } SCN_OUT.clear();   // (IS1 FIX: a key first pressed while the letterbox eased out, still down — held for real now: she walks the moment it's gone · PX: pressed for real — it strikes, and held the chain runs on · STEEL: a Shift let through here is held for real, but it was pressed under the scene — THE HEAVY's latch saw it (padHold.k), so it waits for its release: never a charge by itself)
   scnSeen(S); queueSave(); }
 function scnSeen(S){ if(SAGA && !S.S.dev){ if(S.S.once!==0) SAGA.seen[S.id]=1; if(SAGA.f.cut===S.id){ delete SAGA.f.cut; delete SAGA.f.cutI; } sagaEvent('scene',S.id); } }   // (read to its last line: seen · no longer cut · C4a: the step machine hears it)
 function scnAbort(why){ const S=SCN; if(!S) return; SCN=null;               // 'mode' (the mode changed under it) · 'quit' (Save & quit to title) · 'begin' (a new voyage) · 'dev' — no easing, never marked seen
@@ -24109,7 +24109,7 @@ function worldTint(darkMult,isl){
    floors, the KO beat, a world freeze, or a live step. The meters tick here on REAL time (a freeze counts). */
 function islStep(dt){
   mkDrain();                                                                   // (PT1 K11) a mass kill's queued marks, ≤ MK_CAP a frame
-  if(caveFade){ caveFade.t+=dt;                                               // the breath of black between floors: the world waits; at its darkest the next floor is built
+  if(caveFade){ caveFade.t+=dt; player.hvP=hvHeld(1);                         // the breath of black between floors: the world waits; at its darkest the next floor is built · (STEEL) a Shift or LT down in it waits for its release, as under a pause
     if(!caveFade.done && caveFade.t>=caveFade.mid){ caveFade.done=true; try{ caveFade.fn(); }catch(e){ console.error(e); } }
     if(caveFade && caveFade.t>=caveFade.end) caveFade=null; }
   else if(!invOpen && !imapOpen && !menuOpen && !renaming && !koOpen && !summaryOpen && !caveOpen && !scnHold()){   // (INTROSTORY C2: a story scene holds the isle — scenes only start in its quiet windows)
@@ -24117,7 +24117,7 @@ function islStep(dt){
     else { let live=dt;
       if(hitStop>0){ const f=Math.min(dt,hitStop), ex=hsX>0; hitStop-=f; if(hitStop<1e-6) hitStop=0; hsX=Math.max(0,hsX-f); actTick(f,true); metTick(f,ex?0:1); live=dt-f; }   // THE WORLD FREEZE (§2.2): only your recovery runs on — it eats the freeze (the meters leave H5 & the 'you' freeze out of S9) · exact: a freeze ending mid-frame hands the rest of the frame back
       if(live>1e-4 && !(hitStop>0) && ISL){ const k=slowT>0?slowK:1; slowT=Math.max(0,slowT-live); updateIsland(live*k); metTick(live,0); } } }   // a live step (a boss's death & the level-up nova play in slow motion) · menus/maps pause it
-  else { if(player.hv || player.hvW) hvDrop(); player.hvP=hvHeld(1); } }   // (PX H1 · STEEL) a menu, the satchel, a map, a card or a story scene holds the isle: a charge (or a Shift press waiting) is dropped — it never fires as it closes · a Shift or LT held under it waits for its release (LT read raw — pollPad gives the pad to the pause)
+  else { if(player.hv || player.hvW) hvDrop(); player.hvP=hvHeld(1); } }   // (PX H1 · STEEL) a menu, the satchel, a map, a card or a story scene holds the isle: a charge (or a Shift press waiting) is dropped — it never fires as it closes · a Shift or LT held under it waits for its release (both read raw — pollPad gives the pad to the pause, the keydown's modal checks keep Shift out of keys: padHold.r / .k)
 window.__frameErr=0;                             // frames that threw (the harness and the DEV pip read it — CRAWL 2.0: it must stay 0)
 const FT=new Float32Array(600); let ftN=0;       // the crawl's last 600 frame costs (ms) — the meters' p95 (S20)
 function frame(ts){
