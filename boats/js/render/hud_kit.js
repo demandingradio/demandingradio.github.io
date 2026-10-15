@@ -313,7 +313,7 @@ function tutPick0(it){ if(!(ITUNE.tutOn>0) || !ISL || koBeat || caveFade) return
   if(it && it.kind==='qe' && !tutDone('gear')) return {k:'gear', col:'#7fe3a0', lead:'a better find — ▲', items:[['interact','hold to wear it'],['menu','→ ⚔ Gear to compare']]};   // (§12: the first ▲ item)
   if(!tutDone('land') && !ISL.cave && !ISL.peace)   // (§12: only the keys that are bound — slot 2's skill by name, the rest '[1–4] skills' once two sit there)
     return {k:'land', col:'#9fd0ff', lead:inDev==='pad'?'left stick moves · right stick aims':'WASD moves · the mouse aims',
-      items:[['attack','strike · hold: HEAVY'], ...tutSkills(), ['dash','dash'], ['potion','drink'], ['interact','use']]};
+      items:[['attack','strike · hold: the chain'], ...(hvLive()?[['heavy','hold: THE HEAVY']]:[]), ...tutSkills(), ['dash','dash'], ['potion','drink'], ['interact','use']]};   // (PROJECT STEEL: THE HEAVY is Shift's — named only once it is learned)
   if(treePts()>0 && !tutDone('tree') && tutS.trSn!==tutLandK()) return {k:'tree', col:'#8ef0b0', items:[['menu','→ ✦ Tree — a passive point to spend (a keystone costs 3)']]};   // (§12: the first point · G5 fix: after the landfall lesson, 12 s a landfall — then it lapses till the next)
   if(!tutDone('gem') && tutDone('land') && !islRoused && BAG.some(e=>e && e.k==='g'))   // (C9) the first SKILL GEM in the satchel: where it goes
     return {k:'gem', col:'#6fe0c0', lead:'a skill gem —', items:[['menu','→ ⚔ Gear → your bar: slot it (it levels as you use it)']]};

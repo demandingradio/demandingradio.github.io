@@ -3603,7 +3603,7 @@ function doSave(){
   if(ptMode) return;                       // playtest trials never touch the real voyage
   try{
     const o={
-      sv:SAVE_SV, seed:SEED, wg:WGEN.V, time:Math.round(time), boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, tuneV:2, itune:ITUNE, ituneV:24, ftune:FTUNE, ftuneV:3, wtune:WTUNE, wtuneV:3, etune:ETUNE, etuneV:2, ltune:LTUNE, ltuneV:8, cargo:{gold:cargo.gold}, hold:{items:holdItems().map(entSave), mats:HOLD.mats}, pouch:{}, flask:flask, draughts:draughts, elixirs:elixirs, elix:(elix&&mode!=='island')?{k:elix.k, t:Math.round(elix.t)}:null, plvl:plvl, pxp:pxp, tree:Object.keys(TALLOC).filter(id=>id!=='HELM'), tpx:tpx, tpxB:tpxB, prosp:{lv:prosp.lv, xp:prosp.xp}, php:Math.round(player.hp), ptune:PTUNE, ptuneV:5, para:para, pxr:Math.round(paraXp),   // (sv: the save shape's minor version · the *V keys: a tuning block's defaults generation — an older one loads the new defaults (PT1: change a DEFAULT_* value → bump its *V here and in loadSave) · C4a: cargo = your coin · hold = the Hold · pouch: written only by a mid-crawl save, below)
+      sv:SAVE_SV, seed:SEED, wg:WGEN.V, time:Math.round(time), boat:{x:boat.x,y:boat.y,a:boat.a}, tune:TUNE, tuneV:2, itune:ITUNE, ituneV:25, ftune:FTUNE, ftuneV:3, wtune:WTUNE, wtuneV:3, etune:ETUNE, etuneV:2, ltune:LTUNE, ltuneV:8, cargo:{gold:cargo.gold}, hold:{items:holdItems().map(entSave), mats:HOLD.mats}, pouch:{}, flask:flask, draughts:draughts, elixirs:elixirs, elix:(elix&&mode!=='island')?{k:elix.k, t:Math.round(elix.t)}:null, plvl:plvl, pxp:pxp, tree:Object.keys(TALLOC).filter(id=>id!=='HELM'), tpx:tpx, tpxB:tpxB, prosp:{lv:prosp.lv, xp:prosp.xp}, php:Math.round(player.hp), ptune:PTUNE, ptuneV:5, para:para, pxr:Math.round(paraXp),   // (sv: the save shape's minor version · the *V keys: a tuning block's defaults generation — an older one loads the new defaults (PT1: change a DEFAULT_* value → bump its *V here and in loadSave) · C4a: cargo = your coin · hold = the Hold · pouch: written only by a mid-crawl save, below)
       well:well, flog:flog, fed:fed, spoils:spoils, whiteTaken:whiteTaken,
       disc:discoveredCount, ports:portCount,
       hull:Math.round(hull), upg:UPG, act:missions, mdone:missionsDone, doneIds:doneIds.slice(-80), marks:marks, course:courseSave(),   // (PT1 W5: the course marker, or null)
@@ -3689,7 +3689,7 @@ function loadSave(){
       K.forEach(i=>{ if(cores[i]) cores[i].bOld=true; }); }
     if(s.tune) TUNE=Object.assign({},DEFAULT_TUNE,s.tune);
     if(s.tuneV!==2) TUNE.zoom=DEFAULT_TUNE.zoom;                       // one-time: the closer default zoom
-    ITUNE = (s.itune && s.ituneV===24) ? tunePrune(Object.assign({},DEFAULT_ITUNE,s.itune),DEFAULT_ITUNE) : Object.assign({},DEFAULT_ITUNE);   // ituneV 24 (PROJECT PX: the calmer ground — terrDither 0.15 · terrPatch 0.8 · terrDecal 0.6 · terrAO 1.5; the art* + hv* knobs) · 23 (SEAS & DEPTHS SD7 FIX: cvXp 1.35 · cvXpF 1.05 · cvChest 1.1) · 22 (SEAS & DEPTHS DE6: cvXp 1.3 · cvXpF 1.06 · cvLootF 1.08 · cvChest 1 · and SD5's cvGrow0 3 — a test log's old knobs give way) · 21 (SEAS & DEPTHS DE1: caveStep 1 · cvChest 0.9 · cvXp 1 + the depth knobs) · 20 (PT1 K5: lastStand 4 · lastRing 30 · lastCd 0.5 · wayStrag 6) · 19 (PT1 K2: hsBank 0.16 · hsRefill 0.22) · 18 (C9: the stride on won ground, the horde's hush) · 17 (G4 fix: hoardOre 0.8) · 16 (C7a: caves as quick mines — cvRooms 2.5 · cvNodes · itNormDw · hoardGems retired) · 15 (C6b: itPearlW live) · 14 (G3 fix: itNorm 2.6%) · 13 =CRAWL 2.0's rebased combat knobs + C2a's action machine & hit feel + C2b's Tide, flask & dash + C3a's attacks, tokens & stagger + C3b's packs & smaller rooms + C3c's boss duels + the G2 fix's retune (elite stagger, horde) (an older block loads the defaults)
+    ITUNE = (s.itune && s.ituneV===25) ? tunePrune(Object.assign({},DEFAULT_ITUNE,s.itune),DEFAULT_ITUNE) : Object.assign({},DEFAULT_ITUNE);   // ituneV 25 (PROJECT STEEL: THE HEAVY on Shift — hvTime 0.6 · hvMul 1.6 · hvReach 1.35 · hvKb 1.6 · hvMove 0.4 · hvMax 5 + hvMoveF · hvGrace · hvStop · hvKick · hvZoom · hvStag) · 24 (PROJECT PX: the calmer ground — terrDither 0.15 · terrPatch 0.8 · terrDecal 0.6 · terrAO 1.5; the art* + hv* knobs) · 23 (SEAS & DEPTHS SD7 FIX: cvXp 1.35 · cvXpF 1.05 · cvChest 1.1) · 22 (SEAS & DEPTHS DE6: cvXp 1.3 · cvXpF 1.06 · cvLootF 1.08 · cvChest 1 · and SD5's cvGrow0 3 — a test log's old knobs give way) · 21 (SEAS & DEPTHS DE1: caveStep 1 · cvChest 0.9 · cvXp 1 + the depth knobs) · 20 (PT1 K5: lastStand 4 · lastRing 30 · lastCd 0.5 · wayStrag 6) · 19 (PT1 K2: hsBank 0.16 · hsRefill 0.22) · 18 (C9: the stride on won ground, the horde's hush) · 17 (G4 fix: hoardOre 0.8) · 16 (C7a: caves as quick mines — cvRooms 2.5 · cvNodes · itNormDw · hoardGems retired) · 15 (C6b: itPearlW live) · 14 (G3 fix: itNorm 2.6%) · 13 =CRAWL 2.0's rebased combat knobs + C2a's action machine & hit feel + C2b's Tide, flask & dash + C3a's attacks, tokens & stagger + C3b's packs & smaller rooms + C3c's boss duels + the G2 fix's retune (elite stagger, horde) (an older block loads the defaults)
     { const C=(s.cargo&&typeof s.cargo==='object')?s.cargo:{}, H=(s.hold&&typeof s.hold==='object')?s.hold:{};   // C4a: your coin · THE HOLD (items: C4b's gear locker · mats) · a mid-crawl save's pouch (what the KO left) comes aboard
       cargo={gold:Math.max(0,Math.floor(+C.gold||0))}; POUCH={}; tripGold=0; pouchVer++;
       HOLD={items:Array.isArray(H.items)?H.items.map(entLoad):[], mats:matsIn(H.mats)};   // (C4b: the gear locker's pieces, each checked — junk reads as an empty slot)
@@ -3830,10 +3830,10 @@ addEventListener('keydown',e=>{
   if(mode==='hex'){ hexKey(k); return; }
   if(k==='t'){ if(!(mode==='deck' && DK && DK.sleep)) openMenu('tuning'); return; }   // (G17 FIX: asleep in your bunk, T is held like every other key)
   if(k==='escape'){ if(mode==='interior' && intCard){ intCard=null; sfx('ui_close'); return; } if(mode==='deck' && deckEsc()) return; if(!mapOpen && !imapOpen) openMenu(escTab()); return; }   // the ship's menu, from anywhere (PT1 B1: on deck a card closes first · IS7 FIX: a room's card too — his hearth's "Esc — leave it")
-  if(mode==='island'){                          // ---- on foot ----   (J: tap = the chain · held from a press = THE HEAVY winds up (unarmed holds — the bot — chain as ever); updateIsland drives it, not the OS auto-repeat)
+  if(mode==='island'){                          // ---- on foot ----   (J: a tap, the chain · held, the auto-chain — updateIsland drives it, not the OS auto-repeat · STEEL: Shift lands in keys like any key — actTick reads it: THE HEAVY's charge, once learned)
     if(caveFade) return;                        // (the breath of black between floors: nothing to do)
     if(k==='j'||k==='k'){ if(aimDev==='mouse') keyFace(); aimDev='key'; mouseAcc=0; if(!e.repeat){ if(k==='j') doSlash(); else castSlot(1); } }   // back on the keys: face the way you're walking first — never the stale cursor · J the basic (slot 1) · K = slot 2 (RMB)
-    else if(k>='1' && k<='4'){ if(!e.repeat) castSlot(+k+1); return; }   // THE SKILL BAR (§4.1): 1-4 = slots 3-6
+    else if(/^Digit[1-4]$/.test(e.code||'') || (k>='1' && k<='4')){ if(!e.repeat) castSlot(+(/^Digit[1-4]$/.test(e.code||'') ? e.code[5] : k)+1); return; }   // THE SKILL BAR (§4.1): 1-4 = slots 3-6 · (STEEL) read by the PHYSICAL key: with Shift down (THE HEAVY's charge) 1-4 arrive as ! @ # $
     else if(k===' ') dashPress(e.repeat);                       // (PT2 X2: the player's dash — again just as it lands = THE PERFECT DASH)
     else if(k==='q'||k==='h'){ if(!e.repeat) drinkFlask(); return; }   // the flask (H: the old key, an alias) — empty, it drinks a carried draught
     else if(k==='m'){ if(!e.repeat) imapOpen=true; return; }   // (CH F1: once a press)
@@ -3913,7 +3913,7 @@ addEventListener('mousedown',e=>{
   if(DK.fish){ mouseL=true; fishInput(); return; }
   const a=deckNearest(); if(a && a.k==='line'){ mouseL=true; fishStart(); }
 });
-// mouse combat on the island: the cursor aims, LEFT is the basic (tap = the chain · held from a press = THE HEAVY winds up — unarmed holds, the bot, chain as ever), RIGHT fires skill slot 2
+// mouse combat on the island: the cursor aims, LEFT is the basic (tap = the chain · held = the auto-chain · STEEL: at a full Shift charge it fires THE HEAVY), RIGHT fires skill slot 2
 addEventListener('mousemove',e=>{ const mdx=e.clientX-mouseX, mdy=e.clientY-mouseY; mouseX=e.clientX; mouseY=e.clientY; if(e.target===cv){ cvMX=mouseX; cvMY=mouseY; }
   if(started && mode==='island' && aimDev!=='mouse' && e.target===cv && !invOpen && !menuOpen && !imapOpen && !renaming && !koOpen && !summaryOpen && !introOpen && !caveOpen){   // (mousing round a menu, the satchel or the map never steals your aim)
     mouseAcc+=Math.abs(mdx)+Math.abs(mdy); if(mouseAcc>40){ aimDev='mouse'; inDev='kb'; } }   // a real sweep of the mouse hands aim to the cursor (a nudge doesn't)
@@ -3939,9 +3939,9 @@ addEventListener('mousedown',()=>{ inDev='kb'; });   // (a click hands the promp
  *  (movement) or call the same functions keydown calls (actions). An
  *  idle pad never writes to `keys`, so it never fights the keyboard.
  * ================================================================= */
-const PAD_KEY='mj_boats_pad_v2';                  // v2 (CRAWL 2.0 §15): the roles changed — a v1 config's binds don't carry over (its on/off switch does)
-const PAD_ROLES=[                                  // [role, what it does, default button] — the skill bar: A slot 1 · X slot 2 · Y slot 3 · LB slot 4 · RT slot 5 · LT slot 6
-  ['attack','Strike (hold: HEAVY) · Confirm · Harpoon',0],
+const PAD_KEY='mj_boats_pad_v3';                  // v3 (PROJECT STEEL): LT charges THE HEAVY, skill slot 6 moved to D→ — a v2 (or v1) config's binds don't carry over (its on/off switch does) · v2 (CRAWL 2.0 §15): the roles changed
+const PAD_ROLES=[                                  // [role, what it does, default button] — the skill bar: A slot 1 · X slot 2 · Y slot 3 · LB slot 4 · RT slot 5 · D→ slot 6 · (STEEL) LT held = Shift: THE HEAVY's charge
+  ['attack','Strike · Confirm · Harpoon',0],
   ['cancel','Dash · Anchor · Back',1],
   ['skill2','Skill slot 2 · Cast net · Decorate (on deck)',2],
   ['skill3','Skill slot 3',3],
@@ -3949,7 +3949,7 @@ const PAD_ROLES=[                                  // [role, what it does, defau
   ['deck','Leave the helm (at sea) · Rotate (decorating)',3],            // (PT1 B1: pad Y at sea · it shares the button with skill slot 3, which only the crawl reads)
   ['interact','Interact · Dock · Tab ▶',5],
   ['skill5','Skill slot 5',7],
-  ['skill6','Skill slot 6',6],
+  ['skill6','Skill slot 6',15], ['heavy','Charge THE HEAVY (hold, once learned) · Filter ◀ (decorating)',6],   // (STEEL: slot 6 on D→ — it stops walking in the crawl, the left stick still walks · LT: hold to charge, A to strike)
   ['map','Open chart / island map',8],
   ['menu',"Ship's menu",9],
   ['inventory','Satchel (ashore)',12],
@@ -3957,11 +3957,11 @@ const PAD_ROLES=[                                  // [role, what it does, defau
   ['zoomout','Chart zoom out',6],                  // (aliases on the triggers: read only while a chart is open — mid-crawl the triggers are skills)
   ['zoomin','Chart zoom in',7],
 ];
-const PAD_DPAD_OK={inventory:1, potion:1};         // the only roles the D-pad (12-15) may hold — read only in live crawl play; menus & the sea still walk with it
+const PAD_DPAD_OK={inventory:1, potion:1, skill6:1};   // the only roles the D-pad (12-15) may hold — read only in live crawl play; menus & the sea still walk with it (STEEL: + skill slot 6, on D→)
 function padDefBind(){ const o={}; for(const r of PAD_ROLES) o[r[0]]=r[2]; return o; }
 function padSanitize(b){ const D=padDefBind(); for(const r in b){ if(!(r in D)){ delete b[r]; continue; } const i=b[r]; if(i>=12 && i<=15 && !PAD_DPAD_OK[r]) b[r]=D[r]; } return b; }   // (retired roles drop out · a D-pad bind on any other role goes back to its default)
 function padLoadCfg(){ try{ const s=JSON.parse(localStorage.getItem(PAD_KEY)); if(s&&s.bind) return {enabled:s.enabled!==false, bind:padSanitize(Object.assign(padDefBind(),s.bind))}; }catch(e){}
-  let en=true; try{ const o=JSON.parse(localStorage.getItem('mj_boats_pad_v1')); if(o && o.enabled===false) en=false; }catch(e){}   // (a v1 config: only its on/off carries over)
+  let en=true; for(const k of ['mj_boats_pad_v2','mj_boats_pad_v1']){ try{ const o=JSON.parse(localStorage.getItem(k)); if(o){ if(o.enabled===false) en=false; break; } }catch(e){} }   // (an older config — v2, else v1: only its on/off carries over, once · STEEL)
   return {enabled:en, bind:padDefBind()}; }
 function padSaveCfg(){ try{ localStorage.setItem(PAD_KEY, JSON.stringify(PAD)); }catch(e){} }
 let PAD=padLoadCfg();
@@ -3977,7 +3977,7 @@ function padBtnName(i){ const n={0:' (A)',1:' (B)',2:' (X)',3:' (Y)',4:' (LB)',5
 function padGlyph(r){ const i=PAD.bind[r]; if(i==null||i<0) return '—'; return padBtnName(i).replace(/[() ]/g,'')||('btn '+i); }   // the bound button's short name ('A', 'RB') for prompts
 let inDev='kb';                                                        // the device you touched LAST ('kb' = keys or mouse · 'pad') — every crawl prompt names ITS key
 function keyGlyph(r,k){ return inDev==='pad' ? padGlyph(r) : k; }                                                                  // a prompt's key: the pad's button when you're on the pad
-const KEYG={attack:'LMB', skill2:'RMB', skill3:'1', skill4:'2', skill5:'3', skill6:'4', cancel:'Esc', dash:'Space', potion:'Q', interact:'E', inventory:'I', map:'M', menu:'Esc', deck:'H'};   // the keyboard's side of each role (§4.1)
+const KEYG={attack:'LMB', skill2:'RMB', skill3:'1', skill4:'2', skill5:'3', skill6:'4', cancel:'Esc', dash:'Space', potion:'Q', interact:'E', inventory:'I', map:'M', menu:'Esc', deck:'H', heavy:'Shift'};   // the keyboard's side of each role (§4.1 · STEEL: heavy — THE HEAVY's charge, the pad's LT)
 function glyph(r){ if(r[0]==='#') return r.slice(1); if(inDev==='pad') return padGlyph(r==='dash'?'cancel':r);   /* (C9: '#1–4' — a literal cap, the lessons' grouped skill keys) */                                                                // the label for a role: 'E' on the keys, 'RB' on the pad (the dash is the pad's B)
   if(aimDev==='key'){ if(r==='attack') return 'J'; if(r==='skill2') return 'K'; }                                                              // (playing on the keys alone: J / K, not the mouse buttons)
   return KEYG[r]||r; }
@@ -4045,7 +4045,7 @@ function padSeaDock(){ if(nearLand){ if(sagaNoDock(nearLand)) return; if(nearLan
   if(p&&Math.sqrt(pd)<=portReach(p)) tryDockAt(p); }
 
 function pollPad(dt){
-  padAimOn=false; padHold.s=false; padHold.e=false; padRun=false;   // re-read each frame — only live island play sets them (padRun: towns & rooms, PT1 W3)
+  padAimOn=false; padHold.s=false; padHold.e=false; padHold.h=false; padRun=false;   // re-read each frame — only live island play sets them (padRun: towns & rooms, PT1 W3 · STEEL h: THE HEAVY's charge held)
   const gp=padCur();
   if(!gp||!PAD.enabled){ if(padPrev.length){ padRelease(); padPrev=[]; } return; }
   if(padPrev.length!==gp.buttons.length){ padSnap(gp); return; }   // first frame with this pad: just sync, no spurious actions
@@ -4117,7 +4117,7 @@ function pollPad(dt){
 
   // ---- live gameplay ----
   let mvx=lx, mvy=ly;                                  // the D-pad moves too, not just the stick
-  const dpr=b=>mode==='island' && (PAD.bind.inventory===b || PAD.bind.potion===b);   // (in the crawl a D-pad button bound to the satchel or the flask is that, not a step)
+  const dpr=b=>mode==='island' && (PAD.bind.inventory===b || PAD.bind.potion===b || PAD.bind.skill6===b);   // (in the crawl a D-pad button bound to the satchel, the flask or skill slot 6 — STEEL: D→ — is that, not a step)
   if(padBtn(gp,14)&&!dpr(14)) mvx=-1; else if(padBtn(gp,15)&&!dpr(15)) mvx=1;
   if(padBtn(gp,12)&&!dpr(12)) mvy=-1; else if(padBtn(gp,13)&&!dpr(13)) mvy=1;
   padSetMove(mvx,mvy);
@@ -4126,10 +4126,10 @@ function pollPad(dt){
     const std=gp.mapping==='standard', rx=std?(gp.axes[2]||0):0, ry=std?(gp.axes[3]||0):0, rm=Math.hypot(rx,ry);   // only a standard-mapped pad has a known right stick (elsewhere axes 2/3 can be a resting trigger at -1)
     padAimOn=rm>0.3; if(padAimOn){ padAimX=rx/rm; padAimY=ry/rm; player.fx=padAimX; player.fy=padAimY; }   // RIGHT stick aims (twin-stick) — beats aim assist
     else if(mvx||mvy){ const m=Math.hypot(mvx,mvy); player.fx=mvx/m; player.fy=mvy/m; }   // else face the way you move (attacks lean onto a foe via aim assist)
-    padHold.s=D('attack'); padHold.e=D('interact');                 // tap = the chain · held from a press = THE HEAVY winds up (unarmed holds — the bot — chain as ever) · held interact = quick-equip a ▲ find
+    padHold.s=D('attack'); padHold.e=D('interact'); padHold.h=D('heavy');   // tap = the chain · held = the auto-chain · held interact = quick-equip a ▲ find · (STEEL) LT held = Shift: THE HEAVY's charge (A strikes at full)
     if(padAimOn||mvx||mvy||padHold.s) aimDev='pad';
     if(P('attack')) doSlash();
-    for(let s=1;s<6;s++) if(P(BAR_ROLES[s])) castSlot(s);          // THE SKILL BAR: X · Y · LB · RT · LT = slots 2-6
+    for(let s=1;s<6;s++) if(P(BAR_ROLES[s])) castSlot(s);          // THE SKILL BAR: X · Y · LB · RT · D→ = slots 2-6 (STEEL: slot 6 left LT for THE HEAVY)
     if(P('cancel')) dashPress(false);                              // (PT2 X2: THE PERFECT DASH on the pad too)
     if(P('potion')) drinkFlask();
     if(P('interact')) doInteract();
@@ -4167,8 +4167,8 @@ function renderControlsTab(){
   let h='<div id="tune">'+renderSoundBlock()+scnBlock()+gfxBlock()+plogBlock()+'<h3>🎮 Controller</h3>';   // (PT1 A1: 🔊 Sound & music first · INTROSTORY C2: 📖 Story scenes · PX A2: 🖼 Picture · PL: then 📝 the playtest log)
   h+='<p class="sub">'+(gp?('Connected: <b>'+String(padDevName).replace(/[<>&]/g,'').slice(0,40)+'</b>'):'No controller detected — connect one and press any button.')+'</p>';
   h+='<label style="display:flex;align-items:center;gap:8px;color:#cdd9f3;font-size:13px;margin:4px 0 8px;"><input type="checkbox" id="ctlEnable"'+(PAD.enabled?' checked':'')+'> Controller enabled</label>';
-  h+='<p class="hint">Left stick moves / steers &amp; works the sail — push the stick fully to run in towns and on deck. At sea '+padGlyph('skill4')+' sends your explorer ashore and '+padGlyph('deck')+' leaves the helm; on deck '+padGlyph('interact')+' uses & talks to the crew (the wheel takes her back), '+padGlyph('cancel')+' closes a card and '+padGlyph('skill2')+' decorates ('+padGlyph('attack')+' picks up & sets down, '+padGlyph('deck')+' turns, '+padGlyph('skill2')+' stows, '+padGlyph('skill4')+' / '+padGlyph('interact')+' pick from the stores, the triggers filter them); at the stern line '+padGlyph('attack')+' or '+padGlyph('interact')+' casts and strikes, held they reel. With the chart open it pans; the triggers zoom. Ashore the right stick aims (twin-stick); without it, your blows fire the way you face and lean onto the nearest foe — with none near, your shots lean onto a rock, herb, ruin or cracked wall ahead (shots break them, as a blade does). Tap the strike: 1 · 2 · FINISHER (· 4 SWEEP · 5 LUNGE when learned on the ✦ Tree) — the third blow is the big one (it floors normal foes and pays half again in Tide); hold it and let go when the ring fills for a HEAVY (your finisher, harder and wider, double Tide); every hit builds the TIDE; the skill buttons (X · Y · LB · RT · LT = slots 2-6) spend it — a skill hits 3–5× a strike, and one cast on a FULL bar CRESTS (+25%). B dashes (two charges; strike right after one for a DASH STRIKE · B again just as you land: a free PERFECT DASH), D↓ drinks the flask, D↑ opens the satchel. In menus the stick or D-pad moves the highlight, the strike button confirms, back closes, and the shoulder buttons flip tabs.</p>';
-  h+='<p class="hint">Keys: at sea <b>X</b> sends your explorer · <b>H</b> leaves the helm (walk your deck · <b>E</b> beside a hand talks · <b>E</b> at the wheel to sail · <b>F</b> decorates) · <b>M</b> the chart (click a known place to set your course) · in port, in rooms &amp; on deck hold <b>Shift</b> to run · <b>Shift+P</b> music on/off'+(PLOG?' · <b>0</b> a playtest note':'')+' · ashore <b>LMB</b> / J strike (tap: the chain · hold: a HEAVY) · <b>RMB</b> / K slot 2 · <b>1-4</b> slots 3-6 · <b>Space</b> dash (again just as you land: a free one) · <b>Q</b> (or H) drink · <b>E</b> use · <b>I</b> satchel · <b>M</b> map · gear &amp; gems: <b>drag &amp; drop</b> (the figure, the bar, a socket, the bin, the market’s sell box, the forge’s anvil — an Elixir onto the figure drinks it, a Goods row onto its sell box sells the lot) · <b>right-click</b> quick action · <b>Shift+click</b> satchel ↔ Hold (the pad: A picks a piece, then its buttons).</p>';   // (PT1 W11)
+  h+='<p class="hint">Left stick moves / steers &amp; works the sail — push the stick fully to run in towns and on deck. At sea '+padGlyph('skill4')+' sends your explorer ashore and '+padGlyph('deck')+' leaves the helm; on deck '+padGlyph('interact')+' uses & talks to the crew (the wheel takes her back), '+padGlyph('cancel')+' closes a card and '+padGlyph('skill2')+' decorates ('+padGlyph('attack')+' picks up & sets down, '+padGlyph('deck')+' turns, '+padGlyph('skill2')+' stows, '+padGlyph('skill4')+' / '+padGlyph('interact')+' pick from the stores, the triggers filter them); at the stern line '+padGlyph('attack')+' or '+padGlyph('interact')+' casts and strikes, held they reel. With the chart open it pans; the triggers zoom. Ashore the right stick aims (twin-stick); without it, your blows fire the way you face and lean onto the nearest foe — with none near, your shots lean onto a rock, herb, ruin or cracked wall ahead (shots break them, as a blade does). Tap the strike: 1 · 2 · FINISHER (· 4 SWEEP · 5 LUNGE when learned on the ✦ Tree) — the third blow is the big one (it floors normal foes and pays half again in Tide); hold it and the chain runs on; once you know THE HEAVY (✦ Tree) hold '+padGlyph('heavy')+' to charge it — no blows while the ring fills — and press '+padGlyph('attack')+' when it turns white (your finisher, far harder and wider, double Tide); every hit builds the TIDE; the skill buttons (X · Y · LB · RT · D→ = slots 2-6) spend it — a skill hits 3–5× a strike, and one cast on a FULL bar CRESTS (+25%). B dashes (two charges; strike right after one for a DASH STRIKE · B again just as you land: a free PERFECT DASH), D↓ drinks the flask, D↑ opens the satchel. In menus the stick or D-pad moves the highlight, the strike button confirms, back closes, and the shoulder buttons flip tabs.</p>';
+  h+='<p class="hint">Keys: at sea <b>X</b> sends your explorer · <b>H</b> leaves the helm (walk your deck · <b>E</b> beside a hand talks · <b>E</b> at the wheel to sail · <b>F</b> decorates) · <b>M</b> the chart (click a known place to set your course) · in port, in rooms &amp; on deck hold <b>Shift</b> to run · <b>Shift+P</b> music on/off'+(PLOG?' · <b>0</b> a playtest note':'')+' · ashore <b>LMB</b> / J strike (tap: the chain · hold: it runs on) · <b>Shift</b> (once you know THE HEAVY): hold to charge it, strike when the ring turns white — before that, Shift holds your facing · <b>RMB</b> / K slot 2 · <b>1-4</b> slots 3-6 ·<b>Space</b> dash (again just as you land: a free one) · <b>Q</b> (or H) drink · <b>E</b> use · <b>I</b> satchel · <b>M</b> map · gear &amp; gems: <b>drag &amp; drop</b> (the figure, the bar, a socket, the bin, the market’s sell box, the forge’s anvil — an Elixir onto the figure drinks it, a Goods row onto its sell box sells the lot) · <b>right-click</b> quick action · <b>Shift+click</b> satchel ↔ Hold (the pad: A picks a piece, then its buttons).</p>';   // (PT1 W11)
   h+='<div class="pt-sep"></div><div class="ctlrows">';
   for(const r of PAD_ROLES){ const idx=PAD.bind[r[0]], cap=padCapture===r[0];
     h+='<div class="ctlrow"><span class="cln">'+r[1]+'</span><span class="clb">'+(cap?'<i>press a button…'+(PAD_DPAD_OK[r[0]]?'':' (not the D-pad)')+'</i>':(idx==null||idx<0)?'<i>unbound</i>':('btn '+idx+padBtnName(idx)))+'</span><button class="sbtn ghost" data-rebind="'+r[0]+'">'+(cap?'…':'Rebind')+'</button></div>';
@@ -4197,7 +4197,7 @@ function gameDate(){ const td=Math.max(0,Math.floor(time/210));          // 210 
 const CONTROLS_HTML=
   '<div class="vcg"><b>At sea</b><span>WASD / arrows steer \u00b7 W sail up \u00b7 S sail down \u00b7 E dock or land \u00b7 F cast net \u00b7 X send your explorer (off a wild isle whose heart is fogged) \u00b7 H leave the helm (walk your deck) \u00b7 M chart (click a known place on it to set your course \u2014 again, or Backspace, to clear) \u00b7 Esc menu</span></div>'+
   '<div class="vcg"><b>On deck</b><span>WASD walk \u00b7 Shift run \u00b7 E use (the wheel, the cabin door, the windlass, the galley \u2014 a hot meal & the crew\u2019s feast, the bench \u2014 salvage, brew & repairs, the sea chest, the map table \u2014 the Ship\u2019s Plans, the trophy shelf) \u00b7 E at the stern line casts the hand-line \u2014 E (or Space, or a click) strikes on the bite, then HOLD it to keep the green on the fish \u00b7 E at your bunk: sleep dusk \u2192 dawn (a second captain sails on through the night toward your course marker), or write the log by day \u00b7 E beside a hand talks (chat, their story, orders \u2014 the Master will make for your course marker) \u00b7 R at the map table renames her \u00b7 F decorates (E or a click picks up & sets down \u00b7 R / right-click / the wheel turns \u00b7 Del stows \u00b7 Tab picks from the stores \u00b7 drag a piece from the stores onto the deck \u00b7 F or Esc done \u2014 nothing may block the way to a station) \u00b7 M chart \u00b7 J contracts \u00b7 L fish log \u00b7 C a hot meal \u00b7 X the explorer \u00b7 walk back to the wheel (E) to sail \u00b7 the Master holds her course, heaves to before land and reefs for a blow</span></div>'+   // (PT1 B1)
-  '<div class="vcg"><b>Ashore</b><span>WASD move \u00b7 \ud83d\udda5 left = strike (the cursor aims \u2014 tap it: 1 \u00b7 2 \u00b7 FINISHER (\u00b7 4 SWEEP \u00b7 5 LUNGE when learned on the \u2726 Tree), the third blow is the big one: it floors normal foes and pays half again in Tide \u00b7 HOLD it and let go when the ring fills: a HEAVY \u2014 your finisher, harder and wider, double Tide (a dash, a skill or a stun drops it) \u00b7 every hit raises the TIDE) \u00b7 \ud83d\udda5 right = skill slot 2 \u00b7 1-4 skill slots 3-6 (skills spend the Tide and hit 3\u20135\u00d7 a strike \u2014 cast one on a FULL bar for a CREST, +25%) \u00b7 J / K strike (tap \u00b7 hold: HEAVY) / slot 2 (your shots break rocks, herbs, ruins &amp; cracked walls \u2014 on the keys they lean onto them when no foe is near) \u00b7 Shift hold your facing \u00b7 Space dash (2 charges \u2014 strike right after for a DASH STRIKE \u00b7 Space again just as you land: a free PERFECT DASH) \u00b7 Q (or H) drink the flask (kills refill it) \u00b7 E interact \u00b7 I satchel \u00b7 the brass compass on your survey points the way on (gold down the trail \u00b7 purple caches \u00b7 red the boss \u00b7 blue the way out)</span></div>'+
+  '<div class="vcg"><b>Ashore</b><span>WASD move \u00b7 \ud83d\udda5 left = strike (the cursor aims \u2014 tap it: 1 \u00b7 2 \u00b7 FINISHER (\u00b7 4 SWEEP \u00b7 5 LUNGE when learned on the \u2726 Tree), the third blow is the big one: it floors normal foes and pays half again in Tide \u00b7 hold it and the chain runs on \u00b7 every hit raises the TIDE) \u00b7 \ud83d\udda5 right = skill slot 2 \u00b7 1-4 skill slots 3-6 (skills spend the Tide and hit 3\u20135\u00d7 a strike \u2014 cast one on a FULL bar for a CREST, +25%) \u00b7 J / K strike (tap \u00b7 hold: the chain runs on) / slot 2 (your shots break rocks, herbs, ruins &amp; cracked walls \u2014 on the keys they lean onto them when no foe is near) \u00b7 Shift (once you know THE HEAVY, \u2726 Tree): hold to charge, strike when the ring turns white \u2014 no blows while it fills, let go too soon and it fizzles, a dash, a skill or a stun drops it (before that, Shift holds your facing) \u00b7 Space dash (2 charges \u2014 strike right after for a DASH STRIKE \u00b7 Space again just as you land: a free PERFECT DASH) \u00b7 Q (or H) drink the flask (kills refill it) \u00b7 E interact \u00b7 I satchel \u00b7 the brass compass on your survey points the way on (gold down the trail \u00b7 purple caches \u00b7 red the boss \u00b7 blue the way out)</span></div>'+
   '<div class="vcg"><b>The caves</b><span>a claimed isle opens a cave by her hoard \u2014 E at its mouth to descend (or land on a claimed isle again) \u00b7 secure a floor for the rope up \u25b2 & the stairs down \u25bc \u00b7 a lord of the deep every 5th floor = a checkpoint</span></div>'+
   '<div class="vcg"><b>In port</b><span>WASD walk (hold Shift to run \u2014 in rooms too) \u00b7 E enter a building \u00b7 J contracts \u00b7 M chart</span></div>'+
   '<div class="vcg"><b>Your gear</b><span>drag &amp; drop in the satchel (I) and the \u2694 Gear tab: drag a piece onto the figure or a slot to wear it, off the figure to take it off, onto the \u27f2 salvage bin, the ground or the \u2693 Hold tab (hold it there to open the Hold) \u00b7 a skill gem onto a slot of the bar (or off it), a cut gem onto a piece to socket it \u00b7 an Elixir (the satchel, ashore) onto the figure to drink it \u00b7 at the market (\u2694 Sell gear) drag a piece onto the sell box \u2014 on \ud83d\udc1f Goods a row of the catch or the Hold\u2019s materials onto its own sell box (the lot of them) \u00b7 at the forge onto the anvil (its salvage tab has a bin) \u00b7 right-click = the quick action (equip / take off / unslot / drink \u2014 sell at the market, pick at the forge) \u00b7 Shift+click = satchel \u2194 Hold \u00b7 Esc lets go of a drag</span></div>'+
@@ -6006,7 +6006,7 @@ let ISL=null, itime=0;
 let INT=null, homePortIdx=-1;   // INT = a walkable building interior (museum/home); home port hosts them
 const W_WALL=0, W_GROUND=1, W_PATH=2, W_GATE=3, W_WATER=4, W_ICE=5, W_LAVA=6, W_CRACK=7, W_PROP=8, W_CHASM=9, W_CLIFF=10;   // (PT1 K10a W_CHASM: a ravine's void — a wall to feet, never to sight or a shot; a foe flung in falls · W_CLIFF: a ledge's edge — the same to all, nobody falls off it but a foe driven over it from above) (W_LAVA: the caldera's rivers — unwalkable like water, arrows fly over it · C8b W_CRACK: a secret room's cracked wall — a WALL to everything (islTile & terrTile read it as W_WALL) but terrOverlay, which draws its crack · PT1 K7 W_PROP: a solid breakable prop's tile (cover, a pillar) — a WALL to walking, LOS & every shot (islTile), GROUND to the bake (terrTile: the prop itself draws live))
 const player={x:0,y:0, fx:0,fy:1, r:6, hp:5, maxhp:5, shootT:0, invul:0, graceL:0, dashT:0, dashN:2, dashRc:0, dashEnd:-9, dsQ:0, dsDone:false, dashX:0, dashY:1, pdOK:false, pdQ:0, pdFree:false, pdT:-9, bufDF:0, velX:0, velY:0, snare:0, latch:false,
-  act:null, wpn:'sword', cmb:0, combo:0, comboT:0, hv:null, hvArm:0, hvN:0, bufS:0, bufD:0, bufQ:0, bufK:null, cdS:[0,0,0,0,0,0], cdM:[1,1,1,1,1,1], sipT:0, regen:null, guard:null, pull:null, rushB:0, bcn:false};   // act: THE ACTION in flight (§2.1 — actStart/actTick) · wpn: the weapon in hand · cmb: the combo index · buf*: presses waiting for the action's end (bufQ: a skill slot · bufK: the Tide press buffer) · dashN/dashRc: dash charges & the next one's recharge (§2.10) · dsQ: a strike pressed mid-dash (the DASH STRIKE) · pd*: THE PERFECT DASH (PT2 X2 — dashPress: pdOK this dash may still chain · pdQ a chain waiting for its end · pdFree a free one · pdT when it went · bufDF a buffered press was perfect) · cdS: each slot's cooldown · sipT: the flask sip (§2.11) · hv: THE HEAVY being wound (PX H1) · hvArm: the strike held since a real press · hvN: the full-charge floats shown this page load · regen: a Greater Draught's mend
+  act:null, wpn:'sword', cmb:0, combo:0, comboT:0, hv:null, hvW:0, hvP:false, hvN:0, hvNoT:-9, hvFl:-9, hvFz:null, hvPz:0, bufS:0, bufD:0, bufQ:0, bufK:null, cdS:[0,0,0,0,0,0], cdM:[1,1,1,1,1,1], sipT:0, regen:null, guard:null, pull:null, rushB:0, bcn:false};   // act: THE ACTION in flight (§2.1 — actStart/actTick) · wpn: the weapon in hand · cmb: the combo index · buf*: presses waiting for the action's end (bufQ: a skill slot · bufK: the Tide press buffer) · dashN/dashRc: dash charges & the next one's recharge (§2.10) · dsQ: a strike pressed mid-dash (the DASH STRIKE) · pd*: THE PERFECT DASH (PT2 X2 — dashPress: pdOK this dash may still chain · pdQ a chain waiting for its end · pdFree a free one · pdT when it went · bufDF a buffered press was perfect) · cdS: each slot's cooldown · sipT: the flask sip (§2.11) · hv: THE HEAVY being charged (PX H1 · STEEL: on Shift) · hvW: a fresh Shift press waiting to charge · hvP: Shift (or LT) down last frame · hvN: the full-charge floats shown this page load · hvNoT: the last swallowed-strike tick · hvFl: the full flash · hvFz: a fizzle's fold-in · hvPz: the camera punch left (s, real time) · regen: a Greater Draught's mend
 let enemies=[], inodes=[], iprop=[], iproj=[], ifx=[], ifloat=[];   // (PT1 K7a iprop: the isle's PROPS — crates & powder kegs (K7b-K10b: cover, pillars, traps, set-piece stones))
 let idrops=[];                  // physical loot on the ground (coins, gems, hearts…) — it magnets to you
 let ichests=[], iburied=null, iflag=null;   // hoard & cache chests, buried treasure, the claim-flag ceremony
@@ -6029,8 +6029,8 @@ function elixEnd(quiet){ if(!elix) return; const E=ELIXIR[elix.k]; elix=null; ge
 function elixTick(dt){ if(!elix) return; elix.t-=dt; if(elix.t<=0) elixEnd(false); }            // (20 minutes at most — sea, port & isle time)
 function topDg(){ return ptMode ? ptTopDg : (signs.top ? signs.top.dg|0 : 0); }                   // (C7b) the hardest danger you've conquered — the Temper cap & Deepsteel's craft IP read it
 let mouseX=0, mouseY=0, cvMX=-1, cvMY=-1;        // cursor, for mouse-aimed sword & bow · (G8 fix) its last spot over the game itself (cvMX/Y: a panel's button never moves it)
-let aimDev='key', mouseAcc=0, mouseL=false, mouseR=false;   // who aims: 'mouse' | 'key' | 'pad' (last used) · mouse buttons: tap = the chain · held from a press = THE HEAVY winds up (unarmed holds — the bot — chain as ever)
-let padAimOn=false, padAimX=0, padAimY=1; const padHold={s:false, e:false};   // pad right-stick aim (twin-stick) · the held strike button · the held interact button (quick-equip, C4b)
+let aimDev='key', mouseAcc=0, mouseL=false, mouseR=false;   // who aims: 'mouse' | 'key' | 'pad' (last used) · mouse buttons: tap = the chain · held = the auto-chain (STEEL: THE HEAVY charges on Shift, not on a held strike)
+let padAimOn=false, padAimX=0, padAimY=1; const padHold={s:false, e:false, h:false};   // pad right-stick aim (twin-stick) · the held strike button · the held interact button (quick-equip, C4b) · (STEEL) h: the held heavy button (LT) — Shift's twin
 const SLASH_HALF=1.05, SLASH_BODY=1.3, LAVA_R=18;   // the swing's half-arc (rad) & how far past en.r a body counts as struck — drawn wedge, sword & hitbox all share these · lava flare radius
 let hitStop=0, iShake=0, killStreak=0, killStreakT=0, streakF=null;   // ARPG clear-feel: tiny world freeze on BIG hits only, screen-kick size, kill-streak ramp
 let iKX=0, iKY=0;               // screen kick (buffer px) — shoved along the hit, springs back; never random jitter
@@ -6919,7 +6919,7 @@ function genIsland(core,opt){
   player.hid=false; player.hidT=0; player.hidA=-9; player.hidB=-9; player.onG=false;   // (PT1 K9a) out of the grass on every landfall & floor
   player.dashT=0; player.dashN=dashCh(); player.dashRc=0; player.dashEnd=-9; player.dsQ=0; player.pdOK=false; player.pdQ=0; player.pdFree=false; player.bufDF=0; player.bufS=0; player.bufD=0; player.bufQ=0; player.bufK=null; player.cdS=[0,0,0,0,0,0]; player.cdM=[1,1,1,1,1,1]; player.sipT=0; player.regen=null; gemReset();
   player.act=null; player.aimT=0; player.atkA=-Math.PI/2; mouseL=false; mouseR=false; closeInv();
-  player.cmb=0; player.combo=0; player.comboT=0; player.hv=null; player.spinT=0; player.ccN=0; player.rwT=0; player.dashSeq=0; if(!keep) tide=Math.min(ITUNE.tideRest,tideMax()); tideHitT=-9;   // (C6a: Corsair's count · Rogue Wave's clock · the dash's pass-through tally start over)   // (a new floor or isle: no action in flight, the chain starts over · the dash charges back · Tide starts at its rest on each landfall and rides down the floors · PX RELEASE FIX PRC-R1: the charge goes but hvArm stays — a strike still held through the stairs winds a new one; actTick disarms on release, leaveIsland on the way out)
+  player.cmb=0; player.combo=0; player.comboT=0; player.hv=null; player.hvW=0; player.hvP=hvHeld(); player.hvFz=null; player.hvPz=0; player.spinT=0; player.ccN=0; player.rwT=0; player.dashSeq=0; if(!keep) tide=Math.min(ITUNE.tideRest,tideMax()); tideHitT=-9;   // (C6a: Corsair's count · Rogue Wave's clock · the dash's pass-through tally start over)   // (a new floor or isle: no action in flight, the chain starts over · the dash charges back · Tide starts at its rest on each landfall and rides down the floors · PX RELEASE FIX PRC-R1 · STEEL: the charge, a Shift press waiting, a fizzle's fold-in and the camera punch go — a Shift still held through the stairs waits for its release)
   for(let i=0;i<6;i++) barFx[i]={aff:barCost(i)>0&&canPay(barCost(i))}; tideFull=tideMax()>0&&tide>=tideMax();   // (no 'now affordable' glint for what you landed with)
   HC=null; icorpse=[]; hsB=ITUNE.hsBank; hsX=0;                                       // (the fallen, the hit-stop bank — per floor)
   if(!keep) fcards=[]; phealF=null; bagNagT=-99; qeT=0; qeS=0; qeD=null; lchB.bank=0; lchB.k=-1;   // (first-cards, heal float, the bag-full nag, a half-held quick-equip & the leech bank are per-landfall)
@@ -6988,7 +6988,7 @@ function biomeLines(b){ const m=b.mods, L=[], x=v=>'×'+(+v).toFixed(2).replace(
   if(b.tier>0) L.push({ic:'⚔', txt:'rarer shores run +'+Math.round(b.tier*LTUNE.tierBump)+' danger — and pay for it', c:'#ffce54'});
   return L.slice(0,7); }
 function leaveIsland(ko){
-  player.hv=null; player.hvArm=0;               // (PX H1) THE HEAVY: a charge never leaves the isle with you
+  player.hv=null; player.hvW=0; player.hvFz=null; player.hvPz=0;   // (PX H1 · STEEL) THE HEAVY: a charge (or a Shift press waiting) never leaves the isle with you
   metEnd(ko);                                  // (the meters close the run — window.__score keeps it)
   if(ko && !ptMode && ISL) folkNews('ko',ISL.core.customName||ISL.core.label||ISL.core.name);   // (the wharf hears of the fall — w4)
   if(renaming) finishRename(true);              // never strand the naming card at sea
@@ -7390,7 +7390,7 @@ function dashCh(){ if(TR.kIC) return 1; return Math.max(1,Math.round(ITUNE.dashC
 function doDash(free){ if(koBeat||(!free && player.dashN<1)||player.dashT>0||mode!=='island'||(player.snare||0)>0.85||player.stunT>0) return;   // (PT2 X2: free = THE PERFECT DASH's chain — no charge needed, none spent)
   if(player.pull && player.pull.tng){ player.tngSn={en:player.pull.tng, t:itime}; player.pull=null; burst(player.x,player.y,'#e8889a',6); }   // (C8a) a dash SNAPS a bog toad's tongue — and carries you out of its slam
   if(player.act){ if(player.act.ph==='act'){ player.bufD=1; player.bufDF=free?1:0; return; } actEnd(true); player.bufS=0; player.bufQ=0; }   // (the cancelled blow's buffered presses go with it — a press BEFORE the dash is never a dash strike · G1 fix · PT2 X2: a perfect press waiting on the blade stays free)
-  hvDrop();                                                                                   // (PX H1) a dash drops a charge — a strike still held winds a new one after the dash strike
+  hvDrop();                                                                                   // (PX H1 · STEEL) a dash drops a charge (and a Shift press waiting) — a Shift still down waits for its release
   let dx=0,dy=0;
   if(keys['arrowleft']||keys['a']) dx-=1; if(keys['arrowright']||keys['d']) dx+=1;
   if(keys['arrowup']||keys['w']) dy-=1; if(keys['arrowdown']||keys['s']) dy+=1;
@@ -7500,8 +7500,8 @@ function aimAtMouse(){ const s=islScale();
   const wx=icamX+(mouseX/IKX/IZ.z+IZ.x0-IW/2)/s, wy=icamY+(mouseY/IKY/IZ.z+IZ.y0-IH/2)/s;   // (through the claim's push-in)
   const dx=wx-player.x, dy=wy-player.y, l=Math.hypot(dx,dy);
   if(l>2){ player.fx=dx/l; player.fy=dy/l; } }
-/* keys take the aim back: face the held movement keys (Shift keeps the facing you had) */
-function keyFace(){ if(keys['shift']) return; let mx=0,my=0;
+/* keys take the aim back: face the held movement keys (Shift keeps the facing you had — STEEL: once THE HEAVY is learned, its charge does: hvFaceHold) */
+function keyFace(){ if(hvFaceHold()) return; let mx=0,my=0;
   if(keys['arrowleft']||keys['a']) mx-=1; if(keys['arrowright']||keys['d']) mx+=1;
   if(keys['arrowup']||keys['w']) my-=1; if(keys['arrowdown']||keys['s']) my+=1;
   if(mx||my){ const l=Math.hypot(mx,my); player.fx=mx/l; player.fy=my/l; } }
@@ -7743,10 +7743,10 @@ function areaK(){ const S=stats(); return 1+Math.min(STAT_CAP.aoe, (S.aoe||0)+(S
 function reachMul(){ const S=stats(); return (ITUNE.slashRange/26)*areaK()*(1+(S.rch||0)); }   // every melee shape × (the reach slider · area, cap +80% · a Boarding Pike's +10% reach — C5a)
 function actLeft(){ const A=player.act; return !A?0 : A.ph==='wind'?A.wind-A.t : A.ph==='act'?A.act-A.t : A.rec-A.t; }   // what's left of the current phase
 function actRemain(){ const A=player.act; return !A?0 : A.ph==='wind'?A.wind-A.t+A.act+A.rec : A.ph==='act'?A.act-A.t+A.rec : A.rec-A.t; }   // what's left of the whole action
-function doSlash(){ if(mode==='island') player.hvArm=1;                                          // (PX H1) a REAL press (mouse · J · the pad) arms the HOLD — still down past a beat's end, it winds THE HEAVY · a press the strike can't take (a stun) still arms · the bot never presses: its held mouseL chains as ever
+function doSlash(){                                                                             // a strike PRESS (mouse · J · the pad's A) · (STEEL) the old "a strike held past a blow winds THE HEAVY" is retired: Shift charges it (hvInput), a strike fires it
   if(koBeat||mode!=='island'||!ISL||player.stunT>0) return;
   if(player.dashT>0){ player.dsQ=1; return; }                                                  // in a dash: the DASH STRIKE fires as it ends
-  if(player.hv){ hvTick(0,false); return; }                                                    // (PX2 FIX) a press while winding = the release, now: the HEAVY at full, the next beat early (never a light beat inside the charge)
+  hvInput(); if(player.hvW && !player.act && !player.hv) hvStart(); if(player.hv){ hvPress(); return; }   // (STEEL) charging: the press is swallowed (in its last inputBuffer s: kept) · at FULL or in the grace it fires THE HEAVY · (a Shift pressed this very frame charges first)
   if(!player.act){ if(itime-player.dashEnd<=0.15 && dashStrike()) return; actStart('basic'); return; }   // (just after one: the dash strike)
   if(actLeft()<=ITUNE.inputBuffer) player.bufS=1; }   // a press in a phase's last inputBuffer s fires when the action ends
 function actStart(slot,ds,hv){ if(koBeat||!ISL||player.act) return false;                     // slot 'basic' (ds: the DASH STRIKE — the heavy at ×0.8, a 0.05 s wind-up) · skills start in skillStart · (PX H1) hv: THE HEAVY — the finisher charged (hvBeatOf)
@@ -7770,7 +7770,7 @@ function actEnd(cancel){ const A=player.act; if(!A) return; player.act=null;
   if(A.slot==='basic') player.comboT=ITUNE.comboWindow;                               // the chain waits comboWindow for the next swing
   player.atkA=A.a; player.aimT=Math.max(player.aimT||0,0.08); }                        // (the sprite holds the blow's facing a breath)
 function actTick(dt,frozen){ const A=player.act, k=(player.spore>0)?ITUNE.sporeAtk:1;   // (in a spore cloud your blows come slower)
-  if(player.hvArm && !(mouseL || keys['j'] || padHold.s)) player.hvArm=0;                     // (PX H1) released: the hold is over (only a real press arms it again)
+  hvInput();                                                                                   // (STEEL) Shift / LT: a FRESH press wants THE HEAVY's charge (hvW) · let go, it no longer does
   if(A){
     if(frozen){ if(A.ph==='rec'){ A.t+=dt*k; if(A.t>=A.rec) actEnd(); } else if(A.ph==='act') A.eat+=dt*k; return; }   // FREEZE EATS RECOVERY: frozen time counts toward rec (wind & act wait)
     A.t+=dt*k;
@@ -7782,45 +7782,45 @@ function actTick(dt,frozen){ const A=player.act, k=(player.spore>0)?ITUNE.sporeA
       A.t=A.t-A.act+A.eat; A.ph='rec';
       if(player.bufD>0){ const pf=player.bufDF===1; player.bufD=0; player.bufDF=0; if(pf) pdFire(); else doDash(); if(player.act!==A) return; }       // a dash pressed during act fires now (it cancels the rec) · (PT2 X2: a perfect press stays free)
       if(player.bufQ>0){ const q=player.bufQ; player.bufQ=0; castSlot(q); if(player.act!==A) return; } }  // …as does a skill (a skill cancels a basic's rec)
-    if(A.ph==='rec' && A.t>=A.rec) actEnd(); else return; }
-  if(frozen || koBeat || player.stunT>0){ if(player.hv && (koBeat || player.stunT>0)) hvDrop(); return; }   // (stunned: nothing starts — PX: and a charge is lost)
+    if(A.ph==='rec' && (A.t>=A.rec || (player.hvW && A.slot==='basic' && !A.hvy))) actEnd(); else return; }   // (STEEL) a Shift press waiting: the blade has landed — this blow's recovery is skipped (never THE HEAVY's own), its charge starts below
+  if(frozen || koBeat || player.stunT>0){ if((player.hv || player.hvW) && (koBeat || player.stunT>0)) hvDrop(); return; }   // (stunned: nothing starts — PX · STEEL: and a charge, or a Shift press waiting, is lost)
   const held=!!(mouseL || keys['j'] || padHold.s);
-  if(player.hv){ hvTick(dt,held); return; }                                                  // (PX H1) winding THE HEAVY
+  if(player.hv){ hvTick(dt,held); return; } if(player.hvW && hvStart()) return;            // (PX H1 · STEEL) charging THE HEAVY · a Shift press waiting, nothing in flight: the charge begins
   if(player.bufQ>0){ const q=player.bufQ; player.bufQ=0; castSlot(q); if(player.act) return; }
-  if(player.bufS>0 || held){ const fresh=player.bufS>0; player.bufS=0;                        // tap = the chain · held from a press = THE HEAVY winds up (unarmed holds — the bot — chain as ever)
+  if(player.bufS>0 || held){ player.bufS=0;                                                  // tap = the chain · held = the auto-chain (STEEL: the old "held from a press winds THE HEAVY" is retired — Shift charges it)
     if(player.dashT>0){ player.dsQ=1; return; }                                               // (mid-dash: the strike waits for its end — the DASH STRIKE)
-    if(!fresh && player.hvArm && hvLive() && !(itime-player.dashEnd<=0.15)){ hvStart(); return; }   // (PX H1) never in the dash strike's 0.15 s
     if(!(itime-player.dashEnd<=0.15 && dashStrike())) actStart('basic'); } }
-/* (PX, from TG1) THE HEAVY. The strike HELD past a beat's end — held since a real press (doSlash arms it) — winds the weapon up: ITUNE.hvTime s
-   to full (the finisher's gather glint grows on the tip, a gold texel ring fills round you, you move at × hvMove). Let go at full: the weapon's FINISHER as a
-   HEAVY (hvBeatOf: × hvMul damage, × hvReach reach, × hvKb shove, its floor, × hvHs freeze, × hvTide Tide · the bow looses two more arrows & pierces one more ·
-   the staff's orb swells). Let go early: the next light beat. A dash, a skill, a stun, a KO, a paused isle (menu · satchel · map · card · scene), a lost focus,
-   a weapon swap drop the CHARGE — a strike still held winds a new one. The chain is TAPPED. hvOn 0 or the Legacy feel: the old hold-to-chain. The harness bot
-   holds mouseL without ever pressing: never armed, it chains as ever (every scorecard & the DE6 numbers unmoved — as doDash never chains a perfect dash). */
-function hvLive(){ return ITUNE.hvOn>0 && !(ITUNE.legacyFeel>0); }
-function hvDrop(){ player.hv=null; }
-function hvBeatOf(c0){ const k=Math.max(1,+ITUNE.hvReach||1), c=Object.assign({},c0,{wind:0.06, mul:c0.mul*(+ITUNE.hvMul||1), hsK:+ITUNE.hvHs||1.4, tdK:+ITUNE.hvTide||1.5, kb:(c0.kb!=null?c0.kb:20)*(+ITUNE.hvKb||1), heavy:1, fin:1, hvy:1});
+/* (PROJECT STEEL — S1, from PX H1) THE HEAVY: a NEW MOVE, learned on the ✦ Tree (HVY · TR.aHV · hvLive). A FRESH press of SHIFT (the pad's LT, role 'heavy') starts the CHARGE — mid-blow it
+   WAITS for the blade to land, then skips that blow's recovery (actTick · never THE HEAVY's own); a Shift still down after a heavy, a fizzle or a drop waits for its release (hvInput · hvDrop).
+   CHARGING: the ring fills over hvTime s (a riser, gold motes drawn in), every strike press is swallowed (a soft tick) — one in its last inputBuffer s is KEPT and fires as it fills · you walk × hvMove,
+   your facing held on the keys. FULL: white (a ting, a white pulse, a cream flash, a nudge) — a strike (LMB · J · the pad's A, pressed or held) fires it · × hvMoveF · Shift let go: hvGrace s of GRACE.
+   Let go early, a grace run out or full for hvMax s: it FIZZLES (no blow, no cost) · a dash, a skill, a stun, a KO, a weapon swap, a pause, a lost focus, a new floor DROP it · no node (hvOn 0 · Legacy): no heavy at all. */
+function hvLive(){ return ITUNE.hvOn>0 && !(ITUNE.legacyFeel>0) && !!TR.aHV; }   function hvT(){ return Math.max(0.05,+ITUNE.hvTime||0.6); }   function hvHeld(){ return !!(keys['shift'] || padHold.h); }   function hvFaceHold(){ return hvLive() ? !!player.hv : !!keys['shift']; }   // (the gate · the fill · Shift or LT down · the keys' facing holds while you charge — before the node, while Shift is down: its old job)
+function hvInput(){ const h=hvHeld(), e=h && !player.hvP; player.hvP=h; if(!hvLive()){ player.hvW=0; if(player.hv) hvDrop(); return; } if(!h) player.hvW=0; else if(e && !player.hv) player.hvW=1; }   function hvDrop(){ player.hv=null; player.hvW=0; player.hvP=hvHeld(); if(actx) for(const v of SFXV.slice()) if(v.id==='hv_charge') sfxKill(v,actx.currentTime); }   // (a FRESH press wants a charge — it starts once nothing is in flight · a DROP: the ring just vanishes, its riser stops, a Shift still down waits for its release)
+function hvBeatOf(c0){ const k=Math.max(1,+ITUNE.hvReach||1), c=Object.assign({},c0,{wind:0.06, mul:c0.mul*(+ITUNE.hvMul||1), hsK:+ITUNE.hvHs||1.4, tdK:+ITUNE.hvTide||1.5, kb:(c0.kb!=null?c0.kb:20)*(+ITUNE.hvKb||1), heavy:1, fin:1, hvy:1, kick:ITUNE.hvKick!=null?+ITUNE.hvKick:5.5, pit:(c0.pit||1)*0.85});   // (STEEL: its own kick · the finisher's swing a breath lower)
   if(c0.sh) c.sh=Object.assign({},c0.sh, c0.sh.k==='line'?{L:c0.sh.L*k}:{R:c0.sh.R*k}); if(c0.R2) c.R2=c0.R2*k;
   if(c0.bo) c.bo=Object.assign({},c0.bo,{R:(c0.bo.R||WEAPON.staff.bolt.R)*k, k:Math.min(1,(c0.bo.k||0.5)*1.1)});
   if(c0.pr) c.pr=Object.assign({},c0.pr,{n:(c0.pr.n||1)+2, pc:(c0.pr.pc||0)+1});
   return c; }
-function hvStart(){ if(player.act || player.hv || koBeat || !ISL || player.stunT>0) return false; const W=wpnOf(), CB=comboOf(W), hi=Math.max(0,CB.findIndex(q=>q.heavy)), c0=CB[hi], a=aimFor((c0.pr||c0.bo)?'arrow':'slash');
+function hvStart(){ if(player.act || player.hv || koBeat || !ISL || player.stunT>0 || player.dashT>0 || !hvLive()) return false; const W=wpnOf(), CB=comboOf(W), hi=Math.max(0,CB.findIndex(q=>q.heavy)), c0=CB[hi], a=aimFor((c0.pr||c0.bo)?'arrow':'slash');
   const A={W, slot:'basic', i:hi, c:c0, ph:'wind', t:c0.wind, wind:c0.wind, act:c0.act, rec:c0.rec, a, fx:Math.cos(a), fy:Math.sin(a), gth:true};   // (a stand-in action: the weapon's cocked pose — wPose — & the glint read it)
-  player.hv={t:0, W, A, full:false}; player.comboT=Math.max(player.comboT||0,ITUNE.comboWindow);   // (the arm stays: an hvMax fire still held winds again)
-  sfx(W==='bow'?'bow_draw_full':W==='staff'?'orb_charge':'fin_gather',{x:player.x, y:player.y}); return true; }
-function hvTick(dt,held){ const H=player.hv; if(!H) return; if(H.W!==wpnOf()){ hvDrop(); return; }   // (a weapon swapped in your hands — a quick-equip: the charge is gone)
-  const T=Math.max(0.05,+ITUNE.hvTime||0.55), A=H.A; H.t+=dt;
-  A.a=aimFor((A.c.pr||A.c.bo)?'arrow':'slash'); A.fx=Math.cos(A.a); A.fy=Math.sin(A.a); player.atkA=A.a; player.aimT=0.08; player.comboT=Math.max(player.comboT||0,0.2);   // (the aim follows the cursor · the chain waits)
-  if(!H.full && H.t>=T){ H.full=true; sfx('fin_gather',{pitch:1.6, x:player.x, y:player.y}); burst(player.x,player.y,'#ffd23f',6);
-    if((player.hvN||0)<3){ player.hvN=(player.hvN||0)+1; ifloat.push({x:player.x, y:player.y-24, txt:'let go — HEAVY', t:0, life:0.8, c:'#ffd23f'}); }
-    heavyCard(); }
-  const mx=+ITUNE.hvMax||0; if(held && !(mx>0 && H.t>=mx)) return;
-  player.hv=null;
-  if(H.full){ if(actStart('basic',false,true) && SAGA){ sagaEvent('heavy'); if(introOn() && SAGA.st==='A3') sagaHvSeen(); } return; }   // released at full (or held past hvMax): THE HEAVY · (thrown in A3 — a holder's one heavy ends both goals in a tick: its card never pops later, as px_critique m8)
-  if(SAGA && introOn() && SAGA.st==='A3' && (SAGA.sub|0)===1) SAGA.n.hvEarly=(SAGA.n.hvEarly|0)+1;   // (the guided lesson's ladder counts the early lets-go)
-  actStart('basic'); }                                                                            // early: the next light beat
-function heavyCard(){ if(BEST.s['feel:heavy'] || sagaHvHold()) return;                           // the lesson, once — at your first FULL charge (an old voyage's "hold to chain" habit lands here first)
-  recordFirst('feel','heavy','The heavy',{title:'THE HEAVY', col:'#ffd23f', icon:'⚔', lines:[{txt:'Tap '+glyph('attack')+' — 1 · 2 · FINISHER. Hold it, and a ring fills.'},{txt:'Let go: your finisher as a HEAVY — harder, wider, ×2 Tide.'}]}); }
+  player.hv={t:0, W, A, full:false, ft:0, g:-1, buf:0, mt:0}; player.hvW=0; player.bufS=0; player.comboT=Math.max(player.comboT||0,ITUNE.comboWindow); sfx('hv_charge',{x:player.x, y:player.y}); if(W==='bow'||W==='staff') sfx(W==='bow'?'bow_draw_full':'orb_charge',{x:player.x, y:player.y}); sndDuck('amb',-3,hvT()+0.1); return true; }   // (ft: time at full · g: the grace run, −1 while Shift is down · buf: a kept strike · mt: the next mote · a strike pressed before it is swallowed too · the riser, the bow's creak or the orb's gather, the sea hushed a little)
+function hvTick(dt,held){ const H=player.hv; if(!H) return; if(H.W!==wpnOf()){ hvDrop(); return; }   // (a weapon swapped in your hands — a quick-equip: the charge is gone) · held: the strike held (LMB · J · the pad's A)
+  const T=hvT(), A=H.A, sh=hvHeld(); A.a=aimFor((A.c.pr||A.c.bo)?'arrow':'slash'); A.fx=Math.cos(A.a); A.fy=Math.sin(A.a); player.atkA=A.a; player.aimT=0.08; player.comboT=Math.max(player.comboT||0,0.2);   // (the aim follows the cursor · the chain waits)
+  if(!H.full){ H.t+=dt; if(!sh){ hvFizzle(); return; } H.mt+=dt; while(H.mt>=0.08){ H.mt-=0.08; hvMote(); } if(H.t<T) return;   // CHARGING — Shift let go: it fizzles · a gold mote drawn in every 0.08 s
+    H.full=true; sfx('hv_ready',{x:player.x, y:player.y}); gemRing(player.x,player.y,18,'#ffffff',0.24,2); burst(player.x,player.y,'#ffd23f',6); player.hvFl=itime; addKick(0.6,0,0,1);   // FULL: the ting, a white pulse ring, gold sparks, a cream flash on you, a nudge
+    if((player.hvN||0)<3){ player.hvN=(player.hvN||0)+1; ifloat.push({x:player.x, y:player.y-24, txt:'strike — HEAVY', t:0, life:0.8, c:'#ffd23f'}); }
+    heavyCard(); if(H.buf){ hvFire(); return; } }                                                 // (a strike kept from its last inputBuffer s fires now)
+  H.ft+=dt; if(held){ hvFire(); return; }                                                         // a strike held at full: THE HEAVY
+  if(sh) H.g=-1; else { H.g=Math.max(0,H.g)+dt; if(H.g>=(+ITUNE.hvGrace||0)){ hvFizzle(); return; } }   // Shift let go at full: the GRACE runs (pressed again: full again)
+  const mx=+ITUNE.hvMax||0; if(mx>0 && H.ft>=mx) hvFizzle(); }                                    // full for hvMax s: it lapses (and Windows' Filter Keys box, 8 s of right Shift, never comes)
+function hvPress(){ const H=player.hv; if(H.full){ hvFire(); return; } if(hvT()-H.t<=ITUNE.inputBuffer){ H.buf=1; return; } if(!(itime-(player.hvNoT||-9)<0.3)){ player.hvNoT=itime; sfx('nope',{gain:0.35, pitch:1.25, x:player.x}); } }   function hvFire(){ player.hv=null; player.hvW=0; if(actStart('basic',false,true)){ sfx('heavy',{x:player.x, y:player.y}); if(SAGA) sagaEvent('heavy'); } }   // (a strike while charging: KEPT in its last inputBuffer s, else swallowed — a soft tick, at most every 0.3 s · THE HEAVY: the finisher charged — actStart → hvBeatOf · the release's whoosh & boom · the chain starts again at 1: cmbNext)
+function hvFizzle(){ const H=player.hv; if(!H) return; const q=H.full?1:clamp(H.t/hvT(),0,1); hvDrop(); player.hvFz={t:itime, q}; sfx('hv_fizzle',{x:player.x, y:player.y, gain:0.4+0.6*q}); }   function hvMote(){ const r=player.r*ITUNE.pScale*2.1+4, a=Math.random()*TAU; ifx.push({k:'p', x:player.x+Math.cos(a)*r, y:player.y+player.r*0.3+Math.sin(a)*r, vx:-Math.cos(a)*r*7, vy:-Math.sin(a)*r*7, t:0, life:0.24, c:Math.random()<0.5?'#ffd23f':'#fff3c0'}); }   // (no blow, no cost: the ring folds in — drawExplorerPix — a soft fall · a gold mote off the ring, drawn in to you)
+function hvCrack(x,y,a,L){ const c=Math.cos(a), s=Math.sin(a), P=[[x,y]]; for(let j=1;j<=5;j++){ const q=j/5, w=j<5?(j%2?1:-1)*(1.5+Math.random()*2):0; P.push([x+c*L*q-s*w, y+s*L*q+c*w]); } ifx.push({k:'fissure', pts:P, t:0, life:0.5, gc:'#fff3c0'}); }   function hvLand(x,y,cb){ const d=+ITUNE.hvStop||0; if(d>0 && !(slowT>0) && d>hitStop) hitStop=d; if(cb) cb.hs=Math.max(cb.hs,Math.round(hitStop*1000)); player.hvPz=0.25; sfx('slam',{x, y, pitch:0.92}); sfx('hv_sub',{x, y}); }   // (a GROUND CRACK — drawFinFx's fissure, its glow white-gold · THE HEAVY LANDS: a FIXED hvStop freeze past the hit-stop bank — never shorter after a chain, none in slow-mo — the camera's punch (izUpdate), the slam that ducks the music & a sub under it)
+function hvSlamFx(sh,x,y,a,fl){ const L=sh.k==='line'?sh.L:sh.R, n=sh.k==='line'?1:sh.k==='cone'?3:5, H=sh.k==='cone'?sh.H:Math.PI; if(fl) ifx.push({k:'hvfl', sh, x, y, a, t:0, life:0.05, rt:last}); gemRing(x,y,L*1.5,'#fff3c0',0.25,2); ifx.push({k:'hring', x, y, t:0, life:0.16});   // (STEEL) THE HEAVY's look: a white flash over the whole blow (2 frames) · the SHOCK RING rolling out to 1.5 × its reach in 0.25 s (a gem ring: no light bloom to wash the fight out)
+  for(let j=0;j<n;j++){ const b=n===1?a:n===3?a+(j-1)*H*0.55:a+(j+0.5)/n*TAU, r0=n===5?3:L*0.25; hvCrack(x+Math.cos(b)*r0, y+Math.sin(b)*r0, b, L*(n===5?0.85:0.7)); }   // the GROUND CRACKS under it (a cone 3, a lane 1, a slam's circle 5)
+  for(let j=0;j<24;j++){ const g=j>=14, b=n===1?a+(Math.random()-0.5)*0.5:n===3?a+(Math.random()*2-1)*H:Math.random()*TAU, r=L*(g?0.85+Math.random()*0.25:0.3+Math.random()*0.6), v=g?90+Math.random()*80:15+Math.random()*30; ifx.push({k:'p', x:x+Math.cos(b)*r, y:y+Math.sin(b)*r, vx:Math.cos(b)*v, vy:Math.sin(b)*v-(g?0:12), t:0, life:g?0.24+Math.random()*0.12:0.45+Math.random()*0.3, c:g?(j&1?'#ffd23f':'#fff3c0'):'#b8a888'}); } }   // 14 dust · 10 gold sparks off its edge
+function heavyCard(){ if(!BEST.s['feel:heavy2']) recordFirst('feel','heavy2','The heavy',{title:'THE HEAVY', col:'#ffd23f', icon:'⚔', lines:[{txt:'Hold '+glyph('heavy')+': the ring fills — you can’t swing while it does.'},{txt:'White: '+glyph('attack')+' — THE HEAVY, far harder & wider, ×2 Tide. Let go too soon: it fizzles.'}]}); }   // (STEEL) the lesson, once — at your first FULL charge · a NEW key (feel:heavy2): a voyage that met the old hold-heavy is taught the Shift one too
 /* THE SHAPES (§2.1) — the drawn shape is the hitbox: cone {R, H} · line {L, W} · circle {R, off} · ring {R0, R1}, from (ox,oy) along the angle a,
    each widened by the struck body (a reefspike's TRUE body only — it reflects the blows you actually aim at it) */
 function shapeHits(sh,ox,oy,a,en){ if(untouchable(en)) return false; const dx=en.x-ox, dy=en.y-oy, br=en.type==='reefspike'?en.r:en.r*SLASH_BODY, fx=Math.cos(a), fy=Math.sin(a);   // (a buried sand devil is never struck — §2.1)
@@ -7846,7 +7846,7 @@ function wEff(W){ W=W||wpnOf(); const S=stats(), k=W+'|'+statsVer; if(WEFk===k) 
 function staffBolt(A,c,WD,basic,lad){ if(basic && HK && HK.shot.length && firePower('shot',{bolt:1, A, c}).rep){ player.shootT=Math.max(player.shootT,A.rec+0.05); if(!A.ds){ player.cmb=cmbNext(A); player.combo=player.cmb; } metSwing(true); return; }   // (C6b UNDERTOW ROD: every 4th basic bolt rolls out as a wave instead)
   const S=stats(), B=WEAPON.staff.bolt, bo=c.bo||{}, bs=bo.sp||B.sp, sp=bs*(1+(S.arng||0)), cx=Math.cos(A.a), cy=Math.sin(A.a), em=basic&&barSk(0)==='G21'?barLive(0):null, eL=em?gemLv(em):0, el=em?'fir':(S.el||'frs'), big=!!(bo.burst||bo.orb);   // (C5b EMBER LOB in slot 1: firebolts)
   const P=pushProj({k:'bolt', el, x:player.x+cx*10, y:player.y+cy*10, vx:cx*sp, vy:cy*sp, life:(bo.life||B.life*B.sp/bs)*prngK(), dmg:eBoltDmg(0,el)*c.mul*(em?gLvK(em,eL):1), kb:c.kb!=null?c.kb:WD.kb[c.heavy?1:0], heavy:!!c.heavy, basic:basic?1:0, gem:basic?0:null,   // (PT1 K2: a beat's own speed — every bolt still flies 240u)
-    spl:big?bo.R:(S.base==='dstaff'?24:B.R), splK:big?bo.k:B.k, burst:!!bo.burst, orb:bo.orb?1:0, hr:bo.orb?7:0, helix:bo.helix?1:0, fin:c.fin?1:0, tdK:c.tdK||1, cb:A.cb, chain:S.base==='sgstaff'?1:0, chK:0.6, pc:bo.orb?0:(S.prc||0), w:'staff'});   // (the ORB: hr 7, it always bursts — orbBurst · G6 fix: its flight ends there — gear's pierce never carries it on)
+    spl:big?bo.R:(S.base==='dstaff'?24:B.R), splK:big?bo.k:B.k, burst:!!bo.burst, orb:bo.orb?1:0, hr:bo.orb?7:0, helix:bo.helix?1:0, fin:c.fin?1:0, tdK:c.tdK||1, cb:A.cb, chain:S.base==='sgstaff'?1:0, chK:0.6, pc:bo.orb?0:(S.prc||0), w:'staff', hv:A.hvy?1:0});   // (the ORB: hr 7, it always bursts — orbBurst · G6 fix: its flight ends there — gear's pierce never carries it on)
   if(em){ P.dk=0.55; P.blast={R:eL>=5?32:24, k:0.30*eBoltDmg(0,'phy')/Math.max(1e-6,eBoltDmg(0,'fir')), z:eL>=15?0.4*eBoltDmg(0,'fir')*gLvK(em,eL):0}; if(!big) P.spl=0; }   // 55% fire + a 30% blast (steel: its k re-weighs the fire increases out) (the burst & the orb keep their own splash)
   player.shootT=Math.max(player.shootT,A.rec+0.05); sfx(swingId(A.W,c,false),{pitch:c.pit||1, step:A.i+1, x:player.x, y:player.y});   // (PT1 K2: sw_staff step 1 · 2 · sw_staff_fin)
   ifx.push({k:'cast', a:A.a, t:0, life:big?0.2:0.14, c:ELEM[el].c, big});
@@ -7908,8 +7908,8 @@ function pprojHit(pr){ const hr=pr.hr||(pr.k==='bolt'?4:3), bx=pr.x, by=pr.y, ax
     if(pr.k==='bolt'){ boltHit(pr,en,nx,ny,deK); if(!ISL) return true; }
     else { const rep=pr.vid && en.vid===pr.vid; if(pr.vid) en.vid=pr.vid;
       hurtEnemy(en,{dmg:(pr.dmg||eArrowDmg())*(rep?(pr.rep!=null?pr.rep:ITUNE.splitRepeat):1)*deK, nx, ny, melee:false, kbm:rep?0:1, kb:pr.kb!=null?pr.kb:WEAPON.bow.kb[0], heavy:pr.heavy&&!rep, special:pr.special, basic:pr.basic, ws:pr.ws||WEAPON.bow.stag, type:pr.el||'phy', w:pr.w||'bow', proc:pr.proc,
-        skill:pr.skill, gem:pr.gem, bleed:pr.bleed, shc:pr.shc, tq:pr.tq, pr, pw:pr.pw, fin:pr.fin?1:0, cast:pr.cast}); if(!ISL) return true;   // (C6b: the shot itself rides along — Gale-Bow splits it · pw: a power's shot is never a blow)   // (one shove per foe per volley — the extras only glance · the double nock's arrows land HEAVY · C5b: a gem's shot carries its slot, Bleed & Shock)
-      if(pr.fin && pr.tq && !pr.tq.fz){ pr.tq.fz=1; finStop('H3',0.8,pr.cb); finHit(en.x,en.y); addKick(3.2,nx,ny,1); finArrowFx(en,nx,ny); }   // (PT1 K2) the TRIPLE LOOSE: its first arrow home freezes the world ONCE for the volley (H3 ×0.8, the finisher's least) & booms · (G6 fix) a blade finisher's kick, its gold burst
+        skill:pr.skill, gem:pr.gem, bleed:pr.bleed, shc:pr.shc, tq:pr.tq, pr, pw:pr.pw, fin:pr.fin?1:0, cast:pr.cast, stag:pr.tq&&pr.tq.hv?(+ITUNE.hvStag||1):1}); if(!ISL) return true;   // (STEEL stag: THE HEAVY's volley staggers × hvStag) (C6b: the shot itself rides along — Gale-Bow splits it · pw: a power's shot is never a blow)   // (one shove per foe per volley — the extras only glance · the double nock's arrows land HEAVY · C5b: a gem's shot carries its slot, Bleed & Shock)
+      if(pr.fin && pr.tq && !pr.tq.fz){ pr.tq.fz=1; const hq=!!pr.tq.hv; if(hq){ hvLand(en.x,en.y,pr.cb); hvSlamFx({k:'circle', R:22},en.x,en.y,Math.atan2(ny,nx),false); } else finStop('H3',0.8,pr.cb); finHit(en.x,en.y); addKick(hq?+ITUNE.hvKick||0:3.2,nx,ny,1); finArrowFx(en,nx,ny); }   // (STEEL: THE HEAVY's volley lands as the heavy: its fixed freeze, the punch & slam, the shock ring & cracks round the foe, its kick) (PT1 K2) the TRIPLE LOOSE: its first arrow home freezes the world ONCE for the volley (H3 ×0.8, the finisher's least) & booms · (G6 fix) a blade finisher's kick, its gold burst
       if(pr.fin && pr.tq && en.dead){ const q=pr.tq; q.k=(q.k||0)+1; if(q.k>=3){ if(!q.mf) q.mf=multiKill(q.k,EMAT[en.type]||'fur',en.x,en.y); else { q.mf.txt='×'+q.k+'!'; q.mf.t=Math.min(q.mf.t,0.1); } } }   // (G6 fix) the volley's kills: ×N! from 3 (one chord — later kills grow its number)
       if(pr.snd && !pr.sndD){ pr.sndD=1; sfx(pr.snd,{x:en.x, y:en.y}); }                        // (an anchor's first bite)
       if(pr.hook) harpoonHook(pr,en); }                                                        // (Harpoon Line: it hauls — or pulls you in)
@@ -7946,7 +7946,7 @@ function projClip(pr){ const ax=pr.px!=null?pr.px:pr.x, ay=pr.py!=null?pr.py:pr.
   for(let j=1;j<=n;j++){ const x=ax+dx*j/n, y=ay+dy*j/n, t=islTile(x,y); if(t===W_WALL || t===W_GATE) break; lx=x; ly=y; }
   pr.x=lx; pr.y=ly; }
 /* a staff's bolt strikes: its own foe (the burst's heavy knocks it down) — then its element SPLASHES the others near (no Tide, no knockdown, one voice) */
-function boltHit(pr,en,nx,ny,deK){ const P={dmg:pr.dmg*(pr.dk||1)*(deK||1), nx, ny, melee:false, kbm:1, kb:pr.kb, heavy:pr.heavy, basic:pr.basic, ws:WEAPON.staff.stag, type:pr.el, w:'staff', proc:pr.proc, gem:pr.gem, pr, pw:pr.pw, fin:pr.fin?1:0};   // (dk: an Ember Lob's fire part, 55%)
+function boltHit(pr,en,nx,ny,deK){ const P={dmg:pr.dmg*(pr.dk||1)*(deK||1), nx, ny, melee:false, kbm:1, kb:pr.kb, heavy:pr.heavy, basic:pr.basic, ws:WEAPON.staff.stag, type:pr.el, w:'staff', proc:pr.proc, gem:pr.gem, pr, pw:pr.pw, fin:pr.fin?1:0, stag:pr.hv?(+ITUNE.hvStag||1):1};   // (STEEL stag: THE HEAVY's orb staggers × hvStag)   // (dk: an Ember Lob's fire part, 55%)
   hurtEnemy(en,P); if(!ISL) return;
   if(pr.orb){ orbBurst(pr,en); return; }                                                                    // (PT1 K2) the finisher's ORB bursts round the foe it struck
   const R=pr.spl||0, col=(ELEM[pr.el]||ELEM.phy).c; ifx.push({k:'bsplash', x:pr.x, y:pr.y, R:Math.max(8,R,pr.blast?pr.blast.R:0), t:0, life:pr.burst?0.3:0.2, c:col, big:!!(pr.burst||pr.blast)});
@@ -7967,12 +7967,12 @@ function orbBurst(pr,en){ if(pr.ob) return; pr.ob=1; const R=pr.spl||36, x=pr.x,
   ifx.push({k:'bsplash', x, y, R, t:0, life:0.4, c:col, big:true}); ifx.push({k:'bsplash', x, y, R:R*0.55, t:0, life:0.18, c:'#ffffff', big:true}); ifx.push({k:'hring', x, y, t:0, life:0.16});   // (its element's ring rolling out to R36 · a white flash inside it)
   for(let j=0;j<14;j++){ const a=Math.random()*TAU, s=90+Math.random()*110; ifx.push({k:'p', x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, t:0, life:0.3+Math.random()*0.25, c:j<4?'#ffffff':col}); }   // (the spray)
   for(const e of [...enemies]){ if(e===en || e.dead || untouchable(e) || (pr.hit && pr.hit.indexOf(e)>=0) || (e.x-x)**2+(e.y-y)**2>=(R+e.r)**2) continue;
-    const dx=e.x-x, dy=e.y-y, d=Math.hypot(dx,dy)||1, ok=hurtEnemy(e,{dmg:pr.dmg*(pr.splK||0.9), nx:dx/d, ny:dy/d, melee:false, kbm:1, kb:pr.kb, ws:WEAPON.staff.stag, type:pr.el, w:'staff', spl:1, proc:pr.proc, cb:pr.cb, fin:1}); if(!ISL) return;
+    const dx=e.x-x, dy=e.y-y, d=Math.hypot(dx,dy)||1, ok=hurtEnemy(e,{dmg:pr.dmg*(pr.splK||0.9), nx:dx/d, ny:dy/d, melee:false, kbm:1, kb:pr.kb, ws:WEAPON.staff.stag, type:pr.el, w:'staff', spl:1, proc:pr.proc, cb:pr.cb, fin:1, stag:pr.hv?(+ITUNE.hvStag||1):1}); if(!ISL) return;
     if(ok){ n++; if(!e.dead) knockDown(e); } if(e.dead) nk++; }
   if(pr.blast && !emberBlast(pr)) return;
   brkArea(x,y,Math.max(R,pr.blast?pr.blast.R:0),true,pr); if(!ISL) return;
   sfx('orb_burst',{x, y}); addKick(2,x-player.x,y-player.y,0.8);
-  if(n>0){ finStop('H3',0.8,pr.cb); finHit(x,y); }
+  if(n>0){ if(pr.hv){ hvLand(x,y,pr.cb); hvSlamFx({k:'circle', R},x,y,0,false); addKick(+ITUNE.hvKick||0,x-player.x,y-player.y,1); } else finStop('H3',0.8,pr.cb); finHit(x,y); }   // (STEEL: THE HEAVY's orb lands as the heavy — its fixed freeze, the punch & slam, the shock ring & cracks, its kick)
   if(nk>=3) multiKill(nk,en?(EMAT[en.type]||'fur'):'fur',x,y); }                       // (G6 fix) the orb's multi-kill: its chord & ×N!, as a blade finisher's
 function boltFizz(pr){ burst(pr.x,pr.y,(ELEM[pr.el]||ELEM.phy).c,4); }                                    // (a bolt that found nothing fizzles out)
 function projHome(pr,dt){ let best=pr.hE; const L=Math.hypot(pr.vx,pr.vy)||1;                              // HOMING: it bends toward the nearest foe ahead of it (home rad/s)
@@ -8003,7 +8003,7 @@ function actResolve(A){ if(A.slot==='skill'){ skillResolve(A); return; }        
   if(c.pr && bk==='G17'){ if(S.homeVS>0) PWF.P15=(PWF.P15||0)+1; const n=bL>=5?5:3, sp=eArrowSpeed()*(c.spd||1), vid=++volleySeq, fan=12*Math.PI/180/(n-1), dmg=eArrowDmg()*c.mul*0.45*bm, tq={n:0, cap:8*(c.tdK||1)};   // SPLIT SHOT: 3 arrows (L5 5) in a 12° fan, 45% each (a repeat hit ×0.3) · 5 Tide an arrow, 8 a shot (× the beat's tdK) · L15 pierce 1
     for(let j=0;j<n;j++){ const a=A.a+(j-(n-1)/2)*fan, cx=Math.cos(a), cy=Math.sin(a);
       pushProj({k:'arrow', x:player.x+cx*10, y:player.y+cy*10, vx:cx*sp, vy:cy*sp, life:lf, vid, dmg, rep:0.3, kb:akb, heavy:!!c.heavy, basic:basic?1:0, pc:(S.prc||0)+(bL>=15?1:0)+ppc, tq, tdK:c.tdK||1, fin:fin?1:0, gold:fin, cb:A.cb, gem:0, home:S.homeVS||0}); } }   // (C6b Hurricane Quiver: they home · PT1 K2: the finisher's are gold — and freeze once)
-  else if(c.pr){ const n=c.pr.n>1?c.pr.n:1, sp=eArrowSpeed()*(c.spd||1), vid=n>1?++volleySeq:0, fan=c.pr.sp*Math.PI/180, dmg=eArrowDmg()*c.mul, tq=fin?{n:0, cap:WEAPON.bow.tide*(c.tdK||1), fz:0}:null;   // one volley id: a foe struck by several arrows of ONE shot takes the extras at splitRepeat (PT1 K2: the TRIPLE LOOSE — one Tide cap, one freeze)
+  else if(c.pr){ const n=c.pr.n>1?c.pr.n:1, sp=eArrowSpeed()*(c.spd||1), vid=n>1?++volleySeq:0, fan=c.pr.sp*Math.PI/180, dmg=eArrowDmg()*c.mul, tq=fin?{n:0, cap:WEAPON.bow.tide*(c.tdK||1), fz:0, hv:A.hvy?1:0}:null;   // one volley id: a foe struck by several arrows of ONE shot takes the extras at splitRepeat (PT1 K2: the TRIPLE LOOSE — one Tide cap, one freeze)
     for(let j=0;j<n;j++){ const a=n>1 ? A.a+(j*2/(n-1)-1)*fan : A.a, cx=Math.cos(a), cy=Math.sin(a);   // (a volley spreads ±sp° round the aim)
       pushProj({k:'arrow', x:player.x+cx*10, y:player.y+cy*10, vx:cx*sp, vy:cy*sp, life:lf, vid, dmg, kb:akb, heavy:!!c.heavy, basic:basic?1:0, pc:(S.prc||0)+ppc, gem:basic?0:null, tq, tdK:c.tdK||1, fin:fin?1:0, gold:fin, cb:A.cb}); } }   // (basic: each arrow that hits pays Tide — tideArrow · pc: gear's pierce, + the beat's)
   if(c.pr){
@@ -8033,7 +8033,7 @@ function actStrike(A,k){ const c=A.c, WD=wEff(A.W), S=stats(), basic=A.slot==='b
   if(sh.k==='cone') ifx.push({k:'slash', x:player.x, y:player.y, a:A.a+da, t:0, life:0.133, h:sh.H, R:sh.R, dir, fin:hv, sty, thin:bs?1:0, xs:c.xs?1:0});   // the smear (§2.5): full strength 2 frames, then gone in 0.1 s — its shape IS the hitbox
   else if(sh.k==='line') ifx.push({k:'thrust', x:player.x, y:player.y, a:A.a, t:0, life:0.133, L:sh.L, W:sh.W, fin:hv});
   else ifx.push({k:'slamfx', x:cx0, y:cy0, t:0, life:0.3, R:sh.R, fin:hv});
-  if(fin && !sub) finFx(A,sh);                                                          // (PT1 K2) the finisher's own flourish: the shock arc · the lunge's streaks · the twin stabs
+  if(fin && !sub) finFx(A,sh); if(A.hvy && !sub) hvSlamFx(sh, sh.k==='circle'?cx0:player.x, sh.k==='circle'?cy0:player.y, A.a, true);   // (PT1 K2) the finisher's own flourish: the shock arc · the lunge's streaks · the twin stabs · (STEEL) THE HEAVY's: the white flash, the shock ring, the cracks — whatever it strikes
   sfx(swingId(A.W,c,hv),{pitch:(c.pit||1)*(sub?1.06:1), step:A.i+1, blade:1, x:player.x, y:player.y}); if(c.snd2 && !sub) sfx(c.snd2,{x:cx0, y:cy0});   // (PT1 K2: sw_* step 1 · 2 · its _fin — a double stab calls once a strike · the axe's slam booms too)
   if(sh.k==='circle'){ addKick(1.6,A.fx,A.fy,0.7); burst(cx0,cy0,'#b8a888',7); }                   // (the slam lands whatever it strikes: the ground jolts, dust flies)
   const fp=basic && !!c.heavy && !sub && !!HK && HK.finisher.length>0; if(fp) firePower('finisher',{pre:1, slam:sh.k==='circle', x:cx0, y:cy0, A});   // (C6b) a FINISHER's powers before it lands — Kraken's Maw drags them into the slam
@@ -8046,7 +8046,7 @@ function actStrike(A,k){ const c=A.c, WD=wEff(A.W), S=stats(), basic=A.slot==='b
       if(ISL.spT && !en.ldr && spGap(player.x,player.y,en.x,en.y)){ if(!cg) cg={x:SPG.x, y:SPG.y, t:SPG.t}; continue; }   // (G10 fix) nor up a cliff, nor over a chasm — as a foe's blow can't (hitShape): take the ramp, the bridge
       if(got) got.push(en);
       let nx=dx/d, ny=dy/d; if(sh.k==='circle'){ const qx=en.x-cx0, qy=en.y-cy0, q=Math.hypot(qx,qy); if(q>2){ nx=qx/q; ny=qy/q; } }   // (a slam throws RADIALLY from its circle's heart)
-      const bled=!!(en.st_bl && en.st_bl.t>0), P={dmg:dmg*(bk==='G05' && bL>=5 && bled?1.1:1), nx, ny, melee:true, kbm:anc?0:1, ws:WD.stag, type:'phy', bs, w:A.W, gem:basic?0:null, hvy:A.hvy?1:0};
+      const bled=!!(en.st_bl && en.st_bl.t>0), P={dmg:dmg*(bk==='G05' && bL>=5 && bled?1.1:1), nx, ny, melee:true, kbm:anc?0:1, ws:WD.stag, type:'phy', bs, w:A.W, gem:basic?0:null, hvy:A.hvy?1:0, stag:A.hvy?(+ITUNE.hvStag||1):1};   // (STEEL stag: THE HEAVY's × hvStag stagger — only elites, rares, bosses & the dummy have a bar)
       if(gx) Object.assign(P,gx); const ok=hurtEnemy(en,P); if(!ISL) return -1;
       if(ok && !first) first=en;
       if(bk==='G05' && bL>=15 && bled && en.dead && !en._kp){ const bx=en.x, by=en.y; gemQ(0,()=>rendBurst(bx,by,eSlashDmg()*0.6*bm)); }   // (L15: a bleeding foe you kill bursts — 60%, R30, a proc)
@@ -8072,7 +8072,7 @@ function actImpact(R,A,WD){ if(!R || !R.n) return;                              
   if((R.killsF||0)>=ITUNE.nipQuietN) nipQuiet=itime+ITUNE.nipQuietT;                                           // (a swath of the swarm felled: no nips for 0.4 s — §2.12)
   const c=A.c||{}, fin=!!c.fin, skl=!!A.D && !A.proc && ITUNE.skillHs>0 && !(ITUNE.legacyFeel>0), hk=(ITUNE.legacyFeel>0 || (R.heavy && !c.heavy))?1:(c.hsK||1)*((fin||A.D)?1:ITUNE.lightHs);   // (PT1 K4 skl: a melee SKILL's first strike — never the light beats' freeze × · G6 fix: never a power's free cast or an echo (A.proc) · a Corsair's Creed heavy on a light beat freezes as a heavy)
   let tier=R.tier||'H2'; if((R.kills>=5 || fin || skl) && HS_RANK[tier]<3) tier='H3';   // a multi-kill lands heavy · so does a finisher · (PT1 K4) and a melee skill's first strike
-  if(fin || skl) finStop(tier,WD.hs*hk,A.cb); else { reqHitStop(tier,WD.hs*hk); if(A.cb) A.cb.hs=Math.max(A.cb.hs,Math.round(hitStop*1000)); }   // (PT1 K4: a melee skill never freezes less than a finisher — the daggers' Dance 32 → 70 ms)
+  if(A.hvy) hvLand(R.x,R.y,A.cb); else if(fin || skl) finStop(tier,WD.hs*hk,A.cb); else { reqHitStop(tier,WD.hs*hk); if(A.cb) A.cb.hs=Math.max(A.cb.hs,Math.round(hitStop*1000)); }   // (PT1 K4: a melee skill never freezes less than a finisher — the daggers' Dance 32 → 70 ms) · (STEEL) THE HEAVY lands: its fixed freeze past the bank, the punch, the slam
   addKick(c.kick!=null?c.kick:fin?3.2:HS_TIER[tier][1],A.fx,A.fy,1);                  // (STEEL: a beat's own kick — the LUNGE's 3.8)
   const mat=R.mat||'fur', st=1+Math.min(killStreak,30)*0.01, lad=c.lp!=null?c.lp:Math.pow(2,2*(fin?Math.min(A.i||0,2):(A.i||0))/12);   // (STEEL: the ladder climbs the light beats only — a finisher never above the cleave's ×1.26, the LUNGE its own lp 1)
   sfx(R.crit?'hit_crit':(MAT_HIT[mat]||'hit_flesh'), {mat, layers:1+Math.floor(Math.log2(R.n)), thump:WD.th, pitch:lad*st, x:R.x, y:R.y, blade:SND_BLADE[A.W] && !stats().fists && !SND_BLUNT[stats().base] ? 1 : 0});   // (PT1 A2: blade — a recorded blade layer under the hit)
@@ -10553,7 +10553,7 @@ const BEAST={   // the bestiary's creatures (fodder, drowned & elites count unde
   walrus:{n:'Tusked Walrus', lore:'Winds up, then BELLY-SLIDES down its lane, leaving ice — sidestep it. Up close its tusks SLAM (the cone) and chill you.'},
   salamander:{n:'Salamander', lore:'Its throat glows, then it LOBS lava — leave the ring before it pools. Basking in its own pool it shrugs off blows: lure it out.'},
   beetle:{n:'Prism Beetle', lore:'Charges a BEAM at you — the line LOCKS solid just before it fires: step off it, then punish it while it cools.'},
-  tmantis:{n:'Thicket Mantis', lore:'Crosses its arms on GUARD (the glint) — strike it then and it COUNTER-slashes. Hold your blows till the guard drops — or wind a HEAVY while it guards and let go as it drops.'},
+  tmantis:{n:'Thicket Mantis', lore:'Crosses its arms on GUARD (the glint) — strike it then and it COUNTER-slashes. Hold your blows till the guard drops — or charge THE HEAVY while it guards (Shift, once you know it) and strike as it drops.'},
   sporeling:{n:'Sporeling', lore:'Hop-bumps you — three blows (or its death) BURST it into spores: step out of the ring before the cloud blooms.'},
 };
 const BOSS_LORE='Guards every hoard: its charges run down a LOCKED lane — step aside; up close its tusks SWEEP. Hurt, it calls its herd and STOMPS — dash THROUGH the ring. Its gold bar: fill it to BREAK the beast.';
@@ -12290,14 +12290,14 @@ function updateIsland(dt){
   if(keys['arrowup']||keys['w']) mvy-=1; if(keys['arrowdown']||keys['s']) mvy+=1;
   if(mvx||mvy){ const l=Math.hypot(mvx,mvy); mvx/=l; mvy/=l; }
   if(koBeat || player.stunT>0){ mvx=0; mvy=0; }   // falling: no more steps · (stunned: ≤ 0.25 s — §2.8)
-  // facing = aim: the mouse faces the cursor & the pad's right stick aims whichever way you walk (kite!); keys face the way you move (Shift holds it)
+  // facing = aim: the mouse faces the cursor & the pad's right stick aims whichever way you walk (kite!); keys face the way you move (Shift holds it — STEEL: once THE HEAVY is learned, its charge does)
   if(aimDev==='mouse') aimAtMouse();
   else if(padAimOn){ player.fx=padAimX; player.fy=padAimY; }
-  else if((mvx||mvy) && !keys['shift'] && player.dashT<=0){ player.fx=mvx; player.fy=mvy; }
+  else if((mvx||mvy) && !hvFaceHold() && player.dashT<=0){ player.fx=mvx; player.fy=mvy; }
   aimBrkTick();                                                                     // (PT1 K1) keys/pad with a bow or a staff: the breakable a shot would lean onto wears its ring
   // THE ACTION MACHINE: the current action's phases (the blade arrives at act) — then a held button or a buffered press starts the next
   actTick(dt,false); if(!ISL) return;                                               // (a reflected blow can KO you)
-  oocTick(dt); const slR=stats().slowR||0, mvK=(player.oocK||1)*(player.act ? (player.act.ph==='rec'?player.act.mr:player.act.mw) : player.hv ? clamp(+ITUNE.hvMove,0,1) : 1)*(player.sipT>0?0.6:1)*(player.chill>0?1-0.25*(1-slR):1)*(player.zsl>0?1-player.zsl*(1-slR):1);  // you slow while you swing (§2.1) · (PX H1) while you wind THE HEAVY · while you sip (§2.11) · CHILLED −25% (§2.8 — C6a Sure-footed: 30% less of it) · (C8a) in a foe's cloud (the pollen −40%)
+  oocTick(dt); const slR=stats().slowR||0, mvK=(player.oocK||1)*(player.act ? (player.act.ph==='rec'?player.act.mr:player.act.mw) : player.hv ? clamp(player.hv.full ? +ITUNE.hvMoveF : +ITUNE.hvMove,0,1) : 1)*(player.sipT>0?0.6:1)*(player.chill>0?1-0.25*(1-slR):1)*(player.zsl>0?1-player.zsl*(1-slR):1);  // you slow while you swing (§2.1) · (PX H1 · STEEL) while you charge THE HEAVY (× hvMove — once full, and in its grace, × hvMoveF) · while you sip (§2.11) · CHILLED −25% (§2.8 — C6a Sure-footed: 30% less of it) · (C8a) in a foe's cloud (the pollen −40%)
   if(player.chill>0 && Math.random()<dt*6) ifx.push({k:'p', x:player.x+(Math.random()-0.5)*10, y:player.y-4, vx:0, vy:10, t:0, life:0.4, c:'#bfe6ff'});
   if(player.pois && player.pois.length && Math.random()<dt*5) ifx.push({k:'p', x:player.x+(Math.random()-0.5)*8, y:player.y, vx:0, vy:14, t:0, life:0.45, c:'#9be85a'});   // (poisoned: a green drip)
   if(player.pull){ pullTick(dt); }                                                  // (C5b Harpoon Line: the rope reels you in to a big foe)
@@ -13747,8 +13747,8 @@ function drawClaimFlag(){ if(!iflag) return; const [fx,fy]=iwp(flagX(),flagY()),
   pctx.drawImage(b.cv,fx-b.ax,fy-b.ay+2); }
 const IZ={z:1, x0:0, y0:0};                                                                                        // the blit's push-in: × and the buffer rect's origin
 function izX(bx){ return (bx-IZ.x0)*IZ.z*IKX; } function izY(by){ return (by-IZ.y0)*IZ.z*IKY; }       // buffer → screen (CSS px), through the push-in
-function izUpdate(dt){ let zt=1; if(ITUNE.claimZoom>0 && iflag && !iflag.done && iflag.t>0.15 && iflag.t<40){ const k=Math.max(1,Math.round(PIX_SCALE*DPR)); zt=(k+1)/k; }   // (settles on a WHOLE texel bigger: k → k+1 device px)
-  IZ.z+=(zt-IZ.z)*(1-Math.exp(-(zt>IZ.z?5:4)*dt)); if(Math.abs(zt-IZ.z)<0.004) IZ.z=zt;
+function izUpdate(dt){ let zt=1; const k=Math.max(1,Math.round(PIX_SCALE*DPR)); if(ITUNE.claimZoom>0 && iflag && !iflag.done && iflag.t>0.15 && iflag.t<40) zt=(k+1)/k;   // (settles on a WHOLE texel bigger: k → k+1 device px)
+  if(player.hvPz>0){ player.hvPz=Math.max(0,player.hvPz-dt); const n=Math.max(0,Math.round(+ITUNE.hvZoom||0)); IZ.z=player.hvPz>0 && n>0 ? Math.max(zt,(k+n)/k) : zt; } else { IZ.z+=(zt-IZ.z)*(1-Math.exp(-(zt>IZ.z?5:4)*dt)); if(Math.abs(zt-IZ.z)<0.004) IZ.z=zt; }   // (STEEL) THE HEAVY's camera PUNCH: hvZoom whole texels in for 0.25 s of real time (a freeze can't stretch it) — snapped in & out, always on the grid
   if(IZ.z===1){ IZ.x0=0; IZ.y0=0; return; }
   const sw=IW/IZ.z, sh=IH/IZ.z, fx0=iflag?(flagX()+player.x)/2:player.x, fy0=iflag?(flagY()-30+player.y)/2:player.y, P=iw2p(fx0,fy0);
   IZ.x0=clamp(Math.round(P[0]-sw/2),0,Math.max(0,Math.floor(IW-sw))); IZ.y0=clamp(Math.round(P[1]-sh/2),0,Math.max(0,Math.floor(IH-sh))); }
@@ -16677,7 +16677,7 @@ function editPad(P){ const E=DK.edit; if(!E) return; if(inDev==='pad' && E.dev==
   if(P('map')){ deckEditToggle(false); mapOpen=true; openFullMap(); return; }   // (C13: the chart from decorating, as the keys' M)
   if(P('attack')) editAct(); else if(P('deck')) editRotate(1); else if(P('skill2')) editStow(true);
   if(P('skill4')) editCycle(-1); else if(P('interact')) editCycle(1);
-  if(P('skill6')) editFilter(-1); else if(P('skill5')) editFilter(1); }
+  if(P('heavy')) editFilter(-1); else if(P('skill5')) editFilter(1); }   // (STEEL: the triggers filter — LT is the 'heavy' role now, skill slot 6 moved to D→)
 function editHit(){ const E=DK.edit, L=DK.L[E.lv]; if(!L || E.mx==null) return -1; const p=editLocal(E.mx,E.my); let best=-1, by=-1e9;   // the mouse: the front-most piece whose picture is under it, else what's on its tile
   for(const q of L.dfurn){ const o=decorSpr(q.d.id,q.r), X=q.cx-o.ax, Y=q.by-o.ay; if(p.x>=X && p.x<X+o.w && p.y>=Y && p.y<Y+o.h && q.sy>by){ by=q.sy; best=q.i; } }
   if(best>=0) return best;
@@ -16747,7 +16747,7 @@ function dstoreRender(){ const E=DK&&DK.edit, el=document.getElementById('dstore
   for(const id of L){ const d=DECOR_BY[id], n=editHeldN(id), o=decorSpr(id,0), m=Math.max(o.w,o.h), k=Math.min(2,36/m), fp=decorFp(id,0), inH=E.held&&E.held.id===id;
     const tip=decorName(id)+' — '+fp[0]+'×'+fp[1]+(d.lay==='rug'?' rug':d.lay==='wall'?' · hangs on a wall':'')+(d.where==='in'?' · indoors':d.where==='out'?' · the open deck':'')+(TG[d.act]?' · '+TG[d.act]:d.li?' · lights up':'')+(d.rot>1?' · turns':'')+' · ×'+n;
     h+='<div class="gtile dstile'+(id===E.sel?' sel':'')+(inH?' inh':'')+((SHIP.sto[id]|0)>0?'':' dz')+'" data-dc="'+id+'" title="'+shipEsc(tip)+'"><img draggable="false" alt="" src="'+decorURL(id)+'" style="width:'+Math.round(o.w*k)+'px;height:'+Math.round(o.h*k)+'px"><i>×'+n+'</i></div>'; }
-  h+='</div><div class="dshint">'+(pad ? padGlyph('skill4')+' / '+padGlyph('interact')+' pick  ·  '+padGlyph('skill2')+' take up / stow  ·  '+padGlyph('attack')+' set down / lift  ·  '+padGlyph('deck')+' turn  ·  '+padGlyph('skill6')+' / '+padGlyph('skill5')+' filter  ·  '+padGlyph('cancel')+' done'
+  h+='</div><div class="dshint">'+(pad ? padGlyph('skill4')+' / '+padGlyph('interact')+' pick  ·  '+padGlyph('skill2')+' take up / stow  ·  '+padGlyph('attack')+' set down / lift  ·  '+padGlyph('deck')+' turn  ·  '+padGlyph('heavy')+' / '+padGlyph('skill5')+' filter  ·  '+padGlyph('cancel')+' done'
     : 'click a piece to carry it — or drag it onto the deck  ·  Tab ⇆ pick  ·  R / right-click / the wheel turn  ·  drop it back here to stow')+'</div>';
   el.innerHTML=h; const s=el.querySelector('.dstile.sel'); if(s && s.scrollIntoView) try{ s.scrollIntoView({block:'nearest', inline:'nearest'}); }catch(_){}
   E.barH=el.offsetHeight||E.barH; if(SAGA_HLS.size) sagaHlApply(); }   // (INTROSTORY C6: a lesson's pick in the stores keeps its gold outline across a re-render — D4's sextant)
@@ -20321,7 +20321,7 @@ function scnTear(S){ scnGullOut(); const b=scnEl('scn'); b.classList.add('hidden
 function scnEnd(){ const S=SCN; if(!S || S.st==='out') return; S.st='out'; S.L=null; if(S.cam && S.cam.on && S.cam.m!=='back') scnCamBackOp({t:0.4},0); else if(S.cam) S.cam.zt=0; if((!S.cine || SCN_DEV.auto || S.lb<=0) && !scnCamBusy()) scnFinish(); }   // the letterbox eases out, then it's over (C3: a camera still away eases home with it, 0.4 s)
 function scnFinish(){ const S=SCN; if(!S) return; SCN=null; scnTear(S);
   for(const k of SCN_HELD) SCN_LATCH.add(k); SCN_HELD.clear(); scnPadLatch(); SCN_AFT=SCN_TY.after;   // (a key — or a pad button — held through the last line waits to be released: a Space never drops her sail, an E never docks)
-  for(const k of SCN_OUT){ if(k==='mouse0' || k==='mouse2'){ if(mode==='island'){ if(k==='mouse0'){ mouseL=true; doSlash(); } else mouseR=true; } } else { keys[k]=true; if(k==='j' && mode==='island') doSlash(); } } SCN_OUT.clear();   // (IS1 FIX: a key first pressed while the letterbox eased out, still down — held for real now: she walks the moment it's gone · PX: pressed for real — it strikes, and held it winds a heavy)
+  for(const k of SCN_OUT){ if(k==='mouse0' || k==='mouse2'){ if(mode==='island'){ if(k==='mouse0'){ mouseL=true; doSlash(); } else mouseR=true; } } else { keys[k]=true; if(k==='j' && mode==='island') doSlash(); } } SCN_OUT.clear();   // (IS1 FIX: a key first pressed while the letterbox eased out, still down — held for real now: she walks the moment it's gone · PX: pressed for real — it strikes, and held the chain runs on · STEEL: a Shift let through here is a fresh press — THE HEAVY's charge, once learned)
   scnSeen(S); queueSave(); }
 function scnSeen(S){ if(SAGA && !S.S.dev){ if(S.S.once!==0) SAGA.seen[S.id]=1; if(SAGA.f.cut===S.id){ delete SAGA.f.cut; delete SAGA.f.cutI; } sagaEvent('scene',S.id); } }   // (read to its last line: seen · no longer cut · C4a: the step machine hears it)
 function scnAbort(why){ const S=SCN; if(!S) return; SCN=null;               // 'mode' (the mode changed under it) · 'quit' (Save & quit to title) · 'begin' (a new voyage) · 'dev' — no easing, never marked seen
@@ -21911,7 +21911,7 @@ Object.assign(window.__saga,{
  *  PROJECT INTROSTORY — ASHORE (C8). THE GUILD'S ISLE keeps one shape for ever (TUTL — 5 clearings: the landing, fight A, fight B, the
  *  hoard, one cache) and, while the guided voyage runs, plays gentle (TUTP): fight A 3 sleepers · fight B 4 + 4 swarm and a powder keg ·
  *  the cache 2 · the Great Boar alone at ×0.55 · no traps, set pieces, grottoes or ✕ · a rock by the landing. THE LESSONS: A1 the landing
- *  (a_land — Nell's portrait "from the longboat", then the HUD tour) · A3 the tapped 1 · 2 · FINISHER, then the HEAVY (held) · a_tide when fight A falls (the Tide,
+ *  (a_land — Nell's portrait "from the longboat", then the HUD tour) · A3 the tapped 1 · 2 · FINISHER (STEEL: the HEAVY left it — a ✦ Tree move) · a_tide when fight A falls (the Tide,
  *  the dash), then the compass chip · A4 the dash & the PERFECT DASH (its card stays quiet — the chip teaches it) · A7–A9 fight B as one
  *  group, any order (spend the Tide · a keg · the flask) · A10 the Great Boar (a_boar at its door, asleep) · A11 crack the hoard, your flag
  *  · A12 signal the ship · A13 the ledger (X1 counts the first claims in full), then a_claim. The GUILD strip at the bottom names the keys
@@ -22013,7 +22013,7 @@ Object.assign(SCN_AT,{ islQ:()=>mode==='island' && !!ISL && !ISL.cave && !islRou
 Object.assign(SCENES,{
   a_land:{where:'island', at:'islQ', intro:1, plate:'from the longboat', s:[   // (A1 · ≥ 1 s ashore, nothing roused — then the HUD tour)
     ['nell','neutral','Walk with [[WASD|lstick]]; {aim}. I’m watching from the longboat.'],
-    ['nell','neutral','Tap {key:attack} — one, two, then the FINISHER. Hold it after a blow, let go: a HEAVY.'] ]},
+    ['nell','neutral','Tap {key:attack} — one, two, then the FINISHER.'] ]},   // (STEEL: THE HEAVY left the guided isle — it is a ✦ Tree move now)
   a_tide:{where:'island', at:'islQ', intro:1, plate:'from the longboat', s:[   // (fight A won — nothing roused)
     ['nell','neutral','Hits fill your TIDE. Spend it on a skill — {key:skill2}. Skills hit three to five times harder.'],
     ['nell','neutral','{key:dash} dashes through attacks. Press it again just as you land: a free PERFECT DASH.'] ]},
@@ -22029,13 +22029,13 @@ sagaRows([
     away:SAGA_AAW, pred:()=>tutDone('h') || (SAGA_RT.a1t||0)>=14,   // (the HUD tour told — or 14 s after her words)
     tick(dt){ sagaCoachSet(this); if(SAGA.seen.a_land) SAGA_RT.a1t=(SAGA_RT.a1t||0)+dt; },
     arm(o){ SAGA_RT.a1t=0; if(o.go) sagaAPre('A1'); else if(!o.resume) sagaAGot(); }, giveK:'i', give(){}, resume(){ sagaAResume(); }, prep(){ tutMark('land'); tutMark('h'); }},
-  {id:'A3', area:'A', n:'The combo — tap 1 · 2 · FINISHER · hold: the HEAVY', where:'island', need:sagaANeed, isle:sagaAIsle, early:1,
-    subs:[ {t:'Strike — tap {key:attack}: 1 · 2 · FINISHER', sub:'The third blow is the big one.', ok:()=>!!(SAGA.got.finisher || SAGA.got['secure:fight'])},   // (a finisher on a foe — or fight A won without one, as ever)
-      {t:'The HEAVY — hold {key:attack}, let go when the ring fills', get sub(){ return sagaHvHelp() ? 'Keep holding — let go only when the ring turns white.' : 'Slow to wind up. Worth every second.'; }, ok:()=>sagaHvDone()} ],   // (PX — a full let-go · hvOn 0 · or the ladder)
+  {id:'A3', area:'A', n:'The combo — tap 1 · 2 · FINISHER', where:'island', need:sagaANeed, isle:sagaAIsle, early:1,
+    subs:[ {t:'Strike — tap {key:attack}: 1 · 2 · FINISHER', sub:'The third blow is the big one.', ok:()=>!!(SAGA.got.finisher || SAGA.got['secure:fight'])} ],   // (a finisher on a foe — or fight A won without one, as ever)
+    pips:()=>null,   // (STEEL: one goal, no pips — THE HEAVY left the guided isle, a ✦ Tree move now taught by its own card · a voyage saved on the old 2nd goal resumes with its sub clamped to 1 — sagaArm — so A3 is done; INTRO_K.hvHelp/hvGiveUp & the sagaHv* helpers are idle)
     away:SAGA_AAW, tgt:()=>sagaPackTgt(sagaFightCl(0)),
-    coach:()=>(SAGA.sub|0)>=1 ? {lead:sagaHvHelp() ? 'keep holding — let go when the ring turns white' : '', items:[['attack','hold — let go when the ring fills: HEAVY']]} : {items:[['attack','tap — 1 · 2 · FINISHER']]},
-    tick(dt){ sagaCoachSet(this); if((SAGA.sub|0)>=1){ sagaHvSeen(); SAGA_RT.a3h=(SAGA_RT.a3h||0)+dt; } },
-    arm(o){ if(SAGA.got.heavy) sagaHvSeen(); SAGA_RT.a3h=0; if(!o.resume) SAGA.n.hvEarly=0; if(o.go) sagaAPre('A3'); }, giveK:'i', give(){}, resume(){ sagaAResume(); }},   // (PX: a heavy done before A3 armed — its card never pops later)
+    coach:()=>({items:[['attack','tap — 1 · 2 · FINISHER']]}),
+    tick(){ sagaCoachSet(this); },
+    arm(o){ if(o.go) sagaAPre('A3'); }, giveK:'i', give(){}, resume(){ sagaAResume(); }},
   {id:'A4', area:'A', n:'The dash — and the perfect one', where:'island', need:sagaANeed, isle:sagaAIsle, early:1,
     chip:{t:'Dash — [[Space|dash]] · press again as you land: a free PERFECT DASH', get sub(){ return 'Two charges. Through attacks, not into them.'+(SAGA && (SAGA.n.dashN|0)>=INTRO_K.dashHelp ? ' Wait for the end — then press.' : ''); }},
     away:SAGA_AAW, ev:'pdash', pred:()=>(SAGA.n.dashN|0)>=INTRO_K.dashGiveUp[0] || SAGA.sT>=INTRO_K.dashGiveUp[1],   // (the ladder: 6 dashes — the help · 12, or a minute — done)
@@ -24117,7 +24117,7 @@ function islStep(dt){
     else { let live=dt;
       if(hitStop>0){ const f=Math.min(dt,hitStop), ex=hsX>0; hitStop-=f; if(hitStop<1e-6) hitStop=0; hsX=Math.max(0,hsX-f); actTick(f,true); metTick(f,ex?0:1); live=dt-f; }   // THE WORLD FREEZE (§2.2): only your recovery runs on — it eats the freeze (the meters leave H5 & the 'you' freeze out of S9) · exact: a freeze ending mid-frame hands the rest of the frame back
       if(live>1e-4 && !(hitStop>0) && ISL){ const k=slowT>0?slowK:1; slowT=Math.max(0,slowT-live); updateIsland(live*k); metTick(live,0); } } }   // a live step (a boss's death & the level-up nova play in slow motion) · menus/maps pause it
-  else if(player.hv) player.hv=null; }   // (PX H1) a menu, the satchel, a map, a card or a story scene holds the isle: a charge is dropped — it never fires as it closes (the arm stays while the strike is held)
+  else { if(player.hv || player.hvW) hvDrop(); player.hvP=hvHeld(); } }   // (PX H1 · STEEL) a menu, the satchel, a map, a card or a story scene holds the isle: a charge (or a Shift press waiting) is dropped — it never fires as it closes · a Shift pressed or held under it waits for its release
 window.__frameErr=0;                             // frames that threw (the harness and the DEV pip read it — CRAWL 2.0: it must stay 0)
 const FT=new Float32Array(600); let ftN=0;       // the crawl's last 600 frame costs (ms) — the meters' p95 (S20)
 function frame(ts){

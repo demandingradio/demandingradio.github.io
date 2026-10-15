@@ -22,16 +22,16 @@ Load-time statements: original line 25164 (build 5109cd5), WSPR, a literal with 
   and 25250 (PSPR.ctx=getContext), together and in that order, needing only the DOM; the rest are literal consts and functions.
 */
 /* (PT1 K2) THE FINISHERS' FLOURISH — whole texels: a gold cone's SHOCK ARC (R+2…R+3, rolling out to R+10, gone in 0.2 s) · the lunge's 3 pale STREAKS
-   (one every 0.03 s, each fading) · EARTHSPLITTER's FISSURE (a dark crack, its orange glow the first 0.15 s) */
+   (one every 0.03 s, each fading) · EARTHSPLITTER's FISSURE (a dark crack, its orange glow the first 0.15 s — THE HEAVY's ground cracks glow white-gold: gc) · THE HEAVY's flash */
 const STY_PAL={w:['#dfe8f6','#f2f6ff','#ffffff','#141a28'], c:['#a8cdf0','#bcdeff','#f0f8ff','#0e1a2a'], k:['#e8c8a0','#ffe0b8','#fff8e8','#2a1a0a'], h:['#c8a878','#e0c898','#fff3d8','#2a1a0a'], g:['#ffc450','#ffe39a','#fff8dc','#46220a']};   // the smear palettes (faint · arc · edge · rim): w white · c cool · k warm · h haft · g gold
-function drawFinFx(s){ for(const f of ifx){ const k=f.k; if(k!=='shock' && k!=='lunge' && k!=='fissure') continue; const p=clamp(f.t/f.life,0,1);
+function drawFinFx(s){ for(const f of ifx){ const k=f.k; if(k!=='shock' && k!=='lunge' && k!=='fissure' && k!=='hvfl') continue; const p=clamp(f.t/f.life,0,1); if(k==='hvfl'){ if(!(last-f.rt<33)) continue; const S=f.sh, [sx,sy]=iwp(f.x,f.y), Rr=Math.round((S.k==='line'?S.L:S.R)*s); pctx.fillStyle='#ffffff'; pctx.globalAlpha=0.55; if(S.k==='cone') pxSect(pctx,sx,sy,Math.round(Rr*0.42),Rr,f.a,S.H); else if(S.k==='line') pxLane(pctx,sx,sy,f.a,Rr,S.W*s/2,S.W*s/2); else pxEll(pctx,sx,sy,Rr,Math.round(Rr*0.8)); continue; }   // (PROJECT STEEL) THE HEAVY's white FLASH over its whole blow — 2 frames of REAL time (its freeze holds the world, not the flash)
     if(k==='shock'){ const [sx,sy]=iwp(player.x,player.y), Rr=Math.round(f.R*s)+Math.round((2+8*p)*s); pctx.fillStyle='#46220a'; pctx.globalAlpha=0.45*(1-p); pxSect(pctx,sx,sy,Rr+2,Rr+2,f.a,f.h);
       pctx.fillStyle='#fff3c0'; pctx.globalAlpha=1-p; pxSect(pctx,sx,sy,Rr,Rr+1,f.a,f.h); }
     else if(k==='lunge'){ const [sx,sy]=iwp(player.x,player.y), c=Math.cos(f.a), si=Math.sin(f.a), L=f.L*s, r0=player.r*s;
       for(let j=0;j<3;j++){ const q=(f.t-0.03*j)/0.09; if(q<0||q>1) continue; const o=(j-1)*f.W*s/3; pctx.fillStyle=j===1?'#fff8dc':'#e8eef4'; pctx.globalAlpha=0.9*(1-q);
         pxLine(sx+c*r0*(1+q)-si*o, sy+si*r0*(1+q)+c*o, sx+c*L-si*o, sy+si*L+c*o); } }
     else { const P=f.pts, g=p<0.33?1-p/0.33:0;                                                      // the fissure: its glow first, the crack lingers
-      if(g>0){ pctx.fillStyle='#ff9a3c'; pctx.globalAlpha=0.85*g; for(let j=1;j<P.length;j++){ const [x0,y0]=iwp(P[j-1][0],P[j-1][1]), [x1,y1]=iwp(P[j][0],P[j][1]); pxLine(x0,y0-1,x1,y1-1); pxLine(x0,y0+1,x1,y1+1); } }
+      if(g>0){ pctx.fillStyle=f.gc||'#ff9a3c'; pctx.globalAlpha=0.85*g; for(let j=1;j<P.length;j++){ const [x0,y0]=iwp(P[j-1][0],P[j-1][1]), [x1,y1]=iwp(P[j][0],P[j][1]); pxLine(x0,y0-1,x1,y1-1); pxLine(x0,y0+1,x1,y1+1); } }
       pctx.fillStyle='#1a0e04'; pctx.globalAlpha=Math.min(1,1.6*(1-p)); for(let j=1;j<P.length;j++){ const [x0,y0]=iwp(P[j-1][0],P[j-1][1]), [x1,y1]=iwp(P[j][0],P[j][1]); pxLine(x0,y0,x1,y1); } } }
   pctx.globalAlpha=1; }
 /* (C5b) THE GEMS' FX — whole texels, no allocation: a RING (a nova, a roar, a ward, a dance step) · a ZAP (lightning: a jittered polyline) · a coral SPIKE ·
@@ -293,7 +293,7 @@ function wPose(pfa,prk){ const A=player.act||(player.hv&&player.hv.A), W=wpnOf()
   else if(pose==='sweep'){ const H=c.sh.H*Math.PI/180, s0=pfa-dir*H, lo=Math.round(prk*0.45), e=s0+dir*2*H, q=pfa+(W_REST[W]||0.6), d=Math.atan2(Math.sin(q-e),Math.cos(q-e)), u=(A.ph==='rec' && A.act>0.01)?clamp((r-0.4)/0.6,0,1):0;
     R.a=wd ? s0-dir*0.6*w : u>0 ? e+d*u*u*(3-2*u) : s0+dir*2*H*p; R.lg=p>0&&p<1 ? Math.sin(p*Math.PI)*prk*0.3 : 0; R.dy=wd ? Math.round(lo*w) : A.ph==='act' ? lo : Math.round(lo*(1-r)); R.bd=(wd ? w>0.5 : A.ph==='act' || r<0.6) ? 1 : 0; }   // (STEEL) the SWEEP (the sword's 4th): a LOW back-hand — wound back across you, swept close over the ground through its whole 180°, then (u) brought back down to your guard, never left raised (dy: the blade drawn lower · bd: you crouch a texel)
   else if(pose==='lunge'){ const L=prk*1.5, b=prk*0.3; R.a=pfa; R.lg=wd ? -prk*0.5*w : A.ph==='act' ? -prk*0.5+(L+prk*0.5)*p : L*(1-r); R.bl=Math.round(wd ? -b*0.5*w : A.ph==='act' ? b : b*(1-r)); }   // (STEEL) the LUNGE (the sword's 5th): coiled back, then you & the blade drive forward together (bl: your body leans along your facing — the 22u step itself is real, drawExplorerPix trails it), eased home
-  return R; }
+  if(player.hv && !player.act) R.bd=Math.max(R.bd||0,1); return R; }   // (STEEL) charging THE HEAVY you sink a texel into the cocked finisher's pose — you rise as it strikes
 /* THE WEAPON LAYER (C5a — §15's split): the body bakes without its weapon; each weapon look is its own little texel sprite per 1/32 turn (WSPR), its
    grip at the anchor, drawn on the grid at your hand · the off-hand's piece (a shield, a quiver on your back, a focus) one sprite per facing, a second
    dagger in your off hand. Built with the pixel kit (no read-back), kept (LRU) — WSPR.bk counts the builds (none once warmed: plWarm). */
@@ -448,16 +448,18 @@ function drawExplorerPix(){
   if(back) pctx.drawImage(W.cv, wx-W.ax, wy-W.ay);                                                                 // (PX A2) …the weapon under you
   pctx.drawImage(C.cv, bX+C.ox, bY+C.oy);
   if(player.pdFree && player.dashT>0 && itime-player.pdT<0.09){ const ga=pctx.globalAlpha; pctx.globalAlpha=0.85*(1-(itime-player.pdT)/0.09); pctx.drawImage(creamOf(C).cv, bX+C.ox, bY+C.oy); pctx.globalAlpha=ga; }   // (PT2 X2) the perfect dash's flash: you, lit cream for a breath
+  if(itime-player.hvFl<0.06 && C!==PIX_NONE){ const ga=pctx.globalAlpha; pctx.globalAlpha=0.85*(1-(itime-player.hvFl)/0.06); pctx.drawImage(creamOf(C).cv, bX+C.ox, bY+C.oy); pctx.globalAlpha=ga; }   // (PROJECT STEEL) THE HEAVY's charge turns FULL: you, lit cream for 0.06 s
   if(O && ol!=='quiver' && !oB) pctx.drawImage(O.cv, ox-O.ax, oy-O.ay);                                            // the off-hand's piece on your far arm (a shield, a focus, a second dagger)
   if(!back) pctx.drawImage(W.cv, wx-W.ax, wy-W.ay);                                                                // THE WEAPON in your hand, posed (whole texels, never baked into you)
   pctx.globalAlpha=1;
-  { const H=player.hv, A=player.act||(H&&H.A); if(A && A.gth && A.ph==='wind'){ const q=H?clamp(H.t/Math.max(0.05,+ITUNE.hvTime||0.55),0,1):A.t/Math.max(1e-3,A.wind); if(q>=0.5){ const L=Math.max(3,wLen(look,pr,prk)), tx=Math.round(wx+Math.cos(wa)*L), ty=Math.round(wy+Math.sin(wa)*L), big=q>=0.9 || A.W==='bow' || A.W==='staff' || A.W==='daggers', n=big?2:1;   // (PT1 K2) the finisher GATHERS: a white star on the weapon's tip from half its wind-up — a 2-texel cross flash at 90% (G6 fix: the bow's, the staff's & the twin stab's whole gather — their draws are short)
+  { const H=player.hv, A=player.act||(H&&H.A); if(A && A.gth && A.ph==='wind'){ const q=H?clamp(H.t/hvT(),0,1):A.t/Math.max(1e-3,A.wind); if(q>=0.5){ const L=Math.max(3,wLen(look,pr,prk)), tx=Math.round(wx+Math.cos(wa)*L), ty=Math.round(wy+Math.sin(wa)*L), big=q>=0.9 || A.W==='bow' || A.W==='staff' || A.W==='daggers', n=big?2:1;   // (PT1 K2) the finisher GATHERS: a white star on the weapon's tip from half its wind-up — a 2-texel cross flash at 90% (G6 fix: the bow's, the staff's & the twin stab's whole gather — their draws are short)
       pctx.fillStyle='#ffd86b'; if(big){ pctx.globalAlpha=0.5; pctx.fillRect(tx-3,ty,7,1); pctx.fillRect(tx,ty-3,1,7); } pctx.globalAlpha=big?0.75:0.45; pctx.fillRect(tx-1,ty-1,3,3); pctx.globalAlpha=1; pctx.fillStyle='#ffffff'; pctx.fillRect(tx-n,ty,2*n+1,1); pctx.fillRect(tx,ty-n,1,2*n+1); } } }
-  if(player.hv){ const H=player.hv, q=clamp(H.t/Math.max(0.05,+ITUNE.hvTime||0.55),0,1), R=Math.round(pr*2.1)+2, cy=Y-bob+Math.round(pr*0.3);   // (PX H1) THE HEAVY's ring: gold as it fills (clockwise from the top), white & pulsing at full — one texel wide, on the grid
+  if(player.hv){ const H=player.hv, q=H.full?1:clamp(H.t/hvT(),0,1), R=Math.round(pr*2.1)+2, cy=Y-bob+Math.round(pr*0.3), w2=!H.full && q>=0.75;   // (PX H1 · STEEL) THE HEAVY's ring: gold as it fills (clockwise from the top) — 2 texels wide in its last quarter — white & pulsing at full (dimmer in the grace), on the grid
     if(H.full && LGT.on){ H._t=itime; H._x=X; H._y=cy; H._R=R; } else {                       // (PX2 FIX) in the dark the full ring waits for the light pass — drawn over it, so its white is never the lamp's peach
-    pctx.fillStyle=H.full?'#ffffff':'#ffd23f'; pctx.globalAlpha=H.full?(0.55+0.35*Math.abs(Math.sin(itime*14))):0.5;
-    if(q>0.01) pxSect(pctx,X,cy,R,R,-Math.PI/2+q*Math.PI,q*Math.PI); }                             // (pxSect: R0 = R1 → a one-texel arc round its mid-angle ± ah · ah ≥ π = the whole ring)
+    pctx.fillStyle=H.full?'#ffffff':'#ffd23f'; pctx.globalAlpha=H.full?(0.55+0.35*Math.abs(Math.sin(itime*14)))*(H.g>=0?0.6:1):w2?0.7:0.5;
+    if(q>0.01) pxSect(pctx,X,cy,w2?R-1:R,R,-Math.PI/2+q*Math.PI,q*Math.PI); }                     // (pxSect: R0 = R1 → a one-texel arc round its mid-angle ± ah · ah ≥ π = the whole ring)
     pctx.globalAlpha=1; }
+  else if(player.hvFz && itime-player.hvFz.t<0.15){ const F=player.hvFz, p=(itime-F.t)/0.15, R=Math.max(1,Math.round((Math.round(pr*2.1)+2)*(1-p))), cy=Y-bob+Math.round(pr*0.3); pctx.fillStyle='#ffd23f'; pctx.globalAlpha=0.55*(1-p); pxSect(pctx,X,cy,R,R,-Math.PI/2+F.q*Math.PI,F.q*Math.PI); pctx.globalAlpha=1; }   // (STEEL) a FIZZLE: the ring folds in to you over 0.15 s, fading
   const ax=Math.cos(fa0), ay=Math.sin(fa0), tr=pr*1.72, tx=Math.round(X+ax*tr), ty=Math.round(Y-bob+ay*tr);   // the aim tick: a whisper of three texels
   pctx.fillStyle='rgba(255,255,255,.55)'; pctx.fillRect(tx,ty,1,1);
   pctx.fillStyle='rgba(255,255,255,.3)'; pctx.fillRect(Math.round(tx-ax*1.4-ay*1.2),Math.round(ty-ay*1.4+ax*1.2),1,1); pctx.fillRect(Math.round(tx-ax*1.4+ay*1.2),Math.round(ty-ay*1.4-ax*1.2),1,1);
