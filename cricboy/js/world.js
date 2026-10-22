@@ -25,6 +25,16 @@
     BAN: { name: 'Bangladesh', country: 'BAN', bat: -5, bowl: -4, spin: 2, venues: ['Shere Bangla Stadium', 'Zahur Ahmed Chowdhury Stadium', 'Sylhet International Stadium'] },
     ZIM: { name: 'Zimbabwe', country: 'ZIM', bat: -5, bowl: -6, spin: 2, venues: ['Harare Sports Club', 'Queens Sports Club'] },
   };
+  // the County Championship (an overseas stint for the user in the English summer)
+  CB.COUNTIES = [
+    ['DUR', 'Durham', 'Riverside, Chester-le-Street'], ['DER', 'Derbyshire', 'County Ground, Derby'], ['ESS', 'Essex', 'Chelmsford'], ['GLA', 'Glamorgan', 'Sophia Gardens, Cardiff'],
+    ['GLO', 'Gloucestershire', 'Bristol'], ['HAM', 'Hampshire', 'The Rose Bowl, Southampton'], ['KEN', 'Kent', 'St Lawrence Ground, Canterbury'], ['LAN', 'Lancashire', 'Old Trafford'],
+    ['LEI', 'Leicestershire', 'Grace Road, Leicester'], ['MID', 'Middlesex', "Lord's"], ['NOR', 'Northamptonshire', 'Wantage Road, Northampton'], ['NOT', 'Nottinghamshire', 'Trent Bridge'],
+    ['SOM', 'Somerset', 'County Ground, Taunton'], ['SUR', 'Surrey', 'The Oval'], ['SUS', 'Sussex', 'County Ground, Hove'], ['WAR', 'Warwickshire', 'Edgbaston'],
+    ['WOR', 'Worcestershire', 'New Road, Worcester'], ['YOR', 'Yorkshire', 'Headingley'],
+  ].map(([id, name, ground]) => ({ id, name, ground }));
+  CB.countyById = id => CB.COUNTIES.find(c => c.id === id);
+  const COUNTY_SQUAD = ['open', 'open', 'top', 'top', 'top', 'mid', 'wk', 'ar', 'pace', 'pace', 'pace', 'pace', 'spin', 'spin'];
   CB.AUS_TEST_VENUES = ['The Gabba', 'Adelaide Oval', 'Perth Stadium', 'Melbourne Cricket Ground', 'Sydney Cricket Ground', 'Bellerive Oval'];
   const HOME_ROT = ['ENG', 'IND', 'SA', 'NZ', 'PAK', 'WI', 'SL', 'ENG', 'IND', 'SA'];
   const AWAY_ROT = ['NZ', 'SA', 'IND', 'SL', 'BAN', 'WI', 'PAK', 'ENG', 'NZ', 'IND'];
@@ -69,6 +79,7 @@
       W.nations[code] = { squad: squad.map(p => p.id), xi: [] };
     }
     for (const p of Object.values(W.players)) initPlayerState(p, r);
+    W.ref = CB.poolStrength(W);
     CB.newSeason(W);
     return W;
   };
@@ -77,6 +88,7 @@
   CB.blankStats = blankStats;
   function initPlayerState(p, r) {
     p.st = p.st || { seconds: blankStats(), shield: blankStats(), test: blankStats() };
+    if (!p.st.county) p.st.county = blankStats();
     p.rec = p.rec || [];
     p.bias = +(CB.gauss(r) * 3).toFixed(2);
     p.inj = p.inj || 0;
@@ -108,7 +120,9 @@
     mk(AWAY_ROT[k], false, [142, 152, 162], 'away');
     mk(WINTER_ROT[k], false, [250, 261, 272, 283], 'winter');
     slots.sort((a, b) => a.day - b.day);
-    W.season = { year: y, slots, cursor: 0, series, ladder: {}, ladder2: {}, results: [] };
+    W.season = { year: y, slots, cursor: 0, series, ladder: {}, ladder2: {}, results: [], lb: { shield: {}, test: {} } };
+    if (CB.seasonStartCareer) CB.seasonStartCareer(W);
+    CB.pickCaptains(W);
     for (const id of ids) { W.season.ladder[id] = { p: 0, w: 0, d: 0, l: 0, pts: 0 }; W.season.ladder2[id] = { p: 0, w: 0, d: 0, l: 0, pts: 0 }; }
   };
   CB.slotDate = function (W, slot) {
@@ -120,9 +134,9 @@
   // ---------------------------------------------------------------- form
   // how much a performance at one level counts towards selection for another: weight (how much it is looked at)
   // and value (runs/wickets scaled to the target level: 2nd XI runs are cheaper than Shield runs)
-  const LVW = { shield: { seconds: 0.7, shield: 1, test: 1.2 }, test: { seconds: 0.4, shield: 0.8, test: 1 }, seconds: { seconds: 1, shield: 1.2, test: 1.3 } };
-  const LVV = { shield: { seconds: 0.75, shield: 1, test: 1.15 }, test: { seconds: 0.6, shield: 0.85, test: 1 }, seconds: { seconds: 1, shield: 1.2, test: 1.3 } };
-  const BENCH = { bat: { seconds: 36, shield: 33, test: 38 }, wpm: { seconds: 3.6, shield: 3.2, test: 3.4 } };
+  const LVW = { shield: { seconds: 0.7, shield: 1, test: 1.2, county: 0.85 }, test: { seconds: 0.4, shield: 0.8, test: 1, county: 0.65 }, seconds: { seconds: 1, shield: 1.2, test: 1.3, county: 1.1 }, county: { seconds: 0.5, shield: 0.9, test: 1, county: 1 } };
+  const LVV = { shield: { seconds: 0.75, shield: 1, test: 1.15, county: 0.95 }, test: { seconds: 0.6, shield: 0.85, test: 1, county: 0.8 }, seconds: { seconds: 1, shield: 1.2, test: 1.3, county: 1.15 }, county: { seconds: 0.75, shield: 1, test: 1.1, county: 1 } };
+  const BENCH = { bat: { seconds: 36, shield: 33, test: 38, county: 32 }, wpm: { seconds: 3.6, shield: 3.2, test: 3.4, county: 3.3 } };
   CB.form = function (p, forLevel) {
     const w = LVW[forLevel], v = LVV[forLevel];
     let R = 0, O = 0, n = 0, wk = 0, rc = 0, bm = 0;
@@ -187,7 +201,8 @@
     const xi = ids.map(id => W.players[id]);
     xi.forEach(p => CB.prepMatchPlayer && CB.prepMatchPlayer(p));
     const k = xi.findIndex(p => p.role === 'wk');
-    return { name, short, ids, xi: xi.map(p => Object.assign({ id: p.id, name: p.first + ' ' + p.last, short: CB.shortName(p), role: p.role, user: !!p.user }, { e: p.e, bw: p.bw })), keeper: k >= 0 ? k : 6 };
+    const u = xi.find(p => p.user);
+    return { name, short, ids, prefs: u ? u.captPrefs || null : null, xi: xi.map(p => Object.assign({ id: p.id, name: p.first + ' ' + p.last, short: CB.shortName(p), role: p.role, user: !!p.user }, { e: p.e, bw: p.bw })), keeper: k >= 0 ? k : 6 };
   }
   CB.teamFromIds = teamFromIds;
 
@@ -198,12 +213,92 @@
     return out;
   }
 
+  // ---------------------------------------------------------------- captaincy
+  // Appointed at the start of each season: a senior regular with runs/wickets behind him and a cool head. If the user is
+  // the selectors' pick he gets an offer (W.offers) and the next best leads until he answers.
+  CB.captainScore = function (p, level) {
+    const st = p.st[level] || p.st.shield, T = level === 'test';
+    const seniority = Math.min(T ? 40 : 30, st.m) / 3;
+    const stature = Math.min(15, 1.5 * (st.r / (T ? 1500 : 1000) + st.w / (T ? 60 : 40)));   // runs and wickets at this level
+    const f = CB.form(p, level === 'county' ? 'shield' : level);
+    return seniority + stature + (p.a.MEN - 50) / 5 + Math.max(CB.batVal(p), CB.bowlVal(p)) / 6 + Math.max(f.bat, f.bowl) / 2 + p.bias / 2;
+  };
+  CB.pickCaptains = function (W) {
+    W.offers = (W.offers || []).filter(o => o.type !== 'captain');
+    W.aus.captainsCount = W.aus.captainsCount || 0;
+    const lead = p => p.user && p.legacy === 'leader';
+    for (const s of CB.STATES) {
+      const st = W.states[s.id];
+      const cands = st.squad.map(id => W.players[id]).filter(p => p && p.age >= (lead(p) ? 21 : 23) && p.st.shield.m >= (lead(p) ? 6 : 10) && (!st.xi.length || st.xi.includes(p.id) || p.user));
+      if (!cands.length) { st.captain = null; continue; }
+      const sc = p => CB.captainScore(p, 'shield') + (p.id === st.captain && p.age < 33 ? 4 : 0) + (lead(p) ? 4 : 0);
+      cands.sort((a, b) => sc(b) - sc(a));
+      const best = cands[0], next = cands[1] ? cands[1].id : null;
+      if (best.user && st.captain !== best.id) {
+        st.captain = next;
+        if (!best.declinedCaptain) W.offers.push({ type: 'captain', level: 'shield', team: s.id });
+      } else st.captain = best.id;
+    }
+    // Australia: from last season's Test regulars
+    const pool = (W.aus.xi || []).map(id => W.players[id]).filter(p => p && p.age >= (lead(p) ? 22 : 25) && p.st.test.m >= (lead(p) ? 8 : 12));
+    if (pool.length) {
+      const sc = p => CB.captainScore(p, 'test') + (p.id === W.aus.captain && p.age < 33 ? 5 : 0) + (lead(p) ? 4 : 0);
+      pool.sort((a, b) => sc(b) - sc(a));
+      const best = pool[0], next = pool[1] ? pool[1].id : null;
+      if (best.user && W.aus.captain !== best.id) { W.aus.captain = next; if (!best.declinedTestCaptain) W.offers.push({ type: 'captain', level: 'test' }); }
+      else W.aus.captain = best.id;
+    } else if (W.aus.captain && !W.players[W.aus.captain]) W.aus.captain = null;
+  };
+  CB.acceptCaptaincy = function (W, offer, yes) {
+    const p = CB.user(W);
+    W.offers = (W.offers || []).filter(o => o !== offer && !(o.type === offer.type && o.level === offer.level));
+    if (offer.level === 'test') { if (yes) { W.aus.captain = p.id; if (!p.capTestNo) p.capTestNo = ++W.aus.captainsCount + 48; } else p.declinedTestCaptain = true; }
+    else { if (yes) W.states[offer.team].captain = p.id; else p.declinedCaptain = true; }
+    return yes;
+  };
+  CB.isCaptain = (W, p) => W.aus.captain === p.id ? 'test' : W.states[p.team] && W.states[p.team].captain === p.id ? 'shield' : null;
+  // who leads a side in a given match: the appointed captain if he plays, else the most senior player in the XI
+  function matchCaptain(W, ids, appointed, level) {
+    if (appointed && ids.includes(appointed)) return ids.indexOf(appointed);
+    let bi = 0, bv = -1e9;
+    ids.forEach((id, i) => { const p = W.players[id]; if (!p || p.user) return; const v = CB.captainScore(p, level === 'county' ? 'shield' : level); if (v > bv) { bv = v; bi = i; } });
+    return bi;
+  }
+
+  // ---------------------------------------------------------------- county stint
+  CB.startCounty = function (W, countyId) {
+    const r = CB.rngFor(W), p = CB.user(W), S = W.season;
+    const names = new Set();
+    const squad = COUNTY_SQUAD.map(role => { const q = CB.genPlayer(r, { role, level: 'county', nat: 'ENG', avoid: names, age: 21 + Math.floor(r() * 13) }); q.team = countyId; q.county = true; initPlayerState(q, r); W.players[q.id] = q; return q.id; });
+    // fixtures through the English summer, after the Shield season
+    const from = Math.max(192, (S.slots[S.cursor] || { day: 192 }).day + 1);
+    const opps = CB.COUNTIES.filter(c => c.id !== countyId).sort(() => r() - 0.5).slice(0, 6);
+    W.county = { id: countyId, squad, xi: [], year: S.year, res: [0, 0, 0] };
+    opps.forEach((c, i) => S.slots.push({ type: 'county', day: from + 4 + i * 14, opp: c.id, home: i % 2 === 0, no: i + 1, done: false }));
+    S.slots.sort((a, b) => (a.done === b.done ? a.day - b.day : a.done ? -1 : 1));
+    S.cursor = S.slots.findIndex(x => !x.done); if (S.cursor < 0) S.cursor = S.slots.length;
+    p.countyStints = p.countyStints || [];
+    p.countyStints.push({ y: S.year, id: countyId });
+  };
+  CB.endCounty = function (W) {
+    if (!W.county) return;
+    for (const id of W.county.squad) delete W.players[id];
+    W.county = null;
+  };
+  function countyOpponentXI(W, r, oppId) {
+    const XI = ['open', 'open', 'top', 'top', 'mid', 'ar', 'wk', 'pace', 'pace', 'pace', 'spin'];
+    const names = new Set();
+    const xi = XI.map(role => { const q = CB.genPlayer(r, { role, level: 'county', nat: 'ENG', avoid: names }); q.team = oppId; return q; });
+    const tail = xi.slice(7).sort((a, b) => CB.batVal(b) - CB.batVal(a));
+    return xi.slice(0, 7).concat(tail);
+  }
+
   // ---------------------------------------------------------------- recording
   CB.record = function (W, M, level, teamIds, r) {
     const lines = CB.matchLines(M);
     lines.forEach((side, ti) => side.forEach((L, pi) => {
       const p = W.players[teamIds[ti][pi]]; if (!p) return;
-      const s = p.st[level];
+      const s = p.st[level] || (p.st[level] = blankStats());
       s.m++;
       const rec = { lv: level, bat: [], w: 0, rc: 0, b: 0, y: W.season.year };
       for (const b of L.bat) {
@@ -223,6 +318,12 @@
       if (mw >= 10) s.w10++;
       if (r && !p.user) { const inj = CB.rollInjury(p, r, rec.b / 6, false); if (inj) p.inj = inj + 1; }
       s.ct += L.ct; s.st += L.st;
+      // season leaderboards (Shield, Australian Tests)
+      if ((level === 'shield' || (level === 'test' && p.nat === 'AUS')) && W.season.lb) {
+        const b = W.season.lb[level][p.id] || (W.season.lb[level][p.id] = { r: 0, o: 0, i: 0, w: 0, rc: 0, h: 0 });
+        for (const x of L.bat) { b.r += x.runs; b.i++; if (x.out) b.o++; if (x.runs >= 100) b.h++; }
+        b.w += rec.w; b.rc += rec.rc;
+      }
       p.rec.push(rec); if (p.rec.length > 12) p.rec.shift();
     }));
     return lines;
@@ -237,7 +338,7 @@
     const r = CB.rngFor(W);
     const out = { slot, results: [], user: null };
     const user = W.userId ? W.players[W.userId] : null;
-    const setCtx = (level, home, final) => { if (user) user._ctx = { level, home, final, debut: !user.debut || !user.debut[level] }; };
+    const setCtx = (level, home, final) => { if (user) user._ctx = { level, home, final, debut: !user.debut || !user.debut[level], captain: level !== 'county' && level !== 'seconds' && CB.isCaptain(W, user) === (level === 'test' ? 'test' : 'shield') }; };
     if (slot.type === 'dom') {
       const duty = onDuty(W, slot.day);
       for (const [h, a] of slot.pairs) {
@@ -255,7 +356,8 @@
           });
           const st0 = CB.stateById(h);
           setCtx(lvl, user && user.team === h, false);
-          const cfg = { level: lvl, country: 'AUS', home: 0, seed: (r() * 4294967296) >>> 0,
+          const capt = lvl === 'shield' ? [matchCaptain(W, sides[0], W.states[h].captain, 'shield'), matchCaptain(W, sides[1], W.states[a].captain, 'shield')] : [matchCaptain(W, sides[0], null, 'shield'), matchCaptain(W, sides[1], null, 'shield')];
+          const cfg = { level: lvl, country: 'AUS', home: 0, seed: (r() * 4294967296) >>> 0, capt,
             teams: [teamFromIds(W, sides[0], CB.stateById(h).name + (lvl === 'seconds' ? ' 2nd XI' : ''), h), teamFromIds(W, sides[1], CB.stateById(a).name + (lvl === 'seconds' ? ' 2nd XI' : ''), a)] };
           cfg.venue = lvl === 'shield' ? st0.ground : st0.ground2;
           const M = CB.simMatch(cfg);
@@ -274,6 +376,7 @@
       const sides = [h, a].map(id => { const st = W.states[id]; st.xi = CB.pickXI(W, st.squad.filter(x => !duty.has(x)), 'shield', { prev: st.xi }); return st.xi; });
       setCtx('shield', user && user.team === h, true);
       const cfg = { level: 'shield', days: 5, country: 'AUS', home: 0, seed: (r() * 4294967296) >>> 0, venue: CB.stateById(h).ground, final: true,
+        capt: [matchCaptain(W, sides[0], W.states[h].captain, 'shield'), matchCaptain(W, sides[1], W.states[a].captain, 'shield')],
         teams: [teamFromIds(W, sides[0], CB.stateById(h).name, h), teamFromIds(W, sides[1], CB.stateById(a).name, a)] };
       const M = CB.simMatch(cfg);
       CB.record(W, M, 'shield', sides, r);
@@ -282,6 +385,25 @@
       const res = { level: 'shield', final: true, home: h, away: a, text: M.result.text + (M.result.draw ? ` - ${CB.stateById(h).name} win the Shield` : ''), venue: cfg.venue, score: scoreLine(M), champ };
       out.results.push(res);
       if (sides.some(sd => user && sd.includes(user.id))) out.user = { M, cfg, level: 'shield', sides, res, ti: sides[0].includes(user.id) ? 0 : 1 };
+    } else if (slot.type === 'county') {
+      const C = W.county, c = CB.countyById(slot.opp), mine = C && CB.countyById(C.id);
+      const away = user && onDuty(W, slot.day).has(user.id);
+      if (C && user && !away && !(user.inj > 0)) {
+        const ids = CB.pickXI(W, C.squad.concat([user.id]), 'county', { prev: C.xi, force: user.id }); // the overseas pro always plays
+        C.xi = ids;
+        const opp = countyOpponentXI(W, r, slot.opp);
+        setCtx('county', slot.home, false);
+        const t0 = teamFromIds(W, ids, mine.name, C.id);
+        const t1 = { name: c.name, short: c.id, ids: opp.map(q => q.id), xi: opp.map(q => ({ id: q.id, name: q.first + ' ' + q.last, short: CB.shortName(q), role: q.role, e: q.e, bw: q.bw })), keeper: 6 };
+        const cfg = { level: 'county', country: 'ENG', home: slot.home ? 0 : 1, seed: (r() * 4294967296) >>> 0, venue: slot.home ? mine.ground : c.ground, teams: [t0, t1],
+          capt: [matchCaptain(W, ids, null, 'county'), 0] };
+        const M = CB.simMatch(cfg);
+        CB.record(W, M, 'county', [ids, []], r);
+        if (M.result.draw || M.result.tie) C.res[2]++; else C.res[M.result.winner === 0 ? 0 : 1]++;
+        const res = { level: 'county', home: C.id, away: slot.opp, no: slot.no, text: M.result.text, venue: cfg.venue, score: scoreLine(M) };
+        out.results.push(res);
+        out.user = { M, cfg, level: 'county', sides: [ids, t1.ids], res, ti: 0 };
+      } else out.results.push({ level: 'county', home: C ? C.id : '', away: slot.opp, text: away ? 'Missed: on Test duty' : 'Missed: unavailable', skipped: true });
     } else if (slot.type === 'test') {
       const ser = S.series[slot.series], nat = CB.NATIONS[ser.opp];
       const country = ser.home ? 'AUS' : nat.country;
@@ -294,7 +416,10 @@
       W.nations[ser.opp].xi = oppXI;
       const venue = ser.home ? CB.AUS_TEST_VENUES[(slot.no - 1) % CB.AUS_TEST_VENUES.length] : nat.venues[(slot.no - 1) % nat.venues.length];
       setCtx('test', ser.home && CB.stateById(user ? user.team : 'NSW').ground === venue, false);
+      // a dropped Test captain loses the job; an absent one is covered by the senior man
+      if (W.aus.captain && !ausXI.includes(W.aus.captain) && W.players[W.aus.captain] && W.players[W.aus.captain].user) { W.aus.captain = null; out.lostCaptaincy = 'test'; }
       const cfg = { level: 'test', country, home: ser.home ? 0 : 1, seed: (r() * 4294967296) >>> 0, venue,
+        capt: [matchCaptain(W, ausXI, W.aus.captain, 'test'), matchCaptain(W, oppXI, null, 'test')],
         teams: [teamFromIds(W, ausXI, 'Australia', 'AUS'), teamFromIds(W, oppXI, nat.name, ser.opp)] };
       const M = CB.simMatch(cfg);
       CB.record(W, M, 'test', [ausXI, oppXI], r);
@@ -304,6 +429,8 @@
       out.results.push(res);
       if (user && ausXI.includes(user.id)) out.user = { M, cfg, level: 'test', sides: [ausXI, oppXI], res, ti: 0 };
     }
+    if (out.user) out.user.slot = slot;
+    if (out.user && user && out.user.cfg.capt && out.user.sides[out.user.ti][out.user.cfg.capt[out.user.ti]] === user.id) out.user.captain = true;
     slot.done = true;
     S.results.push(...out.results.map(x => Object.assign({ day: slot.day }, x)));
     S.cursor++;
@@ -312,10 +439,59 @@
     return out;
   };
 
+  // compact all-time row (kept for retired Australians)
+  CB.recordRow = p => ({ n: p.first + ' ' + p.last, t: p.team, u: !!p.user, tm: p.st.test.m, tr: p.st.test.r, ti: p.st.test.inn - p.st.test.no, th: p.st.test.h100, tw: p.st.test.w, trc: p.st.test.rc,
+    sm: p.st.shield.m, sr: p.st.shield.r, si: p.st.shield.inn - p.st.shield.no, sw: p.st.shield.w, src: p.st.shield.rc });
+  CB.allTime = function (W) {
+    const rows = (W.records ? W.records.gone : []).slice();
+    for (const p of Object.values(W.players)) if (p.nat === 'AUS' && !p.club && (p.st.test.m || p.st.shield.m)) rows.push(CB.recordRow(p));
+    return rows;
+  };
+  CB.leaders = function (W, level, key, n) {
+    const lb = W.season.lb && W.season.lb[level] || {};
+    return Object.entries(lb).map(([id, b]) => ({ p: W.players[id], ...b })).filter(x => x.p).sort((a, b) => b[key] - a[key]).slice(0, n || 5);
+  };
+
   function scoreLine(M) {
     return M.inns.map(I => `${M.teams[I.bat].short || M.teams[I.bat].name} ${I.runs}${I.wk < 10 ? '/' + I.wk : ''}${I.closed === 'declared' ? 'd' : ''}`).join(' · ');
   }
   CB.scoreLine = scoreLine;
+
+  // ---------------------------------------------------------------- keeping the world calibrated
+  // Aging hits bowlers' pace harder than batters' skills, so left alone a world drifts batting-friendly over the years.
+  // Each pool (Australian domestic cricket, each Test nation) is nudged back to the strength it had when the world
+  // was made, which is the strength the engine was calibrated against. The user is never touched.
+  const BAT_K = ['DEF', 'PACE', 'SPIN', 'CON'], BOWL_K = ['ACC', 'STK', 'CRA'];
+  function pools(W) {
+    const out = { AUS: CB.STATES.flatMap(s => W.states[s.id].squad) };
+    for (const code of Object.keys(CB.NATIONS)) out[code] = W.nations[code].squad;
+    return out;
+  }
+  function strengthOf(players) {
+    const bats = players.filter(p => ['open', 'top', 'mid'].includes(p.role)).map(CB.batVal).sort((a, b) => b - a);
+    const bowls = players.filter(p => p.role === 'pace' || p.role === 'spin').map(CB.bowlVal).sort((a, b) => b - a);
+    const top = (a, f) => { const n = Math.max(1, Math.round(a.length * f)); return a.slice(0, n).reduce((x, y) => x + y, 0) / n; };
+    return { bat: top(bats, 0.6), bowl: top(bowls, 0.6) };
+  }
+  CB.poolStrength = function (W) {
+    const ref = {};
+    for (const [k, ids] of Object.entries(pools(W))) ref[k] = strengthOf(ids.map(id => W.players[id]).filter(p => p && !p.user));
+    return ref;
+  };
+  CB.equalise = function (W) {
+    if (!W.ref) { W.ref = CB.poolStrength(W); return; }
+    const now = CB.poolStrength(W);
+    for (const [k, ids] of Object.entries(pools(W))) {
+      const d = now[k], ref = W.ref[k]; if (!ref) continue;
+      const db = (d.bat - ref.bat) * 0.7, dw = (d.bowl - ref.bowl) * 0.7;
+      for (const id of ids) {
+        const p = W.players[id]; if (!p || p.user) continue;
+        for (const a of BAT_K) p.a[a] = +Math.max(0, Math.min(100, p.a[a] - db)).toFixed(1);
+        if (p.bowls) for (const a of BOWL_K) p.a[a] = +Math.max(0, Math.min(100, p.a[a] - dw)).toFixed(1);
+        CB.refresh(p);
+      }
+    }
+  };
 
   // ---------------------------------------------------------------- end of season
   CB.endSeason = function (W) {
@@ -330,12 +506,14 @@
       p.bias = +(p.bias * 0.6 + CB.gauss(r) * 2).toFixed(2);
     }
     const retireP = p => p.age >= 39 ? 1 : p.age >= 37 ? 0.55 : p.age >= 35 ? 0.3 : p.age >= 33 ? 0.1 : 0;
+    W.records = W.records || { gone: [] };
+    const keep = p => { if (p.nat === 'AUS' && (p.st.test.m || p.st.shield.m >= 20)) W.records.gone.push(CB.recordRow(p)); };
     const namesOf = nat => new Set(Object.values(W.players).filter(p => p.nat === nat).map(p => p.last));
     const ausNames = namesOf('AUS');
     for (const s of CB.STATES) {
       const st = W.states[s.id];
       // retirements + delistings of fading veterans
-      st.squad = st.squad.filter(id => { const p = W.players[id]; if (p.user) return true; const gone = r() < retireP(p); if (gone) delete W.players[id]; return !gone; });
+      st.squad = st.squad.filter(id => { const p = W.players[id]; if (p.user) return true; const gone = r() < retireP(p); if (gone) { keep(p); delete W.players[id]; } return !gone; });
       // drop the weakest non-user players if the squad is full of deadwood, keep 20
       const need = STATE_SQUAD.slice();
       for (const id of st.squad) { const i = need.indexOf(W.players[id].role); if (i >= 0) need.splice(i, 1); }
@@ -352,6 +530,9 @@
       const natNames = namesOf(code);
       for (const role of need) { const p = CB.genPlayer(r, { role, level: 'test', nat: code, shift: n.bat - 3, bowlShift: n.bowl - 3, avoid: natNames, age: 21 + Math.floor(r() * 4) }); p.pot = +(3 + r() * 6).toFixed(1); p.team = code; initPlayerState(p, r); W.players[p.id] = p; ns.squad.push(p.id); }
     }
+    CB.equalise(W);
+    if (W.records.gone.length > 150) { W.records.gone.sort((a, b) => Math.max(b.tr, b.tw * 25, b.sr / 3) - Math.max(a.tr, a.tw * 25, a.sr / 3)); W.records.gone.length = 150; }
+    CB.endCounty(W);
     W.year++;
     CB.newSeason(W);
     return { summary, news };

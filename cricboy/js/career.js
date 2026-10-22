@@ -49,13 +49,16 @@
       hand: o.hand || 'R', arm: 'R', age: 17, a, caps, power: +(g() * 0.4).toFixed(2), injury: +(0.8 + r() * 0.4).toFixed(2),
       team: o.state, tier: tier.id, traits: [], momentum: null, energyBonus: 0, rest: 0, history: [], milestones: {}, honours: [],
       debut: {}, joined: W.year, coachNotes: [], seasonsAt: {},
+      fame: 0, ilog: [], blog: [], captRec: {}, captPrefs: { toss: 'auto', style: 'balanced' },
     };
     CB.refresh(p);
     CB.initPlayerState(p, r);
     p.bias = 0;
+    if (o.legacy && CB.applyLegacy) CB.applyLegacy(p, o.legacy);
     W.players[p.id] = p;
     W.states[o.state].squad.push(p.id);
     W.userId = p.id;
+    if (CB.seasonStartCareer) CB.seasonStartCareer(W);
     return p;
   };
   CB.user = W => W.players[W.userId];
@@ -216,6 +219,8 @@
     // nerves: mental game matters on debut and in Tests
     const nerves = (ctx.debut ? 0.12 : 0) + (ctx.level === 'test' ? 0.04 : 0);
     batMod += nerves * clamp((60 - p.a.MEN) / 30, 0, 1.5);
+    if (p.form && p.form.n > 0) { batMod += p.form.bat || 0; bowlMod += p.form.bowl || 0; }
+    if (ctx.captain) { const cm = CB.captainMod(p); batMod += cm; bowlMod -= cm * 0.8; }
     p.e.mod = batMod;
     if (CB.hasPerk(p, 'lucky')) p.e.luck = 1;
     if (CB.hasPerk(p, 'nightwatch')) p.e.early = -0.15;
@@ -282,6 +287,24 @@
         cands.push({ kind: 'field', I, i: Math.min(I.log.length - 1, 60), score: 1 });
       }
     }
+    if (U.captain) {
+      // captaincy calls: when to declare, and what to do about a big stand
+      let own = 0, opp = 0;
+      for (const I of M.inns) {
+        if (I.bat === ti) {
+          if (I.k === 2 && I.closed === 'declared') {
+            const i = I.log.findIndex(L => own + L.sc - opp >= 200);
+            if (i >= 0) cands.push({ kind: 'captDeclare', I, i, lead: own + I.log[i].sc - opp, score: 5 });
+          }
+          own += I.runs;
+        } else {
+          let part = 0;
+          const i = I.log.findIndex(L => { part = L.w === 'W' ? 0 : part + L.r; return part >= 80; });
+          if (i >= 0) cands.push({ kind: 'captStand', I, i, part: 80, score: 4.5 });
+          opp += I.runs;
+        }
+      }
+    }
     if (!cands.length) return null;
     cands.sort((a, b) => b.score - a.score);
     const c = cands[0];
@@ -289,11 +312,16 @@
     const L = c.I.log[c.i] || c.I.log[c.I.log.length - 1];
     const bt = M.teams[c.I.bat].short || M.teams[c.I.bat].name;
     const day = 'Innings ' + (c.I.k + 1);
-    const ctx = { score: `${bt} ${L ? L.sc : 0}/${L ? L.wk : 0}`, overs: CB.oversStr(L ? L.b : 0), runs: c.runs, need: c.need, part: c.part, opp: oname, team: tname, bowler: L && M.teams[c.I.fld].xi[L.bw] ? M.teams[c.I.fld].xi[L.bw].short : '' };
-    return { kind: c.kind, inns: c.I.k, at: c.i, title: T.title, text: T.text(ctx), situation: `${day} · ${ctx.score} · ${ctx.overs} ov`, options: T.options, after: CB.momentAftermath(M, c, me, ti) };
+    const ctx = { score: `${bt} ${L ? L.sc : 0}/${L ? L.wk : 0}`, overs: CB.oversStr(L ? L.b : 0), runs: c.runs, need: c.need, part: c.part, lead: c.lead, opp: oname, team: tname, bowler: L && M.teams[c.I.fld].xi[L.bw] ? M.teams[c.I.fld].xi[L.bw].short : '' };
+    const opts = typeof T.options === 'function' ? T.options(p) : T.options;
+    return { kind: c.kind, inns: c.I.k, at: c.i, title: T.title, text: T.text(ctx), situation: `${day} · ${ctx.score} · ${ctx.overs} ov`, options: opts, after: c.kind.startsWith('capt') ? M.result.text + '.' : CB.momentAftermath(M, c, me, ti), captain: c.kind.startsWith('capt') };
   };
   CB.lastBowlerSpin = (M, I, i) => { const L = I.log[i]; const b = M.teams[I.fld].xi[L.bw]; return b && b.bw && b.bw.t === 1; };
   const MOMENTS = {
+    captDeclare: { title: 'Declaration call', text: c => `${c.score}. You lead by ${c.lead}. The dressing room is waiting on your call.`,
+      options: [{ t: 'Declare now and back your bowlers', a: 'MEN' }, { t: 'Bat on and make it safe', a: 'CON' }, { t: 'Ten quick overs, then declare', a: 'ATT' }] },
+    captStand: { title: "Captain's call", text: c => `${c.score}. A ${c.part}-run stand. Every head on the field turns to you.`,
+      options: p => [{ t: 'Attack: three slips and a gully', a: 'MEN' }, { t: 'Spread the field and dry up the runs', a: 'CON' }, p.bowls ? { t: 'Throw the ball to yourself', a: CB.isSpinner(p) ? 'CRA' : 'STK' } : { t: 'Move yourself to short leg', a: 'FLD' }] },
     open: { title: 'New ball', text: c => `You walk out to open. ${c.opp}'s quicks have the new ball and it's hooping. ${c.bowler} at the top of his mark.`,
       options: [{ t: 'Leave everything outside off', a: 'DEF' }, { t: 'Look to drive anything full', a: 'ATT' }, { t: 'Get forward, play late, soft hands', a: 'PACE' }] },
     arrive: { title: 'Walking out', text: c => `${c.score}. You're in. Fielders chirp as you take guard against ${c.bowler}.`,
@@ -351,6 +379,15 @@
     const overs = lines.bowl.reduce((a, b) => a + b.balls, 0) / 6;
     const ev = [];
     if (!p.debut[lv]) { p.debut[lv] = { year: W.season.year, vs: M.teams[1 - U.ti].name }; if (lv !== 'seconds') ev.push({ type: 'debut', level: lv }); }
+    // detailed logs for the stats screens: [season, level, opponent, home, innings no, runs, balls, how out (0 not out), 4s, 6s, position]
+    const LVC = { seconds: 0, shield: 1, test: 2, county: 3 }[lv], vs = M.teams[1 - U.ti].short || M.teams[1 - U.ti].name, home = U.cfg.home === U.ti ? 1 : 0;
+    p.ilog = p.ilog || []; p.blog = p.blog || [];
+    for (const I of M.inns) {
+      if (I.bat === U.ti) { const b = I.bats[me]; if (b && b.in) p.ilog.push([W.season.year, LVC, vs, home, I.k, b.runs, b.balls, b.out ? b.out.kind : 0, b.f4, b.f6, me + 1]); }
+      else { const b = I.bowl[me]; if (b && (b.balls || b.wd || b.nb)) p.blog.push([W.season.year, LVC, vs, home, I.k, b.balls, b.runs, b.wk, b.md]); }
+    }
+    if (p.form && p.form.n > 0) p.form.n--;
+    if (CB.recordCaptaincy) CB.recordCaptaincy(W, U, p, ev);
     const st = p.st[lv];
     const fc = { r: p.st.shield.r + p.st.test.r, w: p.st.shield.w + p.st.test.w, h100: p.st.shield.h100 + p.st.test.h100, w5: p.st.shield.w5 + p.st.test.w5 };
     const chk = (key, cond, text) => { if (cond && !p.milestones[key]) { p.milestones[key] = W.season.year; ev.push({ type: 'milestone', key, text }); } };
@@ -378,6 +415,7 @@
       chk('t100m', st.m >= 100, '100 Test caps');
     }
     if (M.potm && M.potm.team === U.ti && M.potm.idx === me) { p.potm = (p.potm || 0) + 1; ev.push({ type: 'potm' }); }
+    if (lv === 'test' && CB.checkUnlocks) for (const u of CB.checkUnlocks(W, p)) ev.push({ type: 'unlock', u });
     // match history line
     p.history.push({ y: W.season.year, lv, vs: M.teams[1 - U.ti].short || M.teams[1 - U.ti].name, venue: U.cfg.venue, res: M.result.draw ? 'D' : M.result.tie ? 'T' : M.result.winner === U.ti ? 'W' : 'L',
       bat: lines.bat.map(b => b.runs + (b.out ? '' : '*')).join(' & '), bowl: lines.bowl.filter(b => b.balls).map(b => b.wk + '/' + b.runs).join(' & '), final: !!U.cfg.final });
@@ -432,11 +470,11 @@
     const playedShield = p.history.filter(h => h.y === y && h.lv === 'shield').length;
     const playedTest = p.history.filter(h => h.y === y && h.lv === 'test').length;
     p.seasonsAt[y] = { shield: playedShield, test: playedTest };
-    if (W.season.champion === p.team && playedShield > 0) p.honours.push({ y, text: 'Sheffield Shield champion' });
+    if (W.season.champion === p.team && playedShield > 0) p.honours.push({ y, text: W.states[p.team].captain === p.id ? 'Captained ' + CB.stateById(p.team).name + ' to the Shield' : 'Sheffield Shield champion' });
     for (const s of W.season.series) {
       if (!s.xi) continue;
       const played = p.history.filter(h => h.y === y && h.lv === 'test' && h.vs === s.opp).length;
-      if (played && s.res[0] > s.res[1]) p.honours.push({ y, text: `Series win vs ${CB.NATIONS[s.opp].name}${s.opp === 'ENG' ? ' (the Ashes)' : ''}` });
+      if (played && s.res[0] > s.res[1]) p.honours.push({ y, text: `${s.ucapt ? 'Captained Australia to a series' : 'Series'} win vs ${CB.NATIONS[s.opp].name}${s.opp === 'ENG' ? ' (the Ashes)' : ''}` });
     }
     CB.ageUser(p, r);
     // contract: delisted if not making the Shield side by the early-mid twenties
@@ -488,6 +526,10 @@
       if (s.r >= 300) parts.push(`${s.r.toLocaleString()} Shield runs at ${sl.avg}, best ${sl.hs}.`);
       if (s.w >= 10) parts.push(`${s.w} Shield wickets at ${sl.bavg}.`);
     } else parts.push(`He never quite broke into the Shield side, battling away in the Second XI for ${CB.statLine(p.st.seconds).m} matches.`);
+    const ct = (p.captRec || {}).test, cs = (p.captRec || {}).shield;
+    if (ct && ct.m) parts.push(`He captained Australia in ${ct.m} Test${ct.m > 1 ? 's' : ''} (won ${ct.w}, lost ${ct.l}, drew ${ct.d}).`);
+    else if (cs && cs.m) parts.push(`He captained ${st} in ${cs.m} Shield match${cs.m > 1 ? 'es' : ''}.`);
+    if (p.countyStints && p.countyStints.length) { const c = p.countyStints.map(x => CB.countyById(x.id) ? CB.countyById(x.id).name : x.id); parts.push(`County stints: ${[...new Set(c)].join(', ')} (${p.st.county ? p.st.county.r + ' runs, ' + p.st.county.w + ' wickets' : ''}).`); }
     if (p.honours.length) parts.push('Honours: ' + [...new Set(p.honours.map(h => h.text))].slice(0, 4).join(', ') + '.');
     if (p.potm) parts.push(`Player of the match ${p.potm} time${p.potm > 1 ? 's' : ''}.`);
     parts.push(ended === 'delisted' ? 'His state let him go when the contract list was trimmed.' : ended === 'age' ? 'He played on until his body finally said enough.' : `He retired aged ${p.age}.`);
@@ -501,7 +543,8 @@
     return {
       id: p.id + '-' + Date.now(), name: p.first + ' ' + p.last, state: p.team, role: p.role, sub: p.sub, hand: p.hand,
       years: `${p.joined}-${W.year}`, ageEnd: p.age, legacy: b.legacy, bio: b.text, tier: p.tier,
-      test: CB.statLine(p.st.test), shield: CB.statLine(p.st.shield), seconds: CB.statLine(p.st.seconds),
+      test: CB.statLine(p.st.test), shield: CB.statLine(p.st.shield), seconds: CB.statLine(p.st.seconds), county: p.st.county ? CB.statLine(p.st.county) : null,
+      capt: p.captRec || {}, legacy: p.legacy || null, fame: p.fame || 0,
       traits: p.traits.slice(), honours: [...new Set(p.honours.map(h => h.text))], potm: p.potm || 0, capNo: p.capNo || null,
       hidden: { bat: peakBat, bowl: peakBowl, keep: p.role === 'wk' ? Math.round(p.caps.KEEP) : null }, ended,
     };

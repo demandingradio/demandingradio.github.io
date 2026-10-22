@@ -15,11 +15,14 @@
 
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   // fitted class means of the bowling effects (pace, spin): the engine's bowling W/R/B are on that scale
-  const MU = { W: [0.2964, 0.506], R: [0.055, -0.0009], B: [-0.0642, -0.1825] };
+  // fitted class means of the bowling effects (pace, spin) and the batting anchor (Shield top-order mean wicket
+  // effect = batting rating 50); read from the model export so ratings follow whatever fit is loaded
+  const ANC = () => (CB.MODEL && CB.MODEL.anchors) || { batW: { shield: -0.48 }, batWs: -0.13, mu: { W: [0.2964, 0.506], R: [0.055, -0.0009], B: [-0.0642, -0.1825] } };
+  const MU = new Proxy({}, { get: (o, k) => ANC().mu[k] });
 
   // batting survival composite -> wicket logit effect. Steeper at the top (greats are rarer and better than linear),
   // softer at the bottom so tail-enders spread over 0-30 instead of negative ratings.
-  function fS(S) { return -0.48 - 0.015 * (S - 50) - 0.0007 * Math.max(0, S - 75) ** 2 + 0.0004 * Math.max(0, 30 - S) ** 2; }
+  function fS(S) { return ANC().batW.shield - 0.015 * (S - 50) - 0.0007 * Math.max(0, S - 75) ** 2 + 0.0004 * Math.max(0, 30 - S) ** 2; }
   function fB(Q) { return 0.008 * (Q - 50) + 0.00035 * Math.max(0, Q - 75) ** 2 - 0.0006 * Math.max(0, 35 - Q) ** 2; }
   CB.batComposite = (a, vsSpin) => 0.45 * a.DEF + 0.35 * (vsSpin ? a.SPIN : a.PACE) + 0.20 * a.CON;
   CB.bowlComposite = (a, sub) => sub === 'fast' ? 0.5 * a.STK + 0.25 * a.CRA + 0.25 * a.ACC
@@ -32,7 +35,7 @@
     const att = a.ATT - 50;
     const e = {
       W: fS(CB.batComposite(a, false)) + 0.004 * att,
-      Ws: fS(CB.batComposite(a, true)) + 0.004 * att - 0.13,
+      Ws: fS(CB.batComposite(a, true)) + 0.004 * att + ANC().batWs,
       R: -0.04 + 0.011 * (0.5 * a.ATT + 0.3 * a.RUN + 0.1 * a.PACE + 0.1 * a.SPIN - 50),
       B: 0.02 + 0.013 * (0.8 * a.ATT + 0.1 * a.PACE + 0.1 * a.SPIN - 50),
       S6: 0.25 + 0.02 * att + (p.power || 0),
@@ -135,7 +138,7 @@
     spin: { bat: null, bowl: 0, pos: 'tail' },
   };
   // level means (batting composite for specialist batters, bowling composite for frontline bowlers)
-  CB.LEVEL_MEAN = { club: { bat: 33, bowl: 32 }, seconds: { bat: 41, bowl: 41 }, shield: { bat: 49, bowl: 52 }, test: { bat: 55, bowl: 54 } };
+  CB.LEVEL_MEAN = { club: { bat: 33, bowl: 32 }, seconds: { bat: 41, bowl: 41 }, shield: { bat: 49, bowl: 52 }, test: { bat: 55, bowl: 54 }, county: { bat: 45, bowl: 51 } };
 
   let NEXT_ID = 1;
   CB.setNextId = n => { NEXT_ID = Math.max(NEXT_ID, n); };

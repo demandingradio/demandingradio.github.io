@@ -37,6 +37,7 @@
   CB.LEVELS = {
     seconds: { lv: 0, days: 3, opd: 96, fo: 150, name: 'Second XI' },
     shield: { lv: 0, days: 4, opd: 96, fo: 150, name: 'Sheffield Shield' },
+    county: { lv: 2, days: 4, opd: 96, fo: 150, name: 'County Championship' },
     test: { lv: 1, days: 5, opd: 90, fo: 200, name: 'Test' },
   };
   const REGION = { AUS: 'AUS', ENG: 'SEAM', NZ: 'SEAM', SA: 'SEAM', IRE: 'SEAM', IND: 'ASIA', PAK: 'ASIA', UAE: 'ASIA', SL: 'ASIA', BAN: 'ASIA', WI: 'WI', ZIM: 'WI' };
@@ -46,12 +47,13 @@
     const MD = CB.MODEL, MP = MD.match;
     const L = CB.LEVELS[cfg.level];
     const r = CB.rng(cfg.seed || (Math.random() * 4294967296) >>> 0);
-    const lvKey = cfg.level === 'test' ? 'test' : 'shield';
+    const lvKey = cfg.level === 'test' ? 'test' : cfg.level === 'county' ? 'county' : 'shield';
     const M = {
       cfg, r, L, lv: L.lv, level: cfg.level, days: cfg.days || L.days, opd: L.opd,
       country: cfg.country || 'AUS', teams: cfg.teams, home: cfg.home == null ? null : cfg.home,
       inns: [], day: 1, dayBalls: 0, ballsBowled: 0, over: false, result: null, stumps: [],
-      region: cfg.level === 'test' ? (REGION[cfg.country] || 'AUS') : 'SHIELD',
+      region: cfg.level === 'test' ? (REGION[cfg.country] || 'AUS') : cfg.level === 'county' ? 'COUNTY' : 'SHIELD',
+      lvKey: cfg.level === 'test' ? 'test' : cfg.level === 'county' ? 'county' : 'shield',
     };
     // conditions: a match-level pitch effect plus day-to-day deviations (cloud, wear, heat) on scoring and on
     // pace/spin wicket-taking; sizes are the over-dispersion the ball model leaves in real matches (tools/overdisp.js)
@@ -60,7 +62,7 @@
     M.dayFx = [];
     for (let d = 0; d < 6; d++) M.dayFx.push({ r: M.pitch.r + CB.gauss(r) * ps.dr, wP: M.pitch.wP + CB.gauss(r) * ps.dwP, wS: M.pitch.wS + CB.gauss(r) * ps.dwS });
     // weather: overs lost per day, drawn up front
-    const rain = MP.rain[cfg.level === 'test' ? M.country : 'SHIELD'] || MP.rain.default;
+    const rain = MP.rain[cfg.level === 'test' ? M.country : cfg.level === 'county' ? 'COUNTY' : 'SHIELD'] || MP.rain.default;
     M.rainLost = [];
     for (let d = 0; d < M.days; d++) {
       let lost = 0;
@@ -71,12 +73,21 @@
     // captain personalities (sampled per match, per side)
     const D = MP.decl[lvKey];
     M.capt = [0, 1].map(() => ({
-      s1: D.s1m + CB.gauss(r) * D.s1s, o1: D.o1, tail: D.tail, tailWk: D.tailWk, late: D.late, rrSet: Math.max(1.6, D.rrm + CB.gauss(r) * D.rrs), lmin: D.lmin, lbig: D.lbig + CB.gauss(r) * 50,
+      s1: D.s1m + CB.gauss(r) * D.s1s, o1: D.o1, tail: D.tail, tailWk: D.tailWk, late: D.late, rrSet: Math.max(1.6, D.rrm + CB.gauss(r) * D.rrs), lmin: D.lmin, lbig: D.lbig + CB.gauss(r) * 50, foBoost: 0,
     }));
+    // a user captain's choices: toss preference and a style that shifts declarations, targets and the follow-on
+    M.prefs = M.teams.map((t, ti) => { const ci = cfg.capt ? cfg.capt[ti] : -1, x = t.xi[ci]; return x && x.user && t.prefs ? t.prefs : null; });
+    M.prefs.forEach((pf, ti) => {
+      if (!pf) return;
+      const c = M.capt[ti], k = pf.style === 'attack' ? -1 : pf.style === 'defend' ? 1 : 0;
+      c.s1 += 40 * k; c.rrSet = Math.max(1.6, c.rrSet + 0.45 * k); c.lmin += 30 * k; c.lbig += 50 * k; c.foBoost = -0.25 * k;
+    });
     // toss
     const tossW = r() < 0.5 ? 0 : 1;
-    const pBat = cfg.level === 'test' ? (MP.toss[M.country] != null ? MP.toss[M.country] : 0.7) : MP.toss.SHIELD;
-    const batFirst = r() < pBat ? tossW : 1 - tossW;
+    const pBat = cfg.level === 'test' ? (MP.toss[M.country] != null ? MP.toss[M.country] : 0.7) : cfg.level === 'county' ? MP.toss.COUNTY : MP.toss.SHIELD;
+    let batFirst = r() < pBat ? tossW : 1 - tossW;
+    const tp = M.prefs[tossW] && M.prefs[tossW].toss;
+    if (tp === 'bat') batFirst = tossW; else if (tp === 'bowl') batFirst = 1 - tossW;
     M.toss = { winner: tossW, bat: batFirst === tossW };
     M.order = [batFirst, 1 - batFirst];
     for (const t of M.teams) prepTeam(t);
@@ -89,7 +100,7 @@
       const lead = M.inns[0].runs - M.inns[1].runs;
       if (lead >= (M.days <= 3 ? 150 : L.fo) && M.inns[1].closed !== 'declared') {
         const F = MP.fo[lvKey];
-        const p = lead < 250 ? F.a : lead < 350 ? F.b : F.c;
+        const p = Math.max(0, Math.min(1, (lead < 250 ? F.a : lead < 350 ? F.b : F.c) + M.capt[M.order[0]].foBoost));
         if (r() < p) { third = M.order[1]; M.followOn = true; }
       }
     }
@@ -146,10 +157,10 @@
     if (k > 0) { M.dayBalls -= 12; if (M.dayBalls <= 0) newDay(M); if (M.over) { I.closed = 'time'; return I; } }
     I.startDay = M.day;
     // innings-level form/conditions for the batting side (real innings 'fire' or collapse more than independent balls allow)
-    const ie = MD.match.inns[M.level === 'test' ? 'test' : 'shield'];
+    const ie = MD.match.inns[M.lvKey];
     I.zW = CB.gauss(r) * ie.w; I.zR = CB.gauss(r) * ie.r;
     // keep the per-ball mean wicket rate: logit noise of variance v inflates a small probability by ~exp(v/2)
-    const ps = MD.match.pitch[M.level === 'test' ? 'test' : 'shield'];
+    const ps = MD.match.pitch[M.lvKey];
     I.wAdj = [-(ps.wP * ps.wP + ps.dwP * ps.dwP + ie.w * ie.w) / 2, -(ps.wS * ps.wS + ps.dwS * ps.dwS + ie.w * ie.w) / 2];
     const capt = M.capt[batT];
     const lv = M.lv;
@@ -172,9 +183,9 @@
       if (bs.last !== overNo - 2) { bs.lastSpell = bs.spell; bs.spell = 0; bs.limit = Math.max(1, Math.round(be.spell * (0.7 + 0.6 * r()) * Math.min(1.2, Math.max(0.15, 1 + CB.MODEL.match.spellQ * be.q)))); }
       const ty = be.t;
       // context for this over
-      const day = Math.min(lv ? 4 : 3, M.day - 1);
+      const day = Math.min(lv === 1 ? 4 : 3, M.day - 1);
       for (let c = 1; c < NC; c++) {
-        let v = G.base[lv * 2 + ty][c] + G.age[ageBucket(I.ageOvers) * 2 + ty][c] + G.day[day * 2 + ty][c] + G.inns[k * 2 + lv][c];
+        let v = G.base[lv * 2 + ty][c] + G.age[ageBucket(I.ageOvers) * 2 + ty][c] + G.day[day * 2 + ty][c] + G.inns[k * (MD.nlv || 2) + lv][c];
         if (ci >= 0) v += G.country[ci * 2 + ty][c];
         if (homeIdx >= 0) v += G.home[homeIdx][c];
         ctx[c] = v;
@@ -351,7 +362,7 @@
       const bs = I.bowl[cont], e = ft.xi[cont].bw;
       if (bs.day === M.day && bs.spell < bs.limit && bs.today < (e.t ? 40 : 24) && !(bs.spell >= 2 && r() < MP.changeP)) return cont;
     }
-    const sp = MD.spin, day = Math.min(M.lv ? 4 : 3, M.day - 1);
+    const sp = MD.spin, day = Math.min(M.lv === 1 ? 4 : 3, M.day - 1);
     let spinLg = sp.age[M.region][ageBucket(I.ageOvers)] + sp.day[M.region][day] + MP.spinBias;
     if (newBall) spinLg -= 4;
     const w = B.map(i => {
