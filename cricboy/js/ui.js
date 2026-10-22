@@ -263,7 +263,17 @@
     let sub = '';
     if (I && I.k === 3 && s.k === 3) sub = `Target ${I.target} · need ${Math.max(0, I.target - s.runs)}`;
     else if (I && s.k >= 1) { const lead = leadNow(M, s); sub = lead >= 0 ? `${M.teams[I.bat].short} lead by ${lead}` : `${M.teams[I.bat].short} trail by ${-lead}`; }
-    return lines.join('') + (sub ? `<div class="sub">${esc(sub)}</div>` : '');
+    return lines.join('') + (sub ? `<div class="sub">${esc(sub)}</div>` : '') + mineStripHTML();
+  }
+  // the user's innings / spell in the current innings, live
+  function mineStripHTML() {
+    const m = live.mine; if (!m) return '';
+    let h = '';
+    if (m.bat) h += m.bat.out
+      ? `<div class="mebat out"><span>☝️ <b>YOU: OUT</b> ${m.bat.runs} (${m.bat.balls})</span><span class="how">${esc(m.bat.how || '')}</span></div>`
+      : `<div class="mebat in"><span>🏏 <b>YOU</b> ${m.bat.runs}* (${m.bat.balls})</span><span class="how">batting</span></div>`;
+    if (m.bowl && m.bowl.balls) h += `<div class="mebat bowl"><span>🎯 <b>YOU</b> ${fmtOv(m.bowl.balls)}-${m.bowl.runs}-${m.bowl.wk}</span><span class="how">overs-runs-wkts</span></div>`;
+    return h;
   }
   function leadNow(M, s) { const I = M.inns[s.k]; let own = s.runs, opp = 0; for (let k = 0; k < s.k; k++) { if (M.inns[k].bat === I.bat) own += M.inns[k].runs; else opp += M.inns[k].runs; } return own - opp; }
   const tickHTML = t => `<div class="tick ${t.cls || ''}">${t.html}</div>`;
@@ -288,28 +298,44 @@
       const marks = (I.dayMarks || []).slice();
       let arrived = false, bowled = false;
       let lastSc = { runs: 0, wk: 0, balls: 0 };
+      // the user's own innings / spell, snapshotted onto every event for the scoreboard strip
+      const mine = { bat: null, bowl: null };
+      const push = e => { e.mine = { bat: mine.bat && { ...mine.bat }, bowl: mine.bowl && { ...mine.bowl } }; ev.push(e); };
       I.log.forEach((L, i) => {
-        while (marks.length && marks[0].at === i) { const m = marks.shift(); ev.push({ k, html: `Stumps, day ${m.day}: ${esc(bt.short || bt.name)} ${lastSc.runs}/${lastSc.wk}`, cls: 'day', sc: lastSc, day: m.day + 1 }); }
+        while (marks.length && marks[0].at === i) { const m = marks.shift(); push({ k, html: `Stumps, day ${m.day}: ${esc(bt.short || bt.name)} ${lastSc.runs}/${lastSc.wk}`, cls: 'day', sc: lastSc, day: m.day + 1 }); }
         const sc = { runs: L.sc, wk: L.wk, balls: L.b };
-        if (moment && moment.inns === k && moment.at === i) ev.push({ k, moment: true, sc });
+        if (moment && moment.inns === k && moment.at === i) push({ k, moment: true, sc });
         const sIsMe = I.bat === U.ti && L.s === meIdx, bIsMe = I.fld === U.ti && L.bw === meIdx;
-        if (!arrived && I.bat === U.ti && (L.s === meIdx || L.n === meIdx)) { arrived = true; ev.push({ k, html: `🏏 <b>You walk out</b> at ${esc(bt.short)} ${L.sc - (L.r || 0)}/${L.wk}`, cls: 'me', sc }); }
-        if (!bowled && bIsMe) { bowled = true; ev.push({ k, html: `🎯 <b>You're on</b> to bowl · ${esc(bt.short)} ${L.sc}/${L.wk}`, cls: 'me', sc }); }
+        if (!arrived && I.bat === U.ti && (L.s === meIdx || L.n === meIdx)) { arrived = true; mine.bat = { runs: 0, balls: 0, out: false }; push({ k, html: `🏏 <b>You walk out</b> at ${esc(bt.short)} ${L.sc - (L.r || 0)}/${L.wk}`, cls: 'me', sc }); }
+        if (!bowled && bIsMe) { bowled = true; mine.bowl = { balls: 0, runs: 0, wk: 0 }; push({ k, html: `🎯 <b>You're on</b> to bowl · ${esc(bt.short)} ${L.sc}/${L.wk}`, cls: 'me', sc }); }
+        if (sIsMe && mine.bat && L.w !== 'wd') { if (L.w !== 'nb') mine.bat.balls++; if (typeof L.w === 'number' || L.w === 'nb') mine.bat.runs += L.r; }
+        if (bIsMe && mine.bowl) { if (L.w !== 'wd' && L.w !== 'nb') mine.bowl.balls++; if (typeof L.w === 'number' || L.w === 'nb' || L.w === 'wd') mine.bowl.runs += L.r + (L.w === 'nb' ? 1 : 0); }
         if (typeof L.w === 'number' || L.w === 'nb') {
           const before = runs[L.s]; runs[L.s] += L.r;
-          for (const ms of [50, 100, 150, 200, 250, 300]) if (before < ms && runs[L.s] >= ms) ev.push({ k, html: `${sIsMe ? '🎉 <b>' + (ms === 100 ? 'HUNDRED!' : ms + '!') + '</b> You' : '<b>' + ms + '</b> for ' + esc(nm(I.bat, L.s))} ${sIsMe ? 'raise the bat' : ''} · ${esc(bt.short)} ${L.sc}/${L.wk}`, cls: sIsMe ? 'me ms' : 'ms', sc, big: sIsMe && ms >= 100 });
-          if (sIsMe && (L.r === 4 || L.r === 6)) ev.push({ k, html: `${L.r === 6 ? '💥 SIX' : 'FOUR'} off ${esc(nm(I.fld, L.bw))}`, cls: 'me', sc, fast: true });
+          for (const ms of [50, 100, 150, 200, 250, 300]) if (before < ms && runs[L.s] >= ms) push({ k, html: `${sIsMe ? '🎉 <b>' + (ms === 100 ? 'HUNDRED!' : ms + '!') + '</b> You' : '<b>' + ms + '</b> for ' + esc(nm(I.bat, L.s))} ${sIsMe ? 'raise the bat' : ''} · ${esc(bt.short)} ${L.sc}/${L.wk}`, cls: sIsMe ? 'me ms' : 'ms', sc, big: sIsMe && ms >= 100 });
+          if (sIsMe && (L.r === 4 || L.r === 6)) push({ k, html: `${L.r === 6 ? '💥 SIX' : 'FOUR'} off ${esc(nm(I.fld, L.bw))}`, cls: 'me', sc, fast: true });
         }
-        if (L.w === 'drop' && (sIsMe || (I.fld === U.ti && L.x && L.x.fielder === meIdx))) ev.push({ k, html: sIsMe ? '😮‍💨 Dropped! You survive.' : '😬 You put down a chance.', cls: 'me', sc });
+        if (L.w === 'drop' && (sIsMe || (I.fld === U.ti && L.x && L.x.fielder === meIdx))) push({ k, html: sIsMe ? '😮‍💨 Dropped! You survive.' : '😬 You put down a chance.', cls: 'me', sc });
         if (L.w === 'W') {
-          const out = L.x.out, b = I.bats[out];
+          const out = L.x.out, b = I.bats[out], how = CB.dismissalText(M, I, b);
           const isMe = I.bat === U.ti && out === meIdx;
-          ev.push({ k, html: `<b>WICKET</b> ${esc(nm(I.bat, out))} ${esc(CB.dismissalText(M, I, b))} ${b.runs} (${b.balls}) · ${esc(bt.short)} ${L.sc}/${L.wk}`, cls: 'w' + (isMe || bIsMe ? ' me' : ''), sc, me: isMe || bIsMe });
+          if (isMe) {
+            // the user's own dismissal: its own loud card, never confused with a wicket the user took
+            mine.bat.out = true; mine.bat.how = how; mine.bat.runs = b.runs; mine.bat.balls = b.balls;
+            const head = b.runs === 0 ? '🦆 OUT FOR A DUCK' : b.runs >= 100 ? '☝️ OUT, WHAT A KNOCK' : '☝️ YOU\'RE OUT';
+            push({ k, html: `<div class="oh">${head}</div><div><b>${b.runs}</b> off ${b.balls} balls · ${esc(how)}</div><div class="tiny mute">${esc(bt.short)} ${L.sc}/${L.wk}</div>`, cls: 'out', sc, meOut: true });
+          } else {
+            if (bIsMe && b.out.kind !== 7) mine.bowl.wk++;
+            const mineW = bIsMe && b.out.kind !== 7;
+            push({ k, html: `${mineW ? '🎯 <b>YOUR WICKET</b>' : '<b>WICKET</b>'} ${esc(nm(I.bat, out))} ${esc(how)} ${b.runs} (${b.balls}) · ${esc(bt.short)} ${L.sc}/${L.wk}`, cls: mineW ? 'mew' : 'w', sc });
+          }
         }
         lastSc = sc;
       });
       const endTxt = I.closed === 'allout' ? `${esc(bt.name)} all out for ${I.runs}` : I.closed === 'declared' ? `${esc(bt.name)} declare at ${I.runs}/${I.wk}` : I.closed === 'target' ? `${esc(bt.name)} reach the target` : `${esc(bt.name)} ${I.runs}/${I.wk} when play ends`;
-      ev.push({ k, html: endTxt + ` (${fmtOv(I.balls)} ov)`, cls: 'big', sc: { runs: I.runs, wk: I.wk, balls: I.balls }, end: true });
+      const endSc = { runs: I.runs, wk: I.wk, balls: I.balls };
+      if (mine.bat && !mine.bat.out) push({ k, html: `✅ <b>Not out.</b> You finish ${mine.bat.runs}* off ${mine.bat.balls} balls`, cls: 'me', sc: endSc });
+      push({ k, html: endTxt + ` (${fmtOv(I.balls)} ov)`, cls: 'big', sc: endSc, end: true });
     });
     ev.push({ k: M.inns.length - 1, html: `🏁 <b>${esc(M.result.text)}</b>`, cls: 'big ms', sc: { runs: M.inns[M.inns.length - 1].runs, wk: M.inns[M.inns.length - 1].wk, balls: M.inns[M.inns.length - 1].balls }, final: true });
     return ev;
@@ -318,7 +344,7 @@
     const L = live; if (!L || L.done || L.momentOpen || L.paused) return;
     const e = L.events[L.ei++];
     if (!e) { L.done = true; render(); return; }
-    L.sb = { k: e.k, ...e.sc };
+    L.sb = { k: e.k, ...e.sc }; L.mine = e.mine || null;
     if (e.day) L.dayText = 'Day ' + e.day;
     if (e.moment) { L.momentOpen = true; render(); return; }
     L.shown.push(e);
@@ -327,8 +353,12 @@
     const sb = document.getElementById('sb'); if (sb) sb.innerHTML = scoreboardHTML();
     const dl = document.getElementById('dayline'); if (dl) dl.textContent = L.dayText || 'Day 1';
     if (e.big) confetti();
+    if (e.meOut) {
+      if (sb) { sb.classList.remove('flash-out'); void sb.offsetWidth; sb.classList.add('flash-out'); }
+      try { if (navigator.vibrate) navigator.vibrate([120, 60, 220]); } catch (x) { }
+    }
     if (e.final) { L.done = true; render(); return; }
-    const base = e.fast ? 140 : e.cls && e.cls.includes('w') ? 620 : e.cls === 'day' ? 700 : 380;
+    const base = e.meOut ? 1900 : e.fast ? 140 : e.cls === 'w' || e.cls === 'mew' ? 620 : e.cls === 'day' ? 700 : 380;
     L.timer = setTimeout(stepLive, base / L.speed);
   }
 
@@ -339,6 +369,11 @@
     const lines = L.post.lines;
     const bat = lines.bat.map(b => `${b.runs}${b.out ? '' : '*'} <span class="mute small">(${b.balls})</span>`).join(' & ') || '<span class="mute">DNB</span>';
     const bowl = lines.bowl.filter(b => b.balls).map(b => `${b.wk}/${b.runs} <span class="mute small">(${fmtOv(b.balls)})</span>`).join(' & ') || '<span class="mute">-</span>';
+    const meIdx = U.sides[U.ti].indexOf(p.id);
+    const hows = M.inns.filter(I => I.bat === U.ti && I.bats[meIdx] && I.bats[meIdx].in).map(I => {
+      const b = I.bats[meIdx];
+      return `<div class="tiny ${b.out ? 'howout' : 'hownot'}">${b.out ? '☝️ ' + esc(CB.dismissalText(M, I, b)) : '✅ not out'}</div>`;
+    }).join('');
     const potm = M.potm ? M.teams[M.potm.team].xi[M.potm.idx] : null;
     return `
     <div class="card result-banner reveal">
@@ -346,7 +381,7 @@
       <div class="big mt">${esc(M.result.text)}</div>
       <div class="mute small mt">${esc(CB.scoreLine(M))}</div>
     </div>
-    <div class="perf"><div class="p"><div class="tiny faint">BATTING</div><div class="v num">${bat}</div></div><div class="p"><div class="tiny faint">BOWLING</div><div class="v num">${bowl}</div></div></div>
+    <div class="perf"><div class="p"><div class="tiny faint">BATTING</div><div class="v num">${bat}</div>${hows}</div><div class="p"><div class="tiny faint">BOWLING</div><div class="v num">${bowl}</div></div></div>
     ${L.moment ? `<div class="news blue mt"><b>⚡ ${esc(L.moment.title)}</b>${L.choice ? ' · you chose: ' + esc(L.choice) : ''}<div class="small mute">${esc(L.moment.after)}</div></div>` : ''}
     ${potm ? `<div class="news gold mt">⭐ Player of the match: <b>${potm.user ? 'YOU' : esc(potm.name)}</b></div>` : ''}
     ${L.post.ev.filter(e => e.type === 'milestone').map(e => `<div class="news gold">🏅 ${esc(e.text)}</div>`).join('')}
@@ -553,8 +588,8 @@
       // fast-forward to the moment (if still to come), else to the end
       while (live.ei < live.events.length) {
         const e = live.events[live.ei];
-        if (e.moment && !live.momentDone) { live.ei++; live.sb = { k: e.k, ...e.sc }; live.momentOpen = true; break; }
-        live.ei++; if (!e.moment) live.shown.push(e); live.sb = { k: e.k, ...e.sc };
+        if (e.moment && !live.momentDone) { live.ei++; live.sb = { k: e.k, ...e.sc }; live.mine = e.mine || null; live.momentOpen = true; break; }
+        live.ei++; if (!e.moment) live.shown.push(e); live.sb = { k: e.k, ...e.sc }; live.mine = e.mine || null;
         if (e.final) { live.done = true; }
       }
       if (live.ei >= live.events.length) live.done = true;
