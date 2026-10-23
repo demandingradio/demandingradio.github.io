@@ -200,7 +200,14 @@
   function teamFromIds(W, ids, name, short) {
     const xi = ids.map(id => W.players[id]);
     xi.forEach(p => CB.prepMatchPlayer && CB.prepMatchPlayer(p));
-    const k = xi.findIndex(p => p.role === 'wk');
+    let k = xi.findIndex(p => p.role === 'wk');
+    if (k < 0) {
+      // no specialist keeper fit (a small county squad's only gloveman injured): a batter who doesn't bowl takes the
+      // gloves, never the user (a user bowler handed them would never bowl)
+      const cand = xi.map((p, i) => ({ p, i })).filter(o => !o.p.user);
+      const sub = cand.find(o => ['open', 'top', 'mid'].includes(o.p.role) && !o.p.bw) || cand.find(o => !o.p.bw) || cand[cand.length - 1];
+      k = sub ? sub.i : 6;
+    }
     const u = xi.find(p => p.user);
     return { name, short, ids, prefs: u ? u.captPrefs || null : null, xi: xi.map(p => Object.assign({ id: p.id, name: p.first + ' ' + p.last, short: CB.shortName(p), role: p.role, user: !!p.user }, { e: p.e, bw: p.bw })), keeper: k >= 0 ? k : 6 };
   }
@@ -303,10 +310,10 @@
     U.commit(U.M, CB.rng((U.cfg.seed ^ 0x2545f491) >>> 0));
     U.committed = true;
   };
-  // the same match from the same seed, with the user's key-moment call applied from that ball on (engine: cfg.mom)
+  // the same match from the same seed, with the user's key-moment call(s) applied from their balls on (engine: cfg.moms)
   CB.replayUserMatch = function (W, U, mom) {
     if (U.committed) throw new Error('match already committed');
-    U.M = CB.simMatch(Object.assign({}, U.cfg, { mom }));
+    U.M = CB.simMatch(Object.assign({}, U.cfg, { moms: [].concat(mom) }));
     return U.M;
   };
 

@@ -10,9 +10,10 @@
             drop, keepDrop, byeMul, fieldW }
      p.bw = bowling or null  { t (0 pace, 1 spin), W, R, B, wd, nb (log multipliers), q (captain's rating),
             spell (overs), newBall (opening preference), swing (wicket logit, first 20 overs of a ball), mod }
-   cfg.mom (optional) = the user's key-moment call, active from ball i of innings k (and later innings if after):
+   cfg.moms (optional) = the user's key-moment calls, each active from ball i of innings k (and later innings if after):
      { k, i, ti, idx, bat/bowl/opp {W, R, B, q}, own {W}, keep {drop, bye}, declare 'now'|'push'|'later', b0, r0, after }
-   Nothing before that ball changes, so a replay with the same seed is identical up to the moment. */
+   Calls in force at the same time add up. Nothing before a call's ball changes, so a replay with the same seed is
+   identical up to the moment. (cfg.mom = a single call.) */
 (function (G) {
   'use strict';
   const CB = G.CB = G.CB || {};
@@ -57,7 +58,7 @@
       inns: [], day: 1, dayBalls: 0, ballsBowled: 0, over: false, result: null, stumps: [],
       region: cfg.level === 'test' ? (REGION[cfg.country] || 'AUS') : cfg.level === 'county' ? 'COUNTY' : 'SHIELD',
       lvKey: cfg.level === 'test' ? 'test' : cfg.level === 'county' ? 'county' : 'shield',
-      mom: cfg.mom || null,
+      moms: cfg.moms || (cfg.mom ? [cfg.mom] : []),
     };
     // conditions: a match-level pitch effect plus day-to-day deviations (cloud, wear, heat) on scoring and on
     // pace/spin wicket-taking; sizes are the over-dispersion the ball model leaves in real matches (tools/overdisp.js)
@@ -212,7 +213,7 @@
       while (legal < 6 && !I.closed && !M.over) {
         const sb = I.bats[I.s], se = bt.xi[I.s].e;
         // the user's key-moment call (cfg.mom), from its ball on
-        const mo = M.mom && momOn(M, I);
+        const mo = M.moms.length ? momOn(M, I) : null;
         let xW = 0, xR = 0, xB = 0;
         if (mo) {
           const add = o => { if (o) { xW += o.W || 0; xR += o.R || 0; xB += o.B || 0; } };
@@ -299,14 +300,24 @@
   }
 
   function swap(I) { const t = I.s; I.s = I.n; I.n = t; }
-  // is the user's key-moment call in force at this point of innings I?
+  // the user's key-moment calls in force at this point of innings I, merged (null if none)
+  const momActive = (m, I) => I.k === m.k ? I.log.length >= m.i : !!m.after && I.k > m.k;
   function momOn(M, I) {
-    const m = M.mom; if (!m) return null;
-    if (I.k === m.k) return I.log.length >= m.i ? m : null;
-    return m.after && I.k > m.k ? m : null;
+    let n = 0, one = null;
+    for (const m of M.moms) if (momActive(m, I)) { n++; one = m; }
+    if (n <= 1) return one;
+    if (I.momN === n) return I.momMerged;  // within an innings the set only grows
+    const o = { ti: one.ti, idx: one.idx };
+    for (const m of M.moms) {
+      if (!momActive(m, I)) continue;
+      for (const g of ['bat', 'bowl', 'opp', 'own']) if (m[g]) { o[g] = o[g] || {}; for (const k in m[g]) o[g][k] = (o[g][k] || 0) + m[g][k]; }
+      if (m.keep) o.keep = { drop: (o.keep ? o.keep.drop : 1) * m.keep.drop, bye: (o.keep ? o.keep.bye : 1) * m.keep.bye };
+    }
+    I.momN = n; I.momMerged = o;
+    return o;
   }
   // "throw the ball to yourself": the user's captain gives himself more overs
-  function qBoost(M, I, bi) { const m = M.mom && momOn(M, I); return m && m.bowl && m.bowl.q && I.fld === m.ti && bi === m.idx ? m.bowl.q : 0; }
+  function qBoost(M, I, bi) { const m = M.moms.length ? momOn(M, I) : null; return m && m.bowl && m.bowl.q && I.fld === m.ti && bi === m.idx ? m.bowl.q : 0; }
 
   function dismiss(I, idx, bi) {
     I.wk++;
@@ -342,8 +353,8 @@
   function declarationCheck(M, I, capt) {
     const k = I.k;
     // the user's declaration call at his key moment
-    const mo = M.mom && momOn(M, I);
-    if (mo && mo.declare && I.bat === mo.ti && k === mo.k) {
+    const mo = M.moms.find(m => m.declare && m.k === k && I.bat === m.ti && I.log.length >= m.i);
+    if (mo) {
       if (mo.declare === 'now') { I.closed = 'declared'; return 0; }
       if (mo.declare === 'push') { if (I.balls >= mo.b0 + 60 || I.wk >= 8) { I.closed = 'declared'; return 0; } return 1; }
       if (mo.declare === 'later' && I.runs < mo.r0 + 110 && I.wk < 9) return 0;  // bat on: another hundred first

@@ -243,27 +243,21 @@
   CB.INJURIES = { pace: ['side strain', 'stress reaction in the back', 'hamstring tightness', 'ankle impingement', 'calf strain'], bat: ['broken finger', 'hamstring strain', 'concussion (struck on the helmet)', 'sore back', 'quad strain'] };
 
   // ---------------------------------------------------------------- key moments
-  // One moment per match, always in the user's own trade: batters get batting moments, bowlers bowling ones, keepers
-  // batting or keeping, all-rounders either (captains also get captaincy calls). The moment pauses the replay; the call
-  // trains an area (momentum) and changes the rest of the match: a call that fits the conditions and the state of the
-  // game helps, one that fights them hurts (CB.momentPlan -> engine cfg.mom, CB.replayUserMatch).
-  CB.findMoment = function (U, p) {
+  // Every match has a key moment: the user's first chance in his own trade (walking out to bat, his first over, or a
+  // spell behind the stumps for a keeper). After that call, a bigger situation later on (the nervous nineties, a
+  // hat-trick ball, a tight chase, a declaration) can bring a bonus moment.
+  // Both must be stopping times, decided from what has happened so far and never from how the match ends: picking a
+  // moment with hindsight and then replaying from it gives failed innings a second go. The first chance is always
+  // taken; later triggers are walked in order and each is taken or passed on an independent coin.
+  function momentTriggers(U, p) {
     const M = U.M, ti = U.ti, me = U.sides[ti].indexOf(p.id);
-    if (me < 0) return null;
     const bats = ['open', 'top', 'mid', 'wk', 'ar'].includes(p.role);
     const bowls = ['pace', 'spin', 'ar'].includes(p.role) && !!M.teams[ti].xi[me].bw;
     const keeps = p.role === 'wk' && M.teams[ti].keeperIdx === me;
-    // The moment must be a stopping time: decided ball by ball from what has happened so far, never from how the match
-    // ends. (Picking it with hindsight and then replaying from it gives failed innings a second go.) So the match is
-    // walked in order and each trigger is taken or passed on an independent coin; the user's last innings with bat or
-    // ball always takes its first trigger.
-    const coin = CB.rng((U.cfg.seed ^ 0x6a09e667) >>> 0);
-    const cands = [];
-    let own = 0, opp = 0, myBat = 0, myBowl = 0;
+    const out = [];
+    let own = 0, opp = 0;
     for (const I of M.inns) {
-      const batting = I.bat === ti, last = batting ? myBat === 1 : myBowl === 1;
-      if (batting) myBat++; else myBowl++;
-      const tr = [];
+      const batting = I.bat === ti, tr = [];
       if (batting && bats && I.bats[me].in) {
         const dayStart = new Set((I.dayMarks || []).map(m => m.at)), nb = new Set(I.newBalls || []);
         let runs = 0, faced = 0, arrived = false, n50 = false, n100 = false, night = false, gone = false, spun = false, nbOn = false, newBallDue = false;
@@ -274,16 +268,16 @@
             arrived = true;
             const need = I.k === 3 ? I.target - P.sc : 0;
             const kind = I.k === 3 && need > 40 && need < 220 ? 'chase' : me <= 1 ? 'open' : P.wk >= 3 && P.sc < 120 ? 'rescue' : CB.lastBowlerSpin(M, I, i) ? 'spinArrive' : 'arrive';
-            tr.push({ kind, i, need, acc: kind === 'chase' ? 1 : last ? 0.85 : 0.45 });
+            tr.push({ kind, i, need, main: true, bonus: kind === 'chase' ? 1 : 0 });
           } else if (arrived) {
             // set and still there: a new morning, a new partner, spin on, the second new ball
-            if (!night && dayStart.has(i) && runs >= 10) { night = true; tr.push({ kind: 'overnight', i, runs, acc: 0.5 }); }
-            if (!gone && P.w === 'W' && P.x && P.x.out !== me && runs >= 20) { gone = true; tr.push({ kind: 'partnerGone', i, runs, acc: 0.25 }); }
-            if (!spun && L.s === me && faced >= 12 && CB.lastBowlerSpin(M, I, i)) { spun = true; tr.push({ kind: 'spinOn', i, runs, acc: 0.3 }); }
-            if (!nbOn && newBallDue && runs >= 10) { nbOn = true; tr.push({ kind: 'newBallBat', i, runs, acc: 0.6 }); }
+            if (!night && dayStart.has(i) && runs >= 10) { night = true; tr.push({ kind: 'overnight', i, runs, bonus: 0.08 }); }
+            if (!gone && P.w === 'W' && P.x && P.x.out !== me && runs >= 20) { gone = true; tr.push({ kind: 'partnerGone', i, runs, bonus: 0.05 }); }
+            if (!spun && L.s === me && faced >= 12 && CB.lastBowlerSpin(M, I, i)) { spun = true; tr.push({ kind: 'spinOn', i, runs, bonus: 0.05 }); }
+            if (!nbOn && newBallDue && runs >= 10) { nbOn = true; tr.push({ kind: 'newBallBat', i, runs, bonus: 0.08 }); }
           }
-          if (L.s === me && !n50 && runs >= 42 && runs < 50) { n50 = true; tr.push({ kind: 'near50', i, runs, acc: 0.6 }); }
-          if (L.s === me && !n100 && runs >= 88 && runs < 100) { n100 = true; tr.push({ kind: 'near100', i, runs, acc: 1 }); }
+          if (L.s === me && !n50 && runs >= 42 && runs < 50) { n50 = true; tr.push({ kind: 'near50', i, runs, bonus: 0.1 }); }
+          if (L.s === me && !n100 && runs >= 88 && runs < 100) { n100 = true; tr.push({ kind: 'near100', i, runs, bonus: 1 }); }
           if (L.s === me && (typeof L.w === 'number' || L.w === 'nb')) runs += L.r;
           if (L.s === me && L.w !== 'wd' && L.w !== 'nb') faced++;
           if (L.w === 'W' && L.x && L.x.out === me) break;
@@ -296,17 +290,22 @@
           const L = I.log[i];
           if (L.bw === me) {
             const d = dayOf(i);
-            if (!first) { first = true; tr.push({ kind: spin ? (I.k >= 2 ? 'spinWorn' : 'spinFirst') : (L.b < 30 ? 'newBall' : 'paceFirst'), i, acc: last ? 0.6 : 0.4 }); }
-            else {
-              if (!morning && d > lastDay && d >= 2) { morning = true; tr.push({ kind: 'morning', i, acc: 0.35 }); }
-              if (!second && nb.length && i >= nb[0] && !spin) { second = true; tr.push({ kind: 'secondNew', i, acc: 0.7 }); }
-              if (w1 && w2) tr.push({ kind: 'hattrick', i, acc: 1 });
-              else if (w1 && !fresh) { fresh = true; tr.push({ kind: 'freshBat', i, acc: 0.3 }); }
+            if (!first) {
+              first = true;
+              // brought on: what the game looks like right then
+              const kind = part >= 70 ? (spin ? 'spinStand' : 'stand') : L.wk >= 8 ? 'tail' : spin ? (I.k >= 2 ? 'spinWorn' : 'spinFirst') : (L.b < 30 ? 'newBall' : 'paceFirst');
+              tr.push({ kind, i, part, main: true, bonus: spin && I.k >= 2 ? 0.2 : 0.04 });
+              stand = stand || part >= 70; tail = tail || L.wk >= 8;
+            } else {
+              if (!morning && d > lastDay && d >= 2) { morning = true; tr.push({ kind: 'morning', i, bonus: 0.05 }); }
+              if (!second && nb.length && i >= nb[0] && !spin) { second = true; tr.push({ kind: 'secondNew', i, bonus: 0.1 }); }
+              if (w1 && w2) tr.push({ kind: 'hattrick', i, bonus: 1 });
+              else if (w1 && !fresh) { fresh = true; tr.push({ kind: 'freshBat', i, bonus: 0.05 }); }
+              if (!stand && part >= 70) { stand = true; tr.push({ kind: spin ? 'spinStand' : 'stand', i, part, bonus: 0.07 }); }
+              if (!tail && L.wk >= 8) { tail = true; tr.push({ kind: 'tail', i, bonus: 0.07 }); }
             }
-            if (!stand && part >= 70) { stand = true; tr.push({ kind: spin ? 'spinStand' : 'stand', i, part, acc: 0.6 }); }
-            if (!tail && L.wk >= 8) { tail = true; tr.push({ kind: 'tail', i, acc: 0.5 }); }
             lastDay = d;
-            if (L.w !== 'wd' && L.w !== 'nb') { const mine = L.w === 'W' && L.x && I.bats[L.x.out].out && I.bats[L.x.out].out.kind !== 7; w2 = w1 && mine; w1 = mine; if (!mine) w2 = false; }
+            if (L.w !== 'wd' && L.w !== 'nb') { const mine = L.w === 'W' && L.x && I.bats[L.x.out].out && I.bats[L.x.out].out.kind !== 7; w2 = w1 && mine; w1 = mine; }
           }
           part = L.w === 'W' ? 0 : part + L.r;
         }
@@ -314,26 +313,41 @@
       if (!batting && keeps && I.log.length > 40) {
         // behind the stumps: the first spell of spin after the new ball, else a long day standing back
         const i = I.log.findIndex((L, j) => j >= 30 && CB.lastBowlerSpin(M, I, j));
-        tr.push(i >= 0 ? { kind: 'keepSpin', i, acc: 0.4 } : { kind: 'keepPace', i: 40, acc: 0.3 });
+        tr.push(i >= 0 ? { kind: 'keepSpin', i, main: true, bonus: 0 } : { kind: 'keepPace', i: 40, main: true, bonus: 0 });
       }
       if (U.captain) {
         if (batting && I.k === 2) {
           const i = I.log.findIndex(L => own + L.sc - opp >= 200);
-          if (i > 0 && i + 1 < I.log.length && I.log[i].wk <= 7) tr.push({ kind: 'captDeclare', i: i + 1, lead: own + I.log[i].sc - opp, acc: 0.85 });
+          if (i > 0 && i + 1 < I.log.length && I.log[i].wk <= 7) tr.push({ kind: 'captDeclare', i: i + 1, lead: own + I.log[i].sc - opp, bonus: 1 });
         }
         if (!batting) {
           let part = 0;
           const i = I.log.findIndex(L => { part = L.w === 'W' ? 0 : part + L.r; return part >= 80; });
-          if (i >= 0 && i + 1 < I.log.length) tr.push({ kind: 'captStand', i: i + 1, part, acc: 0.3 });
+          if (i >= 0 && i + 1 < I.log.length) tr.push({ kind: 'captStand', i: i + 1, part, bonus: 0.3 });
         }
       }
       tr.sort((a, b) => a.i - b.i);
-      for (const t of tr) if (coin() < t.acc) { cands.push(Object.assign(t, { I })); break; }
-      if (cands.length) break;
+      for (const t of tr) out.push(Object.assign(t, { I }));
       if (batting) own += I.runs; else opp += I.runs;
     }
-    if (!cands.length) return null;
-    const c = cands[0];
+    return out;
+  }
+  CB.findMoment = function (U, p) {
+    if (U.sides[U.ti].indexOf(p.id) < 0) return null;
+    const t = momentTriggers(U, p).find(x => x.main);
+    return t ? momentFrom(U, p, t, false) : null;
+  };
+  // after the main call has been replayed: a bonus moment later in the match, or null
+  CB.findBonusMoment = function (U, p, main) {
+    const coin = CB.rng((U.cfg.seed ^ 0x6a09e667) >>> 0);
+    for (const t of momentTriggers(U, p)) {
+      if (t.I.k < main.inns || (t.I.k === main.inns && t.i <= main.at) || !t.bonus) continue;
+      if (coin() < t.bonus) return momentFrom(U, p, t, true);
+    }
+    return null;
+  };
+  function momentFrom(U, p, c, bonus) {
+    const M = U.M, ti = U.ti;
     const T = MOMENTS[c.kind];
     const cue = CB.momentCues(M, c.I, c.i, ti);
     const L = c.I.log[c.i - 1] || { sc: 0, wk: 0, b: 0 }, now = c.I.log[c.i] || L;
@@ -342,7 +356,7 @@
       bowler: M.teams[c.I.fld].xi[now.bw] ? M.teams[c.I.fld].xi[now.bw].short : 'the bowler', cue };
     const opts = typeof T.options === 'function' ? T.options(p) : T.options;
     return { kind: c.kind, inns: c.I.k, at: c.i, title: T.title, text: T.text(ctx), situation: `Innings ${c.I.k + 1} · ${ctx.score} · ${CB.oversStr(L.b)} ov`,
-      cues: cue.tags, options: opts, captain: c.kind.startsWith('capt'), side: c.kind.startsWith('capt') ? 'capt' : c.I.bat === ti ? 'bat' : c.kind.startsWith('keep') ? 'keep' : 'bowl' };
+      cues: cue.tags, options: opts, bonus, captain: c.kind.startsWith('capt'), side: c.kind.startsWith('capt') ? 'capt' : c.I.bat === ti ? 'bat' : c.kind.startsWith('keep') ? 'keep' : 'bowl' };
   };
   CB.lastBowlerSpin = (M, I, i) => { const L = I.log[i]; const b = L && M.teams[I.fld].xi[L.bw]; return !!(b && b.bw && b.bw.t === 1); };
 

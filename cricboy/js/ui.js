@@ -117,7 +117,7 @@
     <div class="card"><h3>The cricket is real</h3><p class="mute">Every delivery is drawn from a statistical model fitted to every ball of 896 men's Tests (2001-2026), 212 Sheffield Shield matches (2017-2026) and 265 County Championship matches (2017-2019): how often batters get out and score depending on balls faced, ball age, the day, the country, home advantage, declarations and run chases. Captains bowl, declare and enforce follow-ons the way real ones do. Weather, pitches and form come from the same data.</p>
     <p class="mute small">Ball-by-ball data from <a href="https://cricsheet.org" style="color:var(--green)">Cricsheet</a> (ODC-By licence). All players are fictional.</p></div>
     <div class="card"><h3>Your career</h3><p class="mute">You start at 17 in your state's Second XI. Talent is random and hidden. Score runs or take wickets and the selectors notice: Shield, then Tests. Get dropped if you don't. Senior players with big numbers and a cool head get offered the captaincy. Shield regulars outside the Test side may get a county stint in England.</p></div>
-    <div class="card"><h3>Every match</h3><p class="mute">One key moment per match, in your own trade. Read the pitch, the ball and the game: a call that fits lifts you for the rest of that innings or spell, one that fights them can cost you. Either way that area trains 50% harder afterwards. Spend energy on 15 training areas and pair them for combo bonuses; hundreds and five-fors earn extra energy. Life happens between matches three to five times a season, and you have 15 seconds to choose. Milestones unlock perks.</p></div>
+    <div class="card"><h3>Every match</h3><p class="mute">A key moment every match, in your own trade, and sometimes a bonus one when it gets big (the nineties, a hat-trick ball, a tight chase). Read the pitch, the ball and the game: a call that fits lifts you for the rest of that innings or spell, one that fights them can cost you. Either way that area trains 50% harder afterwards. Spend energy on 15 training areas and pair them for combo bonuses; hundreds and five-fors earn extra energy. Life happens between matches three to five times a season, and you have 15 seconds to choose. Milestones unlock perks.</p></div>
     <div class="card"><h3>Legacy</h3><p class="mute">Five huge achievements unlock legacy perks you can start a new career with. Retired careers go on the Shelf with your hidden ratings revealed.</p></div>
     ${bar('<button class="btn primary" data-a="back-title">Got it</button>')}`;
 
@@ -453,16 +453,16 @@
   function leadNow(M, s) { const I = M.inns[s.k]; let own = s.runs, opp = 0; for (let k = 0; k < s.k; k++) { if (M.inns[k].bat === I.bat) own += M.inns[k].runs; else opp += M.inns[k].runs; } return own - opp; }
   const tickHTML = t => `<div class="tick ${t.cls || ''}">${t.html}</div>`;
   function momentHTML() {
-    const mo = live.moment, p = me();
+    const mo = live.moments[live.cur], p = me();
     const span = mo.side === 'bat' ? 'innings' : mo.captain ? 'match' : 'spell';
-    if (live.momentDone) {
-      const after = live.fit > 0 ? `You'll play better for the rest of this ${span}.` : live.fit < 0 ? 'It could cost you.' : 'No edge either way.';
-      return `<div class="moment"><div class="sheet"><div class="handle"></div><div class="kicker">Your call</div><h2>${esc(live.choice || mo.title)}</h2>
-      <div class="verdict ${live.fit > 0 ? 'good' : live.fit < 0 ? 'bad' : ''}">${esc(live.verdict || '')}</div>
+    if (mo.done) {
+      const after = mo.fit > 0 ? `You'll play better for the rest of this ${span}.` : mo.fit < 0 ? 'It could cost you.' : 'No edge either way.';
+      return `<div class="moment"><div class="sheet"><div class="handle"></div><div class="kicker">Your call</div><h2>${esc(mo.choice || mo.title)}</h2>
+      <div class="verdict ${mo.fit > 0 ? 'good' : mo.fit < 0 ? 'bad' : ''}">${esc(mo.verdict || '')}</div>
       <p class="small mute">${after} Momentum: <b style="color:var(--gold)">${esc(CB.focusLabel(CB.FOCUS.find(f => f.id === p.momentum.attr), p).name)}</b> trains ×${CB.hasPerk(p, 'fastlearner') ? 2 : 1.5} next session.</p><button class="btn primary block big mt" data-a="mom-close">Play on</button></div></div>`;
     }
     return `<div class="moment"><div class="sheet"><div class="handle"></div>
-      <div class="kicker">${mo.captain ? '🎖️ Captain\'s moment' : '⚡ Key moment'}</div><h2>${esc(mo.title)}</h2><div class="sit">${esc(mo.situation)}</div>
+      <div class="kicker">${mo.captain ? '🎖️ Captain\'s moment' : mo.bonus ? '🔥 Bonus moment' : '⚡ Key moment'}</div><h2>${esc(mo.title)}</h2><div class="sit">${esc(mo.situation)}</div>
       <p>${esc(mo.text)}</p>
       <div class="cues">${(mo.cues || []).map(c => `<span class="badge">${esc(c)}</span>`).join('')}</div>
       <p class="tiny faint">Read the conditions and the game: the right call lifts you for the rest of this ${span}.</p>
@@ -471,7 +471,7 @@
   }
 
   // timeline of highlights from the simulated match
-  function buildTimeline(U, p, moment) {
+  function buildTimeline(U, p, moments) {
     const M = U.M, ev = [], meIdx = U.sides[U.ti].indexOf(p.id);
     const nm = (ti, i) => { const x = M.teams[ti].xi[i]; return x.user ? 'You' : x.name; };
     M.inns.forEach((I, k) => {
@@ -488,7 +488,7 @@
       I.log.forEach((L, i) => {
         while (marks.length && marks[0].at === i) { const m = marks.shift(); push({ k, html: `Stumps, day ${m.day}: ${esc(bt.short || bt.name)} ${lastSc.runs}/${lastSc.wk}`, cls: 'day', sc: lastSc, day: m.day + 1 }); }
         const sc = { runs: L.sc, wk: L.wk, balls: L.b };
-        if (moment && moment.inns === k && moment.at === i) push({ k, moment: true, sc: lastSc });
+        moments.forEach((mo, mi) => { if (mo.inns === k && mo.at === i) push({ k, moment: true, mi, sc: lastSc }); });
         const sIsMe = I.bat === U.ti && L.s === meIdx, bIsMe = I.fld === U.ti && L.bw === meIdx;
         if (bIsMe) lastMyB = L.b;
         if (!arrived && I.bat === U.ti && (L.s === meIdx || L.n === meIdx)) { arrived = true; mine.bat = { runs: 0, balls: 0, out: false }; push({ k, html: `🏏 <b>You walk out</b> at ${esc(bt.short)} ${L.sc - (L.r || 0)}/${L.wk}`, cls: 'me', sc }); }
@@ -531,7 +531,7 @@
     if (!e) { L.done = true; render(); return; }
     L.sb = { k: e.k, ...e.sc }; L.mine = e.mine || null;
     if (e.day) L.dayText = 'Day ' + e.day;
-    if (e.moment) { L.momentOpen = true; render(); return; }
+    if (e.moment) { L.cur = e.mi; L.momentOpen = true; render(); return; }
     L.shown.push(e);
     const tk = document.getElementById('ticker');
     if (tk) { tk.insertAdjacentHTML('beforeend', tickHTML(e)); tk.scrollTop = tk.scrollHeight; }
@@ -570,7 +570,7 @@
       <div class="mute small mt">${esc(CB.scoreLine(M))}</div>
     </div>
     <div class="perf"><div class="p"><div class="tiny faint">BATTING</div><div class="v num">${bat}</div>${hows}</div><div class="p"><div class="tiny faint">BOWLING</div><div class="v num">${bowl}</div></div></div>
-    ${L.moment ? `<div class="news blue mt"><b>${L.moment.captain ? '🎖️' : '⚡'} ${esc(L.moment.title)}</b>${L.choice ? ' · you chose: ' + esc(L.choice) : ''}${L.verdict ? `<div class="small">${esc(L.verdict)}</div>` : ''}<div class="small mute">${esc(L.after || '')}</div></div>` : ''}
+    ${L.moments.map(mo => `<div class="news blue mt"><b>${mo.captain ? '🎖️' : mo.bonus ? '🔥' : '⚡'} ${esc(mo.title)}</b>${mo.choice ? ' · you chose: ' + esc(mo.choice) : ''}${mo.verdict ? `<div class="small">${esc(mo.verdict)}</div>` : ''}<div class="small mute">${esc(mo.after || '')}</div></div>`).join('')}
     ${potm ? `<div class="news gold mt">⭐ Player of the match: <b>${potm.user ? 'YOU' : esc(potm.name)}</b></div>` : ''}
     ${L.post.ev.filter(e => e.type === 'milestone').map(e => `<div class="news gold">🏅 ${esc(e.text)}</div>`).join('')}
     ${L.post.ev.filter(e => e.type === 'energy').map(e => `<div class="news gold">⚡ ${esc(e.text)}</div>`).join('')}
@@ -691,8 +691,8 @@
     const p = me();
     const U = res.user;
     const debut = !p.debut[U.level] && U.level !== 'seconds';
-    const moment = CB.findMoment(U, p);
-    live = { U, slot: res.slot, moment, events: buildTimeline(U, p, moment), ei: 0, shown: [], speed: 1, sb: { k: 0, runs: 0, wk: 0, balls: 0 }, done: false, momentOpen: false, momentDone: false, skipped, debut, final: false };
+    const moment = CB.findMoment(U, p), moments = moment ? [moment] : [];
+    live = { U, slot: res.slot, moments, calls: [], cur: 0, events: buildTimeline(U, p, moments), ei: 0, shown: [], speed: 1, sb: { k: 0, runs: 0, wk: 0, balls: 0 }, done: false, momentOpen: false, skipped, debut, final: false };
     ui.scTab = 0;
     if (res.lostCaptaincy) skipped.push('Dropped from the Test side, you lose the captaincy.');
     if (!moment) finalizeLive();
@@ -703,7 +703,7 @@
     CB.commitUserMatch(W, L.U);
     L.post = CB.userPostMatch(W, L.U);
     L.final = true;
-    if (L.moment) L.after = CB.momentAfter(L.U, L.moment, p);
+    for (const mo of L.moments) mo.after = CB.momentAfter(L.U, mo, p);
     pending = { stage: 'train', train: { energy: CB.energyFor(p, p.lastMatch), alloc: {}, reason: reasonText(p) }, post: { items: postItems(L.post), note: null }, moment: L.momAttr ? { attr: L.momAttr } : null };
     save();
   }
@@ -809,7 +809,7 @@
       // fast-forward to the moment (if still to come), else to the end
       while (live.ei < live.events.length) {
         const e = live.events[live.ei];
-        if (e.moment && !live.momentDone) { live.ei++; live.sb = { k: e.k, ...e.sc }; live.mine = e.mine || null; live.momentOpen = true; break; }
+        if (e.moment && !live.moments[e.mi].done) { live.ei++; live.sb = { k: e.k, ...e.sc }; live.mine = e.mine || null; live.cur = e.mi; live.momentOpen = true; break; }
         live.ei++; if (!e.moment) live.shown.push(e); live.sb = { k: e.k, ...e.sc }; live.mine = e.mine || null;
         if (e.final) { live.done = true; }
       }
@@ -818,16 +818,19 @@
       requestAnimationFrame(() => { const tk = document.getElementById('ticker'); if (tk) { tk.style.scrollBehavior = 'auto'; tk.scrollTop = tk.scrollHeight; tk.style.scrollBehavior = ''; } });
     },
     'mom': d => {
-      const L = live, p = me(), mo = L.moment, i = +d.v, o = mo.options[i];
-      if (L.momentDone) return;
+      const L = live, p = me(), mi = L.cur, mo = L.moments[mi], i = +d.v, o = mo.options[i];
+      if (mo.done) return;
       const plan = CB.momentPlan(L.U, mo, i, p);
-      CB.replayUserMatch(W, L.U, plan.mom);
-      // the replayed match is identical up to the moment; carry on from there with its new ending
-      L.events = buildTimeline(L.U, p, mo);
-      L.ei = L.events.findIndex(e => e.moment) + 1;
+      L.calls.push(plan.mom);
+      CB.replayUserMatch(W, L.U, L.calls);
+      Object.assign(mo, { done: true, choice: o.t, verdict: plan.verdict, fit: plan.fit });
       p.momentum = { attr: o.a }; L.momAttr = o.a;
-      L.choice = o.t; L.verdict = plan.verdict; L.fit = plan.fit; L.momentDone = true;
-      finalizeLive();
+      // a bigger situation later in the replayed match can bring a bonus moment
+      if (!mo.bonus) { const b = CB.findBonusMoment(L.U, p, mo); if (b) L.moments.push(b); }
+      // the replayed match is identical up to this moment; carry on from there with its new ending
+      L.events = buildTimeline(L.U, p, L.moments);
+      L.ei = L.events.findIndex(e => e.moment && e.mi === mi) + 1;
+      if (L.moments.every(m => m.done)) finalizeLive();
       buzz(plan.fit > 0 ? [20, 40, 20] : 15); render();
     },
     'mom-close': () => { live.momentOpen = false; render(); const tk = document.getElementById('ticker'); if (tk) tk.scrollTop = tk.scrollHeight; live.timer = setTimeout(stepLive, 300 / live.speed); },
