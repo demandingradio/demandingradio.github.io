@@ -50,6 +50,7 @@
       team: o.state, tier: tier.id, traits: [], momentum: null, energyBonus: 0, rest: 0, history: [], milestones: {}, honours: [],
       debut: {}, joined: W.year, coachNotes: [], seasonsAt: {},
       fame: 0, ilog: [], blog: [], captRec: {}, captPrefs: { toss: 'auto', style: 'balanced' },
+      god: !!o.god,  // god mode: every hidden number visible and editable (no legacy unlocks)
     };
     CB.refresh(p);
     CB.initPlayerState(p, r);
@@ -655,8 +656,9 @@
     const weakest = theirs.length ? theirs[0] : 50;
     const d = myV - weakest;
     const nm = target === 'shield' ? 'Shield' : 'Test';
+    const my = myV, bar = weakest;
     const text = d > 2 ? `Selectors are talking about you for the ${nm} side.` : d > -2 ? `On the fringe. One big game could get you a ${nm} call-up.` : d > -6 ? `In the frame, but there are players ahead of you for a ${nm} spot.` : `A long way from ${nm} selection. Keep piling up the numbers.`;
-    return { level: lvl, text, heat: clamp((d + 8) / 12, 0, 1) };
+    return { level: lvl, text, heat: clamp((d + 8) / 12, 0, 1), my, bar, target };
   };
   function sameLane(q, p) {
     const bat = r => ['open', 'top', 'mid'].includes(r);
@@ -760,7 +762,7 @@
       test: CB.statLine(p.st.test), shield: CB.statLine(p.st.shield), seconds: CB.statLine(p.st.seconds), county: p.st.county ? CB.statLine(p.st.county) : null,
       capt: p.captRec || {}, legacyPerk: p.legacy || null, fame: p.fame || 0,
       traits: p.traits.slice(), honours: [...new Set(p.honours.map(h => h.text))], potm: p.potm || 0, capNo: p.capNo || null,
-      hidden: { bat: peakBat, bowl: peakBowl, keep: p.role === 'wk' ? Math.round(p.caps.KEEP) : null }, ended,
+      hidden: { bat: peakBat, bowl: peakBowl, keep: p.role === 'wk' ? Math.round(p.caps.KEEP) : null }, ended, god: !!p.god,
     };
   };
 })(typeof window !== 'undefined' ? window : globalThis);

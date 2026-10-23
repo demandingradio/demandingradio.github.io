@@ -24,7 +24,7 @@
   const hasLS = () => { try { return typeof localStorage !== 'undefined' && !!localStorage; } catch (e) { return false; } };
   CB.getUnlocks = () => { if (!hasLS()) return {}; try { return JSON.parse(localStorage.getItem(UKEY) || '{}'); } catch (e) { return {}; } };
   CB.checkUnlocks = function (W, p) {
-    if (!hasLS()) return [];
+    if (!hasLS() || p.god) return [];  // god mode can't earn legacies
     const u = CB.getUnlocks(), fresh = [];
     for (const x of CB.UNLOCKS) if (!u[x.id] && x.test(p)) { u[x.id] = { by: p.first + ' ' + p.last, y: W.season.year }; fresh.push(x); }
     if (fresh.length) { try { localStorage.setItem(UKEY, JSON.stringify(u)); } catch (e) { } }

@@ -84,7 +84,7 @@
     const st = stateOf(p.team), cap = CB.isCaptain(W, p);
     return `<header class="appbar"><div class="avatar" style="--c:${st.color}">${esc(initials(p))}</div>
       <div class="grow"><div class="ab-name">${esc(p.first)} ${esc(p.last)}${cap ? ' <span class="armband" title="Captain">C</span>' : ''}</div><div class="tiny mute">${p.age} · ${esc(roleText(p))}</div></div>
-      ${lvBadge(CB.userLevel(W, p))}<button class="iconbtn" data-a="menu" aria-label="Menu">☰</button></header>`;
+      ${lvBadge(CB.userLevel(W, p))}${p.god ? '<button class="iconbtn godbtn" data-a="god" aria-label="God mode: hidden ratings">👁</button>' : ''}<button class="iconbtn" data-a="menu" aria-label="Menu">☰</button></header>`;
   }
   function nav() {
     const T = [['home', '🏠', 'Home'], ['stats', '📊', 'Stats'], ['season', '🗓️', 'Season'], ['locker', '🧳', 'Locker']];
@@ -158,7 +158,9 @@
     <div class="sec-title">Bats</div>
     <div class="seg"><button class="${c.hand === 'R' ? 'on' : ''}" data-a="chand" data-v="R">Right-handed</button><button class="${c.hand === 'L' ? 'on' : ''}" data-a="chand" data-v="L">Left-handed</button></div>
     ${legs.length ? `<div class="sec-title">Legacy perk</div><div class="choice-grid"><button class="choice ${!c.legacy ? 'on' : ''}" data-a="clegacy" data-v=""><div class="t">None</div><div class="d">A clean slate</div></button>${legs.map(u => `<button class="choice ${c.legacy === u.id ? 'on' : ''}" data-a="clegacy" data-v="${u.id}"><div class="t">${u.icon} ${esc(u.name)}</div><div class="d">${esc(u.desc)}</div></button>`).join('')}</div>` : ''}
-    <p class="small faint mt">Your talent is rolled when you sign. You won't see the numbers. Ever. (Well, until you retire.)</p>
+    <div class="sec-title">Mode</div>
+    <div class="seg"><button class="${!c.god ? 'on' : ''}" data-a="cgod" data-v="">Normal</button><button class="${c.god ? 'on' : ''}" data-a="cgod" data-v="1">👁 God mode</button></div>
+    <p class="small ${c.god ? '' : 'faint'} mt">${c.god ? 'God mode: every hidden rating is visible and editable, training shows exact gains, and key moments show the right read. God-mode careers are marked on the Shelf and can\'t earn legacy unlocks.' : 'Your talent is rolled when you sign. You won\'t see the numbers. Ever. (Well, until you retire.)'}</p>
     ${bar(`<button class="btn primary big" data-a="sign" ${c.role && c.state && (!needSub || c.sub) ? '' : 'disabled'}>Sign rookie contract</button>`)}`;
   };
 
@@ -348,10 +350,55 @@
         <div class="tiny faint mt">Style</div>${seg('style', [['balanced', 'Balanced'], ['attack', 'Attacking'], ['defend', 'Cautious']])}
         <button class="btn ghost block mt" data-a="resign">Give up the captaincy</button>`
       : `<p class="small mute">Not captain. Selectors look for seniority, big numbers at that level and a strong mental game. State sides from 23, Australia from 25.</p>`}</section>
+      ${p.god ? '<section class="card godcard"><div class="row between"><h3>👁 God mode</h3><button class="btn sm" data-a="god">Open</button></div><p class="small mute">See and tweak every hidden rating. Legacy unlocks are off for this career.</p></section>' : ''}
       <section class="card"><h3>Perks <span class="faint small">${ps.length}/5</span></h3>${ps.length ? ps.map(k => `<div class="perkrow"><span class="pi">${k.icon}</span><div><b>${esc(k.name)}</b><div class="small mute">${esc(k.desc)}</div></div></div>`).join('') : '<p class="faint small">None yet. Debuts, maiden hundreds and five-fors unlock picks.</p>'}</section>
       <section class="card"><h3 class="mb">Legacy unlocks</h3>${CB.UNLOCKS.map(u => `<div class="perkrow ${un[u.id] ? '' : 'dim'}"><span class="pi">${un[u.id] ? u.icon : '🔒'}</span><div class="grow"><b>${esc(u.name)}</b><div class="small mute">${esc(u.need)} · this career ${prog[u.id]}</div></div></div>`).join('')}</section>
       <section class="card"><h3>Training combos</h3><p class="mute small">Put points in both areas in one session: both train harder.</p>${CB.COMBOS.map(c => `<span class="combo">${esc(c.name)}: ${c.need.map(k => CB.focusLabel(CB.FOCUS.find(f => f.id === k), p).name).join(' + ')}</span>`).join('')}</section>
       ${(p.lifeLog || []).length ? `<section class="card"><h3 class="mb">Off the field</h3>${p.lifeLog.slice(-8).reverse().map(l => `<div class="tl"><span class="tl-y">${CB.seasonLabel(l.y)}</span><span>${esc(l.t)}: <span class="mute">${esc(l.c)}</span></span></div>`).join('')}</section>` : ''}`;
+  };
+
+  // ---- god mode: every hidden number, editable
+  const GRADE = { club: 'C', journeyman: 'B-', regular: 'B', fringe: 'B+', test: 'A', star: 'A+', great: 'S' };
+  const GOD_X = [
+    ['bias', "Selectors' opinion", -4, 4, 0.1, 'How the selectors see you, beyond the numbers'],
+    ['fame', 'Fame', 0, 30, 1, 'Public profile'],
+    ['injury', 'Injury proneness', 0.4, 1.6, 0.05, '1 = average. Lower breaks down less'],
+    ['power', 'Power', -1, 1, 0.05, 'Extra sixes'],
+    ['inj', 'Games out injured', 0, 10, 1, 'Set to 0 to heal'],
+  ];
+  SCREENS.god = () => {
+    const p = me(); if (!p || !p.god) return SCREENS.hub();
+    const bat = a => 0.5 * (CB.batComposite(a, false) + CB.batComposite(a, true));
+    const sel = CB.selectionView(W, p);
+    const tile = (l, v, sub) => `<div class="gtile"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+    const slider = (g, k, v, min, max, step) => `<input type="range" data-g="${g}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}" aria-label="${k} ${g}">`;
+    const attrRow = k => {
+      const f = CB.FOCUS.find(x => x.id === k), lab = f ? CB.focusLabel(f, p) : { icon: '', name: k };
+      return `<div class="grow-row"><div class="gname">${lab.icon} ${esc(lab.name)}<span class="gval"><b id="gv-a-${k}">${p.a[k].toFixed(1)}</b> / <span id="gv-caps-${k}">${p.caps[k].toFixed(0)}</span></span></div>
+        <div class="gsl"><span>Now</span>${slider('a', k, p.a[k].toFixed(1), 0, 99, 0.5)}</div><div class="gsl"><span>Ceiling</span>${slider('caps', k, p.caps[k].toFixed(0), 0, 99, 1)}</div></div>`;
+    };
+    const groups = [['Batting', CB.BAT_ATTRS], ['Bowling', CB.BOWL_ATTRS], ['Body, mind & gloves', CB.OTHER_ATTRS]];
+    const e = p.e || {}, b = p.bw;
+    const fx = (l, v) => `<div class="item row between"><span class="mute">${l}</span><span class="num">${v == null ? '-' : (+v).toFixed(3)}</span></div>`;
+    return `
+    <div class="pagehead"><button class="iconbtn" data-a="hub">←</button><h2>👁 God mode</h2></div>
+    <div class="gtiles">
+      ${tile('Talent grade', GRADE[p.tier] || '?', esc(p.tier))}
+      ${tile('Batting', bat(p.a).toFixed(1), 'ceiling ' + bat(p.caps).toFixed(0))}
+      ${p.bowls ? tile('Bowling', CB.bowlComposite(p.a, p.sub).toFixed(1), 'ceiling ' + CB.bowlComposite(p.caps, p.sub).toFixed(0)) : ''}
+      ${p.role === 'wk' ? tile('Keeping', p.a.KEEP.toFixed(1), 'ceiling ' + p.caps.KEEP.toFixed(0)) : ''}
+    </div>
+    <p class="tiny faint">50 = an average Shield regular · 56 ≈ an average Test top-order batter · 70+ is greatness. Ceilings fall after 30.</p>
+    <div class="card"><h3 class="mb">Selection</h3>${sel.my != null ? `<div class="item row between"><span class="mute">Your selection score</span><span class="num">${sel.my.toFixed(1)}</span></div><div class="item row between"><span class="mute">Weakest ${sel.target === 'shield' ? 'Shield' : 'Test'} incumbent in your role</span><span class="num">${sel.bar.toFixed(1)}</span></div>` : ''}<p class="small mute mt">${esc(sel.text)}</p></div>
+    ${groups.map(([t, ks]) => `<div class="card"><h3 class="mb">${t}</h3>${ks.map(attrRow).join('')}</div>`).join('')}
+    <div class="card"><h3 class="mb">Everything else</h3>${GOD_X.map(([k, l, min, max, step, d]) => `<div class="grow-row"><div class="gname">${l}<span class="gval"><b id="gv-x-${k}">${(+(p[k] || 0)).toFixed(step < 1 ? 2 : 0)}</b></span></div><div class="gsl solo">${slider('x', k, +(p[k] || 0), min, max, step)}</div><div class="tiny faint">${d}</div></div>`).join('')}
+      <div class="item row between"><span class="mute">Form</span><span class="num">${p.form && p.form.n > 0 ? `bat ${(p.form.bat || 0).toFixed(2)}, bowl ${(p.form.bowl || 0).toFixed(2)} · ${p.form.n} game${p.form.n > 1 ? 's' : ''}` : 'neutral'}</span></div>
+      <div class="item row between"><span class="mute">Energy bonus next session</span><span class="num">${p.energyBonus || 0}</span></div>
+      <div class="item row between"><span class="mute">Life events left this season</span><span class="num">${p.lifeLeft == null ? '-' : p.lifeLeft}</span></div></div>
+    <div class="card"><h3 class="mb">What the engine uses</h3><p class="tiny faint mb">Fitted effects on each ball (logit scale). Negative W = harder to dismiss.</p>
+      ${fx('Wicket vs pace (W)', e.W)}${fx('Wicket vs spin (Ws)', e.Ws)}${fx('Rotation (R)', e.R)}${fx('Boundaries (B)', e.B)}${fx('Sixes (S6)', e.S6)}${fx('Once set, 60+ balls (con)', e.con)}
+      ${b ? fx('Bowling wickets (W)', b.W) + fx('Bowling runs (R)', b.R) + fx('Bowling boundaries (B)', b.B) + fx("Captain's rating (q)", b.q) : ''}</div>
+    ${bar('<button class="btn ghost" data-a="god-undo">Undo changes</button><button class="btn primary big" data-a="god-fill">Fill to ceiling</button>')}`;
   };
 
   // ---- menu
@@ -466,7 +513,9 @@
       <p>${esc(mo.text)}</p>
       <div class="cues">${(mo.cues || []).map(c => `<span class="badge">${esc(c)}</span>`).join('')}</div>
       <p class="tiny faint">Read the conditions and the game: the right call lifts you for the rest of this ${span}.</p>
-      ${mo.options.map((o, i) => { const f = CB.FOCUS.find(x => x.id === o.a); const lab = CB.focusLabel(f, p); return `<button class="opt" data-a="mom" data-v="${i}"><span class="ic">${lab.icon}</span><span class="grow"><div><b>${esc(o.t)}</b></div><div class="tg">Trains ${esc(lab.name)}</div></span></button>`; }).join('')}
+      ${mo.options.map((o, i) => { const f = CB.FOCUS.find(x => x.id === o.a); const lab = CB.focusLabel(f, p);
+        const fit = p.god ? CB.momentPlan(live.U, mo, i, p).fit : null, gt = fit == null ? '' : `<span class="godread ${fit > 0 ? 'good' : fit < 0 ? 'bad' : ''}">${fit > 0 ? '👁 Good read' : fit < 0 ? '👁 Poor read' : '👁 Fair'}</span>`;
+        return `<button class="opt" data-a="mom" data-v="${i}"><span class="ic">${lab.icon}</span><span class="grow"><div><b>${esc(o.t)}</b></div><div class="tg">Trains ${esc(lab.name)}</div></span>${gt}</button>`; }).join('')}
     </div></div>`;
   }
 
@@ -606,7 +655,8 @@
     const groups = [['bat', 'Batting'], ['bowl', 'Bowling'], ['gen', 'Body & mind']];
     const card = f => {
       const lab = CB.focusLabel(f, p), n = T.alloc[f.id] || 0, mom = p.momentum && p.momentum.attr === f.id;
-      return `<div class="focus ${n ? 'on' : ''} ${mom ? 'mom' : ''}">${mom ? '<span class="mtag">MOMENTUM</span>' : ''}<div class="top"><span class="ic">${lab.icon}</span><span>${esc(lab.name)}</span></div>
+      const gv = p.god && p.a[f.id] != null ? `<div class="godnum">${p.a[f.id].toFixed(1)} <span>/ ${p.caps[f.id].toFixed(0)}</span></div>` : '';
+      return `<div class="focus ${n ? 'on' : ''} ${mom ? 'mom' : ''}">${mom ? '<span class="mtag">MOMENTUM</span>' : ''}<div class="top"><span class="ic">${lab.icon}</span><span>${esc(lab.name)}</span></div>${gv}
         <div class="ctl"><button data-a="tminus" data-v="${f.id}" ${n ? '' : 'disabled'} aria-label="Remove a point">−</button><span class="cnt num">${n}</span><button class="plus" data-a="tplus" data-v="${f.id}" ${left ? '' : 'disabled'} aria-label="Add a point">+</button></div></div>`;
     };
     return `
@@ -614,7 +664,7 @@
     ${p.momentum ? `<div class="news gold small">⚡ Momentum from your key moment: <b>${esc(CB.focusLabel(CB.FOCUS.find(f => f.id === p.momentum.attr), p).name)}</b> trains ×${CB.hasPerk(p, 'fastlearner') ? 2 : 1.5}.</div>` : ''}
     <div class="mt">${CB.COMBOS.map(c => `<span class="combo ${combos.includes(c.id) ? 'lit' : ''}">🃏 ${esc(c.name)}</span>`).join('')}</div>
     ${groups.map(([g, title]) => `<div class="fgroup">${title}</div><div class="fgrid">${CB.FOCUS.filter(f => f.group === g).map(card).join('')}</div>`).join('')}
-    <p class="faint small mt">Gains are hidden. Your coach will tell you when something clicks. Repeating one area gives diminishing returns; age slows everything.</p>
+    <p class="faint small mt">${p.god ? '👁 God mode: numbers are now / ceiling. Training gains shrink as you near the ceiling.' : 'Gains are hidden. Your coach will tell you when something clicks.'} Repeating one area gives diminishing returns; age slows everything.</p>
     ${bar(`<button class="btn ghost" data-a="tauto" title="Spread points sensibly">Auto</button><button class="btn primary big" data-a="tdone" ${left ? 'disabled' : ''}>${left ? left + ' energy left' : 'Train'}</button>`)}`;
   };
 
@@ -625,6 +675,7 @@
     return `
     <h2 class="mb">After the match</h2>
     ${P.note ? `<div class="news">${esc(P.note)}</div>` : ''}
+    ${P.gains && P.gains.length ? `<div class="news godnews">👁 Training gains: ${P.gains.map(([k, g, now]) => { const f = CB.FOCUS.find(x => x.id === k); return `${esc(f ? CB.focusLabel(f, p).name : k)} <b>+${g}</b> (now ${now})`; }).join(' · ')}</div>` : ''}
     ${P.combos && P.combos.length ? `<div class="news blue">🃏 Combo${P.combos.length > 1 ? 's' : ''}: ${P.combos.map(esc).join(', ')}</div>` : ''}
     ${P.items.map(i => `<div class="news ${i.cls || ''}">${i.html}</div>`).join('')}
     ${bar(`<button class="btn primary big" data-a="${nextA}">${nextA === 'life' ? 'Between matches ▶' : nextA === 'perk' ? 'Choose a perk ▶' : 'Continue'}</button>`)}`;
@@ -662,14 +713,14 @@
     if (ui.shelfOpen != null && s[ui.shelfOpen]) return shelfEntryHTML(s[ui.shelfOpen], false);
     return `
     <div class="pagehead"><button class="iconbtn" data-a="${W && me() ? 'hub' : 'back-title'}">←</button><h2>The Shelf</h2></div>
-    ${s.length ? `<div class="shelf">${s.map((e, i) => `<div class="pcard r${e.legacy.rank}" data-a="openshelf" data-v="${i}"><div><div class="l">${esc(e.legacy.label)}</div><div class="n mt">${esc(e.name)}</div><div class="tiny mute">${esc(e.years)} · ${esc(stateOf(e.state) ? stateOf(e.state).id : '')}</div></div><div class="small num">${e.test.m ? `${e.test.m} Tests` : e.shield.m ? `${e.shield.m} Shield` : `${e.seconds.m} 2nd XI`}<br><span class="mute">${(() => { const s = e.test.m ? e.test : e.shield.m ? e.shield : e.seconds, bowler = e.role === 'pace' || e.role === 'spin'; return bowler ? s.w + ' wkts' + (e.test.m ? ' @ ' + s.bavg : '') : s.runs + (e.test.m ? ' @ ' + s.avg : ' runs'); })()}</span></div></div>`).join('')}</div>` : '<div class="card"><p class="mute">No careers yet. Every finished career gets a spot here, with a bio and your hidden ratings revealed.</p></div>'}`;
+    ${s.length ? `<div class="shelf">${s.map((e, i) => `<div class="pcard r${e.legacy.rank}" data-a="openshelf" data-v="${i}"><div><div class="l">${esc(e.legacy.label)}${e.god ? ' · 👁' : ''}</div><div class="n mt">${esc(e.name)}</div><div class="tiny mute">${esc(e.years)} · ${esc(stateOf(e.state) ? stateOf(e.state).id : '')}</div></div><div class="small num">${e.test.m ? `${e.test.m} Tests` : e.shield.m ? `${e.shield.m} Shield` : `${e.seconds.m} 2nd XI`}<br><span class="mute">${(() => { const s = e.test.m ? e.test : e.shield.m ? e.shield : e.seconds, bowler = e.role === 'pace' || e.role === 'spin'; return bowler ? s.w + ' wkts' + (e.test.m ? ' @ ' + s.bavg : '') : s.runs + (e.test.m ? ' @ ' + s.avg : ' runs'); })()}</span></div></div>`).join('')}</div>` : '<div class="card"><p class="mute">No careers yet. Every finished career gets a spot here, with a bio and your hidden ratings revealed.</p></div>'}`;
   };
   function shelfEntryHTML(e, fresh) {
     const row = (l, s) => s && s.m ? `<tr><td>${l}</td><td>${s.m}</td><td class="b">${s.runs}</td><td>${s.avg}</td><td>${s.hs}</td><td>${s.h100}</td><td class="b">${s.w}</td><td>${s.bavg}</td><td>${s.bb}</td></tr>` : '';
     const leg = e.legacyPerk && CB.UNLOCKS.find(u => u.id === e.legacyPerk);
     return `
     ${fresh ? '' : `<div class="pagehead"><button class="iconbtn" data-a="closeshelf">←</button><h2>The Shelf</h2></div>`}
-    <div class="card pcard r${e.legacy.rank} flip" style="min-height:0;cursor:default"><div class="l">${esc(e.legacy.label)}</div><div class="n" style="font-size:38px;margin-top:6px">${esc(e.name)}</div><div class="mute small">${esc(e.years)} · ${e.role === 'pace' || e.role === 'spin' ? CB.SUB_INFO[e.sub] : CB.ROLE_INFO[e.role].label} · ${esc(stateOf(e.state).name)}${e.capNo ? ' · Test cap ' + e.capNo : ''}</div>${leg ? `<div class="chip mt">${leg.icon} ${esc(leg.name)}</div>` : ''}</div>
+    <div class="card pcard r${e.legacy.rank} flip" style="min-height:0;cursor:default"><div class="l">${esc(e.legacy.label)}</div><div class="n" style="font-size:38px;margin-top:6px">${esc(e.name)}</div><div class="mute small">${esc(e.years)} · ${e.role === 'pace' || e.role === 'spin' ? CB.SUB_INFO[e.sub] : CB.ROLE_INFO[e.role].label} · ${esc(stateOf(e.state).name)}${e.capNo ? ' · Test cap ' + e.capNo : ''}</div>${leg ? `<div class="chip mt">${leg.icon} ${esc(leg.name)}</div>` : ''}${e.god ? '<div class="chip mt">👁 God mode</div>' : ''}</div>
     <div class="card"><p class="bio">${esc(e.bio)}</p></div>
     <div class="card scroll-x"><table><tr><th></th><th>M</th><th>Runs</th><th>Avg</th><th>HS</th><th>100</th><th>Wk</th><th>Avg</th><th>BB</th></tr>${row('Tests', e.test)}${row('Shield', e.shield)}${row('County', e.county)}${row('2nd XI', e.seconds)}</table></div>
     ${e.capt && (e.capt.test || e.capt.shield) ? `<div class="card"><h3 class="mb">Captaincy</h3>${['test', 'shield'].filter(l => e.capt[l]).map(l => `<div class="item row between"><span>${LV[l]}</span><span class="num">${e.capt[l].m} M · ${e.capt[l].w}W ${e.capt[l].l}L ${e.capt[l].d}D</span></div>`).join('')}</div>` : ''}
@@ -777,12 +828,13 @@
     'csub': d => { readNames(); ui.create.sub = d.v; render(); },
     'chand': d => { readNames(); ui.create.hand = d.v; render(); },
     'clegacy': d => { readNames(); ui.create.legacy = d.v; render(); },
+    'cgod': d => { readNames(); ui.create.god = !!d.v; render(); },
     'sign': () => {
       readNames();
       const c = ui.create;
       const role = c.role === 'bowl' ? (c.sub === 'finger' || c.sub === 'wrist' ? 'spin' : 'pace') : c.role;
       W = CB.newWorld((Math.random() * 4294967295) >>> 0, 2026);
-      CB.createUser(W, { first: (c.first || 'Sam').trim(), last: (c.last || 'Smith').trim(), state: c.state, role, sub: c.sub, hand: c.hand, legacy: c.legacy || null });
+      CB.createUser(W, { first: (c.first || 'Sam').trim(), last: (c.last || 'Smith').trim(), state: c.state, role, sub: c.sub, hand: c.hand, legacy: c.legacy || null, god: !!c.god });
       pending = null; save(); go('scout');
     },
     'hub': () => { if (pending && (pending.stage === 'train' || pending.stage === 'post')) pending = null; save(); go('hub', 'home'); },
@@ -790,6 +842,9 @@
     'statview': d => { ui.statView = d.v; render(); },
     'chart': d => { ui.chart = d.v; render(); },
     'menu': () => go('menu'),
+    'god': () => { const p = me(); if (!p || !p.god) return; ui.godUndo = JSON.stringify({ a: p.a, caps: p.caps, x: GOD_X.map(([k]) => p[k]) }); go('god'); window.scrollTo(0, 0); },
+    'god-fill': () => { const p = me(); for (const k of CB.ATTRS) p.a[k] = Math.max(p.a[k], p.caps[k]); CB.refresh(p); save(); toast('Every skill filled to its ceiling'); render(); },
+    'god-undo': () => { const p = me(); if (!ui.godUndo) return; const u = JSON.parse(ui.godUndo); p.a = u.a; p.caps = u.caps; GOD_X.forEach(([k], i) => { p[k] = u.x[i]; }); CB.refresh(p); save(); toast('Back to how you were'); render(); },
     'about': () => go('about'), 'about2': () => go('about'),
     'back-title': () => go('title'), 'to-title': () => { save(); go('title'); },
     'shelf': () => { ui.shelfOpen = null; go('shelf'); },
@@ -852,6 +907,7 @@
       p.energyBonus = 0;            // spent this session (life events / combos set it for the next one)
       const res = CB.train(W, p, T.alloc);
       pending.post.note = res.note; pending.post.combos = res.combos.map(c => c.name);
+      if (p.god) pending.post.gains = Object.entries(res.gains).filter(([k, g]) => g > 0).map(([k, g]) => [k, +g.toFixed(2), +p.a[k].toFixed(1)]);
       const sel = CB.selectionView(W, p);
       pending.post.items.push({ cls: 'blue', html: `📋 ${esc(sel.text)}` });
       if (W.county && !W.season.slots.slice(W.season.cursor).some(s => s.type === 'county')) pending.post.items.push({ cls: 'blue', html: `🏴 That's the end of your summer with ${esc(CB.countyById(W.county.id).name)}: ${W.county.res[0]} won, ${W.county.res[1]} lost, ${W.county.res[2]} drawn.` });
@@ -884,6 +940,16 @@
     },
     'retire': () => { const p = me(); if (confirm(`Retire ${p.first} ${p.last} at ${p.age}? This puts your career on the Shelf.`)) finishCareer('retired'); },
   };
+  $app.addEventListener('input', e => {
+    const t = e.target; if (!t.dataset || !t.dataset.g) return;
+    const o = document.getElementById(`gv-${t.dataset.g}-${t.dataset.k}`); if (o) o.textContent = (+t.value).toFixed(t.dataset.g === 'caps' ? 0 : t.step && +t.step < 1 ? (t.dataset.g === 'a' ? 1 : 2) : 0);
+  });
+  $app.addEventListener('change', e => {
+    const t = e.target, p = me(); if (!t.dataset || !t.dataset.g || !p || !p.god) return;
+    const v = +t.value, k = t.dataset.k;
+    if (t.dataset.g === 'a') p.a[k] = v; else if (t.dataset.g === 'caps') p.caps[k] = v; else p[k] = v;
+    CB.refresh(p); save(); render();
+  });
   function readNames() { const f = document.getElementById('fn'), l = document.getElementById('ln'); if (f && ui.create) { ui.create.first = f.value; ui.create.last = l.value; } }
   $app.addEventListener('click', e => {
     const t = e.target.closest('[data-a]'); if (!t || t.disabled) return;
