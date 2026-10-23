@@ -333,6 +333,8 @@
     }
     return out;
   }
+  CB.momentTriggers = (U, p) => momentTriggers(U, p);
+  CB.momentFrom = (U, p, t, bonus) => momentFrom(U, p, t, bonus);
   CB.findMoment = function (U, p) {
     if (U.sides[U.ti].indexOf(p.id) < 0) return null;
     const t = momentTriggers(U, p).find(x => x.main);

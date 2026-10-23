@@ -3,7 +3,7 @@
   'use strict';
   const CB = window.CB;
   const $app = document.getElementById('app');
-  const SAVE = 'cricboy.save.v1', SHELF = 'cricboy.shelf.v1';
+  const SAVE = 'cricboy.save.v1', SHELF = 'cricboy.shelf.v1', ARC = 'cricboy.arcade.v1';
   let W = null;                 // the world (persisted)
   let pending = null;           // between-screen state (persisted, compact)
   let live = null;              // current match replay (memory only)
@@ -13,7 +13,7 @@
   const strip = (k, v) => (k === 'e' || k === 'bw' || k === '_ctx') ? undefined : v;
   function save() {
     if (!W) return;
-    try { localStorage.setItem(SAVE, JSON.stringify({ W, pending, screen: ui.screen }, strip)); } catch (e) { toast('Could not save (storage full?)'); }
+    try { localStorage.setItem(W.arcade ? ARC : SAVE, JSON.stringify({ W, pending, screen: ui.screen }, strip)); } catch (e) { toast('Could not save (storage full?)'); }
   }
   function load() {
     try {
@@ -102,8 +102,12 @@
       <div class="logo">CRIC<span>BOY</span></div>
       <div class="tagline">Seventeen years old. A Second XI cap. A dream of a baggy green.<br><span class="small faint">Every ball simulated from 2.5 million real Test, Sheffield Shield and County Championship deliveries.</span></div>
       <div class="col" style="max-width:340px;margin:8px auto 0;width:100%">
+        <div class="modelabel">Classic Simulation</div>
         ${hasSave() ? `<button class="btn primary big" data-a="continue">Continue career</button>` : ''}
         <button class="btn ${hasSave() ? '' : 'primary'} big" data-a="new">New career</button>
+        <div class="modelabel">Arcade</div>
+        <button class="btn arcbtn big" data-a="arc-home">🕹️ Arcade 1 · 2 · 3</button>
+        <div class="modelabel"></div>
         <button class="btn" data-a="shelf">🏆 The Shelf${getShelf().length ? ' · ' + getShelf().length : ''}</button>
         <button class="btn" data-a="legacy">👑 Legacy unlocks · ${nU}/${CB.UNLOCKS.length}</button>
         <button class="btn ghost" data-a="about">How it works</button>
@@ -470,7 +474,7 @@
       <div class="speed"><span class="ff" id="ff" title="Fast-forwarding: you're not in the middle">⏩</span><button class="btn ${L.speed === 1 ? 'primary' : ''}" data-a="spd" data-v="1">1×</button><button class="btn ${L.speed === 3 ? 'primary' : ''}" data-a="spd" data-v="3">3×</button><button class="btn" data-a="skip">Skip ⏭</button></div></div>
     <div class="ticker mt" id="ticker">${L.shown.map(tickHTML).join('')}</div>
     ${bar(L.done ? '<button class="btn primary big" data-a="result">Result & scorecard</button>' : '<button class="btn big" disabled>Play in progress…</button>')}
-    ${L.momentOpen ? momentHTML() : ''}`;
+    ${L.momentOpen ? momentHTML() : ''}${L.overlay ? L.overlay() : ''}`;
   };
   function scoreboardHTML() {
     const L = live, M = L.U.M, s = L.sb;
@@ -501,6 +505,7 @@
   const tickHTML = t => `<div class="tick ${t.cls || ''}">${t.html}</div>`;
   function momentHTML() {
     const mo = live.moments[live.cur], p = me();
+    if (live.sheet) { const h = live.sheet(mo); if (h) return h; }
     const span = mo.side === 'bat' ? 'innings' : mo.captain ? 'match' : 'spell';
     if (mo.done) {
       const after = mo.fit > 0 ? `You'll play better for the rest of this ${span}.` : mo.fit < 0 ? 'It could cost you.' : 'No edge either way.';
@@ -533,8 +538,10 @@
       // the user's own innings / spell, snapshotted onto every event for the scoreboard strip
       const mine = { bat: null, bowl: null };
       // inv: the user is in the middle (batting, or in a bowling spell); everything else plays at triple speed
-      const push = e => { e.mine = { bat: mine.bat && { ...mine.bat }, bowl: mine.bowl && { ...mine.bowl } }; e.inv = I.bat === U.ti ? !!(mine.bat && !mine.bat.out) : (e.sc ? e.sc.balls : 0) - lastMyB <= 12; ev.push(e); };
+      let li = null;
+      const push = e => { if (e.li == null && li != null) e.li = li; e.mine = { bat: mine.bat && { ...mine.bat }, bowl: mine.bowl && { ...mine.bowl } }; e.inv = I.bat === U.ti ? !!(mine.bat && !mine.bat.out) : (e.sc ? e.sc.balls : 0) - lastMyB <= 12; ev.push(e); };
       I.log.forEach((L, i) => {
+        li = i;
         while (marks.length && marks[0].at === i) { const m = marks.shift(); push({ k, html: `Stumps, day ${m.day}: ${esc(bt.short || bt.name)} ${lastSc.runs}/${lastSc.wk}`, cls: 'day', sc: lastSc, day: m.day + 1 }); }
         const sc = { runs: L.sc, wk: L.wk, balls: L.b };
         moments.forEach((mo, mi) => { if (mo.inns === k && mo.at === i) push({ k, moment: true, mi, sc: lastSc }); });
@@ -550,6 +557,7 @@
           if (sIsMe && (L.r === 4 || L.r === 6)) push({ k, html: `${L.r === 6 ? '💥 SIX' : 'FOUR'} off ${esc(nm(I.fld, L.bw))}`, cls: 'me', sc, fast: true });
         }
         if (L.w === 'drop' && (sIsMe || (I.fld === U.ti && L.x && L.x.fielder === meIdx))) push({ k, html: sIsMe ? '😮‍💨 Dropped! You survive.' : '😬 You put down a chance.', cls: 'me', sc });
+        else if (L.w === 'drop' && bIsMe) push({ k, html: `😩 Dropped off your bowling! ${esc(nm(I.bat, L.s))} survives`, cls: 'me', sc, myDrop: true });
         if (L.w === 'W') {
           const out = L.x.out, b = I.bats[out], how = CB.dismissalText(M, I, b);
           const isMe = I.bat === U.ti && out === meIdx;
@@ -566,6 +574,7 @@
         }
         lastSc = sc;
       });
+      li = null;
       const endTxt = I.closed === 'allout' ? `${esc(bt.name)} all out for ${I.runs}` : I.closed === 'declared' ? `${esc(bt.name)} declare at ${I.runs}/${I.wk}` : I.closed === 'target' ? `${esc(bt.name)} reach the target` : `${esc(bt.name)} ${I.runs}/${I.wk} when play ends`;
       const endSc = { runs: I.runs, wk: I.wk, balls: I.balls };
       if (mine.bat && !mine.bat.out) push({ k, html: `✅ <b>Not out.</b> You finish ${mine.bat.runs}* off ${mine.bat.balls} balls`, cls: 'me', sc: endSc });
@@ -591,6 +600,7 @@
       if (sb) { sb.classList.remove('flash-out'); void sb.offsetWidth; sb.classList.add('flash-out'); }
       buzz([120, 60, 220]);
     }
+    if (L.onEvent && L.onEvent(e) === 'pause') return;
     if (e.final) { L.done = true; render(); return; }
     const base = e.meOut ? 1900 : e.fast ? 140 : e.cls === 'w' || e.cls === 'mew' ? 620 : e.cls === 'day' ? 700 : 380;
     // 3x whenever you're not batting or bowling
@@ -749,6 +759,15 @@
     if (!moment) finalizeLive();
     go('prematch');
   }
+  function classicChoose(L, mo, i, p) {
+    const plan = CB.momentPlan(L.U, mo, i, p), o = mo.options[i];
+    L.calls.push(plan.mom);
+    CB.replayUserMatch(W, L.U, L.calls);
+    p.momentum = { attr: o.a }; L.momAttr = o.a;
+    // a bigger situation later in the replayed match can bring a bonus moment
+    if (!mo.bonus) { const b = CB.findBonusMoment(L.U, p, mo); if (b) L.moments.push(b); }
+    return plan;
+  }
   function finalizeLive() {
     const p = me(), L = live;
     CB.commitUserMatch(W, L.U);
@@ -867,29 +886,25 @@
         if (e.moment && !live.moments[e.mi].done) { live.ei++; live.sb = { k: e.k, ...e.sc }; live.mine = e.mine || null; live.cur = e.mi; live.momentOpen = true; break; }
         live.ei++; if (!e.moment) live.shown.push(e); live.sb = { k: e.k, ...e.sc }; live.mine = e.mine || null;
         if (e.final) { live.done = true; }
+        if (live.onEvent && live.onEvent(e, true) === 'pause') break;  // arcade: a review to decide
       }
-      if (live.ei >= live.events.length) live.done = true;
+      if (live.ei >= live.events.length && !live.paused) live.done = true;
       render();
       requestAnimationFrame(() => { const tk = document.getElementById('ticker'); if (tk) { tk.style.scrollBehavior = 'auto'; tk.scrollTop = tk.scrollHeight; tk.style.scrollBehavior = ''; } });
     },
     'mom': d => {
       const L = live, p = me(), mi = L.cur, mo = L.moments[mi], i = +d.v, o = mo.options[i];
       if (mo.done) return;
-      const plan = CB.momentPlan(L.U, mo, i, p);
-      L.calls.push(plan.mom);
-      CB.replayUserMatch(W, L.U, L.calls);
+      const plan = (L.onChoose || classicChoose)(L, mo, i, p);
       Object.assign(mo, { done: true, choice: o.t, verdict: plan.verdict, fit: plan.fit });
-      p.momentum = { attr: o.a }; L.momAttr = o.a;
-      // a bigger situation later in the replayed match can bring a bonus moment
-      if (!mo.bonus) { const b = CB.findBonusMoment(L.U, p, mo); if (b) L.moments.push(b); }
       // the replayed match is identical up to this moment; carry on from there with its new ending
       L.events = buildTimeline(L.U, p, L.moments);
       L.ei = L.events.findIndex(e => e.moment && e.mi === mi) + 1;
-      if (L.moments.every(m => m.done)) finalizeLive();
+      if (L.moments.every(m => m.done)) (L.onFinal || finalizeLive)();
       buzz(plan.fit > 0 ? [20, 40, 20] : 15); render();
     },
     'mom-close': () => { live.momentOpen = false; render(); const tk = document.getElementById('ticker'); if (tk) tk.scrollTop = tk.scrollHeight; live.timer = setTimeout(stepLive, 300 / live.speed); },
-    'result': () => { clearTimeout(live.timer); go('result'); },
+    'result': () => { clearTimeout(live.timer); go(live.arcade ? 'arc-result' : 'result'); },
     'sctab': d => { ui.scTab = +d.v; render(); },
     'train': () => { clearTimeout(live && live.timer); go('train'); },
     'tplus': d => { const T = pending.train; const used = Object.values(T.alloc).reduce((a, b) => a + b, 0); if (used < T.energy) { T.alloc[d.v] = (T.alloc[d.v] || 0) + 1; buzz(6); render(); } },
@@ -983,6 +998,12 @@
   window.addEventListener('beforeunload', () => { if (W && !(live && live.final === false)) save(); });
   // test hook (?dev): drive the real actions from the console
   if (/[?&]dev/.test(location.search)) window.CBUI = { ACT, ui, render, get W() { return W; }, get live() { return live; }, get pending() { return pending; } };
-  // boot
-  render();
+  window.CBApp = {
+    SCREENS, ACT, ui, render, go, save, toast, buzz, confetti, esc, bar, lvBadge, conditions, buildTimeline, stepLive, scorecardHTML, tickHTML,
+    get W() { return W; }, set W(v) { W = v; }, get live() { return live; }, set live(v) { live = v; },
+    get pending() { return pending; }, set pending(v) { pending = v; }, ARC,
+    saveClassic: () => { if (W && !W.arcade) save(); },
+  };
+  // boot (after the arcade screens have registered)
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render); else render();
 })();
