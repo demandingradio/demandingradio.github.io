@@ -56,161 +56,74 @@
   CB.captainMod = p => 0.0025 * (55 - p.a.MEN);
 
   // ---------------------------------------------------------------- life events
-  // fx: form {bat, bowl, n} (bat > 0 = harder to bat; bowl > 0 = more wickets) | energy n | attr {K: d} | cap {K: d}
-  //     bias d (selectors) | fame d | inj n (miss games) | rest n | perk true
-  const BAT = p => ['open', 'top', 'mid', 'wk', 'ar'].includes(p.role);
-  const BOWL = p => !!p.bowls && (p.role === 'pace' || p.role === 'spin' || p.role === 'ar');
-  const LVL = (W, p) => CB.userLevel(W, p);
-  CB.LIFE = [
-    { id: 'nightout', icon: '🍻', title: 'Team night out', when: () => true,
-      text: () => 'The boys are heading into town to celebrate. Your phone keeps buzzing.',
-      options: [
-        { t: 'Go big', roll: [{ p: 0.55, fx: { bias: 1, fame: 1 }, out: 'Legendary night. The senior players love you now.' }, { p: 0.45, fx: { form: { bat: 0.08, bowl: -0.06, n: 1 }, energy: -1 }, out: 'You wake up on a mate\'s couch. Next match is going to hurt.' }] },
-        { t: 'One drink, then home', fx: { bias: 0.4 }, out: 'Showed your face, kept your head. Sensible.' },
-        { t: 'Stay in, ice bath, early night', fx: { rest: 1, energy: 1 }, out: 'Fresh as a daisy. Slightly boring.' }] },
-    { id: 'sponsor', icon: '🏏', title: 'Bat sponsor calling', when: (W, p) => LVL(W, p) !== 'seconds' || p.fame >= 2,
-      text: () => 'A bat company wants your face on their posters. The photo shoot is on a training day.',
-      options: [
-        { t: 'Sign. Smile for the camera', fx: { fame: 2, energy: -1 }, out: 'You\'re on a billboard in your home town. Training suffered a bit.' },
-        { t: 'Ask them to shoot on a rest day', roll: [{ p: 0.6, fx: { fame: 1 }, out: 'They agreed. Win-win.' }, { p: 0.4, fx: {}, out: 'They signed someone else.' }] },
-        { t: 'Not interested. Cricket first', fx: { attr: { MEN: 0.8 } }, out: 'Coach noticed. "That\'s the right attitude."' }] },
-    { id: 'interview', icon: '🎤', title: 'Microphone in your face', when: (W, p) => LVL(W, p) !== 'seconds',
-      text: () => 'A journalist asks if the selectors have got it wrong with the current XI.',
-      options: [
-        { t: 'Back your mates, say nothing', fx: { bias: 0.6 }, out: 'Bland, safe, and the selectors liked it.' },
-        { t: 'Honest: "I deserve a spot"', roll: [{ p: 0.5, fx: { bias: 1.2, fame: 1 }, out: 'Bold. The headline worked in your favour.' }, { p: 0.5, fx: { bias: -1.2, fame: 1 }, out: 'The chairman of selectors was not amused.' }] },
-        { t: 'Crack a joke', fx: { fame: 1 }, out: 'It went viral. Nobody remembers the question.' }] },
-    { id: 'technique', icon: '🛠️', title: 'Technical overhaul?', when: (W, p) => BAT(p) && p.age <= 30,
-      text: () => 'The batting coach wants to change your trigger movement. "Short-term pain, long-term gain."',
-      options: [
-        { t: 'Rebuild it properly', fx: { form: { bat: 0.1, n: 2 }, cap: { DEF: 1.5, PACE: 1 } }, out: 'Feels awful in the nets. But something is there.' },
-        { t: 'Small tweak only', fx: { attr: { DEF: 0.8 } }, out: 'A little tidier. No drama.' },
-        { t: 'If it ain\'t broke…', fx: { attr: { CON: 0.5 } }, out: 'You trust what got you here.' }] },
-    { id: 'action', icon: '🌀', title: 'Remodel your action?', when: (W, p) => BOWL(p) && p.age <= 31,
-      text: p => 'A biomechanist reckons your action is costing you ' + (CB.isSpinner(p) ? 'revs' : 'pace') + '. Rebuilding it means a few rough weeks.',
-      options: [
-        { t: 'Rebuild it', fx: { form: { bowl: -0.1, n: 2 }, cap: { STK: 2 } }, out: 'Your first spell back was all over the place. Long game.' },
-        { t: 'Work on accuracy instead', fx: { attr: { ACC: 1 } }, out: 'Hitting the top of off more often already.' },
-        { t: 'Leave it alone', fx: { rest: 1 }, out: 'Fine. Your shoulder thanks you.' }] },
-    { id: 'niggle', icon: '🩹', title: 'A niggle', when: () => true,
-      text: p => 'Your ' + (p.bowls && !CB.isSpinner(p) ? 'side' : 'hamstring') + ' is tight. The physio says it could be nothing. Could be something.',
-      options: [
-        { t: 'Rest a game', fx: { inj: 1, rest: 2 }, out: 'You sit one out. Fully fit after.' },
-        { t: 'Strap it and play', roll: [{ p: 0.7, fx: {}, out: 'Held up fine.' }, { p: 0.3, fx: { inj: 2 }, out: 'It went. You\'re out for a couple of games.' }] },
-        { t: 'Extra rehab sessions', fx: { energy: -1, attr: { FIT: 1 } }, out: 'Hours with the physio. Stronger for it.' }] },
-    { id: 'club', icon: '🏟️', title: 'Your old club needs you', when: (W, p) => LVL(W, p) !== 'test',
-      text: () => 'Grade cricket this weekend: your junior club is short of players for a big game.',
-      options: [
-        { t: 'Turn out for them', roll: [{ p: 0.6, fx: { form: { bat: -0.06, bowl: 0.04, n: 1 }, fame: 1 }, out: 'You smash it. Confidence high, locals adore you.' }, { p: 0.4, fx: { energy: -1 }, out: 'Got a duck on a goat track. Tired legs too.' }] },
-        { t: 'Run a clinic for their juniors instead', fx: { fame: 1, attr: { MEN: 0.5 } }, out: 'Thirty kids now want to be you.' },
-        { t: 'Rest', fx: { energy: 1 }, out: 'Feet up.' }] },
-    { id: 'legend', icon: '🧓', title: 'A legend in the nets', when: () => true,
-      text: () => 'A former Australian great is at training and offers to spend an hour with you.',
-      options: [
-        { t: 'Ask about the mental side', fx: { attr: { MEN: 1.2 }, cap: { MEN: 1 } }, out: '"It\'s all between the ears, son." It stuck.' },
-        { t: 'Ask about technique', fx: {}, out: 'One tiny tip. It changes everything.' },
-        { t: 'Too shy. Watch from a distance', fx: {}, out: 'You regret it on the drive home.' }] },
-    { id: 'trolls', icon: '📱', title: 'Social media pile-on', when: (W, p) => p.lastMatch && p.lastMatch.quiet,
-      text: () => 'After a quiet game, the replies are brutal. Someone made a meme.',
-      options: [
-        { t: 'Fire back', roll: [{ p: 0.3, fx: { fame: 2 }, out: 'Your comeback was funnier than the meme. Fans love it.' }, { p: 0.7, fx: { bias: -0.8, form: { bat: 0.04, n: 1 } }, out: 'Bad idea. It\'s a story now.' }] },
-        { t: 'Delete the app for a week', fx: { attr: { MEN: 1 } }, out: 'Quieter head. Better sleep.' },
-        { t: 'Use it as fuel', fx: { form: { bat: -0.05, bowl: 0.04, n: 1 } }, out: 'You\'ve screenshotted it. Wait till next game.' }] },
-    { id: 'wedding', icon: '💒', title: 'Family wedding', when: () => true,
-      text: () => 'Your cousin is getting married on the rest day. It\'s a six-hour round trip.',
-      options: [
-        { t: 'Go. Family first', fx: { energy: -1, attr: { MEN: 0.6 } }, out: 'Grandma cried. You danced. Worth it.' },
-        { t: 'Video call in', fx: { bias: 0.3 }, out: 'You missed the cake. Stayed on top of training.' }] },
-    { id: 'uni', icon: '🎓', title: 'Exams vs nets', when: (W, p) => p.age <= 21,
-      text: () => 'Uni exams clash with extra net sessions. Your mum has opinions.',
-      options: [
-        { t: 'Study. Backup plans matter', fx: { energy: -1, attr: { MEN: 0.8 } }, out: 'Passed. Brain tired.' },
-        { t: 'Defer and go all in on cricket', fx: { energy: 1, bias: 0.4 }, out: 'Mum is disappointed. The coach is thrilled.' }] },
-    { id: 'job', icon: '🧰', title: 'Part-time job', when: (W, p) => LVL(W, p) === 'seconds' && p.age <= 24,
-      text: () => 'Second XI money doesn\'t pay rent. A mate offers you shifts on his landscaping crew.',
-      options: [
-        { t: 'Take the shifts', fx: { energy: -1, attr: { FIT: 1, STA: 0.8 } }, out: 'Hard yakka. Your shoulders are huge now.' },
-        { t: 'Live on noodles, train full-time', fx: { energy: 1 }, out: 'Two-minute noodles, again. But you\'re in the nets every day.' }] },
-    { id: 'beep', icon: '⏱️', title: 'Pre-season fitness test', when: () => true,
-      text: () => 'The dreaded yo-yo test is on Monday. Selectors look at the numbers.',
-      options: [
-        { t: 'Train like a maniac all weekend', roll: [{ p: 0.7, fx: { bias: 0.8, attr: { FIT: 0.8 } }, out: 'Top three in the squad. Noted.' }, { p: 0.3, fx: { inj: 1 }, out: 'Pulled a hammy in the final shuttle.' }] },
-        { t: 'Steady prep', fx: { attr: { FIT: 0.5 } }, out: 'Middle of the pack. Nobody noticed. That\'s fine.' }] },
-    { id: 'rival', icon: '🗯️', title: 'A rival mouths off', when: (W, p) => LVL(W, p) !== 'seconds',
-      text: () => 'An opponent told a podcast you "can\'t handle the short ball". You play them next.',
-      options: [
-        { t: 'Let the bat do the talking', fx: { form: { bat: -0.05, bowl: 0.04, n: 1 }, attr: { CON: 0.5 } }, out: 'Laser focus.' },
-        { t: 'Hit back in the papers', roll: [{ p: 0.5, fx: { fame: 2 }, out: 'The rivalry is now a thing. Ratings!' }, { p: 0.5, fx: { form: { bat: 0.06, n: 1 } }, out: 'You\'ve made it personal. Now you have to deliver.' }] },
-        { t: 'Laugh it off', fx: { attr: { MEN: 0.5 } }, out: 'Water off a duck\'s back.' }] },
-    { id: 'charity', icon: '🎗️', title: 'Charity match', when: (W, p) => p.fame >= 1 || LVL(W, p) !== 'seconds',
-      text: () => 'A children\'s hospital fundraiser wants you to bat in fancy dress.',
-      options: [
-        { t: 'Absolutely. Bring the costume', fx: { fame: 2, energy: -1 }, out: 'You batted as a banana. Raised $40k.' },
-        { t: 'Donate a signed bat instead', fx: { fame: 1 }, out: 'Kind and low-key.' }] },
-    { id: 'newbat', icon: '🪵', title: 'A new bat', when: (W, p) => BAT(p),
-      text: () => 'Your favourite bat has cracked. The new one feels heavier and pings off the middle.',
-      options: [
-        { t: 'Use it straight away', fx: { attr: { ATT: 0.8 } }, out: 'The ball flies. You feel unstoppable.' },
-        { t: 'Glue the old one, keep it for match days', fx: { attr: { CON: 0.6 } }, out: 'Superstition wins. Feels right.' }] },
-    { id: 't20', icon: '💰', title: 'Overseas T20 offer', when: (W, p) => LVL(W, p) !== 'seconds' && p.age >= 21,
-      text: () => 'A franchise league in the Gulf offers good money for a fortnight. It clashes with training camp.',
-      options: [
-        { t: 'Take the money', fx: { fame: 1, bias: -1, attr: { ATT: 1 } }, out: 'Fun, flashy, and your red-ball coach is grumpy.' },
-        { t: 'Decline. Red ball is the dream', fx: { bias: 1 }, out: 'The selectors were quietly impressed.' }] },
-    { id: 'meditate', icon: '🧘', title: 'The team psychologist', when: () => true,
-      text: () => 'The squad psych suggests daily visualisation sessions.',
-      options: [
-        { t: 'Commit to it', fx: { attr: { MEN: 1, CON: 0.6 } }, out: 'Calmer at the crease already.' },
-        { t: 'Not my thing', fx: {}, out: 'Fair enough.' }] },
-    { id: 'icebath', icon: '🧊', title: 'Recovery protocol', when: (W, p) => p.age >= 24,
-      text: () => 'Sports science want you on a new recovery program: ice baths, sleep tracking, no late nights.',
-      options: [
-        { t: 'Full buy-in', fx: { attr: { FIT: 1 }, rest: 1 }, out: 'Your body feels five years younger.' },
-        { t: 'Half-hearted', fx: { attr: { FIT: 0.3 } }, out: 'Some ice baths. Some late nights.' }] },
-    { id: 'mystery', icon: '🎭', title: 'A mystery spinner in the nets', when: (W, p) => BAT(p),
-      text: () => 'A teenager with a weird action is bowling in the nets. Nobody can read him.',
-      options: [
-        { t: 'Face him for an hour', fx: { attr: { SPIN: 1.2 } }, out: 'Bamboozled at first. Then you started picking him.' },
-        { t: 'Stick to your routine', fx: { attr: { DEF: 0.4 } }, out: 'Routine is king.' }] },
-    { id: 'tailbat', icon: '🛡️', title: 'Batting homework', when: (W, p) => p.role === 'pace' || p.role === 'spin',
-      text: () => 'The coach wants his bowlers to add runs. Extra batting sessions after bowling?',
-      options: [
-        { t: 'Yes. Every run counts', fx: { attr: { DEF: 1.2, ATT: 0.6 }, energy: -1 }, out: 'You\'re starting to look like a proper No. 8.' },
-        { t: 'My job is wickets', fx: { attr: { ACC: 0.5 } }, out: 'Focused. Single-minded.' }] },
-    { id: 'foodpoison', icon: '🤢', title: 'Dodgy prawns', when: () => true,
-      text: () => 'Team dinner. The prawns were questionable. You feel awful the morning of travel.',
-      options: [
-        { t: 'Tough it out', fx: { form: { bat: 0.06, bowl: -0.05, n: 1 } }, out: 'Grim. You got through it.' },
-        { t: 'Tell the doctor', roll: [{ p: 0.5, fx: { inj: 1 }, out: 'Doctor orders: you sit out a game.' }, { p: 0.5, fx: { rest: 1 }, out: 'A drip and a nap. Good as new.' }] }] },
-    { id: 'contract', icon: '✍️', title: 'Contract talks', when: (W, p) => LVL(W, p) !== 'seconds' && p.age >= 22,
-      text: p => CB.stateById(p.team).name + ' offer you a new deal. Your manager says hold out for more.',
-      options: [
-        { t: 'Sign on the spot', fx: { bias: 0.8 }, out: 'Loyal. The state appreciates it.' },
-        { t: 'Hold out', roll: [{ p: 0.6, fx: { fame: 1 }, out: 'You got the bump. Some resentment in the rooms.' }, { p: 0.4, fx: { bias: -1 }, out: 'Talks dragged on. Selectors noticed the distraction.' }] }] },
-    { id: 'camp', icon: '⛺', title: 'National camp invite', when: (W, p) => LVL(W, p) === 'shield',
-      text: () => 'You\'re invited to the national high-performance camp in Brisbane.',
-      options: [
-        { t: 'Go and soak it up', fx: { bias: 1.2, attr: { MEN: 0.6 }, energy: -1 }, out: 'Facing Test quicks in the nets. Eye-opening.' },
-        { t: 'Ask to defer (you\'re in form)', fx: { form: { bat: -0.04, bowl: 0.03, n: 1 } }, out: 'Kept your rhythm. Not everyone liked it.' }] },
-    { id: 'doghouse', icon: '🐶', title: 'Late to the bus', when: () => true,
-      text: () => 'Your alarm didn\'t go off. The team bus left five minutes ago.',
-      options: [
-        { t: 'Own it, apologise to the group', fx: { bias: 0.2 }, out: 'Push-ups for the squad. Forgiven.' },
-        { t: 'Blame the hotel', fx: { bias: -0.8 }, out: 'Nobody believes you. Fines committee is thrilled.' }] },
-    { id: 'heat', icon: '🌡️', title: 'Heatwave', when: () => true,
-      text: () => 'It\'s going to be 41 degrees. The physio suggests extra hydration work and lighter training.',
-      options: [
-        { t: 'Follow the plan', fx: { rest: 1 }, out: 'You stay cool. Others cramp.' },
-        { t: 'Train through it, toughen up', fx: { attr: { STA: 0.8 }, energy: -1 }, out: 'Brutal. Stronger for it.' }] },
-  ];
-  // per-player specials: the technique tip goes to your main discipline
-  CB.LIFE.find(e => e.id === 'legend').options[1].fxFor = p => ({ attr: BAT(p) ? { DEF: 1.2 } : { ACC: 1.2 } });
+  // The events themselves are plain data in js/life/*.js (CB.addLife). Each says whose career it fits (who), at what
+  // level (lv), age and situation (need); text can use {placeholders}. Options carry fx, or roll between outcomes.
+  // fx: form n (+ confident / - off your game, |n| games) | energy n (next session) | attr {K: d} | cap {K: d}
+  //     bias d (selectors) | fame d | inj n (miss games) | rest n. Attr keys: the training areas, plus MAIN (your main
+  //     discipline), BAT and BOWL (spread across that discipline's skills).
+  CB.LIFE = [];
+  CB.addLife = list => { for (const e of list) CB.LIFE.push(e); };
+  CB.LIFE_WHO = {
+    any: () => true,
+    bat: p => ['open', 'top', 'mid', 'wk', 'ar'].includes(p.role),
+    bowl: p => ['pace', 'spin', 'ar'].includes(p.role),
+    pace: p => (p.role === 'pace' || p.role === 'ar') && !CB.isSpinner(p),
+    spin: p => (p.role === 'spin' || p.role === 'ar') && CB.isSpinner(p),
+    keep: p => p.role === 'wk',
+    ar: p => p.role === 'ar',
+  };
+  CB.LIFE_NEED = {
+    quiet: (W, p) => !!(p.lastMatch && p.lastMatch.quiet),
+    big: (W, p) => !!(p.lastMatch && (p.lastMatch.runs >= 50 || p.lastMatch.wk >= 3)),
+    capt: (W, p) => !!CB.isCaptain(W, p),
+    fame: (W, p) => (p.fame || 0) >= 3,
+    capped: (W, p) => p.st.test.m > 0,
+    uncapped: (W, p) => p.st.test.m === 0,
+  };
+  CB.LIFE_LEVELS = ['seconds', 'shield', 'test', 'county'];
+  // where the user is living right now: the level of his last match
+  const lifeLevel = (W, p) => { const h = p.history[p.history.length - 1]; return h ? h.lv : 'seconds'; };
+  CB.lifeEligible = function (W, p, e, lv) {
+    if (e.who && !CB.LIFE_WHO[e.who](p)) return false;
+    if (e.lv && !e.lv.includes(lv)) return false;
+    if (e.age && (p.age < e.age[0] || p.age > e.age[1])) return false;
+    if (e.need && !CB.LIFE_NEED[e.need](W, p)) return false;
+    return true;
+  };
+  // specific stories (your discipline, your situation) come up more often than generic ones
+  const lifeWeight = e => (e.who && e.who !== 'any' ? 1.6 : 1) * (e.need ? 2 : 1) * (e.lv ? 1.3 : 1);
+
+  const CITY = { NSW: 'Sydney', VIC: 'Melbourne', QLD: 'Brisbane', WA: 'Perth', SA: 'Adelaide', TAS: 'Hobart' };
+  CB.lifeCtx = function (W, p, r) {
+    const st = CB.stateById(p.team), lv = lifeLevel(W, p), nm = q => q.first + ' ' + q.last;
+    const mates = W.states[p.team].squad.map(id => W.players[id]).filter(q => q && !q.user);
+    const others = CB.STATES.filter(s => s.id !== p.team), oppState = pick(r, others);
+    const ser = W.season.series.find(s => s.xi && s.xi.includes(p.id)) || W.season.series.find(s => s.home) || W.season.series[0];
+    const natId = ser ? ser.opp : 'ENG', nation = CB.NATIONS[natId].name;
+    const county = W.county ? CB.countyById(W.county.id) : (p.countyStints && p.countyStints.length ? CB.countyById(p.countyStints[p.countyStints.length - 1].id) : null);
+    let rivals = W.states[oppState.id].squad.map(id => W.players[id]).filter(Boolean);
+    if (lv === 'test') rivals = W.nations[natId].squad.map(id => W.players[id]).filter(Boolean);
+    if (!p.coach) { const n = CB.genName(CB.rng((W.seed ^ (p.id * 7919)) >>> 0), 'AUS'); p.coach = n.first + ' ' + n.last; }
+    const spin = CB.isSpinner(p), bowler = p.role === 'pace' || p.role === 'spin';
+    const engName = () => { const n = CB.genName(r, 'ENG'); return n.first + ' ' + n.last; };
+    return {
+      first: p.first, last: p.last, age: p.age, state: st.name, city: CITY[p.team], ground: st.ground,
+      mate: mates.length ? nm(pick(r, mates)) : 'your roommate', mate2: mates.length ? nm(pick(r, mates)) : 'a teammate',
+      rival: lv === 'county' ? engName() : rivals.length ? nm(pick(r, rivals)) : 'an opponent', coach: p.coach,
+      county: county ? county.name : 'a county side', countyground: county ? county.ground : 'a county ground',
+      opp: lv === 'test' ? nation : lv === 'county' ? pick(r, CB.COUNTIES.filter(c => !county || c.id !== county.id)).name : oppState.name,
+      nation, skill: bowler ? 'bowling' : p.role === 'wk' ? 'keeping' : 'batting',
+      weapon: spin ? 'revs' : 'pace', bowltype: spin ? 'spinner' : 'quick', niggle: p.bowls && !spin && p.role !== 'wk' ? 'side' : 'hamstring',
+    };
+  };
+  const fill = (s, ctx) => String(s).replace(/\{(\w+)\}/g, (m, k) => ctx[k] != null ? ctx[k] : m);
+  CB.lifeFill = fill;
 
   CB.seasonStartCareer = function (W) {
     const p = W.userId && W.players[W.userId]; if (!p) return;
     const r = CB.rngFor(W);
     p.lifeLeft = 3 + Math.floor(r() * 3);
-    p.lifeSeen = [];
+    p.lifeSeen = p.lifeSeen || [];
     W.season.countyOffered = false;
   };
   // remaining user games this season (rough), for spreading 3-5 events across it
@@ -225,40 +138,83 @@
     const r = CB.rngFor(W);
     const prob = Math.min(1, p.lifeLeft / Math.max(1, remainingGames(W, p)) * 1.15);
     if (r() > prob) return null;
-    const pool = CB.LIFE.filter(e => !p.lifeSeen.includes(e.id) && (!e.when || e.when(W, p)) && (!p.lifeRecent || !p.lifeRecent.includes(e.id)));
-    if (!pool.length) return null;
-    const e = pick(r, pool);
+    const lv = lifeLevel(W, p);
+    // a story is told once per career; only a very long career starts hearing the oldest ones again
+    const pool = () => { const seen = new Set(p.lifeSeen); return CB.LIFE.filter(e => !seen.has(e.id) && CB.lifeEligible(W, p, e, lv)); };
+    let cand = pool();
+    if (!cand.length) { p.lifeSeen = p.lifeSeen.slice(Math.ceil(p.lifeSeen.length / 2)); cand = pool(); }
+    if (!cand.length) return null;
+    const tot = cand.reduce((a, e) => a + lifeWeight(e), 0);
+    let u = r() * tot, e = cand[cand.length - 1];
+    for (const x of cand) { u -= lifeWeight(x); if (u <= 0) { e = x; break; } }
     p.lifeLeft--; p.lifeSeen.push(e.id);
-    p.lifeRecent = (p.lifeRecent || []).concat(e.id).slice(-8);   // avoid repeating last season's stories
-    return { id: e.id, icon: e.icon, title: e.title, text: e.text(p, W), options: e.options.map(o => o.t) };
+    const ctx = CB.lifeCtx(W, p, r);
+    return { id: e.id, icon: e.icon, title: fill(e.title, ctx), text: fill(e.text, ctx), options: e.options.map(o => fill(o.t, ctx)), ctx };
   };
-  CB.resolveLifeEvent = function (W, id, choice) {
-    const p = CB.user(W), e = CB.LIFE.find(x => x.id === id), o = e.options[choice], r = CB.rngFor(W);
-    let fx = o.fxFor ? o.fxFor(p) : o.fx, out = o.out;
+  CB.resolveLifeEvent = function (W, id, choice, ctx) {
+    const p = CB.user(W), e = CB.LIFE.find(x => x.id === id), r = CB.rngFor(W);
+    if (!e || !e.options[choice]) return { out: 'Life goes on.', chips: [] };  // a save from before this event was retired
+    const o = e.options[choice];
+    let fx = o.fx, out = o.out;
     if (o.roll) { let u = r(); for (const x of o.roll) { u -= x.p; if (u <= 0 || x === o.roll[o.roll.length - 1]) { fx = x.fx; out = x.out; break; } } }
     const chips = CB.applyFx(p, fx || {});
-    p.lifeLog = (p.lifeLog || []).concat({ y: W.season.year, t: e.title, c: o.t }).slice(-40);
-    return { out, chips };
+    const c = ctx || CB.lifeCtx(W, p, r);
+    p.lifeLog = (p.lifeLog || []).concat({ y: W.season.year, t: fill(e.title, c), c: fill(o.t, c) }).slice(-60);
+    return { out: fill(out || '', c), chips };
   };
+  // pseudo-attributes spread across a discipline
+  const SPREAD = { BAT: { DEF: 0.45, CON: 0.4, PACE: 0.35, SPIN: 0.35, ATT: 0.25 }, BOWL: { ACC: 0.55, STK: 0.45, CRA: 0.5 } };
+  function mainSpread(p) {
+    if (p.role === 'pace' || p.role === 'spin') return { BOWL: 1 };
+    if (p.role === 'ar') return { BAT: 0.6, BOWL: 0.6 };
+    if (p.role === 'wk') return { BAT: 0.8, KEEP: 0.5 };
+    return { BAT: 1 };
+  }
   CB.applyFx = function (p, fx) {
     const chips = [];
     if (fx.form) {
-      p.form = { bat: (fx.form.bat || 0), bowl: (fx.form.bowl || 0), n: fx.form.n || 1 };
-      const good = (fx.form.bat || 0) < 0 || (fx.form.bowl || 0) > 0;
+      const f = typeof fx.form === 'number' ? (fx.form > 0 ? { bat: -0.05, bowl: 0.04, n: fx.form } : { bat: 0.06, bowl: -0.05, n: -fx.form }) : fx.form;
+      p.form = { bat: f.bat || 0, bowl: f.bowl || 0, n: f.n || 1 };
+      const good = (f.bat || 0) < 0 || (f.bowl || 0) > 0;
       chips.push(good ? `🔥 Confidence up (next ${p.form.n > 1 ? p.form.n + ' games' : 'game'})` : `📉 Off your game (next ${p.form.n > 1 ? p.form.n + ' games' : 'game'})`);
     }
-    if (fx.energy) { p.energyBonus = (p.energyBonus || 0) + fx.energy; chips.push(fx.energy > 0 ? '⚡ +1 energy next session' : '🪫 -1 energy next session'); }
-    if (fx.attr) for (const [k, d] of Object.entries(fx.attr)) { p.a[k] = clamp(p.a[k] + d, 0, 100); chips.push(chipFor(k, d)); }
-    if (fx.cap) for (const [k, d] of Object.entries(fx.cap)) { p.caps[k] = clamp(p.caps[k] + d, 0, 99); chips.push('🌱 New ceiling: ' + nameFor(k, p)); }
+    if (fx.energy) { p.energyBonus = (p.energyBonus || 0) + fx.energy; chips.push(fx.energy > 0 ? `⚡ +${fx.energy} energy next session` : `🪫 ${fx.energy} energy next session`); }
+    if (fx.attr) {
+      const flat = {}, labels = [];
+      const add = (k, d) => { flat[k] = (flat[k] || 0) + d; };
+      for (const [k, d] of Object.entries(fx.attr)) {
+        if (k === 'MAIN') {
+          for (const [g, w] of Object.entries(mainSpread(p))) {
+            if (SPREAD[g]) for (const [a, x] of Object.entries(SPREAD[g])) add(a, d * w * x); else add(g, d * w);
+            labels.push([g, d]);
+          }
+        } else if (SPREAD[k]) { for (const [a, x] of Object.entries(SPREAD[k])) add(a, d * x); labels.push([k, d]); }
+        else { add(k, d); labels.push([k, d]); }
+      }
+      // gains are soft-capped by potential: life can polish a player, not make a different one
+      for (const [k, d] of Object.entries(flat)) p.a[k] = clamp(p.a[k] + (d > 0 ? d * clamp((p.caps[k] + 4 - p.a[k]) / 8, 0.15, 1) : d), 0, 100);
+      for (const [k, d] of labels) chips.push(chipFor(k, d, p));
+    }
+    if (fx.cap) for (const [k, d] of Object.entries(fx.cap)) {
+      const keys = k === 'MAIN' ? Object.keys(mainSpread(p)).flatMap(g => SPREAD[g] ? Object.keys(SPREAD[g]) : [g]) : SPREAD[k] ? Object.keys(SPREAD[k]) : [k];
+      for (const a of keys) p.caps[a] = clamp(p.caps[a] + d * (keys.length > 1 ? 0.6 : 1), 0, 99);
+      chips.push('🌱 New ceiling: ' + (k === 'MAIN' ? 'your ' + (p.role === 'pace' || p.role === 'spin' ? 'bowling' : 'game') : nameFor(k, p)));
+    }
     if (fx.bias) { p.bias = clamp((p.bias || 0) + fx.bias, -4, 4); chips.push(fx.bias > 0 ? '📋 Selectors noticed' : '📋 Selectors unimpressed'); }
-    if (fx.fame) { p.fame = (p.fame || 0) + fx.fame; chips.push('⭐ Profile up'); }
+    if (fx.fame) { p.fame = (p.fame || 0) + fx.fame; chips.push(fx.fame > 0 ? '⭐ Profile up' : '⭐ Profile down'); }
     if (fx.inj) { p.inj = Math.max(p.inj || 0, fx.inj); p.injName = p.injName || 'precaution'; chips.push(`🩹 Miss ${fx.inj} game${fx.inj > 1 ? 's' : ''}`); }
     if (fx.rest) { p.rest = (p.rest || 0) + fx.rest; chips.push('🛌 Fresher body'); }
     CB.refresh(p);
-    return chips.filter(Boolean);
+    return [...new Set(chips.filter(Boolean))];
   };
-  function nameFor(k, p) { const f = CB.FOCUS.find(x => x.id === k); return f ? CB.focusLabel(f, p).name.toLowerCase() : k; }
-  function chipFor(k, d) { const f = CB.FOCUS.find(x => x.id === k); return (f ? f.icon + ' ' + f.name : k) + (d > 0 ? ' ↑' : ' ↓'); }
+  function nameFor(k, p) { if (k === 'BAT') return 'batting'; if (k === 'BOWL') return 'bowling'; const f = CB.FOCUS.find(x => x.id === k); return f ? CB.focusLabel(f, p).name.toLowerCase() : k; }
+  function chipFor(k, d, p) {
+    const up = d > 0 ? ' ↑' : ' ↓';
+    if (k === 'BAT') return '🏏 Batting' + up;
+    if (k === 'BOWL') return '🎯 Bowling' + up;
+    const f = CB.FOCUS.find(x => x.id === k); if (!f) return k + up;
+    const l = CB.focusLabel(f, p); return l.icon + ' ' + l.name + up;
+  }
 
   // ---------------------------------------------------------------- county stint offers
   // After the Shield season, a state regular who isn't in the Test side may be wanted by a county.

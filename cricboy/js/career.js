@@ -116,7 +116,10 @@
     if (CB.hasPerk(p, 'netrat') && last && last.quiet) e++;
     if (CB.hasPerk(p, 'coachspet')) e++;
     if (p.energyBonus) { e += p.energyBonus; }
-    if (last && last.overs >= 45) e--;
+    // the buzz of a hundred or a five-for (it also carries a bowler through a heavy workload)
+    if (last && last.ton) e += last.ton;
+    if (last && last.five) e += last.five;
+    if (last && last.overs >= 45 && !last.five) e--;
     return Math.max(2, e);
   };
   CB.activeCombos = function (alloc) {
@@ -240,129 +243,318 @@
   CB.INJURIES = { pace: ['side strain', 'stress reaction in the back', 'hamstring tightness', 'ankle impingement', 'calf strain'], bat: ['broken finger', 'hamstring strain', 'concussion (struck on the helmet)', 'sore back', 'quad strain'] };
 
   // ---------------------------------------------------------------- key moments
-  // find the user's biggest moment in the simulated match; return a scenario with three choices (each trains an area)
+  // One moment per match, always in the user's own trade: batters get batting moments, bowlers bowling ones, keepers
+  // batting or keeping, all-rounders either (captains also get captaincy calls). The moment pauses the replay; the call
+  // trains an area (momentum) and changes the rest of the match: a call that fits the conditions and the state of the
+  // game helps, one that fights them hurts (CB.momentPlan -> engine cfg.mom, CB.replayUserMatch).
   CB.findMoment = function (U, p) {
     const M = U.M, ti = U.ti, me = U.sides[ti].indexOf(p.id);
     if (me < 0) return null;
+    const bats = ['open', 'top', 'mid', 'wk', 'ar'].includes(p.role);
+    const bowls = ['pace', 'spin', 'ar'].includes(p.role) && !!M.teams[ti].xi[me].bw;
+    const keeps = p.role === 'wk' && M.teams[ti].keeperIdx === me;
+    // The moment must be a stopping time: decided ball by ball from what has happened so far, never from how the match
+    // ends. (Picking it with hindsight and then replaying from it gives failed innings a second go.) So the match is
+    // walked in order and each trigger is taken or passed on an independent coin; the user's last innings with bat or
+    // ball always takes its first trigger.
+    const coin = CB.rng((U.cfg.seed ^ 0x6a09e667) >>> 0);
     const cands = [];
-    const tname = M.teams[ti].name, oname = M.teams[1 - ti].name;
+    let own = 0, opp = 0, myBat = 0, myBowl = 0;
     for (const I of M.inns) {
-      if (I.bat === ti) {
-        const b = I.bats[me]; if (!b.in) continue;
-        // walk the log to find arrival + milestones approaches
-        let runs = 0, balls = 0, arrived = null, near50 = null, near100 = null, chase = null;
+      const batting = I.bat === ti, last = batting ? myBat === 1 : myBowl === 1;
+      if (batting) myBat++; else myBowl++;
+      const tr = [];
+      if (batting && bats && I.bats[me].in) {
+        const dayStart = new Set((I.dayMarks || []).map(m => m.at)), nb = new Set(I.newBalls || []);
+        let runs = 0, faced = 0, arrived = false, n50 = false, n100 = false, night = false, gone = false, spun = false, nbOn = false, newBallDue = false;
         for (let i = 0; i < I.log.length; i++) {
-          const L = I.log[i];
-          const involved = L.s === me || L.n === me;
-          if (involved && arrived == null) arrived = i;
-          if (L.s === me && L.w !== 'wd') { if (typeof L.w === 'number' || L.w === 'nb') runs += L.r; if (L.w !== 'nb') balls++; }
-          if (L.s === me && near50 == null && runs >= 42 && runs < 50) near50 = { i, runs, balls };
-          if (L.s === me && near100 == null && runs >= 88 && runs < 100) near100 = { i, runs, balls };
-          if (I.k === 3 && involved && chase == null && I.target - L.sc > 40 && I.target - L.sc < 220) chase = { i, need: I.target - L.sc };
+          const L = I.log[i], P = I.log[i - 1] || { sc: 0, wk: 0 };
+          if (nb.has(i)) newBallDue = true;
+          if (!arrived && (L.s === me || L.n === me)) {
+            arrived = true;
+            const need = I.k === 3 ? I.target - P.sc : 0;
+            const kind = I.k === 3 && need > 40 && need < 220 ? 'chase' : me <= 1 ? 'open' : P.wk >= 3 && P.sc < 120 ? 'rescue' : CB.lastBowlerSpin(M, I, i) ? 'spinArrive' : 'arrive';
+            tr.push({ kind, i, need, acc: kind === 'chase' ? 1 : last ? 0.85 : 0.45 });
+          } else if (arrived) {
+            // set and still there: a new morning, a new partner, spin on, the second new ball
+            if (!night && dayStart.has(i) && runs >= 10) { night = true; tr.push({ kind: 'overnight', i, runs, acc: 0.5 }); }
+            if (!gone && P.w === 'W' && P.x && P.x.out !== me && runs >= 20) { gone = true; tr.push({ kind: 'partnerGone', i, runs, acc: 0.25 }); }
+            if (!spun && L.s === me && faced >= 12 && CB.lastBowlerSpin(M, I, i)) { spun = true; tr.push({ kind: 'spinOn', i, runs, acc: 0.3 }); }
+            if (!nbOn && newBallDue && runs >= 10) { nbOn = true; tr.push({ kind: 'newBallBat', i, runs, acc: 0.6 }); }
+          }
+          if (L.s === me && !n50 && runs >= 42 && runs < 50) { n50 = true; tr.push({ kind: 'near50', i, runs, acc: 0.6 }); }
+          if (L.s === me && !n100 && runs >= 88 && runs < 100) { n100 = true; tr.push({ kind: 'near100', i, runs, acc: 1 }); }
+          if (L.s === me && (typeof L.w === 'number' || L.w === 'nb')) runs += L.r;
+          if (L.s === me && L.w !== 'wd' && L.w !== 'nb') faced++;
           if (L.w === 'W' && L.x && L.x.out === me) break;
         }
-        if (arrived != null) { const L = I.log[arrived]; cands.push({ kind: me <= 1 ? 'open' : (L.wk >= 3 && L.sc < 120 ? 'rescue' : (CB.lastBowlerSpin(M, I, arrived) ? 'spinArrive' : 'arrive')), I, i: arrived, score: 2 + (L.wk >= 3 ? 2 : 0) + (I.k === 3 ? 1 : 0) }); }
-        if (near50) cands.push({ kind: 'near50', I, i: near50.i, runs: near50.runs, score: 3 });
-        if (near100) cands.push({ kind: 'near100', I, i: near100.i, runs: near100.runs, score: 6 });
-        if (chase) cands.push({ kind: 'chase', I, i: chase.i, need: chase.need, score: 5 });
-      } else if (p.bw) {
-        // bowling: first over in the innings, a big stand, or the tail
-        let first = null, stand = null, tail = null, part = 0;
+      }
+      if (!batting && bowls) {
+        const spin = CB.isSpinner(p), nb = I.newBalls || [], dayOf = j => { let d = I.startDay; for (const o of I.om || []) { if (o[0] > j) break; d = o[1]; } return d; };
+        let first = false, stand = false, tail = false, morning = false, second = false, part = 0, lastDay = 0, w1 = false, w2 = false, fresh = false;
         for (let i = 0; i < I.log.length; i++) {
           const L = I.log[i];
-          part = L.w === 'W' ? 0 : part + L.r;
           if (L.bw === me) {
-            if (first == null) first = i;
-            if (stand == null && part >= 70) stand = { i, part };
-            if (tail == null && L.wk >= 8) tail = i;
+            const d = dayOf(i);
+            if (!first) { first = true; tr.push({ kind: spin ? (I.k >= 2 ? 'spinWorn' : 'spinFirst') : (L.b < 30 ? 'newBall' : 'paceFirst'), i, acc: last ? 0.6 : 0.4 }); }
+            else {
+              if (!morning && d > lastDay && d >= 2) { morning = true; tr.push({ kind: 'morning', i, acc: 0.35 }); }
+              if (!second && nb.length && i >= nb[0] && !spin) { second = true; tr.push({ kind: 'secondNew', i, acc: 0.7 }); }
+              if (w1 && w2) tr.push({ kind: 'hattrick', i, acc: 1 });
+              else if (w1 && !fresh) { fresh = true; tr.push({ kind: 'freshBat', i, acc: 0.3 }); }
+            }
+            if (!stand && part >= 70) { stand = true; tr.push({ kind: spin ? 'spinStand' : 'stand', i, part, acc: 0.6 }); }
+            if (!tail && L.wk >= 8) { tail = true; tr.push({ kind: 'tail', i, acc: 0.5 }); }
+            lastDay = d;
+            if (L.w !== 'wd' && L.w !== 'nb') { const mine = L.w === 'W' && L.x && I.bats[L.x.out].out && I.bats[L.x.out].out.kind !== 7; w2 = w1 && mine; w1 = mine; if (!mine) w2 = false; }
           }
+          part = L.w === 'W' ? 0 : part + L.r;
         }
-        if (first != null) cands.push({ kind: CB.isSpinner(p) ? (I.k >= 2 ? 'spinWorn' : 'spinFirst') : (I.log[first].b < 30 ? 'newBall' : 'paceFirst'), I, i: first, score: 2 + (I.log[first].b < 30 ? 1 : 0) + (I.k >= 2 ? 1 : 0) });
-        if (stand) cands.push({ kind: CB.isSpinner(p) ? 'spinStand' : 'stand', I, i: stand.i, part: stand.part, score: 4 });
-        if (tail != null) cands.push({ kind: 'tail', I, i: tail, score: 2.5 });
-        if (p.role === 'wk') cands.push({ kind: 'keep', I, i: Math.min(I.log.length - 1, 30), score: 1.5 });
-      } else if (p.role === 'wk') {
-        cands.push({ kind: 'keep', I, i: Math.min(I.log.length - 1, 30), score: 1.5 });
-      } else {
-        cands.push({ kind: 'field', I, i: Math.min(I.log.length - 1, 60), score: 1 });
       }
-    }
-    if (U.captain) {
-      // captaincy calls: when to declare, and what to do about a big stand
-      let own = 0, opp = 0;
-      for (const I of M.inns) {
-        if (I.bat === ti) {
-          if (I.k === 2 && I.closed === 'declared') {
-            const i = I.log.findIndex(L => own + L.sc - opp >= 200);
-            if (i >= 0) cands.push({ kind: 'captDeclare', I, i, lead: own + I.log[i].sc - opp, score: 5 });
-          }
-          own += I.runs;
-        } else {
+      if (!batting && keeps && I.log.length > 40) {
+        // behind the stumps: the first spell of spin after the new ball, else a long day standing back
+        const i = I.log.findIndex((L, j) => j >= 30 && CB.lastBowlerSpin(M, I, j));
+        tr.push(i >= 0 ? { kind: 'keepSpin', i, acc: 0.4 } : { kind: 'keepPace', i: 40, acc: 0.3 });
+      }
+      if (U.captain) {
+        if (batting && I.k === 2) {
+          const i = I.log.findIndex(L => own + L.sc - opp >= 200);
+          if (i > 0 && i + 1 < I.log.length && I.log[i].wk <= 7) tr.push({ kind: 'captDeclare', i: i + 1, lead: own + I.log[i].sc - opp, acc: 0.85 });
+        }
+        if (!batting) {
           let part = 0;
           const i = I.log.findIndex(L => { part = L.w === 'W' ? 0 : part + L.r; return part >= 80; });
-          if (i >= 0) cands.push({ kind: 'captStand', I, i, part: 80, score: 4.5 });
-          opp += I.runs;
+          if (i >= 0 && i + 1 < I.log.length) tr.push({ kind: 'captStand', i: i + 1, part, acc: 0.3 });
         }
       }
+      tr.sort((a, b) => a.i - b.i);
+      for (const t of tr) if (coin() < t.acc) { cands.push(Object.assign(t, { I })); break; }
+      if (cands.length) break;
+      if (batting) own += I.runs; else opp += I.runs;
     }
     if (!cands.length) return null;
-    cands.sort((a, b) => b.score - a.score);
     const c = cands[0];
     const T = MOMENTS[c.kind];
-    const L = c.I.log[c.i] || c.I.log[c.I.log.length - 1];
+    const cue = CB.momentCues(M, c.I, c.i, ti);
+    const L = c.I.log[c.i - 1] || { sc: 0, wk: 0, b: 0 }, now = c.I.log[c.i] || L;
     const bt = M.teams[c.I.bat].short || M.teams[c.I.bat].name;
-    const day = 'Innings ' + (c.I.k + 1);
-    const ctx = { score: `${bt} ${L ? L.sc : 0}/${L ? L.wk : 0}`, overs: CB.oversStr(L ? L.b : 0), runs: c.runs, need: c.need, part: c.part, lead: c.lead, opp: oname, team: tname, bowler: L && M.teams[c.I.fld].xi[L.bw] ? M.teams[c.I.fld].xi[L.bw].short : '' };
+    const ctx = { score: `${bt} ${L.sc}/${L.wk}`, runs: c.runs, need: c.need, part: c.part, lead: c.lead, opp: M.teams[1 - ti].name, team: M.teams[ti].name,
+      bowler: M.teams[c.I.fld].xi[now.bw] ? M.teams[c.I.fld].xi[now.bw].short : 'the bowler', cue };
     const opts = typeof T.options === 'function' ? T.options(p) : T.options;
-    return { kind: c.kind, inns: c.I.k, at: c.i, title: T.title, text: T.text(ctx), situation: `${day} · ${ctx.score} · ${ctx.overs} ov`, options: opts, after: c.kind.startsWith('capt') ? M.result.text + '.' : CB.momentAftermath(M, c, me, ti), captain: c.kind.startsWith('capt') };
+    return { kind: c.kind, inns: c.I.k, at: c.i, title: T.title, text: T.text(ctx), situation: `Innings ${c.I.k + 1} · ${ctx.score} · ${CB.oversStr(L.b)} ov`,
+      cues: cue.tags, options: opts, captain: c.kind.startsWith('capt'), side: c.kind.startsWith('capt') ? 'capt' : c.I.bat === ti ? 'bat' : c.kind.startsWith('keep') ? 'keep' : 'bowl' };
   };
-  CB.lastBowlerSpin = (M, I, i) => { const L = I.log[i]; const b = M.teams[I.fld].xi[L.bw]; return b && b.bw && b.bw.t === 1; };
-  const MOMENTS = {
-    captDeclare: { title: 'Declaration call', text: c => `${c.score}. You lead by ${c.lead}. The dressing room is waiting on your call.`,
-      options: [{ t: 'Declare now and back your bowlers', a: 'MEN' }, { t: 'Bat on and make it safe', a: 'CON' }, { t: 'Ten quick overs, then declare', a: 'ATT' }] },
-    captStand: { title: "Captain's call", text: c => `${c.score}. A ${c.part}-run stand. Every head on the field turns to you.`,
-      options: p => [{ t: 'Attack: three slips and a gully', a: 'MEN' }, { t: 'Spread the field and dry up the runs', a: 'CON' }, p.bowls ? { t: 'Throw the ball to yourself', a: CB.isSpinner(p) ? 'CRA' : 'STK' } : { t: 'Move yourself to short leg', a: 'FLD' }] },
-    open: { title: 'New ball', text: c => `You walk out to open. ${c.opp}'s quicks have the new ball and it's hooping. ${c.bowler} at the top of his mark.`,
-      options: [{ t: 'Leave everything outside off', a: 'DEF' }, { t: 'Look to drive anything full', a: 'ATT' }, { t: 'Get forward, play late, soft hands', a: 'PACE' }] },
-    arrive: { title: 'Walking out', text: c => `${c.score}. You're in. Fielders chirp as you take guard against ${c.bowler}.`,
-      options: [{ t: 'Get off the mark early, look for singles', a: 'RUN' }, { t: 'Block, block, block. Earn the right', a: 'CON' }, { t: 'Put the bad ball away', a: 'ATT' }] },
-    rescue: { title: 'Rescue job', text: c => `${c.score}. Collapse on. The crowd's gone quiet. Your side needs a partnership.`,
-      options: [{ t: 'Counter-punch: hit them off their length', a: 'ATT' }, { t: 'Dig in for the long haul', a: 'CON' }, { t: 'Solid technique, play straight', a: 'DEF' }] },
-    spinArrive: { title: 'Spin from the off', text: c => `${c.score}. ${c.bowler} is wheeling away with men around the bat. The ball is spitting out of the rough.`,
-      options: [{ t: 'Use your feet, get to the pitch', a: 'SPIN' }, { t: 'Sweep hard, put him off his length', a: 'ATT' }, { t: 'Pad it away, smother the spin', a: 'DEF' }] },
-    near50: { title: 'Knocking on fifty', text: c => `You're on ${c.runs}*. ${c.score}. A maiden fifty is right there. The field spreads.`,
-      options: [{ t: 'Keep the scoreboard ticking with singles', a: 'RUN' }, { t: "Stay patient. It'll come", a: 'CON' }, { t: 'Loft one over the infield', a: 'ATT' }] },
-    near100: { title: 'The nervous nineties', text: c => `On ${c.runs}*. ${c.score}. The whole ground knows. Your heart is thumping.`,
-      options: [{ t: 'Back yourself, go big', a: 'ATT' }, { t: 'Breathe. One ball at a time', a: 'MEN' }, { t: 'Nudge, nurdle and run hard', a: 'RUN' }] },
-    chase: { title: 'The chase', text: c => `Chasing. ${c.need} still needed. ${c.score}. Time and wickets both matter now.`,
-      options: [{ t: 'Take the attack to them', a: 'ATT' }, { t: 'Rotate strike, keep wickets in hand', a: 'RUN' }, { t: 'Shut up shop, play for time', a: 'DEF' }] },
-    newBall: { title: 'Taking the new ball', text: c => `${c.score}. Captain tosses you the cherry. Overhead conditions are cloudy.`,
-      options: [{ t: 'Pitch it up and swing it', a: 'CRA' }, { t: 'Hit the deck hard, extract bounce', a: 'STK' }, { t: 'Tight lines, make them play', a: 'ACC' }] },
-    paceFirst: { title: 'First change', text: c => `${c.score}. You come on first change. The pitch has gone flat and the ball has lost its shine.`,
-      options: [{ t: 'Bang it in, bouncer plan', a: 'STK' }, { t: 'Fourth-stump line, dry them up', a: 'ACC' }, { t: 'Wobble seam, hunt the edge', a: 'CRA' }] },
-    stand: { title: 'Break the stand', text: c => `${c.score}. A ${c.part}-run partnership is killing you. The captain needs something.`,
-      options: [{ t: 'Short-ball barrage', a: 'STK' }, { t: 'Patience: maidens build pressure', a: 'ACC' }, { t: 'Go wider on the crease, angle it in', a: 'CRA' }] },
-    tail: { title: 'Mopping up', text: c => `${c.score}. The tail is in. Finish this.`,
-      options: [{ t: 'Yorkers, full and straight', a: 'ACC' }, { t: 'Bouncers to the tail-enders', a: 'STK' }, { t: 'Keep running in hard, bowl long', a: 'STA' }] },
-    spinFirst: { title: 'Toss it up', text: c => `${c.score}. You're on early. There's not much in the pitch yet.`,
-      options: [{ t: 'Flight it, buy the wicket', a: 'CRA' }, { t: 'Dart it in, keep it tight', a: 'ACC' }, { t: 'Rip it hard, look for drift', a: 'STK' }] },
-    spinWorn: { title: 'Day five dust', text: c => `${c.score}. Footmarks outside off. This is your day.`,
-      options: [{ t: 'Aim at the rough, rip it', a: 'STK' }, { t: 'Vary flight and pace', a: 'CRA' }, { t: 'Bowl all day from one end', a: 'STA' }] },
-    spinStand: { title: 'Holding an end', text: c => `${c.score}. A ${c.part}-run stand. The quicks are cooked. Captain throws you the ball.`,
-      options: [{ t: 'Fire it in flat, bore them out', a: 'ACC' }, { t: 'Tempt the big drive', a: 'CRA' }, { t: 'More revs, more risk', a: 'STK' }] },
-    keep: { title: 'Behind the stumps', text: c => `${c.score}. Standing up to the spinner, the batter's lunging. Half a chance coming.`,
-      options: [{ t: 'Stay low, move late', a: 'KEEP' }, { t: 'Chirp and build pressure', a: 'MEN' }, { t: 'Keep your energy for the long day', a: 'FIT' }] },
-    field: { title: 'In the field', text: c => `${c.score}. Skier coming down at mid-on. It's yours.`,
-      options: [{ t: 'Call loudly and take it', a: 'FLD' }, { t: 'Stay calm, eyes on the ball', a: 'MEN' }, { t: 'Sprint to get under it', a: 'FIT' }] },
+  CB.lastBowlerSpin = (M, I, i) => { const L = I.log[i]; const b = L && M.teams[I.fld].xi[L.bw]; return !!(b && b.bw && b.bw.t === 1); };
+
+  // what a player can read at that moment: the day, the pitch on the day, the ball, the state of the game
+  CB.momentCues = function (M, I, i, ti) {
+    const L = I.log[i - 1] || { sc: 0, wk: 0, b: 0 };
+    const om = (I.om || []).filter(o => o[0] <= i).pop() || [0, I.startDay, (M.days - I.startDay + 1) * M.opd * 6];
+    const day = om[1], fx = M.dayFx[day - 1] || M.pitch;
+    const ov = L.b / 6, nbAt = (I.newBalls || []).filter(j => j <= i).pop(), age = nbAt != null ? ov - (I.log[nbAt - 1] ? I.log[nbAt - 1].b / 6 : 0) : ov;
+    let own = 0, opp = 0;
+    for (const J of M.inns) { if (J === I) break; if (J.bat === I.bat) own += J.runs; else opp += J.runs; }
+    const lead = own + L.sc - opp, need = I.k === 3 ? I.target - L.sc : null;
+    let part = 0, pb = 0;
+    for (let j = i - 1; j >= 0 && I.log[j].w !== 'W'; j--) { part += I.log[j].r; if (I.log[j].w !== 'wd' && I.log[j].w !== 'nb') pb++; }
+    const c = { day, seam: fx.wP, turn: fx.wS, flat: fx.r, age, wk: L.wk, sc: L.sc, lead, need, k: I.k, oversLeft: om[2] / 6,
+      part, partRR: pb ? part / pb * 6 : 0, batting: I.bat === ti, spin: CB.lastBowlerSpin(M, I, i), days: M.days };
+    c.rr = need != null ? need / Math.max(1, c.oversLeft) : null;
+    c.helpful = c.seam > 0.1 || c.turn > 0.12;
+    const t = [`Day ${day}`];
+    if (c.seam > 0.1) t.push('🌱 Seaming'); if (c.turn > 0.12) t.push('🌀 Turning');
+    if (!c.helpful) t.push(c.flat > 0.06 || (c.seam < -0.1 && c.turn < 0.05) ? '🛣️ Flat deck' : '🏏 Even contest');
+    t.push(age < 12 ? '🔴 New ball' : age >= 50 ? '🟤 Old ball' : `⚪ Ball ${Math.floor(age)} ov old`);
+    if (need != null) t.push(`🎯 ${need} needed · ~${Math.round(c.oversLeft)} ov left`);
+    else if (I.k > 0) t.push(lead >= 0 ? `📈 Lead by ${lead}` : `📉 Trail by ${-lead}`);
+    if (c.wk >= 3 && c.sc / c.wk < 25) t.push('😬 Wickets tumbling');
+    if (part >= 50) t.push(`🤝 Stand of ${part}`);
+    c.tags = t;
+    return c;
   };
 
-  CB.momentAftermath = function (M, c, me, ti) {
-    const I = c.I;
-    if (I.bat === ti) {
+  // each moment: options (training area a), and a read of the cues -> { good: [a...], bad: [a...], why }
+  const MOMENTS = {
+    captDeclare: { title: 'Declaration call', text: c => `${c.score}. You lead by ${c.lead}. The dressing room is waiting on your call.`,
+      options: [{ t: 'Declare now and back your bowlers', a: 'MEN', m: 'now' }, { t: 'Bat on and make it safe', a: 'CON', m: 'later' }, { t: 'Ten quick overs, then declare', a: 'ATT', m: 'push' }],
+      read: c => {
+        const needOv = c.helpful ? 75 : 100;
+        if (c.oversLeft < needOv) return { good: ['MEN'], bad: ['CON'], why: `About ${Math.round(c.oversLeft)} overs left: you need time to bowl them out.` };
+        if (c.oversLeft > needOv + 60) return { good: ['CON'], bad: ['MEN'], why: `${Math.round(c.oversLeft)} overs left is plenty. Bat them out of the game first.` };
+        return { good: ['ATT'], bad: [], why: 'Quick runs now, then enough time to bowl them out.' };
+      } },
+    captStand: { title: "Captain's call", text: c => `${c.score}. A ${c.part}-run stand. Every head on the field turns to you.`,
+      options: p => [{ t: 'Attack: three slips and a gully', a: 'MEN', m: 'attack' }, { t: 'Spread the field and dry up the runs', a: 'CON', m: 'spread' }, p.bowls ? { t: 'Throw the ball to yourself', a: CB.isSpinner(p) ? 'CRA' : 'STK', m: 'self' } : { t: 'Move yourself to short leg', a: 'FLD', m: 'shortleg' }],
+      read: (c, p) => {
+        const mine = p.bowls && ((CB.isSpinner(p) && c.turn > 0.12) || (!CB.isSpinner(p) && (c.seam > 0.1 || c.age < 15)));
+        if (mine) return { good: [CB.isSpinner(p) ? 'CRA' : 'STK', 'MEN'], bad: ['CON'], why: 'The conditions suit your own bowling: back yourself.' };
+        if (c.helpful || c.age < 15) return { good: ['MEN'], bad: ['CON'], why: 'There is help for the bowlers. Attack it.' };
+        if (c.partRR > 3.5) return { good: ['CON'], bad: ['MEN'], why: 'Runs are flowing on a good deck. Squeeze them.' };
+        return { good: [], bad: [], why: 'No obvious answer on this pitch.' };
+      } },
+    open: { title: 'New ball', text: c => `You walk out to open. ${c.opp} have the new ball and ${c.bowler} is at the top of his mark.`,
+      options: [{ t: 'Leave everything outside off', a: 'DEF' }, { t: 'Look to drive anything full', a: 'ATT' }, { t: 'Get forward, play late, soft hands', a: 'PACE' }],
+      read: c => c.seam > 0.1 ? { good: ['DEF', 'PACE'], bad: ['ATT'], why: 'It is seaming around: leave well, play late.' }
+        : c.seam < -0.08 || c.flat > 0.08 ? { good: ['ATT'], bad: [], why: 'Nothing in it for the quicks. There are runs up front.' }
+        : { good: ['PACE'], bad: ['ATT'], why: 'A bit of early movement: soft hands, nothing loose.' } },
+    arrive: { title: 'Walking out', text: c => `${c.score}. You're in. Fielders chirp as you take guard against ${c.bowler}.`,
+      options: [{ t: 'Get off the mark early, look for singles', a: 'RUN' }, { t: 'Block, block, block. Earn the right', a: 'CON' }, { t: 'Put the bad ball away', a: 'ATT' }],
+      read: c => c.wk >= 3 && c.sc / Math.max(1, c.wk) < 30 ? { good: ['CON'], bad: ['ATT'], why: 'Wickets have been falling. Survive first.' }
+        : c.seam > 0.1 || c.age < 12 ? { good: ['CON'], bad: ['ATT'], why: 'The ball is still doing a bit. Earn the right.' }
+        : c.flat > 0.06 || (c.k === 2 && c.lead > 150) ? { good: ['ATT'], bad: [], why: 'Flat deck, and the game wants runs.' }
+        : { good: ['RUN'], bad: [], why: 'Rotate the strike and the field has to come in.' } },
+    rescue: { title: 'Rescue job', text: c => `${c.score}. Collapse on. The crowd's gone quiet. Your side needs a partnership.`,
+      options: [{ t: 'Counter-punch: hit them off their length', a: 'ATT' }, { t: 'Dig in for the long haul', a: 'CON' }, { t: 'Solid technique, play straight', a: 'DEF' }],
+      read: c => c.turn > 0.12 ? { good: ['ATT'], bad: ['DEF'], why: 'On a turner a ball has your name on it. Make them pay first.' }
+        : c.seam > 0.1 || c.age < 20 ? { good: ['DEF'], bad: ['ATT'], why: 'The ball is moving. Play straight and late.' }
+        : { good: ['CON'], bad: [], why: 'The pitch is fine. It needs time, not shots.' } },
+    spinArrive: { title: 'Spin from the off', text: c => `${c.score}. ${c.bowler} is wheeling away with men around the bat.`,
+      options: [{ t: 'Use your feet, get to the pitch', a: 'SPIN' }, { t: 'Sweep hard, put him off his length', a: 'ATT' }, { t: 'Pad it away, smother the spin', a: 'DEF' }],
+      read: c => c.turn > 0.12 ? { good: ['ATT'], bad: ['DEF'], why: 'It is ragging out of the rough. Sweep him off his length.' }
+        : c.turn < 0 ? { good: ['SPIN'], bad: [], why: 'Little turn: get down the pitch and smother it.' }
+        : { good: ['SPIN'], bad: ['DEF'], why: 'Footwork beats a spinner on a fair pitch. Pads invite the lbw.' } },
+    near50: { title: 'Knocking on fifty', text: c => `You're on ${c.runs}*. ${c.score}. A fifty is right there. The field spreads.`,
+      options: [{ t: 'Keep the scoreboard ticking with singles', a: 'RUN' }, { t: "Stay patient. It'll come", a: 'CON' }, { t: 'Loft one over the infield', a: 'ATT' }],
+      read: c => (c.k === 2 && c.lead > 150) || (c.rr != null && c.rr > 4) ? { good: ['ATT'], bad: ['CON'], why: 'The game needs quick runs.' }
+        : c.wk >= 5 ? { good: ['CON'], bad: ['ATT'], why: 'Your side is five down. Stay there.' }
+        : { good: ['RUN'], bad: ['ATT'], why: 'Singles are there with the field back.' } },
+    near100: { title: 'The nervous nineties', text: c => `On ${c.runs}*. ${c.score}. The whole ground knows. Your heart is thumping.`,
+      options: [{ t: 'Back yourself, go big', a: 'ATT' }, { t: 'Breathe. One ball at a time', a: 'MEN' }, { t: 'Nudge, nurdle and run hard', a: 'RUN' }],
+      read: c => (c.k === 2 && c.lead > 150) || (c.rr != null && c.rr > 4) ? { good: ['ATT'], bad: [], why: 'The team needs quick runs. Go and get it.' }
+        : c.wk >= 6 ? { good: ['MEN'], bad: ['ATT'], why: 'The tail is with you. Don\'t throw it away.' }
+        : { good: ['MEN'], bad: ['ATT'], why: 'Nerves are the enemy. Slow the heart rate down.' } },
+    chase: { title: 'The chase', text: c => `Chasing. ${c.need} still needed. ${c.score}. Time and wickets both matter now.`,
+      options: [{ t: 'Take the attack to them', a: 'ATT' }, { t: 'Rotate strike, keep wickets in hand', a: 'RUN' }, { t: 'Shut up shop, play for time', a: 'DEF' }],
+      read: c => c.rr > 5.5 ? { good: ['DEF'], bad: ['ATT'], why: `${Math.round(c.rr * 10) / 10} an over is beyond you. Save the game.` }
+        : c.rr > 3.6 ? { good: ['ATT'], bad: ['DEF'], why: `${Math.round(c.rr * 10) / 10} an over: you have to go now.` }
+        : { good: ['RUN'], bad: ['ATT'], why: `${Math.round(c.rr * 10) / 10} an over is gettable. No risks, keep it ticking.` } },
+    overnight: { title: 'Resuming overnight', text: c => `You resume on ${c.runs}*. ${c.score}. A fresh morning and fresh bowlers.`,
+      options: [{ t: 'Leave well early on', a: 'DEF' }, { t: 'Pick up where you left off', a: 'ATT' }, { t: 'Re-set: bat like you\'re on nought', a: 'CON' }],
+      read: c => c.seam > 0.08 ? { good: ['DEF'], bad: ['ATT'], why: 'The morning ball is moving. Respect the first hour.' }
+        : c.flat > 0.06 ? { good: ['ATT'], bad: [], why: 'A flat deck in the sun. Keep the momentum.' }
+        : { good: ['CON'], bad: ['ATT'], why: 'Overnight batters get out early. Start again.' } },
+    newBallBat: { title: 'The second new ball', text: c => `${c.score}. They've taken the new ball. You're on ${c.runs}*.`,
+      options: [{ t: 'See it off, soft hands', a: 'PACE' }, { t: 'Hard ball flies: cash in', a: 'ATT' }, { t: 'Get off strike, share the load', a: 'RUN' }],
+      read: c => c.seam > 0.05 ? { good: ['PACE'], bad: ['ATT'], why: 'The new ball is seaming. Survive it.' }
+        : c.flat > 0.06 ? { good: ['ATT'], bad: [], why: 'Hard ball, flat deck: it comes on nicely.' }
+        : { good: ['PACE'], bad: [], why: 'Ten careful overs and the ball is yours again.' } },
+    partnerGone: { title: 'Partner gone', text: c => `${c.score}. Your partner's gone. You're set on ${c.runs}* and there's a new batter in.`,
+      options: [{ t: 'Take charge, farm the strike', a: 'RUN' }, { t: 'Keep playing your own game', a: 'CON' }, { t: 'Take the quicks, shield the new man', a: 'PACE' }],
+      read: c => c.wk >= 6 ? { good: ['RUN'], bad: ['CON'], why: 'The tail is in. Farm the strike.' }
+        : c.seam > 0.08 || c.age < 15 ? { good: ['PACE'], bad: [], why: 'Lively ball. Protect the new man from it.' }
+        : { good: ['CON'], bad: [], why: 'You are the set batter. Keep doing what works.' } },
+    spinOn: { title: 'Spin on', text: c => `${c.score}. ${c.bowler} comes on. You're ${c.runs}* and the field closes in.`,
+      options: [{ t: 'Use your feet', a: 'SPIN' }, { t: 'Sweep him off his length', a: 'ATT' }, { t: 'Watch him out of the hand', a: 'DEF' }],
+      read: c => c.turn > 0.12 ? { good: ['ATT'], bad: ['DEF'], why: 'Big turn: sweep and push him off his length.' }
+        : { good: ['SPIN'], bad: [], why: 'Not much turn. Get to the pitch of it.' } },
+    freshBat: { title: 'New batter', text: c => `${c.score}. Wicket! A new batter is in. Your over.`,
+      options: p => CB.isSpinner(p) ? [{ t: 'Toss it up, men around the bat', a: 'CRA' }, { t: 'Rip one big first up', a: 'STK' }, { t: 'Dart it in at the stumps', a: 'ACC' }]
+        : [{ t: 'Full and straight first ball', a: 'ACC' }, { t: 'Bouncer to welcome him', a: 'STK' }, { t: 'Pack the cordon, hunt the edge', a: 'CRA' }],
+      read: (c, p) => CB.isSpinner(p)
+        ? (c.turn > 0.12 ? { good: ['STK'], bad: [], why: 'It is turning. A big one first up.' } : c.wk >= 7 ? { good: ['ACC'], bad: [], why: 'A tail-ender: straight ones do it.' } : { good: ['CRA'], bad: [], why: 'New batters are vulnerable in the air.' })
+        : (c.wk >= 7 ? { good: ['ACC'], bad: ['CRA'], why: 'Tail-enders miss straight ones. They rarely nick.' } : c.seam > 0.08 ? { good: ['CRA'], bad: [], why: 'It is seaming. Make the new man play.' } : { good: ['ACC'], bad: ['STK'], why: 'Make him play first ball. A bouncer lets him off.' }) },
+    hattrick: { title: 'On a hat-trick', text: c => `${c.score}. Two in two. The whole ground is on its feet.`,
+      options: p => [{ t: CB.isSpinner(p) ? 'Fire it at the stumps' : 'Yorker. Full and straight', a: 'ACC' }, { t: CB.isSpinner(p) ? 'Biggest leg-break you\'ve got' : 'The bouncer he won\'t expect', a: 'STK' }, { t: 'Same ball as the last two', a: 'CRA' }],
+      read: () => ({ good: ['ACC'], bad: ['STK'], why: 'Hit the stumps: bowled and lbw need no help.' }) },
+    morning: { title: 'New day', text: c => `Day ${c.cue.day}. ${c.score}. Fresh legs, fresh spell.`,
+      options: p => CB.isSpinner(p) ? [{ t: 'Flight it early', a: 'CRA' }, { t: 'Rip it from ball one', a: 'STK' }, { t: 'Hold an end, tight lines', a: 'ACC' }]
+        : [{ t: 'Pitch it up, look for swing', a: 'CRA' }, { t: 'Hit the deck, hard length', a: 'STK' }, { t: 'Make them play every ball', a: 'ACC' }],
+      read: (c, p) => CB.isSpinner(p)
+        ? (c.turn > 0.12 ? { good: ['STK'], bad: [], why: 'Overnight dew gone, the dust is back. Spin it.' } : { good: ['ACC'], bad: [], why: 'Little turn this morning. Build pressure.' })
+        : (c.seam > 0.08 ? { good: ['CRA'], bad: ['STK'], why: 'Morning moisture: pitch it up and swing it.' } : c.seam < -0.05 ? { good: ['STK'], bad: ['CRA'], why: 'No swing about. Bang it in.' } : { good: ['ACC'], bad: [], why: 'Settle into a line and make them play.' }) },
+    secondNew: { title: 'Second new ball', text: c => `${c.score}. 80 overs up. The captain takes the new ball and hands it to you.`,
+      options: [{ t: 'Pitch it up and swing it', a: 'CRA' }, { t: 'Hit the deck hard', a: 'STK' }, { t: 'Tight lines, make them play', a: 'ACC' }],
+      read: c => c.seam > 0.1 ? { good: ['CRA'], bad: [], why: 'It is moving. Pitch it up.' }
+        : c.seam < -0.05 ? { good: ['STK'], bad: ['CRA'], why: 'No movement: use the hardness and bounce.' }
+        : { good: ['ACC'], bad: [], why: 'A good pitch rewards a tight line.' } },
+    newBall: { title: 'Taking the new ball', text: c => `${c.score}. The captain tosses you the cherry.`,
+      options: [{ t: 'Pitch it up and swing it', a: 'CRA' }, { t: 'Hit the deck hard, extract bounce', a: 'STK' }, { t: 'Tight lines, make them play', a: 'ACC' }],
+      read: c => c.seam > 0.1 ? { good: ['CRA'], bad: [], why: 'It is moving. Pitch it up and let it swing.' }
+        : c.seam < -0.05 ? { good: ['STK'], bad: ['CRA'], why: 'No movement: hit the deck and make it uncomfortable.' }
+        : { good: ['ACC'], bad: [], why: 'A good pitch rewards a tight line on off stump.' } },
+    paceFirst: { title: 'First change', text: c => `${c.score}. You come on first change. The shine is going.`,
+      options: [{ t: 'Bang it in, bouncer plan', a: 'STK' }, { t: 'Fourth-stump line, dry them up', a: 'ACC' }, { t: 'Wobble seam, hunt the edge', a: 'CRA' }],
+      read: c => c.seam > 0.08 ? { good: ['CRA'], bad: [], why: 'There is still something off the seam.' }
+        : c.age >= 40 ? { good: ['CRA'], bad: [], why: 'Old ball: wobble it and hunt reverse.' }
+        : c.flat > 0.06 || c.partRR > 3.5 ? { good: ['ACC'], bad: ['CRA'], why: 'Runs are flowing. Dry them up first.' }
+        : { good: ['STK'], bad: [], why: 'A flat patch. Rough them up.' } },
+    stand: { title: 'Break the stand', text: c => `${c.score}. A ${c.part}-run partnership is killing you. The captain needs something.`,
+      options: [{ t: 'Short-ball barrage', a: 'STK' }, { t: 'Patience: maidens build pressure', a: 'ACC' }, { t: 'Go wider on the crease, angle it in', a: 'CRA' }],
+      read: c => c.age >= 45 ? { good: ['CRA'], bad: [], why: 'The old ball is reversing. Angle it in.' }
+        : c.partRR > 3.8 ? { good: ['ACC'], bad: ['STK'], why: 'They are scoring freely. Starve them.' }
+        : c.seam > 0.05 ? { good: ['STK'], bad: [], why: 'Pace and bounce in the deck. Test them up top.' }
+        : { good: ['ACC'], bad: [], why: 'Pressure builds wickets on a good pitch.' } },
+    tail: { title: 'Mopping up', text: c => `${c.score}. The tail is in. Finish this.`,
+      options: [{ t: 'Yorkers, full and straight', a: 'ACC' }, { t: 'Bouncers to the tail-enders', a: 'STK' }, { t: 'Keep running in hard, bowl long', a: 'STA' }],
+      read: c => c.seam > 0.1 ? { good: ['STK'], bad: [], why: 'Lively deck: the short ball will do it.' }
+        : { good: ['ACC'], bad: ['STA'], why: 'Full and straight. Tail-enders miss straight ones.' } },
+    spinFirst: { title: 'Toss it up', text: c => `${c.score}. You're on early. The batters are eyeing you up.`,
+      options: [{ t: 'Flight it, buy the wicket', a: 'CRA' }, { t: 'Dart it in, keep it tight', a: 'ACC' }, { t: 'Rip it hard, look for drift', a: 'STK' }],
+      read: c => c.turn > 0.12 ? { good: ['STK'], bad: [], why: 'It is turning already. Give it a rip.' }
+        : c.turn < -0.05 ? { good: ['ACC'], bad: ['CRA'], why: 'Nothing in it for you yet. Hold an end.' }
+        : { good: ['CRA'], bad: [], why: 'A fair pitch: flight beats them in the air.' } },
+    spinWorn: { title: 'Day dust', text: c => `${c.score}. Footmarks outside off. This could be your day.`,
+      options: [{ t: 'Aim at the rough, rip it', a: 'STK' }, { t: 'Vary flight and pace', a: 'CRA' }, { t: 'Bowl all day from one end', a: 'STA' }],
+      read: c => c.turn > 0.1 ? { good: ['STK'], bad: [], why: 'The rough is there to use. Hit it.' }
+        : c.rr != null && c.rr > 3.5 ? { good: ['CRA'], bad: ['STA'], why: 'They need to go after you. Tempt them.' }
+        : { good: ['CRA'], bad: [], why: 'Not much turn: beat them in the air.' } },
+    spinStand: { title: 'Holding an end', text: c => `${c.score}. A ${c.part}-run stand. The quicks are cooked. The captain throws you the ball.`,
+      options: [{ t: 'Fire it in flat, bore them out', a: 'ACC' }, { t: 'Tempt the big drive', a: 'CRA' }, { t: 'More revs, more risk', a: 'STK' }],
+      read: c => c.turn > 0.12 ? { good: ['STK'], bad: [], why: 'The pitch is turning. Spin it hard.' }
+        : c.partRR > 3.5 ? { good: ['CRA'], bad: [], why: 'They are attacking. Give them the bait.' }
+        : { good: ['ACC'], bad: [], why: 'On a flat one, dry them up.' } },
+    keepSpin: { title: 'Standing up', text: c => `${c.score}. Standing up to the spinner, the batter's lunging. Half a chance is coming.`,
+      options: [{ t: 'Stay low, move late', a: 'KEEP' }, { t: 'Chirp and build pressure', a: 'MEN' }, { t: 'Keep your energy for the long day', a: 'FIT' }],
+      read: c => c.turn > 0.1 ? { good: ['KEEP'], bad: ['FIT'], why: 'It is spitting. Every half-chance counts.' }
+        : c.day >= 3 ? { good: ['FIT'], bad: [], why: 'A long day in the field. Stay sharp late.' }
+        : { good: ['MEN'], bad: [], why: 'Little turn: build the pressure yourself.' } },
+    keepPace: { title: 'Behind the stumps', text: c => `${c.score}. Standing back to the quicks. A long session ahead.`,
+      options: [{ t: 'Stay low, watch every ball in', a: 'KEEP' }, { t: 'Chirp and lift the bowlers', a: 'MEN' }, { t: 'Pace yourself for the day', a: 'FIT' }],
+      read: c => c.seam > 0.1 ? { good: ['KEEP'], bad: [], why: 'Edges will come. Be ready.' }
+        : c.day >= 3 || c.flat > 0.06 ? { good: ['FIT', 'MEN'], bad: [], why: 'A long grind. Energy and voice win days like this.' }
+        : { good: ['KEEP'], bad: [], why: 'Concentration behind the stumps is your job.' } },
+  };
+
+  // how each call plays (wicket logit W, rotation R, boundaries B; q = more overs). The styles are trade-offs, roughly
+  // even on their own; what pays is the read: a call that fits the conditions and the game, or fights them.
+  const BAT_STYLE = { ATT: { W: 0.12, B: 0.25 }, DEF: { W: -0.1, R: -0.12, B: -0.25 }, CON: { W: -0.07, R: -0.06, B: -0.15 }, RUN: { W: 0.03, R: 0.18, B: -0.08 }, PACE: { W: -0.04, R: -0.03, B: -0.06 }, SPIN: { W: 0.02, R: 0.05, B: 0.1 }, MEN: { W: -0.03, B: -0.03 } };
+  const BOWL_STYLE = { STK: { W: 0.06, B: 0.12 }, ACC: { W: -0.03, R: -0.1, B: -0.12 }, CRA: { W: 0.03, B: 0.06 }, STA: { R: -0.04, q: 0.6 } };
+  const READ_BAT = { 1: { W: -0.25, R: 0.04, B: 0.04 }, 0: {}, '-1': { W: 0.2 } };
+  const READ_BOWL = { 1: { W: 0.2 }, 0: {}, '-1': { W: -0.1, B: 0.08 } };
+  const plus = (a, b) => { const o = Object.assign({}, a); for (const k in b) o[k] = (o[k] || 0) + b[k]; return o; };
+  // the user's call -> fit (+1 good read, 0, -1 against the grain), a verdict, and the engine's cfg.mom
+  CB.momentPlan = function (U, mo, choice, p) {
+    const M = U.M, I = M.inns[mo.inns], ti = U.ti, me = U.sides[ti].indexOf(p.id);
+    const T = MOMENTS[mo.kind], o = mo.options[choice];
+    const c = CB.momentCues(M, I, mo.at, ti);
+    const rd = T.read(c, p);
+    const fit = rd.good.includes(o.a) ? 1 : rd.bad.includes(o.a) ? -1 : 0;
+    const L = I.log[mo.at - 1] || { sc: 0, b: 0 };
+    const mom = { k: mo.inns, i: mo.at, ti, idx: me };
+    if (mo.side === 'bat') mom.bat = plus(BAT_STYLE[o.a] || {}, READ_BAT[fit]);
+    else if (mo.side === 'bowl') mom.bowl = plus(BOWL_STYLE[o.a] || {}, READ_BOWL[fit]);
+    else if (mo.side === 'keep') { mom.keep = o.a === 'KEEP' ? { drop: fit > 0 ? 0.55 : 0.75, bye: 0.7 } : { drop: fit < 0 ? 1.25 : 0.9, bye: 1 }; mom.own = { W: fit * 0.05 + (o.a === 'MEN' ? 0.03 : 0) }; }
+    else if (mo.kind === 'captDeclare') { mom.declare = o.m; mom.b0 = L.b; mom.r0 = L.sc; mom.after = true; mom.own = { W: fit > 0 ? 0.08 : fit < 0 ? -0.04 : 0 }; }
+    else if (mo.kind === 'captStand') {
+      const bonus = fit > 0 ? 0.1 : fit < 0 ? -0.05 : 0;
+      if (o.m === 'attack') mom.opp = { W: 0.1 + bonus, B: 0.1 };
+      else if (o.m === 'spread') mom.opp = { W: -0.04 + bonus, R: -0.08, B: -0.18 };
+      else if (o.m === 'self') { mom.bowl = { q: 1.5, W: bonus }; mom.opp = { W: bonus * 0.5 }; }
+      else mom.opp = { W: 0.03 + bonus };
+    }
+    const verdict = fit > 0 ? '✅ Great read. ' + rd.why : fit < 0 ? '⚠️ Against the grain. ' + rd.why : '👍 Fair call. ' + rd.why;
+    return { mom, fit, verdict };
+  };
+  // the line under the moment on the result screen, from the final match
+  CB.momentAfter = function (U, mo, p) {
+    const M = U.M, I = M.inns[mo.inns], me = U.sides[U.ti].indexOf(p.id);
+    if (mo.captain) return M.result.text + '.';
+    if (I.bat === U.ti) {
       const b = I.bats[me];
       const d = CB.dismissalText(M, I, b);
       return b.out ? `You made ${b.runs} off ${b.balls} before you were ${d.startsWith('run out') ? d : 'out ' + d}.` : `You finished ${b.runs}* off ${b.balls}.`;
     }
+    if (mo.side === 'keep') { const t = M.teams[I.fld]; let ct = 0, st = 0; for (const b of I.bats) if (b.out && b.out.fielder === me) { if (b.out.kind === 4) st++; else ct++; } return `Behind the stumps: ${ct} catch${ct === 1 ? '' : 'es'}${st ? ', ' + st + ' stumping' + (st > 1 ? 's' : '') : ''}. ${t.name} conceded ${I.ex.b} byes.`; }
     const bs = I.bowl[me];
     if (bs && bs.balls) return `Your figures for the innings: ${CB.oversStr(bs.balls)}-${bs.md}-${bs.runs}-${bs.wk}.`;
     return 'The game moved on.';
@@ -423,7 +615,10 @@
     const inj = CB.rollInjury(p, r, overs, true);
     if (inj) { p.inj = inj; const kind = p.bowls && !CB.isSpinner(p) && overs > 10 ? CB.INJURIES.pace : CB.INJURIES.bat; p.injName = kind[Math.floor(r() * kind.length)]; ev.push({ type: 'injury', len: inj, name: p.injName }); }
     const quiet = runs < 20 && wk < 2;
-    p.lastMatch = { quiet, overs, runs, wk };
+    const ton = best >= 200 ? 2 : best >= 100 ? 1 : 0, five = wk >= 10 ? 2 : bestW >= 5 ? 1 : 0;
+    p.lastMatch = { quiet, overs, runs, wk, ton, five };
+    if (ton) ev.push({ type: 'energy', text: (best >= 200 ? 'Double hundred' : 'Hundred') + ': +' + ton + ' energy for training' });
+    if (five) ev.push({ type: 'energy', text: (wk >= 10 ? 'Ten in the match' : 'Five-for') + ': +' + five + ' energy for training' });
     // perk offers
     if (ev.some(e => e.type === 'debut' || (e.type === 'milestone' && ['fc100', 'fc5w', 't100', 't5w', 'fc1000', 't1000', 't100w', 'fc100w'].includes(e.key)))) p.perkOffer = true;
     return { ev, runs, wk, overs, lines };
@@ -491,8 +686,13 @@
 
   // ---------------------------------------------------------------- shelf
   CB.legacy = function (p) {
-    const t = p.st.test, s = p.st.shield;
-    const tAvg = t.inn - t.no > 0 ? t.r / (t.inn - t.no) : 0, tBowlAvg = t.w ? t.rc / t.w : 99;
+    const t = p.st.test;
+    return legacyOf(t.m, t.inn - t.no > 0 ? t.r / (t.inn - t.no) : 0, t.w, t.w ? t.rc / t.w : 99, p.st.shield.m);
+  };
+  // the same verdict from a finished career's stat lines (the Shelf keeps those, not raw stats)
+  CB.legacyFromLines = (t, s) => legacyOf(t.m, parseFloat(t.avg) || 0, t.w, parseFloat(t.bavg) || 99, s.m);
+  function legacyOf(tm, tAvg, tw, tBowlAvg, sm) {
+    const t = { m: tm, w: tw }, s = { m: sm };
     if ((tAvg >= 55 && t.m >= 40) || (tAvg >= 50 && t.m >= 110) || (t.w >= 400 && tBowlAvg < 26) || (t.w >= 250 && tBowlAvg < 22)) return { label: 'All-time great', rank: 7 };
     if ((tAvg >= 45 && t.m >= 60) || (tAvg >= 50 && t.m >= 25) || (t.w >= 220 && tBowlAvg < 29) || (t.w >= 150 && tBowlAvg < 24) || (t.m >= 120)) return { label: 'Australian great', rank: 6 };
     if (t.m >= 20) return { label: 'Test regular', rank: 5 };
@@ -502,7 +702,7 @@
     if (s.m >= 10) return { label: 'State player', rank: 2 };
     if (s.m >= 1) return { label: 'Fringe state player', rank: 1 };
     return { label: 'Second XI battler', rank: 0 };
-  };
+  }
   const fmtAvg = (r, d) => d > 0 ? (r / d).toFixed(2) : '-';
   CB.statLine = function (s) {
     return { m: s.m, runs: s.r, avg: fmtAvg(s.r, s.inn - s.no), sr: s.bf ? (s.r / s.bf * 100).toFixed(1) : '-', hs: s.hs + (s.hsNo ? '*' : ''), h100: s.h100, f50: s.f50, w: s.w, bavg: s.w ? (s.rc / s.w).toFixed(2) : '-', bb: s.bbW ? s.bbW + '/' + s.bbR : '-', w5: s.w5, ct: s.ct, st: s.st, econ: s.b ? (s.rc / s.b * 6).toFixed(2) : '-' };
@@ -525,7 +725,7 @@
       parts.push(`He never wore the baggy green but played ${s.m} Sheffield Shield match${s.m > 1 ? 'es' : ''}.`);
       if (s.r >= 300) parts.push(`${s.r.toLocaleString()} Shield runs at ${sl.avg}, best ${sl.hs}.`);
       if (s.w >= 10) parts.push(`${s.w} Shield wickets at ${sl.bavg}.`);
-    } else parts.push(`He never quite broke into the Shield side, battling away in the Second XI for ${CB.statLine(p.st.seconds).m} matches.`);
+    } else { const n = p.st.seconds.m; parts.push(`He never quite broke into the Shield side, battling away in the Second XI for ${n} match${n === 1 ? '' : 'es'}.`); }
     const ct = (p.captRec || {}).test, cs = (p.captRec || {}).shield;
     if (ct && ct.m) parts.push(`He captained Australia in ${ct.m} Test${ct.m > 1 ? 's' : ''} (won ${ct.w}, lost ${ct.l}, drew ${ct.d}).`);
     else if (cs && cs.m) parts.push(`He captained ${st} in ${cs.m} Shield match${cs.m > 1 ? 'es' : ''}.`);
@@ -544,7 +744,7 @@
       id: p.id + '-' + Date.now(), name: p.first + ' ' + p.last, state: p.team, role: p.role, sub: p.sub, hand: p.hand,
       years: `${p.joined}-${W.year}`, ageEnd: p.age, legacy: b.legacy, bio: b.text, tier: p.tier,
       test: CB.statLine(p.st.test), shield: CB.statLine(p.st.shield), seconds: CB.statLine(p.st.seconds), county: p.st.county ? CB.statLine(p.st.county) : null,
-      capt: p.captRec || {}, legacy: p.legacy || null, fame: p.fame || 0,
+      capt: p.captRec || {}, legacyPerk: p.legacy || null, fame: p.fame || 0,
       traits: p.traits.slice(), honours: [...new Set(p.honours.map(h => h.text))], potm: p.potm || 0, capNo: p.capNo || null,
       hidden: { bat: peakBat, bowl: peakBowl, keep: p.role === 'wk' ? Math.round(p.caps.KEEP) : null }, ended,
     };

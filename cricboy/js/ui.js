@@ -32,7 +32,16 @@
     } catch (e) { console.error(e); return false; }
   }
   const hasSave = () => { try { return !!localStorage.getItem(SAVE); } catch (e) { return false; } };
-  const getShelf = () => { try { return JSON.parse(localStorage.getItem(SHELF) || '[]'); } catch (e) { return []; } };
+  // older entries stored the legacy perk over the legacy verdict (and crashed the Shelf): rebuild the verdict from the stats
+  const fixEntry = e => {
+    if (!e.legacy || typeof e.legacy !== 'object' || e.legacy.rank == null) {
+      if (typeof e.legacy === 'string' && !e.legacyPerk) e.legacyPerk = e.legacy;
+      e.legacy = CB.legacyFromLines(e.test || { m: 0, w: 0 }, e.shield || { m: 0 });
+    }
+    e.traits = e.traits || []; e.hidden = e.hidden || { bat: '-', bowl: null };
+    return e;
+  };
+  const getShelf = () => { try { return JSON.parse(localStorage.getItem(SHELF) || '[]').filter(Boolean).map(fixEntry); } catch (e) { return []; } };
   const addShelf = e => { const s = getShelf(); s.unshift(e); try { localStorage.setItem(SHELF, JSON.stringify(s)); } catch (x) { } };
   const wipeSave = () => { try { localStorage.removeItem(SAVE); } catch (e) { } };
 
@@ -108,7 +117,7 @@
     <div class="card"><h3>The cricket is real</h3><p class="mute">Every delivery is drawn from a statistical model fitted to every ball of 896 men's Tests (2001-2026), 212 Sheffield Shield matches (2017-2026) and 265 County Championship matches (2017-2019): how often batters get out and score depending on balls faced, ball age, the day, the country, home advantage, declarations and run chases. Captains bowl, declare and enforce follow-ons the way real ones do. Weather, pitches and form come from the same data.</p>
     <p class="mute small">Ball-by-ball data from <a href="https://cricsheet.org" style="color:var(--green)">Cricsheet</a> (ODC-By licence). All players are fictional.</p></div>
     <div class="card"><h3>Your career</h3><p class="mute">You start at 17 in your state's Second XI. Talent is random and hidden. Score runs or take wickets and the selectors notice: Shield, then Tests. Get dropped if you don't. Senior players with big numbers and a cool head get offered the captaincy. Shield regulars outside the Test side may get a county stint in England.</p></div>
-    <div class="card"><h3>Every match</h3><p class="mute">One key moment per match gives momentum: that area trains 50% harder afterwards. Spend energy on 15 training areas; pair them for combo bonuses. Life happens between matches, three to five times a season. Milestones unlock perks.</p></div>
+    <div class="card"><h3>Every match</h3><p class="mute">One key moment per match, in your own trade. Read the pitch, the ball and the game: a call that fits lifts you for the rest of that innings or spell, one that fights them can cost you. Either way that area trains 50% harder afterwards. Spend energy on 15 training areas and pair them for combo bonuses; hundreds and five-fors earn extra energy. Life happens between matches three to five times a season, and you have 15 seconds to choose. Milestones unlock perks.</p></div>
     <div class="card"><h3>Legacy</h3><p class="mute">Five huge achievements unlock legacy perks you can start a new career with. Retired careers go on the Shelf with your hidden ratings revealed.</p></div>
     ${bar('<button class="btn primary" data-a="back-title">Got it</button>')}`;
 
@@ -366,10 +375,13 @@
   };
   SCREENS.life = () => {
     const L = pending.life;
-    if (L.result) return `<div class="lifecard reveal"><div class="life-ic">${L.icon}</div><div class="kicker">Between matches</div><h2>${esc(L.title)}</h2><p>${esc(L.result.out)}</p>
+    if (L.result) return `<div class="lifecard reveal"><div class="life-ic">${L.icon}</div><div class="kicker">Between matches</div><h2>${esc(L.title)}</h2>${L.result.auto ? `<p class="small mute">⏱️ Time's up. You went with: <b>${esc(L.result.auto)}</b></p>` : ''}<p>${esc(L.result.out)}</p>
       <div class="chips">${L.result.chips.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
       ${bar(`<button class="btn primary big" data-a="life-done">Continue</button>`)}`;
-    return `<div class="lifecard reveal"><div class="life-ic">${L.icon}</div><div class="kicker">Between matches</div><h2>${esc(L.title)}</h2><p>${esc(L.text)}</p></div>
+    if (ui.lifeFor !== L.id) { ui.lifeFor = L.id; ui.lifeEnd = Date.now() + LIFE_SECS * 1000; }
+    const gone = Math.min(LIFE_SECS, Math.max(0, LIFE_SECS - (ui.lifeEnd - Date.now()) / 1000));
+    return `<div class="lifecard reveal"><div class="life-ic">${L.icon}</div><div class="kicker">Between matches</div><h2>${esc(L.title)}</h2><p>${esc(L.text)}</p>
+      <div class="lifetimer" title="Choose before time runs out, or it's chosen for you"><i style="animation-duration:${LIFE_SECS}s;animation-delay:-${gone.toFixed(2)}s"></i></div></div>
       ${L.options.map((o, i) => `<button class="opt" data-a="life-pick" data-v="${i}"><span class="ic letter">${'ABC'[i]}</span><span class="grow"><b>${esc(o)}</b></span></button>`).join('')}`;
   };
 
@@ -408,7 +420,7 @@
     return `
     <div class="scoreboard" id="sb">${scoreboardHTML()}</div>
     <div class="row between mt"><div class="small mute" id="dayline">${esc(L.dayText || 'Day 1')}</div>
-      <div class="speed"><button class="btn ${L.speed === 1 ? 'primary' : ''}" data-a="spd" data-v="1">1×</button><button class="btn ${L.speed === 3 ? 'primary' : ''}" data-a="spd" data-v="3">3×</button><button class="btn" data-a="skip">Skip ⏭</button></div></div>
+      <div class="speed"><span class="ff" id="ff" title="Fast-forwarding: you're not in the middle">⏩</span><button class="btn ${L.speed === 1 ? 'primary' : ''}" data-a="spd" data-v="1">1×</button><button class="btn ${L.speed === 3 ? 'primary' : ''}" data-a="spd" data-v="3">3×</button><button class="btn" data-a="skip">Skip ⏭</button></div></div>
     <div class="ticker mt" id="ticker">${L.shown.map(tickHTML).join('')}</div>
     ${bar(L.done ? '<button class="btn primary big" data-a="result">Result & scorecard</button>' : '<button class="btn big" disabled>Play in progress…</button>')}
     ${L.momentOpen ? momentHTML() : ''}`;
@@ -442,10 +454,18 @@
   const tickHTML = t => `<div class="tick ${t.cls || ''}">${t.html}</div>`;
   function momentHTML() {
     const mo = live.moment, p = me();
-    if (live.momentDone) return `<div class="moment"><div class="sheet"><div class="handle"></div><div class="kicker">Your call</div><h2>${esc(live.choice || mo.title)}</h2><p class="small mute">Momentum: <b style="color:var(--gold)">${esc(CB.focusLabel(CB.FOCUS.find(f => f.id === p.momentum.attr), p).name)}</b> trains ×${CB.hasPerk(p, 'fastlearner') ? 2 : 1.5} next session.</p><button class="btn primary block big mt" data-a="mom-close">Play on</button></div></div>`;
+    const span = mo.side === 'bat' ? 'innings' : mo.captain ? 'match' : 'spell';
+    if (live.momentDone) {
+      const after = live.fit > 0 ? `You'll play better for the rest of this ${span}.` : live.fit < 0 ? 'It could cost you.' : 'No edge either way.';
+      return `<div class="moment"><div class="sheet"><div class="handle"></div><div class="kicker">Your call</div><h2>${esc(live.choice || mo.title)}</h2>
+      <div class="verdict ${live.fit > 0 ? 'good' : live.fit < 0 ? 'bad' : ''}">${esc(live.verdict || '')}</div>
+      <p class="small mute">${after} Momentum: <b style="color:var(--gold)">${esc(CB.focusLabel(CB.FOCUS.find(f => f.id === p.momentum.attr), p).name)}</b> trains ×${CB.hasPerk(p, 'fastlearner') ? 2 : 1.5} next session.</p><button class="btn primary block big mt" data-a="mom-close">Play on</button></div></div>`;
+    }
     return `<div class="moment"><div class="sheet"><div class="handle"></div>
       <div class="kicker">${mo.captain ? '🎖️ Captain\'s moment' : '⚡ Key moment'}</div><h2>${esc(mo.title)}</h2><div class="sit">${esc(mo.situation)}</div>
       <p>${esc(mo.text)}</p>
+      <div class="cues">${(mo.cues || []).map(c => `<span class="badge">${esc(c)}</span>`).join('')}</div>
+      <p class="tiny faint">Read the conditions and the game: the right call lifts you for the rest of this ${span}.</p>
       ${mo.options.map((o, i) => { const f = CB.FOCUS.find(x => x.id === o.a); const lab = CB.focusLabel(f, p); return `<button class="opt" data-a="mom" data-v="${i}"><span class="ic">${lab.icon}</span><span class="grow"><div><b>${esc(o.t)}</b></div><div class="tg">Trains ${esc(lab.name)}</div></span></button>`; }).join('')}
     </div></div>`;
   }
@@ -459,16 +479,18 @@
       ev.push({ k, html: `<b>${esc(bt.name)}</b> ${k === 3 ? `need ${I.target} to win` : k === 2 && I.followOn ? 'follow on' : 'begin their innings'}`, cls: 'big', sc: { runs: 0, wk: 0, balls: 0 } });
       const runs = new Array(11).fill(0);
       const marks = (I.dayMarks || []).slice();
-      let arrived = false, bowled = false;
+      let arrived = false, bowled = false, lastMyB = -99;
       let lastSc = { runs: 0, wk: 0, balls: 0 };
       // the user's own innings / spell, snapshotted onto every event for the scoreboard strip
       const mine = { bat: null, bowl: null };
-      const push = e => { e.mine = { bat: mine.bat && { ...mine.bat }, bowl: mine.bowl && { ...mine.bowl } }; ev.push(e); };
+      // inv: the user is in the middle (batting, or in a bowling spell); everything else plays at triple speed
+      const push = e => { e.mine = { bat: mine.bat && { ...mine.bat }, bowl: mine.bowl && { ...mine.bowl } }; e.inv = I.bat === U.ti ? !!(mine.bat && !mine.bat.out) : (e.sc ? e.sc.balls : 0) - lastMyB <= 12; ev.push(e); };
       I.log.forEach((L, i) => {
         while (marks.length && marks[0].at === i) { const m = marks.shift(); push({ k, html: `Stumps, day ${m.day}: ${esc(bt.short || bt.name)} ${lastSc.runs}/${lastSc.wk}`, cls: 'day', sc: lastSc, day: m.day + 1 }); }
         const sc = { runs: L.sc, wk: L.wk, balls: L.b };
-        if (moment && moment.inns === k && moment.at === i) push({ k, moment: true, sc });
+        if (moment && moment.inns === k && moment.at === i) push({ k, moment: true, sc: lastSc });
         const sIsMe = I.bat === U.ti && L.s === meIdx, bIsMe = I.fld === U.ti && L.bw === meIdx;
+        if (bIsMe) lastMyB = L.b;
         if (!arrived && I.bat === U.ti && (L.s === meIdx || L.n === meIdx)) { arrived = true; mine.bat = { runs: 0, balls: 0, out: false }; push({ k, html: `🏏 <b>You walk out</b> at ${esc(bt.short)} ${L.sc - (L.r || 0)}/${L.wk}`, cls: 'me', sc }); }
         if (!bowled && bIsMe) { bowled = true; mine.bowl = { balls: 0, runs: 0, wk: 0 }; push({ k, html: `🎯 <b>You're on</b> to bowl · ${esc(bt.short)} ${L.sc}/${L.wk}`, cls: 'me', sc }); }
         if (sIsMe && mine.bat && L.w !== 'wd') { if (L.w !== 'nb') mine.bat.balls++; if (typeof L.w === 'number' || L.w === 'nb') mine.bat.runs += L.r; }
@@ -522,7 +544,10 @@
     }
     if (e.final) { L.done = true; render(); return; }
     const base = e.meOut ? 1900 : e.fast ? 140 : e.cls === 'w' || e.cls === 'mew' ? 620 : e.cls === 'day' ? 700 : 380;
-    L.timer = setTimeout(stepLive, base / L.speed);
+    // 3x whenever you're not batting or bowling
+    const nx = L.events[L.ei], inv = e.inv || e.meOut || e.big || e.cls === 'mew' || (nx && (nx.inv || nx.moment)), mult = inv ? 1 : 3;
+    const ff = document.getElementById('ff'); if (ff) ff.classList.toggle('on', mult > 1);
+    L.timer = setTimeout(stepLive, base / (L.speed * mult));
   }
 
   // ---- result
@@ -545,9 +570,10 @@
       <div class="mute small mt">${esc(CB.scoreLine(M))}</div>
     </div>
     <div class="perf"><div class="p"><div class="tiny faint">BATTING</div><div class="v num">${bat}</div>${hows}</div><div class="p"><div class="tiny faint">BOWLING</div><div class="v num">${bowl}</div></div></div>
-    ${L.moment ? `<div class="news blue mt"><b>${L.moment.captain ? '🎖️' : '⚡'} ${esc(L.moment.title)}</b>${L.choice ? ' · you chose: ' + esc(L.choice) : ''}<div class="small mute">${esc(L.moment.after)}</div></div>` : ''}
+    ${L.moment ? `<div class="news blue mt"><b>${L.moment.captain ? '🎖️' : '⚡'} ${esc(L.moment.title)}</b>${L.choice ? ' · you chose: ' + esc(L.choice) : ''}${L.verdict ? `<div class="small">${esc(L.verdict)}</div>` : ''}<div class="small mute">${esc(L.after || '')}</div></div>` : ''}
     ${potm ? `<div class="news gold mt">⭐ Player of the match: <b>${potm.user ? 'YOU' : esc(potm.name)}</b></div>` : ''}
     ${L.post.ev.filter(e => e.type === 'milestone').map(e => `<div class="news gold">🏅 ${esc(e.text)}</div>`).join('')}
+    ${L.post.ev.filter(e => e.type === 'energy').map(e => `<div class="news gold">⚡ ${esc(e.text)}</div>`).join('')}
     <div class="sec-title">Scorecard</div>
     <div class="seg mb">${M.inns.map((I, i) => `<button class="${ui.scTab === i ? 'on' : ''}" data-a="sctab" data-v="${i}">${esc(M.teams[I.bat].short || M.teams[I.bat].name)} ${i >= 2 ? '2nd' : '1st'}</button>`).join('')}</div>
     ${scorecardHTML(M, M.inns[ui.scTab] || M.inns[0])}
@@ -636,7 +662,7 @@
     if (ui.shelfOpen != null && s[ui.shelfOpen]) return shelfEntryHTML(s[ui.shelfOpen], false);
     return `
     <div class="pagehead"><button class="iconbtn" data-a="${W && me() ? 'hub' : 'back-title'}">←</button><h2>The Shelf</h2></div>
-    ${s.length ? `<div class="shelf">${s.map((e, i) => `<div class="pcard r${e.legacy.rank}" data-a="openshelf" data-v="${i}"><div><div class="l">${esc(e.legacy.label)}</div><div class="n mt">${esc(e.name)}</div><div class="tiny mute">${esc(e.years)} · ${esc(stateOf(e.state) ? stateOf(e.state).id : '')}</div></div><div class="small num">${e.test.m ? `${e.test.m} Tests` : e.shield.m ? `${e.shield.m} Shield` : `${e.seconds.m} 2nd XI`}<br><span class="mute">${e.role === 'pace' || e.role === 'spin' ? (e.test.m ? e.test.w + ' wkts @ ' + e.test.bavg : e.shield.w + ' wkts') : (e.test.m ? e.test.runs + ' @ ' + e.test.avg : e.shield.runs + ' runs')}</span></div></div>`).join('')}</div>` : '<div class="card"><p class="mute">No careers yet. Every finished career gets a spot here, with a bio and your hidden ratings revealed.</p></div>'}`;
+    ${s.length ? `<div class="shelf">${s.map((e, i) => `<div class="pcard r${e.legacy.rank}" data-a="openshelf" data-v="${i}"><div><div class="l">${esc(e.legacy.label)}</div><div class="n mt">${esc(e.name)}</div><div class="tiny mute">${esc(e.years)} · ${esc(stateOf(e.state) ? stateOf(e.state).id : '')}</div></div><div class="small num">${e.test.m ? `${e.test.m} Tests` : e.shield.m ? `${e.shield.m} Shield` : `${e.seconds.m} 2nd XI`}<br><span class="mute">${(() => { const s = e.test.m ? e.test : e.shield.m ? e.shield : e.seconds, bowler = e.role === 'pace' || e.role === 'spin'; return bowler ? s.w + ' wkts' + (e.test.m ? ' @ ' + s.bavg : '') : s.runs + (e.test.m ? ' @ ' + s.avg : ' runs'); })()}</span></div></div>`).join('')}</div>` : '<div class="card"><p class="mute">No careers yet. Every finished career gets a spot here, with a bio and your hidden ratings revealed.</p></div>'}`;
   };
   function shelfEntryHTML(e, fresh) {
     const row = (l, s) => s && s.m ? `<tr><td>${l}</td><td>${s.m}</td><td class="b">${s.runs}</td><td>${s.avg}</td><td>${s.hs}</td><td>${s.h100}</td><td class="b">${s.w}</td><td>${s.bavg}</td><td>${s.bb}</td></tr>` : '';
@@ -658,18 +684,28 @@
   SCREENS.retired = () => shelfEntryHTML(pending.entry, true);
 
   // ---------------------------------------------------------------- flow
+  // The user's match is simulated but not committed until its key moment is settled: the call re-runs the match from
+  // that ball (same seed, so everything before it is identical). Until then nothing is saved; leaving mid-replay
+  // returns to the last save and the same match plays again.
   function startLive(res, skipped) {
     const p = me();
     const U = res.user;
     const debut = !p.debut[U.level] && U.level !== 'seconds';
-    const post = CB.userPostMatch(W, U);
     const moment = CB.findMoment(U, p);
-    live = { U, slot: res.slot, post, moment, events: buildTimeline(U, p, moment), ei: 0, shown: [], speed: 1, sb: { k: 0, runs: 0, wk: 0, balls: 0 }, done: false, momentOpen: false, momentDone: false, skipped, debut };
+    live = { U, slot: res.slot, moment, events: buildTimeline(U, p, moment), ei: 0, shown: [], speed: 1, sb: { k: 0, runs: 0, wk: 0, balls: 0 }, done: false, momentOpen: false, momentDone: false, skipped, debut, final: false };
     ui.scTab = 0;
     if (res.lostCaptaincy) skipped.push('Dropped from the Test side, you lose the captaincy.');
-    pending = { stage: 'train', train: { energy: CB.energyFor(p, p.lastMatch), alloc: {}, reason: reasonText(p) }, post: { items: postItems(post), note: null }, moment: moment ? { attr: moment.options[0].a } : null };
-    save();
+    if (!moment) finalizeLive();
     go('prematch');
+  }
+  function finalizeLive() {
+    const p = me(), L = live;
+    CB.commitUserMatch(W, L.U);
+    L.post = CB.userPostMatch(W, L.U);
+    L.final = true;
+    if (L.moment) L.after = CB.momentAfter(L.U, L.moment, p);
+    pending = { stage: 'train', train: { energy: CB.energyFor(p, p.lastMatch), alloc: {}, reason: reasonText(p) }, post: { items: postItems(L.post), note: null }, moment: L.momAttr ? { attr: L.momAttr } : null };
+    save();
   }
   function reasonText(p) {
     const e = CB.energyFor(p, p.lastMatch);
@@ -677,7 +713,9 @@
     if (CB.hasPerk(p, 'netrat') && p.lastMatch && p.lastMatch.quiet) bits.push('Net Rat +1');
     if (CB.hasPerk(p, 'coachspet')) bits.push("Coach's Pet +1");
     if (p.energyBonus > 0) bits.push('bonus +' + p.energyBonus); else if (p.energyBonus < 0) bits.push('drained ' + p.energyBonus);
-    if (p.lastMatch && p.lastMatch.overs >= 45) bits.push('Heavy workload -1');
+    if (p.lastMatch && p.lastMatch.ton) bits.push((p.lastMatch.ton > 1 ? 'Double hundred' : 'Hundred') + ' +' + p.lastMatch.ton);
+    if (p.lastMatch && p.lastMatch.five) bits.push((p.lastMatch.five > 1 ? 'Ten-for' : 'Five-for') + ' +' + p.lastMatch.five);
+    if (p.lastMatch && p.lastMatch.overs >= 45 && !p.lastMatch.five) bits.push('Heavy workload -1');
     return `${e} energy${bits.length ? ' · ' + bits.join(', ') : ''}`;
   }
   function postItems(post) {
@@ -686,8 +724,9 @@
       if (e.type === 'debut') items.push({ cls: 'gold', html: e.level === 'test' ? `🧢 <b>Test debut!</b> You're Australian Test cricketer number ${p.capNo || '?'}.` : e.level === 'county' ? `🏴 <b>County debut.</b> An overseas pro in England.` : `🎉 <b>First-class debut</b> for ${esc(stateOf(p.team).name)}.` });
       if (e.type === 'milestone') items.push({ cls: 'gold', html: `🏅 ${esc(e.text)}` });
       if (e.type === 'potm') items.push({ cls: 'gold', html: '⭐ Player of the match.' });
+      if (e.type === 'energy') items.push({ cls: 'gold', html: '⚡ <b>' + esc(e.text) + '</b>' });
       if (e.type === 'injury') items.push({ cls: 'red', html: `🩹 Injury: ${esc(e.name)}. Out for ${e.len} game${e.len > 1 ? 's' : ''}.` });
-      if (e.type === 'unlock') { items.push({ cls: 'gold', html: `👑 <b>LEGACY UNLOCKED: ${esc(e.u.name)}</b><br><span class="small">${esc(e.u.desc)} Available for your next career.</span>` }); setTimeout(confetti, 300); }
+      if (e.type === 'unlock') items.push({ cls: 'gold', party: true, html: `👑 <b>LEGACY UNLOCKED: ${esc(e.u.name)}</b><br><span class="small">${esc(e.u.desc)} Available for your next career.</span>` });
     }
     return items;
   }
@@ -699,7 +738,7 @@
       if (S.cursor >= S.slots.length) { save(); go('season'); return; }
       const co = CB.countyOfferDue(W);
       if (co) { pending = { countyOffer: co, skipped }; save(); go('county'); return; }
-      const res = CB.playSlot(W);
+      const res = CB.playSlot(W, { defer: true });
       if (res.user) { startLive(res, skipped); return; }
       // summarise a slot without us
       const slot = res.slot;
@@ -778,7 +817,19 @@
       render();
       requestAnimationFrame(() => { const tk = document.getElementById('ticker'); if (tk) { tk.style.scrollBehavior = 'auto'; tk.scrollTop = tk.scrollHeight; tk.style.scrollBehavior = ''; } });
     },
-    'mom': d => { const o = live.moment.options[+d.v]; me().momentum = { attr: o.a }; pending.moment = { attr: o.a }; live.choice = o.t; live.momentDone = true; buzz(15); save(); render(); },
+    'mom': d => {
+      const L = live, p = me(), mo = L.moment, i = +d.v, o = mo.options[i];
+      if (L.momentDone) return;
+      const plan = CB.momentPlan(L.U, mo, i, p);
+      CB.replayUserMatch(W, L.U, plan.mom);
+      // the replayed match is identical up to the moment; carry on from there with its new ending
+      L.events = buildTimeline(L.U, p, mo);
+      L.ei = L.events.findIndex(e => e.moment) + 1;
+      p.momentum = { attr: o.a }; L.momAttr = o.a;
+      L.choice = o.t; L.verdict = plan.verdict; L.fit = plan.fit; L.momentDone = true;
+      finalizeLive();
+      buzz(plan.fit > 0 ? [20, 40, 20] : 15); render();
+    },
     'mom-close': () => { live.momentOpen = false; render(); const tk = document.getElementById('ticker'); if (tk) tk.scrollTop = tk.scrollHeight; live.timer = setTimeout(stepLive, 300 / live.speed); },
     'result': () => { clearTimeout(live.timer); go('result'); },
     'sctab': d => { ui.scTab = +d.v; render(); },
@@ -804,9 +855,16 @@
       pending.stage = 'post'; delete pending.train;
       const le = CB.maybeLifeEvent(W); if (le) pending.life = le;
       save(); go('post');
+      if (pending.post.items.some(i => i.party)) setTimeout(confetti, 300);
     },
     'life': () => go('life'),
-    'life-pick': d => { const L = pending.life; L.result = CB.resolveLifeEvent(W, L.id, +d.v); buzz(12); save(); render(); },
+    'life-pick': d => {
+      const L = pending && pending.life; if (!L || L.result) return;
+      clearTimeout(ui.lifeT);
+      L.result = CB.resolveLifeEvent(W, L.id, +d.v, L.ctx);
+      if (d.auto) L.result.auto = L.options[+d.v];
+      buzz(12); save(); render();
+    },
     'life-done': () => { pending.life = null; save(); if (me().perkOffer) go('perk'); else ACT.hub(); },
     'perk': () => go('perk'),
     'pickperk': d => { const p = me(); if (p.traits.length >= 5) p.traits.shift(); p.traits.push(d.v); p.perkOffer = false; if (pending) pending.perkChoices = null; toast(CB.PERKS.find(k => k.id === d.v).name + ' unlocked'); save(); ACT.hub(); },
@@ -833,8 +891,27 @@
     const f = SCREENS[ui.screen] || SCREENS.title;
     document.body.dataset.screen = ui.screen;
     try { $app.innerHTML = f(); } catch (err) { console.error(err); $app.innerHTML = `<div class="card"><h3>Something went wrong</h3><p class="mute small">${esc(err.message)}</p><button class="btn" data-a="to-title">Title</button></div>`; }
+    lifeTimer();
   }
-  window.addEventListener('beforeunload', () => { if (W) save(); });
+  // life events: if no choice is made in time, one is picked at random. The clock stops while the app is hidden.
+  const LIFE_SECS = 15;
+  function lifeTimer() {
+    clearTimeout(ui.lifeT);
+    const L = pending && pending.life;
+    if (ui.screen !== 'life' || !L || L.result || document.hidden) return;
+    ui.lifeT = setTimeout(() => {
+      if (ui.screen === 'life' && pending && pending.life === L && !L.result) ACT['life-pick']({ v: String(Math.floor(Math.random() * L.options.length)), auto: '1' });
+    }, Math.max(0, ui.lifeEnd - Date.now()));
+  }
+  document.addEventListener('visibilitychange', () => {
+    const L = pending && pending.life, onLife = ui.screen === 'life' && L && !L.result;
+    if (document.hidden) {
+      if (onLife) { ui.lifeLeft = ui.lifeEnd - Date.now(); clearTimeout(ui.lifeT); }
+      if (W && !(live && live.final === false)) save();
+    } else if (onLife && ui.lifeLeft != null) { ui.lifeEnd = Date.now() + ui.lifeLeft; ui.lifeLeft = null; render(); }
+  });
+  // an unsettled match (key moment still to come) is never saved: the last save replays it identically
+  window.addEventListener('beforeunload', () => { if (W && !(live && live.final === false)) save(); });
   // test hook (?dev): drive the real actions from the console
   if (/[?&]dev/.test(location.search)) window.CBUI = { ACT, ui, render, get W() { return W; }, get live() { return live; }, get pending() { return pending; } };
   // boot

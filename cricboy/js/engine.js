@@ -9,7 +9,10 @@
             ro (run-out logit), mod (extra wicket logit, e.g. pressure), con (wicket logit once set, 60+ balls),
             drop, keepDrop, byeMul, fieldW }
      p.bw = bowling or null  { t (0 pace, 1 spin), W, R, B, wd, nb (log multipliers), q (captain's rating),
-            spell (overs), newBall (opening preference), swing (wicket logit, first 20 overs of a ball), mod } */
+            spell (overs), newBall (opening preference), swing (wicket logit, first 20 overs of a ball), mod }
+   cfg.mom (optional) = the user's key-moment call, active from ball i of innings k (and later innings if after):
+     { k, i, ti, idx, bat/bowl/opp {W, R, B, q}, own {W}, keep {drop, bye}, declare 'now'|'push'|'later', b0, r0, after }
+   Nothing before that ball changes, so a replay with the same seed is identical up to the moment. */
 (function (G) {
   'use strict';
   const CB = G.CB = G.CB || {};
@@ -54,6 +57,7 @@
       inns: [], day: 1, dayBalls: 0, ballsBowled: 0, over: false, result: null, stumps: [],
       region: cfg.level === 'test' ? (REGION[cfg.country] || 'AUS') : cfg.level === 'county' ? 'COUNTY' : 'SHIELD',
       lvKey: cfg.level === 'test' ? 'test' : cfg.level === 'county' ? 'county' : 'shield',
+      mom: cfg.mom || null,
     };
     // conditions: a match-level pitch effect plus day-to-day deviations (cloud, wear, heat) on scoring and on
     // pace/spin wicket-taking; sizes are the over-dispersion the ball model leaves in real matches (tools/overdisp.js)
@@ -150,7 +154,7 @@
       bats: bt.xi.map((p, i) => ({ i, runs: 0, balls: 0, f4: 0, f6: 0, out: null, in: false })),
       bowl: ft.xi.map(() => ({ balls: 0, runs: 0, wk: 0, md: 0, wd: 0, nb: 0, spell: 0, limit: 6, last: -99, lastSpell: 0, today: 0, day: 0 })),
       next: 2, s: 0, n: 1, ageOvers: 0, newBallAt: 80 + Math.floor(r() * 4),
-      startDay: M.day, prevBowler: [-1, -1], log: [],
+      startDay: M.day, prevBowler: [-1, -1], log: [], om: [],
     };
     I.bats[0].in = I.bats[1].in = true;
     M.inns.push(I);
@@ -172,6 +176,7 @@
 
     while (!I.closed && !M.over) {
       if (M.dayBalls <= 0) { newDay(M); if (M.over) break; }
+      I.om.push([I.log.length, M.day, ballsLeftInMatch(M)]);  // the clock at each over (key-moment cues)
       // batting captain: declare? (also returns how hard to push towards a declaration)
       const intentPush = declarationCheck(M, I, capt);
       if (I.closed) break;
@@ -180,7 +185,7 @@
       const bowler = ft.xi[bi], be = bowler.bw, bs = I.bowl[bi];
       if (bs.day !== M.day) { bs.day = M.day; bs.today = 0; bs.last = -99; }
       if (bs.zW == null) { const sd = MD.match.rhythm; bs.zW = CB.gauss(r) * sd - sd * sd / 2; } // a bowler's day: in rhythm or not
-      if (bs.last !== overNo - 2) { bs.lastSpell = bs.spell; bs.spell = 0; bs.limit = Math.max(1, Math.round(be.spell * (0.7 + 0.6 * r()) * Math.min(1.2, Math.max(0.15, 1 + CB.MODEL.match.spellQ * be.q)))); }
+      if (bs.last !== overNo - 2) { const mq = qBoost(M, I, bi); bs.lastSpell = bs.spell; bs.spell = 0; bs.limit = Math.max(1, Math.round(be.spell * (0.7 + 0.6 * r()) * Math.min(1.2, Math.max(0.15, 1 + CB.MODEL.match.spellQ * (be.q + mq * 0.5))))); }
       const ty = be.t;
       // context for this over
       const day = Math.min(lv === 1 ? 4 : 3, M.day - 1);
@@ -206,6 +211,14 @@
       let legal = 0;
       while (legal < 6 && !I.closed && !M.over) {
         const sb = I.bats[I.s], se = bt.xi[I.s].e;
+        // the user's key-moment call (cfg.mom), from its ball on
+        const mo = M.mom && momOn(M, I);
+        let xW = 0, xR = 0, xB = 0;
+        if (mo) {
+          const add = o => { if (o) { xW += o.W || 0; xR += o.R || 0; xB += o.B || 0; } };
+          if (batT === mo.ti) { if (I.s === mo.idx) add(mo.bat); }
+          else { if (bi === mo.idx) add(mo.bowl); add(mo.opp); add(mo.own); }
+        }
         // wides: re-bowled, never a wicket here
         if (r() < MD.ex.wd[exKey] * Math.exp(be.wd || 0)) {
           const w = pickMap(r, MD.ex.wdRuns[exKey]);
@@ -218,12 +231,13 @@
         const nb = r() < MD.ex.nb[exKey] * Math.exp(be.nb || 0);
         for (let c = 1; c < NC; c++) lg[c] = ctx[c] + G.bf[bfBucket(sb.balls)][c] + iv[c];
         if (I.s <= 6) { const wv = G.wk[wkBucket(I.wk)]; for (let c = 1; c < NC; c++) lg[c] += wv[c]; }
-        const rot = se.R + be.R + pitchR, bnd = se.B + be.B + pitchR;
+        const rot = se.R + be.R + pitchR + xR, bnd = se.B + be.B + pitchR + xB;
         lg[1] += rot; lg[2] += rot; lg[3] += rot; lg[4] += bnd; lg[5] += bnd + se.S6;
         lg[6] += (ty ? se.Ws : se.W) + be.W + pitchW + MD.ex.catchInflate[exKey] + (se.mod || 0) + (be.mod || 0) + bs.zW
           + (I.ageOvers < 20 ? be.swing || 0 : 0) + (sb.balls >= 60 ? se.con || 0 : 0) // attribute hooks (players.js)
           + (sb.balls < 20 ? se.early || 0 : 0) + (I.s >= 7 ? be.bunny || 0 : 0)  // perk hooks (career.js)
-          + (k === 3 ? MD.match.inns4W || 0 : 0);  // last-innings pressure the per-ball context under-states (calibrated)
+          + (k === 3 ? MD.match.inns4W || 0 : 0)  // last-innings pressure the per-ball context under-states (calibrated)
+          + xW;
         lg[7] += se.ro || 0;
         if (nb) { lg[6] = -50; lg[7] = -50; }
         let mx = 0; for (let c = 1; c < NC; c++) if (lg[c] > mx) mx = lg[c];
@@ -236,7 +250,7 @@
         if (cat <= 5) {
           const runs = RUNS[cat];
           if (cat === 0 && !nb) {
-            const kq = ft.xi[ft.keeperIdx].e.byeMul || 1;
+            const kq = (ft.xi[ft.keeperIdx].e.byeMul || 1) * (mo && mo.keep && batT !== mo.ti && ft.keeperIdx === mo.idx ? mo.keep.bye : 1);
             if (r() < MD.ex.bye[exKey] * kq) { const b = pickMap(r, MD.ex.byeRuns[exKey]); I.ex.b += b; I.runs += b; logBall(I, bi, 'b', b); if (b % 2) swap(I); }
             else if (r() < MD.ex.lb[exKey]) { const b = pickMap(r, MD.ex.lbRuns[exKey]); I.ex.lb += b; I.runs += b; logBall(I, bi, 'lb', b); if (b % 2) swap(I); }
             else logBall(I, bi, 0, 0);
@@ -252,7 +266,8 @@
           if (kind === 2 || kind === 4) {
             fielder = kind === 4 || r() < MD.ex.keepShare[ty ? 'S' : 'P'] ? ft.keeperIdx : pickFielder(r, ft, bi);
             // a chance: average fielders drop at the rate catchInflate allowed for, good ones less
-            const f = ft.xi[fielder].e, drop = MD.ex.dropBase * (fielder === ft.keeperIdx ? (f.keepDrop || 1) : (f.drop || 1)) * (se.luck ? 1.6 : 1);
+            const f = ft.xi[fielder].e, drop = MD.ex.dropBase * (fielder === ft.keeperIdx ? (f.keepDrop || 1) : (f.drop || 1)) * (se.luck ? 1.6 : 1)
+              * (mo && mo.keep && batT !== mo.ti && fielder === mo.idx ? mo.keep.drop : 1);
             if (r() < drop) { logBall(I, bi, 'drop', 0, { fielder, kind }); continue; }
           } else if (kind === 5) fielder = bi;
           sb.out = { kind, bowler: bi, fielder };
@@ -270,7 +285,7 @@
       I.prevBowler = [I.prevBowler[1], bi];
       overNo++; I.overs = overNo;
       I.ageOvers++;
-      if (I.ageOvers >= 80 && I.balls >= I.newBallAt * 6) { I.ageOvers = 0; I.newBallAt = I.balls / 6 + 80 + Math.floor(r() * 4); }
+      if (I.ageOvers >= 80 && I.balls >= I.newBallAt * 6) { I.ageOvers = 0; I.newBallAt = I.balls / 6 + 80 + Math.floor(r() * 4); (I.newBalls = I.newBalls || []).push(I.log.length); }
       swap(I);
     }
     if (!I.closed) I.closed = 'time';
@@ -284,6 +299,14 @@
   }
 
   function swap(I) { const t = I.s; I.s = I.n; I.n = t; }
+  // is the user's key-moment call in force at this point of innings I?
+  function momOn(M, I) {
+    const m = M.mom; if (!m) return null;
+    if (I.k === m.k) return I.log.length >= m.i ? m : null;
+    return m.after && I.k > m.k ? m : null;
+  }
+  // "throw the ball to yourself": the user's captain gives himself more overs
+  function qBoost(M, I, bi) { const m = M.mom && momOn(M, I); return m && m.bowl && m.bowl.q && I.fld === m.ti && bi === m.idx ? m.bowl.q : 0; }
 
   function dismiss(I, idx, bi) {
     I.wk++;
@@ -318,6 +341,13 @@
   // ---- declarations: may close the innings; returns a push-intent bucket (1..4, nearer = harder) or 0
   function declarationCheck(M, I, capt) {
     const k = I.k;
+    // the user's declaration call at his key moment
+    const mo = M.mom && momOn(M, I);
+    if (mo && mo.declare && I.bat === mo.ti && k === mo.k) {
+      if (mo.declare === 'now') { I.closed = 'declared'; return 0; }
+      if (mo.declare === 'push') { if (I.balls >= mo.b0 + 60 || I.wk >= 8) { I.closed = 'declared'; return 0; } return 1; }
+      if (mo.declare === 'later' && I.runs < mo.r0 + 110 && I.wk < 9) return 0;  // bat on: another hundred first
+    }
     if (k === 3 || I.wk >= 9) return 0;
     let own = 0, opp = 0;
     for (const i of M.inns) { if (i.bat === I.bat) own += i.runs; else opp += i.runs; }
@@ -367,7 +397,7 @@
     if (newBall) spinLg -= 4;
     const w = B.map(i => {
       const e = ft.xi[i].bw, bs = I.bowl[i];
-      let v = MP.bowlTemp * e.q + (e.t ? spinLg * MP.spinW : 0);
+      let v = MP.bowlTemp * (e.q + qBoost(M, I, i)) + (e.t ? spinLg * MP.spinW : 0);
       if (bs.day === M.day && bs.last >= 0) {
         const gap = overNo - bs.last - 1, need = e.t ? 2 : Math.max(3, Math.round(bs.spell * MP.restMul)); // bs.spell = the spell just finished
         if (gap < need) v -= MP.restPen * (need - gap) / need;

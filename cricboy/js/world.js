@@ -293,6 +293,23 @@
     return xi.slice(0, 7).concat(tail);
   }
 
+  // ---------------------------------------------------------------- the user's match: deferred commit, key-moment replay
+  // a deferred match must replay ball-for-ball, so its teams are copied away from the live player objects
+  function freezeTeams(cfg) {
+    for (const t of cfg.teams) t.xi = t.xi.map(x => Object.assign({}, x, { e: Object.assign({}, x.e), bw: x.bw ? Object.assign({}, x.bw) : x.bw }));
+  }
+  CB.commitUserMatch = function (W, U) {
+    if (U.committed) return;
+    U.commit(U.M, CB.rng((U.cfg.seed ^ 0x2545f491) >>> 0));
+    U.committed = true;
+  };
+  // the same match from the same seed, with the user's key-moment call applied from that ball on (engine: cfg.mom)
+  CB.replayUserMatch = function (W, U, mom) {
+    if (U.committed) throw new Error('match already committed');
+    U.M = CB.simMatch(Object.assign({}, U.cfg, { mom }));
+    return U.M;
+  };
+
   // ---------------------------------------------------------------- recording
   CB.record = function (W, M, level, teamIds, r) {
     const lines = CB.matchLines(M);
@@ -330,14 +347,25 @@
   };
 
   // ---------------------------------------------------------------- playing a slot
-  // returns { userMatch: {...} | null, results: [...] }. If the user plays, simulation of the user's match happens here
-  // too: the UI replays it afterwards.
-  CB.playSlot = function (W) {
+  // returns { user: {...} | null, results: [...] }. If the user plays, his match is simulated here too and the UI
+  // replays it. With opts.defer it is not committed yet (stats, ladder, results): its key moment can still change how it
+  // ends (CB.replayUserMatch re-runs it from that ball), then the UI calls CB.commitUserMatch.
+  CB.playSlot = function (W, opts) {
+    opts = opts || {};
     const S = W.season, slot = S.slots[S.cursor];
     if (!slot) return null;
     const r = CB.rngFor(W);
     const out = { slot, results: [], user: null };
     const user = W.userId ? W.players[W.userId] : null;
+    const play = (cfg, sides, commit, info) => {
+      const mine = user && sides.some(sd => sd.includes(user.id));
+      if (mine && opts.defer) freezeTeams(cfg);
+      const M = CB.simMatch(cfg);
+      if (!mine) { commit(M, r); return M; }
+      out.user = Object.assign({ M, cfg, sides, ti: sides[0].includes(user.id) ? 0 : 1, commit, committed: false }, info);
+      if (!opts.defer) CB.commitUserMatch(W, out.user);
+      return M;
+    };
     const setCtx = (level, home, final) => { if (user) user._ctx = { level, home, final, debut: !user.debut || !user.debut[level], captain: level !== 'county' && level !== 'seconds' && CB.isCaptain(W, user) === (level === 'test' ? 'test' : 'shield') }; };
     if (slot.type === 'dom') {
       const duty = onDuty(W, slot.day);
@@ -360,13 +388,14 @@
           const cfg = { level: lvl, country: 'AUS', home: 0, seed: (r() * 4294967296) >>> 0, capt,
             teams: [teamFromIds(W, sides[0], CB.stateById(h).name + (lvl === 'seconds' ? ' 2nd XI' : ''), h), teamFromIds(W, sides[1], CB.stateById(a).name + (lvl === 'seconds' ? ' 2nd XI' : ''), a)] };
           cfg.venue = lvl === 'shield' ? st0.ground : st0.ground2;
-          const M = CB.simMatch(cfg);
-          CB.record(W, M, lvl, sides, r);
-          const lad = lvl === 'shield' ? S.ladder : S.ladder2;
-          [h, a].forEach((id, ti) => { const L = lad[id]; L.p++; if (M.result.draw || M.result.tie) { L.d++; L.pts += 1; } else if (M.result.winner === ti) { L.w++; L.pts += 6; } else L.l++; });
-          const res = { level: lvl, home: h, away: a, text: M.result.text, venue: cfg.venue, score: scoreLine(M) };
+          const res = { level: lvl, home: h, away: a, venue: cfg.venue };
           out.results.push(res);
-          if (sides.some(sd => user && sd.includes(user.id))) out.user = { M, cfg, level: lvl, sides, res, ti: sides[0].includes(user.id) ? 0 : 1 };
+          play(cfg, sides, (M, rr) => {
+            CB.record(W, M, lvl, sides, rr);
+            const lad = lvl === 'shield' ? S.ladder : S.ladder2;
+            [h, a].forEach((id, ti) => { const L = lad[id]; L.p++; if (M.result.draw || M.result.tie) { L.d++; L.pts += 1; } else if (M.result.winner === ti) { L.w++; L.pts += 6; } else L.l++; });
+            res.text = M.result.text; res.score = scoreLine(M);
+          }, { level: lvl, res });
         }
       }
     } else if (slot.type === 'final') {
@@ -378,13 +407,14 @@
       const cfg = { level: 'shield', days: 5, country: 'AUS', home: 0, seed: (r() * 4294967296) >>> 0, venue: CB.stateById(h).ground, final: true,
         capt: [matchCaptain(W, sides[0], W.states[h].captain, 'shield'), matchCaptain(W, sides[1], W.states[a].captain, 'shield')],
         teams: [teamFromIds(W, sides[0], CB.stateById(h).name, h), teamFromIds(W, sides[1], CB.stateById(a).name, a)] };
-      const M = CB.simMatch(cfg);
-      CB.record(W, M, 'shield', sides, r);
-      const champ = M.result.draw || M.result.tie ? h : [h, a][M.result.winner];  // a drawn final goes to the top side
-      S.champion = champ;
-      const res = { level: 'shield', final: true, home: h, away: a, text: M.result.text + (M.result.draw ? ` - ${CB.stateById(h).name} win the Shield` : ''), venue: cfg.venue, score: scoreLine(M), champ };
+      const res = { level: 'shield', final: true, home: h, away: a, venue: cfg.venue };
       out.results.push(res);
-      if (sides.some(sd => user && sd.includes(user.id))) out.user = { M, cfg, level: 'shield', sides, res, ti: sides[0].includes(user.id) ? 0 : 1 };
+      play(cfg, sides, (M, rr) => {
+        CB.record(W, M, 'shield', sides, rr);
+        const champ = M.result.draw || M.result.tie ? h : [h, a][M.result.winner];  // a drawn final goes to the top side
+        S.champion = champ;
+        Object.assign(res, { text: M.result.text + (M.result.draw ? ` - ${CB.stateById(h).name} win the Shield` : ''), score: scoreLine(M), champ });
+      }, { level: 'shield', res });
     } else if (slot.type === 'county') {
       const C = W.county, c = CB.countyById(slot.opp), mine = C && CB.countyById(C.id);
       const away = user && onDuty(W, slot.day).has(user.id);
@@ -397,12 +427,13 @@
         const t1 = { name: c.name, short: c.id, ids: opp.map(q => q.id), xi: opp.map(q => ({ id: q.id, name: q.first + ' ' + q.last, short: CB.shortName(q), role: q.role, e: q.e, bw: q.bw })), keeper: 6 };
         const cfg = { level: 'county', country: 'ENG', home: slot.home ? 0 : 1, seed: (r() * 4294967296) >>> 0, venue: slot.home ? mine.ground : c.ground, teams: [t0, t1],
           capt: [matchCaptain(W, ids, null, 'county'), 0] };
-        const M = CB.simMatch(cfg);
-        CB.record(W, M, 'county', [ids, []], r);
-        if (M.result.draw || M.result.tie) C.res[2]++; else C.res[M.result.winner === 0 ? 0 : 1]++;
-        const res = { level: 'county', home: C.id, away: slot.opp, no: slot.no, text: M.result.text, venue: cfg.venue, score: scoreLine(M) };
+        const res = { level: 'county', home: C.id, away: slot.opp, no: slot.no, venue: cfg.venue };
         out.results.push(res);
-        out.user = { M, cfg, level: 'county', sides: [ids, t1.ids], res, ti: 0 };
+        play(cfg, [ids, t1.ids], (M, rr) => {
+          CB.record(W, M, 'county', [ids, []], rr);
+          if (M.result.draw || M.result.tie) C.res[2]++; else C.res[M.result.winner === 0 ? 0 : 1]++;
+          res.text = M.result.text; res.score = scoreLine(M);
+        }, { level: 'county', res });
       } else out.results.push({ level: 'county', home: C ? C.id : '', away: slot.opp, text: away ? 'Missed: on Test duty' : 'Missed: unavailable', skipped: true });
     } else if (slot.type === 'test') {
       const ser = S.series[slot.series], nat = CB.NATIONS[ser.opp];
@@ -421,18 +452,20 @@
       const cfg = { level: 'test', country, home: ser.home ? 0 : 1, seed: (r() * 4294967296) >>> 0, venue,
         capt: [matchCaptain(W, ausXI, W.aus.captain, 'test'), matchCaptain(W, oppXI, null, 'test')],
         teams: [teamFromIds(W, ausXI, 'Australia', 'AUS'), teamFromIds(W, oppXI, nat.name, ser.opp)] };
-      const M = CB.simMatch(cfg);
-      CB.record(W, M, 'test', [ausXI, oppXI], r);
       for (const id of ausXI) { const p = W.players[id]; if (!p.capNo) p.capNo = ++W.aus.caps + 470; }
-      if (M.result.draw || M.result.tie) ser.res[2]++; else ser.res[M.result.winner]++;
-      const res = { level: 'test', home: 'AUS', away: ser.opp, no: slot.no, text: M.result.text, venue, score: scoreLine(M), country };
+      const res = { level: 'test', home: 'AUS', away: ser.opp, no: slot.no, venue, country };
       out.results.push(res);
-      if (user && ausXI.includes(user.id)) out.user = { M, cfg, level: 'test', sides: [ausXI, oppXI], res, ti: 0 };
+      play(cfg, [ausXI, oppXI], (M, rr) => {
+        CB.record(W, M, 'test', [ausXI, oppXI], rr);
+        if (M.result.draw || M.result.tie) ser.res[2]++; else ser.res[M.result.winner]++;
+        res.text = M.result.text; res.score = scoreLine(M);
+      }, { level: 'test', res });
     }
     if (out.user) out.user.slot = slot;
     if (out.user && user && out.user.cfg.capt && out.user.sides[out.user.ti][out.user.cfg.capt[out.user.ti]] === user.id) out.user.captain = true;
     slot.done = true;
-    S.results.push(...out.results.map(x => Object.assign({ day: slot.day }, x)));
+    for (const x of out.results) x.day = slot.day;
+    S.results.push(...out.results);
     S.cursor++;
     // injuries heal by one slot; new knocks for AI players who just played
     for (const p of Object.values(W.players)) if (p.inj > 0) p.inj--;
